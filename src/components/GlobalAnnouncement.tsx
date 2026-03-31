@@ -102,7 +102,7 @@ export function GlobalAnnouncement() {
           <div className="absolute bottom-[-20px] left-[-20px] w-48 h-48 bg-secondary/20 rounded-full blur-2xl" />
           
           <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-20 h-20 rounded-[32px] bg-white text-primary flex items-center justify-center mb-6 shadow-2xl animate-bounce duration-[2000ms]">
+            <div className="w-20 h-20 rounded-[32px] bg-white text-primary flex items-center justify-center mb-6 shadow-2xl animate-bounce duration-1000">
               <Megaphone className="w-10 h-10" />
             </div>
             <DialogTitle className="text-3xl font-black mb-3 italic tracking-tight leading-none">تنبيه إداري رسمي</DialogTitle>

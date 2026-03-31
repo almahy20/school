@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Database, Table, Plus, Trash2, Edit2, Save, X, RefreshCw, Search, ChevronDown } from 'lucide-react';
+import { Database, Table, Plus, Trash2, Edit2, Save, X, RefreshCw, Search, ChevronDown, CheckCircle2, AlertCircle } from 'lucide-react';
 
 type TableName = 'students' | 'classes' | 'grades' | 'attendance' | 'student_parents' | 'exam_templates';
 
@@ -178,149 +178,197 @@ export default function DatabasePage() {
 
   return (
     <AppLayout>
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <Database className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">إدارة قاعدة البيانات</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { setAddMode(true); setNewRow({}); }} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-            <Plus className="w-4 h-4" />
-            إضافة سجل
-          </button>
-          <button onClick={fetchData} className="p-2 rounded-lg border border-input hover:bg-muted transition-colors" title="تحديث">
-            <RefreshCw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Table selector */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        {TABLES.map(t => (
-          <button
-            key={t.name}
-            onClick={() => setActiveTable(t.name)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTable === t.name ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
-          >
-            <Table className="w-4 h-4 inline-block ml-1" />
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <div className="relative mb-4">
-        <Search className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="بحث في البيانات..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="pl-3 pr-9 py-2 rounded-lg border border-input bg-background text-foreground text-sm w-full max-w-md"
-        />
-      </div>
-
-      {/* Add row form */}
-      {addMode && (
-        <div className="bg-card border border-primary/30 rounded-xl p-4 mb-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3">إضافة سجل جديد</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {tableConfig.columns.filter(c => c.editable).map(c => (
-              <div key={c.key}>
-                <label className="text-xs text-muted-foreground mb-1 block">{c.label}</label>
-                <input
-                  value={newRow[c.key] || ''}
-                  onChange={e => setNewRow(f => ({ ...f, [c.key]: e.target.value }))}
-                  className="px-3 py-2 rounded-lg border border-input bg-background text-foreground text-sm w-full"
-                  placeholder={c.label}
-                />
-              </div>
-            ))}
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-14">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">إدارة قاعدة البيانات</h1>
+            <p className="text-sm text-slate-400 font-medium tracking-wide">التحكم المباشر في سجلات وجداول النظام</p>
           </div>
-          <div className="flex gap-2 mt-3">
-            <button onClick={handleAdd} disabled={actionLoading === 'new'} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50">
-              <Save className="w-4 h-4 inline-block ml-1" />
-              حفظ
+          
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={fetchData} 
+              className={`w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 hover:text-primary transition-all shadow-sm ${loading ? 'opacity-50' : ''}`}
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
             </button>
-            <button onClick={() => setAddMode(false)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm hover:bg-muted/80">
-              <X className="w-4 h-4 inline-block ml-1" />
-              إلغاء
+            <button 
+              onClick={() => { setAddMode(true); setNewRow({}); }} 
+              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-slate-900 text-white font-bold text-sm shadow-lg shadow-slate-900/10 hover:shadow-xl hover:translate-y-[-2px] transition-all"
+            >
+              <Plus className="w-5 h-5 text-primary" />
+              إضافة سجل جديد
             </button>
           </div>
-        </div>
-      )}
+        </header>
 
-      {/* Data table */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        {/* Table Selector */}
+        <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar lg:flex-wrap">
+          {TABLES.map(t => (
+            <button
+              key={t.name}
+              onClick={() => setActiveTable(t.name)}
+              className={`px-6 py-3 rounded-2xl text-xs font-bold whitespace-nowrap transition-all border ${
+                activeTable === t.name 
+                ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105' 
+                : 'bg-white border-slate-100 text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Table className={`w-4 h-4 inline-block ml-2 ${activeTable === t.name ? 'text-white' : 'text-slate-200'}`} />
+              {t.label}
+            </button>
+          ))}
         </div>
-      ) : (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  {tableConfig.columns.map(c => (
-                    <th key={c.key} className="text-right p-3 text-xs font-semibold text-foreground whitespace-nowrap">{c.label}</th>
-                  ))}
-                  <th className="text-center p-3 text-xs font-semibold text-foreground">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(row => (
-                  <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+
+        {/* Search */}
+        <div className="relative group max-w-2xl w-full">
+          <Search className="w-5 h-5 absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-primary transition-colors" />
+          <input
+            type="text"
+            placeholder="ابحث في السجلات..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pr-14 pl-6 py-4 rounded-3xl border border-slate-100 bg-white text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all shadow-sm"
+          />
+        </div>
+
+        {/* Add Row Form (Minimalist View) */}
+        {addMode && (
+          <div className="bg-slate-900 rounded-[40px] p-10 relative overflow-hidden animate-in slide-in-from-top-4 duration-500 shadow-2xl">
+            <h3 className="text-xl font-bold text-white mb-8 pr-2 flex items-center gap-3">
+              <Plus className="w-6 h-6 text-primary" />
+              إضافة سجل جديد في {tableConfig.label}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {tableConfig.columns.filter(c => c.editable).map(c => (
+                <div key={c.key} className="space-y-2">
+                  <label className="text-xs font-bold text-slate-500 pr-1">{c.label}</label>
+                  <input
+                    value={newRow[c.key] || ''}
+                    onChange={e => setNewRow(f => ({ ...f, [c.key]: e.target.value }))}
+                    className="w-full px-6 py-4 rounded-2xl bg-white/5 border border-white/10 text-white text-sm font-medium focus:outline-none focus:border-primary/50 transition-all placeholder:text-white/10"
+                    placeholder={`أدخل ${c.label}...`}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-4 mt-10">
+              <button 
+                onClick={handleAdd} 
+                disabled={actionLoading === 'new'} 
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Save className="w-5 h-5" />
+                حفظ وإضافة السجل
+              </button>
+              <button 
+                onClick={() => setAddMode(false)} 
+                className="px-8 py-4 rounded-2xl bg-white/5 text-white/60 font-bold text-sm hover:bg-white/10 transition-all"
+              >إلغاء</button>
+            </div>
+          </div>
+        )}
+
+        {/* Table Data */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-40 bg-white rounded-[40px] border border-slate-100">
+            <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin mb-4" />
+            <p className="text-slate-400 text-sm font-medium">جاري مزامنة بيانات الجدول...</p>
+          </div>
+        ) : (
+          <div className="bg-white border border-slate-100 shadow-sm rounded-[40px] overflow-hidden">
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full text-right border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50 border-b border-slate-100">
                     {tableConfig.columns.map(c => (
-                      <td key={c.key} className="p-3 text-sm text-foreground max-w-[200px] truncate">
-                        {editingId === row.id && c.editable ? (
-                          <input
-                            value={editForm[c.key] || ''}
-                            onChange={e => setEditForm(f => ({ ...f, [c.key]: e.target.value }))}
-                            className="px-2 py-1 rounded border border-input bg-background text-foreground text-xs w-full"
-                          />
-                        ) : (
-                          <span className="text-xs">{row[c.key]?.toString() || '—'}</span>
-                        )}
-                      </td>
+                      <th key={c.key} className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">{c.label}</th>
                     ))}
-                    <td className="p-3">
-                      <div className="flex items-center justify-center gap-1">
-                        {editingId === row.id ? (
-                          <>
-                            <button onClick={() => saveEdit(row.id)} disabled={actionLoading === row.id} className="p-1.5 rounded-lg hover:bg-success/10 text-success disabled:opacity-50" title="حفظ">
-                              <Save className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => setEditingId(null)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="إلغاء">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button onClick={() => startEdit(row)} className="p-1.5 rounded-lg hover:bg-primary/10 text-primary" title="تعديل">
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDelete(row.id)} disabled={actionLoading === row.id} className="p-1.5 rounded-lg hover:bg-destructive/10 text-destructive disabled:opacity-50" title="حذف">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
+                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">الإجراءات</th>
                   </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={tableConfig.columns.length + 1} className="p-8 text-center text-muted-foreground">لا توجد بيانات</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {filtered.map(row => (
+                    <tr key={row.id} className="group hover:bg-slate-50/30 transition-all">
+                      {tableConfig.columns.map(c => (
+                        <td key={c.key} className="px-8 py-6 text-sm font-medium text-slate-600 max-w-[200px] truncate">
+                          {editingId === row.id && c.editable ? (
+                            <input
+                              value={editForm[c.key] || ''}
+                              onChange={e => setEditForm(f => ({ ...f, [c.key]: e.target.value }))}
+                              className="w-full px-4 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold focus:outline-none focus:border-primary transition-all"
+                            />
+                          ) : (
+                            <span className="group-hover:text-slate-900 transition-colors">{row[c.key]?.toString() || '—'}</span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="px-8 py-6">
+                        <div className="flex items-center justify-center gap-2">
+                          {editingId === row.id ? (
+                            <>
+                              <button 
+                                onClick={() => saveEdit(row.id)} 
+                                disabled={actionLoading === row.id} 
+                                className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-500/10"
+                              >
+                                <Save className="w-5 h-5" />
+                              </button>
+                              <button 
+                                onClick={() => setEditingId(null)} 
+                                className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-all"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button 
+                                onClick={() => startEdit(row)} 
+                                className="w-10 h-10 rounded-xl bg-slate-50 text-slate-300 hover:text-primary hover:bg-primary/5 transition-all"
+                                title="تعديل"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(row.id)} 
+                                disabled={actionLoading === row.id} 
+                                className="w-10 h-10 rounded-xl bg-slate-50 text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition-all"
+                                title="حذف"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={tableConfig.columns.length + 1} className="py-32 text-center">
+                        <div className="w-20 h-20 rounded-full bg-slate-50 mx-auto flex items-center justify-center mb-6">
+                          <Database className="w-10 h-10 text-slate-200" />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">الجدول فارغ</h3>
+                        <p className="text-slate-400 font-medium">لم يتم العثور على أي بيانات في هذا الجدول حالياً.</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-8 py-5 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">مزامنة البيانات نشطة</span>
+              </div>
+              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">إجمالي السجلات: {filtered.length}</p>
+            </div>
           </div>
-          <div className="p-3 border-t bg-muted/30 text-xs text-muted-foreground text-center">
-            إجمالي السجلات: {filtered.length}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </AppLayout>
   );
 }

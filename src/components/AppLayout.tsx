@@ -1,63 +1,86 @@
 import { useState, ReactNode } from 'react';
 import Sidebar from './Sidebar';
-import { Menu, BookOpen } from 'lucide-react';
+import { Menu, BookOpen, Bell, Search, User } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
+import { cn } from '@/lib/utils';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col lg:flex-row font-cairo" dir="rtl">
+    <div className="min-h-screen bg-[#F8FAFC] flex flex-col lg:flex-row font-cairo selection:bg-primary/20 overflow-x-hidden" dir="rtl">
       <GlobalAnnouncement />
 
-      {/* Scroll Progress Decor */}
-      <div className="fixed top-0 right-0 left-0 h-1 bg-muted z-[100]">
-        <div className="h-full bg-secondary transition-all" style={{ width: '0%' }} />
-      </div>
-
-      {/* Mobile Top Header */}
-      <div className="lg:hidden flex items-center justify-between p-4 bg-primary text-white shadow-lg relative z-[60]">
+      {/* Mobile Glass Header */}
+      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-white/50 sticky top-0 z-[60] shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center shadow-md border border-white/10">
-            <BookOpen className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white shadow-lg shadow-primary/20">
+            <BookOpen className="w-4 h-4" />
           </div>
-          <span className="text-lg font-black tracking-tight underline decoration-secondary decoration-2 underline-offset-4 pointer-events-none">إدارة عربية</span>
+          <span className="text-xl font-black tracking-tight text-slate-900">إدارة عربية</span>
         </div>
         <button 
           onClick={() => setSidebarOpen(true)}
-          className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-all active:scale-95 shadow-sm border border-white/5"
+          className="p-2.5 rounded-xl bg-slate-50 text-slate-900 hover:bg-slate-100 transition-all active:scale-95 border border-slate-200 shadow-inner"
         >
-          <Menu className="w-6 h-6 text-white" />
+          <Menu className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Sidebar Overlay */}
+      {/* Sidebar Overlay (Mobile) */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-primary/40 backdrop-blur-sm z-[70] lg:hidden animate-fade-in" onClick={() => setSidebarOpen(false)} />
+        <div 
+          className="fixed inset-0 bg-slate-900/10 backdrop-blur-[8px] z-[70] lg:hidden animate-in fade-in duration-700" 
+          onClick={() => setSidebarOpen(false)} 
+        />
       )}
 
-      {/* Sidebar Container */}
-      <div className={`
-        fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-500 transform lg:static lg:translate-x-0
-        ${sidebarOpen ? 'translate-x-0' : 'translate-x-full shadow-none'}
-        ${sidebarOpen ? 'shadow-[0_0_50px_rgba(0,0,0,0.3)]' : ''}
-      `}>
+      {/* Fixed Desktop Sidebar Container */}
+      <aside className={cn(
+        "fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-700 ease-out transform shadow-2xl lg:translate-x-0 bg-slate-900",
+        sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+      )}>
         <Sidebar onClose={() => setSidebarOpen(false)} />
-      </div>
+      </aside>
 
-      <main className="flex-1 min-w-0 min-h-screen relative overflow-x-hidden">
-        {/* Background Subtle Pattern */}
-        <div className="absolute inset-0 bg-[url('/dots.svg')] bg-[length:40px_40px] opacity-[0.03] pointer-events-none" />
+      {/* Main Content Area - Shifted for fixed sidebar on desktop */}
+      <main className="flex-1 min-w-0 min-h-screen relative flex flex-col bg-slate-50/50 lg:mr-72">
+        {/* Decorative Background Elements */}
+        <div className="absolute top-0 right-0 w-full h-[600px] bg-gradient-to-b from-primary/[0.03] to-transparent pointer-events-none" />
         
-        <div className="max-w-[1600px] mx-auto p-6 lg:p-10 animate-fade-in relative z-10">
+        {/* Desktop Header Navigation (Scaled Down) */}
+        <div className="hidden lg:flex items-center justify-end px-10 py-6 gap-6 relative z-50">
+           <div className="flex items-center gap-2 p-2 rounded-xl bg-white border border-slate-100 shadow-sm px-4 h-10">
+              <Search className="w-3.5 h-3.5 text-slate-300" />
+              <input type="text" placeholder="بحث سريع..." className="bg-transparent border-none text-[10px] font-black placeholder:text-slate-300 focus:outline-none w-28" />
+           </div>
+           <div className="w-9 h-9 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-primary transition-colors cursor-pointer shadow-sm relative">
+              <Bell className="w-4 h-4" />
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full border-2 border-white" />
+           </div>
+           <div className="h-6 w-px bg-slate-100 mx-1" />
+           <div className="flex items-center gap-2 p-1 pr-3 rounded-xl bg-slate-900 text-white shadow-xl shadow-slate-200 group cursor-pointer hover:translate-y-[-1px] transition-all h-9">
+              <span className="text-[9px] font-black uppercase tracking-widest hidden xl:block">نسخة بريميوم</span>
+              <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
+                 <User className="w-3.5 h-3.5" />
+              </div>
+           </div>
+        </div>
+
+        {/* Scaled Padding for Main Content */}
+        <div className="flex-1 w-full p-6 sm:p-8 lg:p-12 animate-in fade-in slide-in-from-bottom-2 duration-1000 relative z-10 overflow-x-hidden">
           {children}
         </div>
         
-        <footer className="py-12 px-6 border-t border-border/50 text-center relative z-10 bg-white/50 backdrop-blur-sm">
-          <p className="text-[10px] font-black text-primary/30 uppercase tracking-[0.4em] mb-1">
-            E D A R A · A R A B I Y A
-          </p>
-          <p className="text-[9px] font-bold text-primary/20 italic">The Intelligent School Management Suite</p>
+        {/* Scaled Footer */}
+        <footer className="py-8 px-10 text-center relative z-10 border-t border-slate-100 bg-white/50 backdrop-blur-sm mt-auto">
+          <div className="flex flex-col items-center gap-3">
+             <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center mb-1">
+                <BookOpen className="w-3 h-3 text-slate-400" />
+             </div>
+             <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase opacity-70"> Edara Arabiya Executive System </p>
+             <p className="text-[8px] font-bold text-slate-300 tracking-[0.4em]"> نُظام إدارة المدرسة الذكي © {new Date().getFullYear()} </p>
+          </div>
         </footer>
       </main>
     </div>

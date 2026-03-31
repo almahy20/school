@@ -1,17 +1,28 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  LayoutDashboard, Users, GraduationCap, UserCheck, School, LogOut, BookOpen, ClipboardList, CalendarCheck, Settings, X, MessageSquare
+  LayoutDashboard, Users, GraduationCap, UserCheck, School, LogOut, BookOpen, ClipboardList, CalendarCheck, Settings, X, MessageSquare, ChevronLeft, ShieldAlert
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const adminLinks = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
   { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
+  { to: '/manage-complaints', label: 'الشكاوى من أولياء الأمور', icon: MessageSquare },
   { to: '/students', label: 'إدارة الطلاب', icon: Users },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck },
   { to: '/classes', label: 'الفصول الدراسية', icon: School },
+  { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
+  { to: '/fees', label: 'المصروفات', icon: ClipboardList },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
+];
+
+const superAdminLinks = [
+  { to: '/super-admin', label: 'إدارة المدارس المركزية', icon: ShieldAlert },
+  { to: '/manage-complaints', label: 'شكاوى مديري المدارس', icon: MessageSquare },
+  { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
+  { to: '/settings', label: 'إعدادات المنصة', icon: Settings },
 ];
 
 const teacherLinks = [
@@ -19,12 +30,12 @@ const teacherLinks = [
   { to: '/students', label: 'طلابي', icon: Users },
   { to: '/classes', label: 'فصولي', icon: School },
   { to: '/grades', label: 'الدرجات والتقييم', icon: ClipboardList },
-  { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
 const parentLinks = [
   { to: '/', label: 'متابعة الأبناء', icon: Users },
+  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
@@ -36,75 +47,107 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const links = user?.role === 'admin' ? adminLinks
-    : user?.role === 'teacher' ? teacherLinks
-    : parentLinks;
+  const getLinks = () => {
+    if (user?.isSuperAdmin) return superAdminLinks;
+    if (user?.role === 'admin') return adminLinks;
+    if (user?.role === 'teacher') return teacherLinks;
+    return parentLinks;
+  };
+
+  const links = getLinks();
 
   const handleLogout = async () => {
     await logout();
     navigate('/login');
   };
 
-  const roleLabel = user?.role === 'admin' ? 'مدير النظام'
-    : user?.role === 'teacher' ? 'معلم'
-    : 'ولي أمر';
+  const roleLabel = user?.isSuperAdmin ? 'المشرف العام'
+    : user?.role === 'admin' ? 'مدير النظام'
+    : user?.role === 'teacher' ? 'معلم ممارس'
+    : 'ولي أمر معتمد';
 
   return (
-    <aside className="h-screen w-72 bg-primary flex flex-col shadow-2xl relative z-50">
-      {/* Sidebar Decor */}
-      <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center opacity-5 pointer-events-none" />
+    <aside className="h-full w-72 bg-slate-900 flex flex-col relative z-[90] border-l border-white/5 shadow-2xl overflow-hidden text-right">
+      {/* Dynamic Background Pattern */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
       
-      <div className="p-8 relative">
-        <div className="flex items-center gap-4 group cursor-pointer">
-          <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center shadow-lg shadow-black/20 transition-all group-hover:scale-110 group-hover:rotate-3 border border-white/10">
-            <BookOpen className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-white tracking-tight">إدارة عربية</h1>
-            <span className="text-[10px] font-bold text-secondary uppercase tracking-[0.2em] block">S C H O O L</span>
-          </div>
-        </div>
-        {onClose && (
-          <button onClick={onClose} className="lg:hidden absolute top-8 left-8 p-2 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        )}
+      {/* Mobile Close Button */}
+      <div className="lg:hidden absolute top-4 left-4 z-[100]">
+        <button onClick={onClose} className="p-2 rounded-lg bg-white/5 text-white/40 hover:text-white transition-all">
+          <X className="w-5 h-5" />
+        </button>
       </div>
 
-      <div className="px-8 py-6 flex items-center gap-4 mb-2">
-        <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/5 flex items-center justify-center text-white text-lg font-black shadow-inner">
-          {user?.fullName?.[0] || '?'}
+      {/* Brand Section (Scaled Down) */}
+      <div className="p-8 pb-4 relative flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/10 shadow-2xl backdrop-blur-md rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
+          <BookOpen className="w-5 h-5 text-white" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-black text-white truncate">{user?.fullName}</p>
-          <div className="flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-            <span className="text-[10px] font-bold text-white/50 uppercase tracking-wider">{roleLabel}</span>
+           <h1 className="text-lg font-black text-white tracking-tight leading-none mb-1">إدارة عربية</h1>
+           <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Smart Education</p>
+        </div>
+      </div>
+
+      {/* User Section (Scaled Down) */}
+      <div className="px-5 py-6">
+        <div className="p-4 rounded-[24px] bg-white/5 border border-white/5 backdrop-blur-xl relative group">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white text-lg font-black border border-white/10 group-hover:bg-white/20 transition-all shrink-0">
+              {user?.fullName?.[0] || '?'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-black text-white truncate leading-none mb-1.5">{user?.fullName}</p>
+              <span className="inline-flex px-2 py-0.5 rounded-full bg-white/5 text-[8px] font-black text-white/30 uppercase tracking-widest border border-white/5">
+                {roleLabel}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar relative">
+      {/* Navigation (Scaled Down Padding & Font) */}
+      <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar flex flex-col justify-start pt-1 pb-4">
         {links.map(link => (
-          <NavLink key={link.to} to={link.to} end={link.to === '/'}
+          <NavLink 
+            key={link.to} 
+            to={link.to} 
+            end={link.to === '/'}
             onClick={onClose}
-            className={({ isActive }) => `nav-item ${isActive ? 'nav-item-active' : 'nav-item-inactive'} transition-all group`}>
+            className={({ isActive }) => cn(
+              "flex items-center justify-between px-5 h-11 rounded-[16px] transition-all duration-500 group text-right whitespace-nowrap overflow-hidden transition-all duration-500",
+              isActive 
+                ? "bg-white text-slate-900 shadow-xl shadow-white/5" 
+                : "text-white/30 hover:text-white hover:bg-white/5"
+            )}
+          >
             {({ isActive }) => (
               <>
-                <link.icon className={`w-5 h-5 transition-all group-hover:scale-110 ${isActive ? 'text-white' : 'text-white/40 group-hover:text-white'}`} />
-                <span className={`tracking-tight ${isActive ? 'font-black' : 'font-bold'}`}>{link.label}</span>
-                {isActive && <div className="mr-auto w-1.5 h-1.5 rounded-full bg-secondary" />}
+                <div className="flex items-center gap-3">
+                  <link.icon className={cn("w-4 h-4 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-slate-900" : "text-white/20 group-hover:text-white")} />
+                  <span className="text-[11px] font-black tracking-tight">{link.label}</span>
+                </div>
+                {/* Active Indicator Dot */}
+                <div className={cn(
+                  "w-1 h-1 rounded-full transition-all duration-500 scale-0",
+                  isActive && "scale-100 bg-slate-900"
+                )} />
               </>
             )}
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-6 mt-auto">
-        <button onClick={handleLogout} className="flex items-center gap-3 w-full px-5 py-4 rounded-2xl bg-white/5 text-white/60 hover:bg-destructive hover:text-white transition-all group font-bold text-sm">
-          <LogOut className="w-5 h-5 transition-transform group-hover:translate-x-[-4px]" />
-          <span>تسجيل الخروج</span>
+      {/* Footer / Logout (Scaled Down) */}
+      <div className="p-5 mt-auto border-t border-white/5">
+        <button 
+          onClick={handleLogout} 
+          className="flex items-center justify-center gap-3 w-full h-11 rounded-[16px] bg-white/5 text-white/30 hover:bg-rose-500/10 hover:text-rose-400 transition-all text-[9px] font-black uppercase tracking-widest border border-white/5"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>إنهاء الجلسة</span>
         </button>
+        <p className="text-[8px] font-bold text-white/5 text-center mt-4 tracking-[0.3em] uppercase">V 2.0 PREMIUM</p>
       </div>
     </aside>
   );

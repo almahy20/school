@@ -2,7 +2,16 @@ import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Plus, ClipboardList, Check, Trash2, Users } from 'lucide-react';
+import { 
+  BookOpen, Plus, ClipboardList, Check, Trash2, Users, Save, 
+  Search, X, ArrowLeft, ChevronLeft, LayoutGrid, Award,
+  Sparkles, History, Filter, AlertCircle, TrendingUp, Info
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 
 interface ExamTemplate {
   id: string;
@@ -24,9 +33,9 @@ interface StudentGrade {
 }
 
 const EXAM_TYPES = [
-  { value: 'daily', label: 'يومي', color: 'bg-info/10 text-info' },
-  { value: 'monthly', label: 'شهري', color: 'bg-warning/10 text-warning' },
-  { value: 'final', label: 'نهائي', color: 'bg-primary/10 text-primary' },
+  { value: 'daily', label: 'يومي', color: 'indigo' },
+  { value: 'monthly', label: 'شهري', color: 'emerald' },
+  { value: 'final', label: 'نهائي', color: 'rose' },
 ];
 
 export default function GradesPage() {
@@ -39,21 +48,27 @@ export default function GradesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Load classes
   useEffect(() => {
-    if (!user) return;
-    supabase.from('classes').select('*').eq('teacher_id', user.id).then(({ data }) => {
-      setClasses(data || []);
-      if (data?.length) setSelectedClass(data[0].id);
-      setLoading(false);
-    });
-  }, [user]);
+    if (!user?.schoolId) return;
+    supabase.from('classes')
+      .select('*')
+      .eq('school_id', user.schoolId)
+      .eq('teacher_id', user.id)
+      .then(({ data }) => {
+        setClasses(data || []);
+        if (data?.length) setSelectedClass(data[0].id);
+        setLoading(false);
+      });
+  }, [user?.id, user?.schoolId]);
 
   // Load templates for selected class
   useEffect(() => {
-    if (!selectedClass || !user) return;
+    if (!selectedClass || !user?.schoolId) return;
     supabase.from('exam_templates').select('*')
+      .eq('school_id', user.schoolId)
       .eq('class_id', selectedClass)
       .eq('teacher_id', user.id)
       .order('created_at', { ascending: false })
@@ -62,17 +77,23 @@ export default function GradesPage() {
         setSelectedTemplate(null);
         setStudentGrades([]);
       });
-  }, [selectedClass, user]);
+  }, [selectedClass, user?.id, user?.schoolId]);
 
   // Load students & grades when template selected
   useEffect(() => {
     if (!selectedTemplate) { setStudentGrades([]); return; }
     const fetchStudentsGrades = async () => {
-      const { data: students } = await supabase.from('students').select('id, name').eq('class_id', selectedTemplate.class_id).order('name');
+      const { data: students } = await supabase
+        .from('students')
+        .select('id, name')
+        .eq('school_id', user?.schoolId)
+        .eq('class_id', selectedTemplate.class_id)
+        .order('name');
       if (!students?.length) { setStudentGrades([]); return; }
 
       const studentIds = students.map(s => s.id);
       const { data: grades } = await supabase.from('grades').select('*')
+        .eq('school_id', user?.schoolId)
         .in('student_id', studentIds)
         .eq('exam_template_id', selectedTemplate.id);
 
@@ -105,6 +126,7 @@ export default function GradesPage() {
         ...(sg.gradeId ? { id: sg.gradeId } : {}),
         student_id: sg.studentId,
         teacher_id: user.id,
+        school_id: user.schoolId,
         subject: selectedTemplate.subject,
         score: Number(sg.score),
         max_score: selectedTemplate.max_score,
@@ -119,6 +141,7 @@ export default function GradesPage() {
     // Refresh grades
     const studentIds = studentGrades.map(sg => sg.studentId);
     const { data: grades } = await supabase.from('grades').select('*')
+      .eq('school_id', user.schoolId)
       .in('student_id', studentIds)
       .eq('exam_template_id', selectedTemplate.id);
 
@@ -131,6 +154,7 @@ export default function GradesPage() {
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا التقييم؟ سيتم حذف جميع الدرجات المرتبطة به.')) return;
     await supabase.from('grades').delete().eq('exam_template_id', templateId);
     await supabase.from('exam_templates').delete().eq('id', templateId);
     setTemplates(prev => prev.filter(t => t.id !== templateId));
@@ -140,187 +164,213 @@ export default function GradesPage() {
     }
   };
 
+  const filteredGrades = studentGrades.filter(sg => sg.studentName.includes(searchQuery));
+  
+  const average = studentGrades.length > 0 
+    ? Math.round(studentGrades.reduce((sum, sg) => sum + (Number(sg.score) || 0), 0) / studentGrades.length) 
+    : 0;
+
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1400px] mx-auto text-right">
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="page-header !mb-0 italic tracking-tighter">منظومة الدرجات والتقييم</h1>
-            <p className="text-secondary/40 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              رصد التحصيل الأكاديمي والتقارير الدورية
-            </p>
+      <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        {/* Premium Header - Scaled Down */}
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
+               <h1 className="text-2xl font-black text-slate-900 tracking-tight">رصد الدرجات والتقييمات</h1>
+            </div>
+            <p className="text-slate-500 font-medium text-sm pr-4">توثيق الأداء الأكاديمي وإصدار تقارير التقييم المستمر</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-4">
-            <div className="relative group">
-              <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
-                className="pr-6 pl-12 py-4 rounded-[20px] border-2 border-muted bg-white text-primary text-xs font-black uppercase tracking-widest focus:border-primary transition-all shadow-sm cursor-pointer appearance-none min-w-[200px]">
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-              <ClipboardList className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/30 pointer-events-none" />
-            </div>
-            
-            {selectedClass && (
-              <button onClick={() => setShowCreateTemplate(true)}
-                className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-primary text-white font-black text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0">
-                <Plus className="w-5 h-5" /> تأسيس تقييم جديد
-              </button>
-            )}
+             <div className="relative group min-w-[180px]">
+               <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer">
+                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+               </select>
+               <Users className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
+             </div>
+             
+             {selectedClass && (
+               <Button onClick={() => setShowCreateTemplate(true)} className="h-11 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
+                 <Plus className="w-4.5 h-4.5" /> تقييم جديد
+               </Button>
+             )}
           </div>
         </header>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 gap-6 bg-muted/10 rounded-[40px] border-2 border-dashed border-muted/50">
-            <div className="w-14 h-14 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-primary/40 font-black text-xs uppercase tracking-[0.3em] animate-pulse">جارٍ استرجاع سجلات التحصيل الفيدرالية…</p>
-          </div>
+           <div className="flex flex-col items-center justify-center py-32 gap-4">
+             <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+             <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري مزامنة السجلات الأكاديمية</p>
+           </div>
         ) : classes.length === 0 ? (
-          <div className="bg-white border-2 border-muted p-24 text-center rounded-[40px]">
-            <div className="w-24 h-24 rounded-[32px] bg-muted/50 flex items-center justify-center mx-auto mb-8 text-muted-foreground/30">
-              <ClipboardList className="w-12 h-12" />
+          <div className="bg-white border-2 border-dashed border-slate-200 p-24 text-center rounded-[48px] shadow-sm">
+            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
+              <ClipboardList className="w-10 h-10" />
             </div>
-            <h2 className="text-2xl font-black text-primary mb-3 italic tracking-tight">لا توجد سجلات متاحة</h2>
-            <p className="text-muted-foreground font-bold max-w-sm mx-auto leading-relaxed">لم يتم تعيين أي فصول دراسية لهويتك الأكاديمية بعد.</p>
+            <h2 className="text-xl font-black text-slate-900 mb-2">لا توجد فصول دراسية</h2>
+            <p className="text-slate-400 font-medium text-sm">لم يتم تعيين فصول دراسية لحسابك التعليمي بعد.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-            {/* Left Column: Templates */}
-            <div className="lg:col-span-4 space-y-6">
-              <div className="flex items-center justify-between px-4">
-                <h2 className="text-[10px] font-black text-primary/30 uppercase tracking-[0.3em]">سجل ملفات التقييم</h2>
-                <span className="text-[9px] font-black text-primary bg-secondary/20 px-3 py-1 rounded-full uppercase tracking-widest">{templates.length} ملف</span>
-              </div>
-              
-              <div className="space-y-4">
-                {templates.length === 0 ? (
-                  <div className="bg-white rounded-[32px] border-2 border-dashed border-muted p-12 text-center">
-                    <ClipboardList className="w-10 h-10 text-primary/10 mx-auto mb-4" />
-                    <p className="text-[10px] font-black text-primary/30 uppercase tracking-widest">لا توجد قوالب نشطة</p>
-                  </div>
-                ) : templates.map(t => {
-                  const typeInfo = EXAM_TYPES.find(et => et.value === t.exam_type) || EXAM_TYPES[1];
-                  const isSelected = selectedTemplate?.id === t.id;
-                  return (
-                    <div key={t.id}
-                      onClick={() => setSelectedTemplate(t)}
-                      className={`bg-white rounded-[28px] border-2 p-6 cursor-pointer transition-all duration-500 animate-scale-in group relative overflow-hidden ${
-                        isSelected 
-                          ? 'border-primary shadow-2xl shadow-primary/10' 
-                          : 'border-muted hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5'
-                      }`}>
-                      {isSelected && <div className="absolute right-0 top-0 bottom-0 w-2 bg-primary" />}
-                      
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="min-w-0">
-                          <h3 className={`font-black tracking-tight leading-tight transition-colors ${isSelected ? 'text-primary text-xl' : 'text-primary/60 text-lg'}`}>
-                            {t.title || t.subject}
-                          </h3>
-                        </div>
-                        <button onClick={e => { e.stopPropagation(); handleDeleteTemplate(t.id); }}
-                          className="w-10 h-10 rounded-xl text-primary/20 hover:bg-destructive/10 hover:text-destructive transition-all flex items-center justify-center">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase tracking-wider ${
-                          t.exam_type === 'final' ? 'bg-primary text-white' : 'bg-secondary text-primary'
-                        }`}>
-                          {typeInfo.label}
-                        </span>
-                        <div className="flex items-center gap-2 py-1 px-3 rounded-xl bg-muted text-primary/40 text-[9px] font-black uppercase tracking-widest">
-                          <BookOpen className="w-3.5 h-3.5" />
-                          {t.subject}
-                        </div>
-                        <span className="text-[9px] font-black text-primary/30 uppercase tracking-widest">· {t.max_score} درجة</span>
-                      </div>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+            {/* Left Sidebar: Templates List - Scaled Down */}
+            <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-6">
+               <div className="flex items-center justify-between px-3">
+                  <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">قوالب التقييم النشطة</h2>
+                  <Badge variant="outline" className="bg-white text-indigo-600 font-black px-3 py-0.5 rounded-full text-[9px]">{templates.length} تقييمات</Badge>
+               </div>
+
+               <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+                  {templates.length === 0 ? (
+                    <div className="bg-white/40 backdrop-blur-sm border border-dashed border-slate-200 p-12 text-center rounded-[32px]">
+                       <p className="text-slate-400 font-black text-[9px] uppercase tracking-widest opacity-60">لا توجد قوالب حالية</p>
                     </div>
-                  );
-                })}
-              </div>
+                  ) : templates.map(t => {
+                    const isSelected = selectedTemplate?.id === t.id;
+                    return (
+                      <div key={t.id}
+                        onClick={() => setSelectedTemplate(t)}
+                        className={cn(
+                          "premium-card p-5 cursor-pointer transition-all duration-500 overflow-hidden relative group",
+                          isSelected 
+                            ? "bg-slate-900 text-white shadow-xl shadow-slate-200 border-none translate-x-2 scale-[1.03]" 
+                            : "hover:translate-x-2"
+                        )}>
+                        <div className="flex items-start justify-between gap-4 mb-3 relative z-10">
+                           <div className="flex-1">
+                              <h3 className={cn("text-base font-black tracking-tight", isSelected ? "text-white" : "text-slate-900")}>{t.title}</h3>
+                              <p className={cn("text-[8px] uppercase font-black tracking-widest mt-1", isSelected ? "text-indigo-300" : "text-slate-400")}>{t.subject} • {t.term}</p>
+                           </div>
+                           <button onClick={e => { e.stopPropagation(); handleDeleteTemplate(t.id); }}
+                             className={cn(
+                               "w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0",
+                               isSelected ? "bg-white/10 text-white/40 hover:bg-rose-500/20 hover:text-rose-400" : "bg-slate-50 text-slate-300 hover:text-rose-500"
+                             )}>
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                        </div>
+                        <div className="flex items-center gap-2 relative z-10 border-t pt-3 mt-1 border-white/5 disabled:border-slate-50">
+                            <span className={cn(
+                                "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest",
+                                isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500"
+                            )}>
+                              {t.exam_type === 'daily' ? 'يومي' : t.exam_type === 'monthly' ? 'شهري' : 'نهائي'}
+                            </span>
+                            <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>درجة عظمى: {t.max_score}</span>
+                        </div>
+                        {isSelected && (
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/20 rounded-bl-[80px] pointer-events-none" />
+                        )}
+                      </div>
+                    );
+                  })}
+               </div>
+
+               {selectedTemplate && (
+                 <section className="bg-slate-900 rounded-[40px] p-8 space-y-6 shadow-2xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
+                    <div className="flex items-center gap-3 relative z-10">
+                       <TrendingUp className="w-4 h-4 text-indigo-400" />
+                       <h3 className="text-base font-black text-white">إحصائيات الأداء</h3>
+                    </div>
+                    <div className="space-y-4 relative z-10">
+                       <div className="flex justify-between items-end">
+                          <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">متوسط درجات الفصل</span>
+                          <span className="text-2xl font-black text-indigo-400">{average} / {selectedTemplate.max_score}</span>
+                       </div>
+                       <Progress value={(average/selectedTemplate.max_score)*100} className="h-1.5 bg-white/10" />
+                    </div>
+                 </section>
+               )}
             </div>
 
-            {/* Right Column: Grade entry */}
-            <div className="lg:col-span-8">
+            {/* Right Column: Grade entry rows - Scaled Down */}
+            <div className="xl:col-span-8 space-y-8">
               {!selectedTemplate ? (
-                <div className="bg-white rounded-[40px] border-2 border-dashed border-muted p-32 text-center animate-scale-in">
-                  <div className="w-24 h-24 bg-muted/30 rounded-[32px] flex items-center justify-center mx-auto mb-8 text-primary/10">
-                    <ClipboardList className="w-12 h-12" />
-                  </div>
-                  <h3 className="text-2xl font-black text-primary mb-3 italic tracking-tight">جاهز لرصد النتائج؟</h3>
-                  <p className="text-muted-foreground font-bold max-w-sm mx-auto leading-relaxed">اختر أحد ملفات التقييم من القائمة الجانبية للبدء في توثيق النتائج الأكاديمية.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-[40px] border-2 border-muted shadow-sm overflow-hidden animate-scale-in relative">
-                  <div className="absolute top-0 right-0 w-full h-1.5 bg-primary" />
-                  <div className="p-10 border-b-2 border-muted bg-muted/10">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-                      <div>
-                        <div className="flex items-center gap-4 mb-3">
-                          <h2 className="text-3xl font-black text-primary italic tracking-tight leading-none">{selectedTemplate.title || selectedTemplate.subject}</h2>
-                          <span className="px-4 py-1.5 rounded-xl bg-primary text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-primary/20">{selectedTemplate.term}</span>
-                        </div>
-                        <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest text-primary/40">
-                          <span className="flex items-center gap-2"><BookOpen className="w-4 h-4" /> {selectedTemplate.subject}</span>
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary/20" />
-                          <span>الدرجة العظمى: <span className="text-primary">{selectedTemplate.max_score}</span></span>
-                        </div>
-                      </div>
-                      
-                      <button onClick={handleSaveAll} disabled={saving}
-                        className="flex items-center gap-4 h-16 px-10 rounded-[24px] bg-primary text-white text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 group">
-                        {saving ? (
-                          <div className="w-5 h-5 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                        ) : (
-                          <Check className="w-5 h-5 font-black transition-transform group-hover:scale-110" />
-                        )}
-                        {saving ? 'جارٍ المزامنة...' : 'اعتماد النتائج'}
-                      </button>
+                 <div className="bg-white border-2 border-dashed border-slate-100 p-24 text-center rounded-[48px] shadow-sm">
+                    <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-[32px] flex items-center justify-center mx-auto mb-6 text-slate-200">
+                      <Sparkles className="w-10 h-10" />
                     </div>
-                  </div>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">اختر تقييماً للبدء</h3>
+                    <p className="text-slate-400 font-medium text-sm max-w-xs mx-auto">قم بتحديد أحد القوالب في الجانب الأيمن أو أنشئ تقييماً جديداً لرصد درجات الطلاب.</p>
+                 </div>
+              ) : (
+                <div className="premium-card p-0 overflow-hidden flex flex-col shadow-xl animate-in slide-in-from-left-6 duration-700">
+                   <div className="p-8 border-b border-slate-50 bg-slate-50/20 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                      <div className="flex items-center gap-5">
+                         <div className="w-16 h-16 rounded-[22px] bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-200 shrink-0">
+                            <Award className="w-8 h-8" />
+                         </div>
+                         <div>
+                            <div className="flex items-center gap-3 mb-1">
+                               <h2 className="text-xl font-black text-slate-900">{selectedTemplate.title}</h2>
+                               <Badge className="bg-white border-slate-100 font-black text-[8px] uppercase">{selectedTemplate.subject}</Badge>
+                            </div>
+                            <div className="flex items-center gap-3 text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">
+                               <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {studentGrades.length}</span>
+                               <div className="w-1 h-1 rounded-full bg-slate-200" />
+                               <span>الفصل: {selectedTemplate.term}</span>
+                            </div>
+                         </div>
+                      </div>
 
-                  <div className="p-0">
-                    {studentGrades.length === 0 ? (
-                      <div className="p-32 text-center">
-                        <Users className="w-16 h-16 text-primary/10 mx-auto mb-6" />
-                        <p className="text-primary/30 font-black text-xs uppercase tracking-widest">لا يوجد سجل طلاب نشط لهذه القاعة</p>
+                      <div className="flex items-center gap-3">
+                         <div className="relative group w-full md:w-56">
+                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+                            <input 
+                              type="text" 
+                              placeholder="بحث باسم الطالب..." 
+                              value={searchQuery}
+                              onChange={e => setSearchQuery(e.target.value)}
+                              className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-slate-100 bg-white text-xs font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 transition-all" 
+                            />
+                         </div>
+                         <Button onClick={handleSaveAll} disabled={saving} className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs shadow-lg gap-2 shrink-0">
+                            {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4.5 h-4.5" />}
+                            {saving ? 'جاري الرصد...' : 'حفظ الدرجات'}
+                         </Button>
                       </div>
-                    ) : (
-                      <div className="divide-y-2 divide-muted">
-                        <div className="grid grid-cols-12 gap-4 px-10 py-6 bg-muted/30 text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] border-b-2 border-muted">
-                          <div className="col-span-1">الرقم</div>
-                          <div className="col-span-11 sm:col-span-7">الاسم الأكاديمي</div>
-                          <div className="hidden sm:block sm:col-span-4 text-left">الدرجة النهائية</div>
+                   </div>
+
+                   <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto custom-scrollbar">
+                      {filteredGrades.length === 0 ? (
+                        <div className="p-24 text-center">
+                           <Users className="w-12 h-12 text-slate-100 mx-auto mb-4 opacity-50" />
+                           <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">لا توجد نتائج</p>
                         </div>
-                        {studentGrades.map((sg, idx) => (
-                          <div key={sg.studentId} className="grid grid-cols-12 gap-8 items-center px-10 py-8 hover:bg-primary/5 transition-all duration-300 group">
-                            <div className="col-span-1 text-sm font-black text-primary/20">{String(idx + 1).padStart(2, '0')}</div>
-                            <div className="col-span-11 sm:col-span-7">
-                              <p className="text-lg font-black text-primary group-hover:text-primary transition-colors tracking-tight leading-none">{sg.studentName}</p>
-                            </div>
-                            <div className="col-span-12 sm:col-span-4">
-                              <div className="relative group/input">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={selectedTemplate.max_score}
-                                  value={sg.score}
-                                  onChange={e => handleScoreChange(sg.studentId, e.target.value)}
-                                  placeholder="0.0"
-                                  className="w-full h-16 px-8 rounded-[20px] border-2 border-muted bg-white text-primary font-black text-xl text-center focus:outline-none focus:border-primary transition-all group-hover:border-primary/40"
-                                />
-                                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-[10px] font-black text-primary/20 uppercase pointer-events-none tracking-widest">
-                                  / {selectedTemplate.max_score}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                      ) : (
+                        filteredGrades.map((sg, idx) => (
+                           <div key={sg.studentId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-8 py-5 hover:bg-slate-50/50 transition-all group">
+                             <div className="flex items-center gap-4 min-w-0">
+                               <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center text-[10px] font-black text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-all shadow-inner shrink-0">
+                                  {idx + 1}
+                               </div>
+                               <div className="min-w-0">
+                                  <h3 className="text-base font-black text-slate-800 transition-colors truncate leading-tight mb-1 group-hover:text-indigo-600">{sg.studentName}</h3>
+                                  <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest opacity-60">سجل أكاديمي نشط</p>
+                               </div>
+                             </div>
+
+                             <div className="relative group/input w-full sm:w-32">
+                               <input
+                                 type="number"
+                                 min="0"
+                                 max={selectedTemplate.max_score}
+                                 value={sg.score}
+                                 onChange={e => handleScoreChange(sg.studentId, e.target.value)}
+                                 placeholder="0"
+                                 className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-lg text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
+                               />
+                               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-200 uppercase pointer-events-none tracking-widest">
+                                 / {selectedTemplate.max_score}
+                               </div>
+                             </div>
+                           </div>
+                        ))
+                      )}
+                   </div>
                 </div>
               )}
             </div>
@@ -332,8 +382,9 @@ export default function GradesPage() {
         <CreateTemplateModal
           classId={selectedClass}
           teacherId={user!.id}
+          user={user}
           onClose={() => setShowCreateTemplate(false)}
-          onCreated={(t) => {
+          onCreated={(t: any) => {
             setTemplates(prev => [t, ...prev]);
             setSelectedTemplate(t);
             setShowCreateTemplate(false);
@@ -344,11 +395,8 @@ export default function GradesPage() {
   );
 }
 
-function CreateTemplateModal({ classId, teacherId, onClose, onCreated }: {
-  classId: string; teacherId: string;
-  onClose: () => void;
-  onCreated: (t: ExamTemplate) => void;
-}) {
+// ─── Create Template Modal (Scaled Down) ─────────────────────────────────────
+function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: any) {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('monthly');
@@ -364,6 +412,7 @@ function CreateTemplateModal({ classId, teacherId, onClose, onCreated }: {
     const { data, error } = await supabase.from('exam_templates').insert({
       class_id: classId,
       teacher_id: teacherId,
+      school_id: user?.schoolId,
       subject: subject.trim(),
       exam_type: examType,
       max_score: Number(maxScore),
@@ -379,60 +428,59 @@ function CreateTemplateModal({ classId, teacherId, onClose, onCreated }: {
   };
 
   return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-bold text-foreground mb-6">إنشاء قالب تقييم</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">عنوان التقييم</label>
-            <input value={title} onChange={e => setTitle(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground"
-              placeholder="مثال: اختبار الفترة الأولى" />
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
+        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إنشاء تقييم جديد</h2>
+        <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">مسمى التقييم</label>
+            <Input value={title} onChange={e => setTitle(e.target.value)}
+              className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
+              placeholder="مثال: اختبار الشهر الأول" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">المادة *</label>
-            <input value={subject} onChange={e => setSubject(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground"
-              placeholder="مثال: الرياضيات" />
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المادة الدراسية *</label>
+            <Input value={subject} onChange={e => setSubject(e.target.value)}
+              className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
+              placeholder="مثال: لغة عربية" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">نوع التقييم</label>
-              <select value={examType} onChange={e => setExamType(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground">
-                <option value="daily">يومي</option>
-                <option value="monthly">شهري</option>
-                <option value="final">نهائي</option>
-              </select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">نوع التقييم</label>
+               <select value={examType} onChange={e => setExamType(e.target.value)}
+                 className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
+                 {EXAM_TYPES.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
+               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الفصل الدراسي</label>
-              <select value={term} onChange={e => setTerm(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground">
-                <option value="الفصل الأول">الفصل الأول</option>
-                <option value="الفصل الثاني">الفصل الثاني</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الدرجة العظمى</label>
-              <input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">الوزن (%)</label>
-              <input type="number" value={weight} onChange={e => setWeight(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-input bg-background text-foreground" />
+            <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
+               <select value={term} onChange={e => setTerm(e.target.value)}
+                 className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
+                 <option value="الفصل الأول">الفصل الأول</option>
+                 <option value="الفصل الثاني">الفصل الثاني</option>
+               </select>
             </div>
           </div>
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading}
-              className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">
-              {loading ? 'جارٍ الإنشاء...' : 'إنشاء'}
-            </button>
-            <button type="button" onClick={onClose}
-              className="flex-1 py-3 rounded-xl bg-muted text-foreground font-medium">إلغاء</button>
+          <div className="grid grid-cols-2 gap-4">
+             <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة العظمى</label>
+                <Input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
+                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
+             </div>
+             <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن النسبي (%)</label>
+                <Input type="number" value={weight} onChange={e => setWeight(e.target.value)}
+                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
+             </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <Button type="submit" disabled={loading}
+              className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-indigo-600 transition-all text-sm">
+              {loading ? 'جاري الرصد...' : 'تأكيد الإنشاء'}
+            </Button>
+            <Button type="button" onClick={onClose} variant="ghost"
+              className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
           </div>
         </form>
       </div>

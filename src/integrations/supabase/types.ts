@@ -1,4 +1,4 @@
-export type Json =
+﻿export type Json =
   | string
   | number
   | boolean
@@ -10,33 +10,53 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
       attendance: {
         Row: {
+          class_id: string | null
           created_at: string
           date: string
           id: string
+          school_id: string | null
           status: string
           student_id: string
         }
         Insert: {
+          class_id?: string | null
           created_at?: string
           date: string
           id?: string
+          school_id?: string | null
           status: string
           student_id: string
         }
         Update: {
+          class_id?: string | null
           created_at?: string
           date?: string
           id?: string
+          school_id?: string | null
           status?: string
           student_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "attendance_class_id_fkey"
+            columns: ["class_id"]
+            isOneToOne: false
+            referencedRelation: "classes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attendance_student_id_fkey"
             columns: ["student_id"]
@@ -85,6 +105,7 @@ export type Database = {
           grade_level: string | null
           id: string
           name: string
+          school_id: string | null
           teacher_id: string | null
         }
         Insert: {
@@ -92,6 +113,7 @@ export type Database = {
           grade_level?: string | null
           id?: string
           name: string
+          school_id?: string | null
           teacher_id?: string | null
         }
         Update: {
@@ -99,14 +121,73 @@ export type Database = {
           grade_level?: string | null
           id?: string
           name?: string
+          school_id?: string | null
           teacher_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "classes_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "classes_teacher_id_fkey"
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      complaints: {
+        Row: {
+          admin_response: string | null
+          content: string
+          created_at: string | null
+          id: string
+          parent_id: string | null
+          school_id: string | null
+          status: string | null
+          student_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_response?: string | null
+          content: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          school_id?: string | null
+          status?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_response?: string | null
+          content?: string
+          created_at?: string | null
+          id?: string
+          parent_id?: string | null
+          school_id?: string | null
+          status?: string | null
+          student_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "complaints_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "complaints_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -118,6 +199,7 @@ export type Database = {
           exam_type: string
           id: string
           max_score: number
+          school_id: string | null
           subject: string
           teacher_id: string
           term: string
@@ -130,6 +212,7 @@ export type Database = {
           exam_type?: string
           id?: string
           max_score?: number
+          school_id?: string | null
           subject: string
           teacher_id: string
           term?: string
@@ -142,6 +225,7 @@ export type Database = {
           exam_type?: string
           id?: string
           max_score?: number
+          school_id?: string | null
           subject?: string
           teacher_id?: string
           term?: string
@@ -157,10 +241,110 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "exam_templates_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "exam_templates_teacher_id_fkey"
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fee_payments: {
+        Row: {
+          amount: number
+          fee_id: string | null
+          id: string
+          payment_date: string | null
+          payment_method: string | null
+          school_id: string | null
+        }
+        Insert: {
+          amount: number
+          fee_id?: string | null
+          id?: string
+          payment_date?: string | null
+          payment_method?: string | null
+          school_id?: string | null
+        }
+        Update: {
+          amount?: number
+          fee_id?: string | null
+          id?: string
+          payment_date?: string | null
+          payment_method?: string | null
+          school_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fee_payments_fee_id_fkey"
+            columns: ["fee_id"]
+            isOneToOne: false
+            referencedRelation: "fees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fee_payments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fees: {
+        Row: {
+          amount_due: number
+          amount_paid: number
+          created_at: string | null
+          id: string
+          school_id: string | null
+          status: string | null
+          student_id: string | null
+          term: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount_due?: number
+          amount_paid?: number
+          created_at?: string | null
+          id?: string
+          school_id?: string | null
+          status?: string | null
+          student_id?: string | null
+          term: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount_due?: number
+          amount_paid?: number
+          created_at?: string | null
+          id?: string
+          school_id?: string | null
+          status?: string | null
+          student_id?: string | null
+          term?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fees_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fees_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
             referencedColumns: ["id"]
           },
         ]
@@ -172,6 +356,7 @@ export type Database = {
           exam_template_id: string | null
           id: string
           max_score: number
+          school_id: string | null
           score: number
           student_id: string
           subject: string
@@ -184,6 +369,7 @@ export type Database = {
           exam_template_id?: string | null
           id?: string
           max_score?: number
+          school_id?: string | null
           score: number
           student_id: string
           subject: string
@@ -196,6 +382,7 @@ export type Database = {
           exam_template_id?: string | null
           id?: string
           max_score?: number
+          school_id?: string | null
           score?: number
           student_id?: string
           subject?: string
@@ -208,6 +395,13 @@ export type Database = {
             columns: ["exam_template_id"]
             isOneToOne: false
             referencedRelation: "exam_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grades_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
@@ -285,6 +479,8 @@ export type Database = {
           full_name: string
           id: string
           phone: string | null
+          school_id: string | null
+          specialization: string | null
           updated_at: string
         }
         Insert: {
@@ -293,6 +489,8 @@ export type Database = {
           full_name?: string
           id: string
           phone?: string | null
+          school_id?: string | null
+          specialization?: string | null
           updated_at?: string
         }
         Update: {
@@ -301,7 +499,44 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
+          school_id?: string | null
+          specialization?: string | null
           updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      schools: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          status: string | null
+          subscription_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          subscription_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          subscription_date?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -310,18 +545,21 @@ export type Database = {
           created_at: string
           id: string
           parent_id: string
+          school_id: string | null
           student_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           parent_id: string
+          school_id?: string | null
           student_id: string
         }
         Update: {
           created_at?: string
           id?: string
           parent_id?: string
+          school_id?: string | null
           student_id?: string
         }
         Relationships: [
@@ -330,6 +568,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "student_parents_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
           {
@@ -350,6 +595,7 @@ export type Database = {
           name: string
           notes: string | null
           parent_phone: string | null
+          school_id: string | null
           updated_at: string
         }
         Insert: {
@@ -360,6 +606,7 @@ export type Database = {
           name: string
           notes?: string | null
           parent_phone?: string | null
+          school_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -370,6 +617,7 @@ export type Database = {
           name?: string
           notes?: string | null
           parent_phone?: string | null
+          school_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -380,31 +628,57 @@ export type Database = {
             referencedRelation: "classes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "students_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
         Row: {
           id: string
+          is_super_admin: boolean | null
           role: Database["public"]["Enums"]["app_role"]
+          school_id: string | null
           user_id: string
         }
         Insert: {
           id?: string
+          is_super_admin?: boolean | null
           role?: Database["public"]["Enums"]["app_role"]
+          school_id?: string | null
           user_id: string
         }
         Update: {
           id?: string
+          is_super_admin?: boolean | null
           role?: Database["public"]["Enums"]["app_role"]
+          school_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      claim_school_admin: {
+        Args: { new_school_id: string }
+        Returns: undefined
+      }
+      get_auth_school_id: { Args: never; Returns: string }
       get_parent_student_ids: {
         Args: { _parent_id: string }
         Returns: string[]
@@ -424,6 +698,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "teacher" | "parent"

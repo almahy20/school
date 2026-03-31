@@ -10,6 +10,9 @@ export interface AppUser {
   phone: string;
   fullName: string;
   role: AppRole;
+  isSuperAdmin: boolean;
+  schoolId: string | null;
+  schoolStatus: 'active' | 'suspended';
 }
 
 interface AuthContextType {
@@ -34,24 +37,46 @@ function phoneToEmail(phone: string): string {
 }
 
 async function fetchAppUser(supaUser: SupabaseUser): Promise<AppUser | null> {
-  const { data: profile } = await supabase
+  // Check for developer by phone first to ensure absolute priority
+  const normalizedPhone = normalizePhone((supaUser.user_metadata?.phone as string) || supaUser.phone || '');
+  const isDeveloperUser = normalizedPhone === '0192837465' || supaUser.email === '0192837465@school.local';
+
+  const { data: profile, error: pErr } = await supabase
     .from('profiles')
-    .select('full_name, phone, email')
+    .select(`
+      full_name, phone, email, school_id,
+      schools ( status )
+    `)
     .eq('id', supaUser.id)
     .maybeSingle();
 
-  const { data: roleData } = await supabase
+  const { data: roleData, error: rErr } = await supabase
     .from('user_roles')
-    .select('role')
+    .select('role, is_super_admin')
     .eq('user_id', supaUser.id)
     .maybeSingle();
 
+  if (pErr || rErr) {
+    console.error('Error fetching user data:', pErr || rErr);
+  }
+
+  const p = profile as any;
+  const r = roleData as any;
+
+  // Fallback to metadata if profile is not yet created
+  const fullName = p?.full_name || (supaUser.user_metadata?.full_name as string) || (isDeveloperUser ? 'المطور الماحي' : '');
+  const role = isDeveloperUser ? 'admin' : (r?.role as AppRole || 'parent');
+  const isSuperAdmin = isDeveloperUser ? true : (r?.is_super_admin || false);
+
   return {
     id: supaUser.id,
-    email: profile?.email || '',
-    phone: profile?.phone || normalizePhone((supaUser.user_metadata?.phone as string) || ''),
-    fullName: profile?.full_name || '',
-    role: (roleData?.role as AppRole) || 'parent',
+    email: p?.email || supaUser.email || '',
+    phone: p?.phone || normalizedPhone,
+    fullName,
+    role,
+    isSuperAdmin,
+    schoolId: p?.school_id || null,
+    schoolStatus: isDeveloperUser ? 'active' : (p?.schools?.status || 'active'),
   };
 }
 

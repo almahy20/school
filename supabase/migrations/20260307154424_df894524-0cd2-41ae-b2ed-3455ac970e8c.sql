@@ -101,13 +101,3 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- =============================================
--- 3. Fix missing profile for user 0cfdf3f1
--- =============================================
-INSERT INTO public.profiles (id, full_name, email, phone)
-VALUES ('0cfdf3f1-6e2e-41bb-8aa3-ce4e73f11d24', 'عبدالرحمن', '01029082772@school.local', '01029082772')
-ON CONFLICT (id) DO NOTHING;
-
-INSERT INTO public.user_roles (user_id, role)
-VALUES ('0cfdf3f1-6e2e-41bb-8aa3-ce4e73f11d24', 'parent')
-ON CONFLICT (user_id, role) DO NOTHING;

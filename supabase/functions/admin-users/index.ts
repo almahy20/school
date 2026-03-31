@@ -59,8 +59,14 @@ Deno.serve(async (req) => {
         if (userId === caller.id) {
           return new Response(JSON.stringify({ error: "Cannot change own role" }), { status: 400, headers: corsHeaders });
         }
+        // Get the caller's school_id to preserve tenancy
+        const { data: callerRole } = await adminClient
+          .from("user_roles")
+          .select("school_id")
+          .eq("user_id", caller.id)
+          .single();
         await adminClient.from("user_roles").delete().eq("user_id", userId);
-        await adminClient.from("user_roles").insert({ user_id: userId, role: data.role });
+        await adminClient.from("user_roles").insert({ user_id: userId, role: data.role, school_id: callerRole?.school_id });
         return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
@@ -75,6 +81,7 @@ Deno.serve(async (req) => {
       case "create_user": {
         const phone = data.phone?.replace(/\D/g, '');
         const email = `${phone}@school.local`;
+        const school_id = data.school_id || null;
         const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
           email,
           password: data.password,
@@ -82,11 +89,16 @@ Deno.serve(async (req) => {
           user_metadata: { full_name: data.full_name || '', phone },
         });
         if (createErr) throw createErr;
-        // Set role if provided
-        if (data.role && data.role !== 'parent') {
-          await adminClient.from("user_roles").update({ role: data.role }).eq("user_id", newUser.user.id);
+        const newUserId = newUser.user.id;
+        // Assign school_id to the profile
+        if (school_id) {
+          await adminClient.from("profiles").update({ school_id, full_name: data.full_name || '', phone }).eq("id", newUserId);
         }
-        return new Response(JSON.stringify({ success: true, userId: newUser.user.id }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        // Set role and school_id in user_roles (trigger creates a default 'parent' row)
+        await adminClient.from("user_roles")
+          .update({ role: data.role || 'parent', school_id })
+          .eq("user_id", newUserId);
+        return new Response(JSON.stringify({ success: true, userId: newUserId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       case "ban": {

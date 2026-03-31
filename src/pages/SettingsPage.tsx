@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ChevronLeft, User, Bell, Globe, HelpCircle, Shield,
-  Users, Database, LogOut, Edit2, Plus
+  Users, Database, LogOut, Edit2, Plus, ArrowLeft
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -35,124 +35,120 @@ export default function SettingsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-4xl mx-auto">
-        <div className="text-center">
-          <h1 className="page-header mb-2 inline-block">إعدادات النظام</h1>
-          <p className="text-muted-foreground text-sm">إدارة حسابك وتخصيص تجربة التطبيق الخاصة بك.</p>
-        </div>
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1000px] mx-auto text-right">
+        {/* Header Section */}
+        <header className="flex flex-col gap-2">
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">الإعدادات والتحكم</h1>
+          <p className="text-sm text-slate-400 font-medium tracking-wide">إدارة الحساب الشخصي وتفضيلات النظام</p>
+        </header>
 
         {/* Profile Card */}
-        <div className="bg-card rounded-3xl border shadow-lg p-8 flex flex-col sm:flex-row items-center gap-8 group animate-scale-in relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl group-hover:bg-primary/10 transition-colors" />
-          
+        <div className="bg-white border border-slate-100 p-8 rounded-[40px] shadow-sm flex flex-col sm:flex-row items-center gap-8 relative overflow-hidden group">
           <div className="relative">
-            <div className="w-24 h-24 rounded-3xl bg-primary/10 border-4 border-card flex items-center justify-center text-4xl font-black text-primary shadow-xl transition-transform group-hover:scale-105 group-hover:rotate-3">
+            <div className="w-28 h-28 rounded-3xl bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl font-bold text-slate-300 shadow-inner group-hover:bg-primary group-hover:text-white transition-all duration-500">
               {user?.fullName?.[0] || '?'}
             </div>
-            <button className="absolute -bottom-2 -left-2 w-10 h-10 rounded-2xl bg-card border shadow-lg flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all active:scale-90">
+            <button className="absolute -bottom-2 -right-2 w-10 h-10 rounded-xl bg-white border border-slate-100 shadow-md flex items-center justify-center text-slate-400 hover:text-primary transition-all">
               <Plus className="w-5 h-5" />
             </button>
           </div>
           
           <div className="flex-1 text-center sm:text-right">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
-              <h2 className="text-2xl font-black text-foreground">{user?.fullName}</h2>
-              <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold tracking-widest uppercase self-center sm:self-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
+              <h2 className="text-2xl font-bold text-slate-900 tracking-tight">{user?.fullName}</h2>
+              <span className="px-3 py-1 rounded-lg bg-primary/5 text-primary text-[10px] font-bold uppercase tracking-widest border border-primary/10 w-fit mx-auto sm:mx-0">
                 {roleLabel}
               </span>
             </div>
-            <p className="text-muted-foreground font-medium mb-4">{user?.phone || user?.email}</p>
-            <button className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-muted text-foreground text-sm font-bold hover:bg-primary hover:text-white transition-all active:scale-95 shadow-sm">
-              <Edit2 className="w-4 h-4" /> تعديل الملف الشخصي
+            <p className="text-sm font-medium text-slate-400 mb-6" dir="ltr">{user?.phone || user?.email}</p>
+            <button className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white text-slate-700 text-xs font-bold border border-slate-100 hover:bg-slate-50 transition-all mx-auto sm:mx-0">
+              <Edit2 className="w-4 h-4 text-slate-400" /> تعديل الملف الشخصي
             </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <div className="flex items-center gap-3 px-2">
-              <User className="w-5 h-5 text-primary" />
-              <h3 className="text-sm font-black text-muted-foreground uppercase tracking-[0.2em]">إعدادات الحساب</h3>
-            </div>
-            <div className="bg-card rounded-3xl border shadow-sm overflow-hidden divide-y">
-              {accountSettings.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={item.onClick}
-                  className="w-full flex items-center gap-5 p-5 hover:bg-primary/5 transition-all text-right group"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center shrink-0 transition-all group-hover:bg-primary/10 group-hover:scale-110">
-                    <item.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="flex-1">
-                    <span className="block font-bold text-foreground group-hover:text-primary transition-colors">{item.label}</span>
-                    {item.extra && <span className="text-xs text-muted-foreground font-medium">{item.extra}</span>}
-                  </div>
-                  <ChevronLeft className="w-5 h-5 text-muted-foreground/30 group-hover:translate-x-[-4px] group-hover:text-primary transition-all" />
-                </button>
-              ))}
+          <div className="flex flex-col gap-8">
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-2">تفضيلات الحساب</h3>
+              <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
+                {accountSettings.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    className="w-full flex items-center gap-4 p-6 hover:bg-slate-50/50 transition-all text-right group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                      <item.icon className="w-6 h-6 text-slate-300 group-hover:text-white transition-colors" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="block text-base font-bold text-slate-700 group-hover:text-primary transition-colors">{item.label}</span>
+                      {item.extra && (
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-0.5 block">{item.extra}</span>
+                      )}
+                    </div>
+                    <ArrowLeft className="w-4 h-4 text-slate-100 group-hover:text-primary group-hover:translate-x-[-4px] transition-all" />
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="flex items-center gap-3 px-2">
-              <HelpCircle className="w-5 h-5 text-primary" />
-              <h3 className="text-sm font-black text-muted-foreground uppercase tracking-[0.2em]">الدعم والمساعدة</h3>
-            </div>
-            <div className="bg-card rounded-3xl border shadow-sm overflow-hidden divide-y">
-              {supportSettings.map((item) => (
-                <button
-                  key={item.label}
-                  onClick={item.onClick}
-                  className="w-full flex items-center gap-5 p-5 hover:bg-primary/5 transition-all text-right group"
-                >
-                  <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center shrink-0 transition-all group-hover:bg-primary/10 group-hover:scale-110">
-                    <item.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <span className="flex-1 font-bold text-foreground group-hover:text-primary transition-colors">{item.label}</span>
-                  <ChevronLeft className="w-5 h-5 text-muted-foreground/30 group-hover:translate-x-[-4px] group-hover:text-primary transition-all" />
-                </button>
-              ))}
+            <div className="space-y-4">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-2">الدعم والخصوصية</h3>
+              <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
+                {supportSettings.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={item.onClick}
+                    className="w-full flex items-center gap-4 p-6 hover:bg-slate-50/50 transition-all text-right group"
+                  >
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                      <item.icon className="w-6 h-6 text-slate-300 group-hover:text-white transition-colors" />
+                    </div>
+                    <span className="flex-1 text-base font-bold text-slate-700 group-hover:text-primary transition-colors">{item.label}</span>
+                    <ArrowLeft className="w-4 h-4 text-slate-100 group-hover:text-primary group-hover:translate-x-[-4px] transition-all" />
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="flex flex-col gap-8">
             {user?.role === 'admin' && (
-              <>
-                <div className="flex items-center gap-3 px-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <h3 className="text-sm font-black text-muted-foreground uppercase tracking-[0.2em]">أدوات المسؤول</h3>
-                </div>
-                <div className="bg-card rounded-3xl border shadow-sm overflow-hidden divide-y">
+              <div className="space-y-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-2">إدارة النظام</h3>
+                <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
                   {adminSettings.map((item) => (
                     <button
                       key={item.label}
                       onClick={item.onClick}
-                      className="w-full flex items-center gap-5 p-5 hover:bg-primary/5 transition-all text-right group"
+                      className="w-full flex items-center gap-4 p-6 hover:bg-slate-50/50 transition-all text-right group"
                     >
-                      <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center shrink-0 transition-all group-hover:bg-primary/10 group-hover:scale-110">
-                        <item.icon className="w-6 h-6 text-primary" />
+                      <div className="w-12 h-12 rounded-2xl bg-slate-900/5 flex items-center justify-center shrink-0 group-hover:bg-slate-900 group-hover:text-white transition-all">
+                        <item.icon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
                       </div>
-                      <span className="flex-1 font-bold text-foreground group-hover:text-primary transition-colors">{item.label}</span>
-                      <ChevronLeft className="w-5 h-5 text-primary/30 group-hover:translate-x-[-4px] group-hover:text-primary transition-all" />
+                      <span className="flex-1 text-base font-bold text-slate-700 group-hover:text-slate-900 transition-colors">{item.label}</span>
+                      <ArrowLeft className="w-4 h-4 text-slate-100 group-hover:text-slate-900 group-hover:translate-x-[-4px] transition-all" />
                     </button>
                   ))}
                 </div>
-              </>
+              </div>
             )}
 
             <button
               onClick={handleLogout}
-              className="w-full py-5 rounded-3xl bg-destructive/10 text-destructive font-black text-lg flex items-center justify-center gap-3 hover:bg-destructive hover:text-white transition-all shadow-lg shadow-destructive/10 active:scale-95 group"
+              className="w-full py-6 rounded-[32px] bg-slate-900 text-white font-bold text-base flex items-center justify-center gap-3 hover:bg-rose-500 transition-all shadow-lg shadow-slate-900/10 active:scale-95 group"
             >
-              <LogOut className="w-6 h-6 transition-transform group-hover:scale-110 group-hover:rotate-12" />
-              تسجيل الخروج من النظام
+              <LogOut className="w-5 h-5 transition-transform group-hover:rotate-12" />
+              تسجيل الخروج
             </button>
             
-            <div className="text-center p-8 bg-muted/30 rounded-3xl border border-dashed border-border/50">
-              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 border overflow-hidden">
-                <img src="/favicon.ico" alt="Logo" className="w-8 h-8 opacity-20" />
+            <div className="text-center p-10 bg-slate-50 rounded-[40px] border border-slate-100">
+              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-200/50">
+                <div className="w-6 h-6 rounded-lg bg-primary/20" />
               </div>
-              <p className="text-xs font-black text-muted-foreground/40 tracking-widest uppercase mb-1">إدارة عربية</p>
-              <p className="text-[10px] font-bold text-muted-foreground/30">الإصدار 2.5.0 (2025) · كافة الحقوق محفوظة</p>
+              <p className="text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mb-1">EDARA ARABIYA</p>
+              <p className="text-[9px] font-medium text-slate-300 uppercase tracking-widest leading-relaxed">الإصدار 2.5.0<br/>جميع الحقوق محفوظة © 2025</p>
             </div>
           </div>
         </div>

@@ -1,502 +1,263 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
-import StatCard from '@/components/StatCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   Users, GraduationCap, UserCheck, School, BookOpen, 
   TrendingUp, Award, ArrowUpRight, Zap, Target,
   CheckCircle, XCircle, Clock, AlertCircle, Eye, X,
-  ClipboardList, CalendarCheck, Calendar
+  ClipboardList, CalendarCheck, Calendar, MessageSquare,
+  ChevronRight, Activity
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  if (user?.role === 'parent') return <ParentDashboard />;
-  if (user?.role === 'teacher') return <TeacherDashboard />;
-  return <AdminDashboard />;
-}
-
-// ─── Admin Dashboard (Strategy Center) ───────────────────────────────────────────
-function AdminDashboard() {
-  const { user } = useAuth();
-  const [stats, setStats] = useState({ students: 0, teachers: 0, parents: 0, classes: 0 });
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('students').select('id', { count: 'exact', head: true }),
-      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
-      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
-      supabase.from('classes').select('id', { count: 'exact', head: true }),
-    ]).then(([s, t, p, c]) => {
-      setStats({ students: s.count || 0, teachers: t.count || 0, parents: p.count || 0, classes: c.count || 0 });
-    });
-  }, []);
-
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1400px] mx-auto">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="page-header !mb-0 italic tracking-tighter">المركز الإداري</h1>
-            <p className="text-primary/40 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary" />
-              أداء المؤسسة التعليمية اليوم
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">التوجيه المستمر</p>
-              <p className="text-sm font-bold text-primary">تحكم كامل، أمان مطلق</p>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-primary/5 border-2 border-primary/10 flex items-center justify-center text-primary rotate-3">
-              <Zap className="w-6 h-6 fill-primary" />
-            </div>
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
-          <StatCard title="إجمالي الطلاب" value={stats.students} icon={Users} color="primary" />
-          <StatCard title="المعلمون" value={stats.teachers} icon={GraduationCap} color="secondary" />
-          <StatCard title="أولياء الأمور" value={stats.parents} icon={UserCheck} color="accent" />
-          <StatCard title="إحصائية الفصول" value={stats.classes} icon={School} color="success" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 relative overflow-hidden bg-primary p-12 rounded-[40px] shadow-2xl shadow-primary/20">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl" />
-            <div className="absolute bottom-0 left-0 w-48 h-48 bg-secondary/20 rounded-full -ml-24 -mb-24 blur-3xl" />
-            
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 text-white">
-              <div className="shrink-0 w-24 h-24 rounded-3xl bg-white/10 border border-white/20 flex items-center justify-center shadow-inner group transition-transform hover:scale-105 active:scale-95 cursor-pointer">
-                <Target className="w-12 h-12 text-secondary group-hover:rotate-12 transition-all" />
-              </div>
-              <div className="text-center md:text-right space-y-4">
-                <h2 className="text-4xl font-black tracking-tight leading-tight">مرحباً بك، {user?.fullName}</h2>
-                <p className="text-white/60 font-bold text-lg max-w-2xl leading-relaxed">
-                  أنت الآن في عصب النظام الإداري لمؤسسة "إدارة عربية". رؤيتك الاستراتيجية هي التي تدفعنا لتطوير منصة تعليمية ذكية، آمنة، ومتكاملة.
-                </p>
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 pt-4">
-                  <div className="px-6 py-3 rounded-2xl bg-white/10 font-bold text-sm backdrop-blur-md border border-white/5">
-                    الاستخدام الحالي: مرتفع
-                  </div>
-                  <div className="px-6 py-3 rounded-2xl bg-secondary text-primary font-black text-sm shadow-xl shadow-black/20">
-                    تقرير المدرسة الموحد
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white border-2 border-muted p-8 rounded-[40px] flex flex-col items-center justify-center text-center group active:scale-[0.98] transition-all cursor-pointer hover:border-secondary shadow-sm">
-            <div className="w-20 h-20 rounded-3xl bg-secondary/10 flex items-center justify-center text-secondary mb-6 group-hover:scale-110 transition-transform">
-              <ArrowUpRight className="w-10 h-10 font-black" />
-            </div>
-            <h3 className="text-2xl font-black text-primary mb-2">رؤية المستقبل</h3>
-            <p className="text-muted-foreground font-bold leading-relaxed mb-6 px-4">استكشاف الفرص المتاحة وتتبع نمو الطلاب الأكاديمي عبر التقارير التحليلية المتقدمة.</p>
-            <div className="w-full h-2 bg-muted/40 rounded-full overflow-hidden">
-              <div className="h-full bg-secondary w-[85%] animate-pulse" />
-            </div>
-          </div>
-        </div>
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
+        {user?.role === 'parent' ? <ParentDashboard />
+          : user?.role === 'teacher' ? <TeacherDashboard />
+          : <AdminDashboard />}
       </div>
     </AppLayout>
   );
 }
 
-// ─── Teacher Dashboard (Classroom Control) ──────────────────────────────────────
+// ─── Shared Components ────────────────────────────────────────────────────────
+function StatsCard({ title, value, icon: Icon, color, trend }: any) {
+  const colors: any = {
+    primary: "bg-slate-900 text-white border-slate-800 shadow-slate-200/50",
+    emerald: "bg-emerald-500 text-white border-emerald-400/20 shadow-emerald-100",
+    amber: "bg-amber-500 text-white border-amber-400/20 shadow-amber-100",
+    indigo: "bg-indigo-600 text-white border-indigo-500/20 shadow-indigo-100",
+    white: "bg-white text-slate-900 border-slate-100 shadow-slate-200/20"
+  };
+
+  return (
+    <div className={cn(
+      "group premium-card p-8 flex flex-col justify-between border shadow-xl hover:scale-[1.02] transition-all duration-500",
+      colors[color || 'white']
+    )}>
+      <div className="flex items-start justify-between">
+        <div className={cn(
+          "w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:rotate-6",
+          color === 'white' ? 'bg-slate-50 text-slate-400' : 'bg-white/20 text-white'
+        )}>
+          <Icon className="w-7 h-7" />
+        </div>
+        {trend && (
+          <div className={cn(
+            "px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1",
+            color === 'white' ? 'bg-emerald-50 text-emerald-600' : 'bg-white/20 text-white'
+          )}>
+            <ArrowUpRight className="w-3 h-3" />
+            {trend}
+          </div>
+        )}
+      </div>
+      <div className="mt-8">
+        <p className={cn("text-[11px] font-black uppercase tracking-widest mb-1 opacity-60")}>{title}</p>
+        <h3 className="text-4xl font-black leading-none tracking-tighter">{value}</h3>
+      </div>
+    </div>
+  );
+}
+
+// ─── Admin Dashboard ──────────────────────────────────────────────────────────
+function AdminDashboard() {
+  const { user } = useAuth();
+  const [stats, setStats] = useState({ students: 0, teachers: 0, parents: 0, classes: 0 });
+
+  useEffect(() => {
+    if (!user?.schoolId) return;
+    Promise.all([
+      supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId),
+      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'teacher').eq('school_id', user.schoolId),
+      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'parent').eq('school_id', user.schoolId),
+      supabase.from('classes').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId),
+    ]).then(([s, t, p, c]) => {
+      setStats({ students: s.count || 0, teachers: t.count || 0, parents: p.count || 0, classes: c.count || 0 });
+    });
+  }, [user?.schoolId]);
+
+  return (
+    <div className="flex flex-col gap-12 max-w-[1500px] mx-auto text-right">
+      <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10">
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="w-2 h-10 bg-primary rounded-full" />
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">نظرة عامة على المؤسسة</h1>
+          </div>
+          <p className="text-slate-500 font-medium text-lg pr-5">إدارة البيانات المركزية والكادر التعليمي</p>
+        </div>
+        
+        <div className="flex items-center gap-4 px-8 py-4 rounded-[32px] bg-white border border-slate-100 shadow-sm">
+           <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
+             <Calendar className="w-6 h-6" />
+           </div>
+           <div>
+             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">تاريخ اليوم</p>
+             <p className="text-lg font-black text-slate-700 leading-none">{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+           </div>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
+        <StatsCard title="إجمالي الطلاب" value={stats.students} icon={Users} color="primary" trend="نشط جداً" />
+        <StatsCard title="كادر المعلمين" value={stats.teachers} icon={GraduationCap} color="indigo" />
+        <StatsCard title="أولياء الأمور" value={stats.parents} icon={UserCheck} color="amber" />
+        <StatsCard title="الفصول الدراسية" value={stats.classes} icon={School} color="emerald" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 premium-card">
+           <div className="flex items-center justify-between mb-10">
+             <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <h2 className="text-2xl font-black text-slate-900">النشاطات الأخيرة</h2>
+             </div>
+             <Button variant="ghost" className="text-slate-400 font-black text-xs uppercase tracking-widest">عرض الكل</Button>
+           </div>
+           
+           <div className="space-y-6">
+              <div className="p-20 text-center flex flex-col items-center gap-4 bg-slate-50 border border-dashed border-slate-200 rounded-[32px]">
+                 <Activity className="w-10 h-10 text-slate-200" />
+                 <p className="text-slate-400 font-medium text-sm text-center">لا توجد نشاطات مؤخرة لعرضها حالياً</p>
+              </div>
+           </div>
+        </div>
+
+        <div className="premium-card bg-slate-100 text-slate-400 border-slate-200 flex items-center justify-center relative overflow-hidden">
+             <div className="text-center p-10 space-y-4">
+                <Target className="w-12 h-12 mx-auto opacity-20" />
+                <h3 className="text-xl font-black tracking-tight text-slate-400">لا توجد أهداف محددة</h3>
+             </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Teacher Dashboard ────────────────────────────────────────────────────────
 function TeacherDashboard() {
   const { user } = useAuth();
   const [myClasses, setMyClasses] = useState<any[]>([]);
   const [studentCount, setStudentCount] = useState(0);
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('classes').select('*').eq('teacher_id', user.id).then(async ({ data }) => {
-      setMyClasses(data || []);
-      if (data?.length) {
-        const classIds = data.map(c => c.id);
-        const { count } = await supabase.from('students').select('id', { count: 'exact', head: true }).in('class_id', classIds);
-        setStudentCount(count || 0);
-      }
-    });
-  }, [user]);
+    if (!user?.schoolId) return;
+    supabase.from('classes')
+      .select('*')
+      .eq('school_id', user.schoolId)
+      .eq('teacher_id', user.id)
+      .then(async ({ data }) => {
+        setMyClasses(data || []);
+        if (data?.length) {
+          const classIds = data.map(c => c.id);
+          const { count } = await supabase
+            .from('students')
+            .select('id', { count: 'exact', head: true })
+            .eq('school_id', user.schoolId)
+            .in('class_id', classIds);
+          setStudentCount(count || 0);
+        }
+      });
+  }, [user?.id, user?.schoolId]);
 
   return (
-    <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1400px] mx-auto">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="page-header !mb-0 italic tracking-tighter">بوابة المعلم</h1>
-            <p className="text-secondary/40 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              إدارة الفصول والتقييم الأكاديمي
-            </p>
-          </div>
-          <div className="w-12 h-12 rounded-xl bg-secondary/10 border-2 border-secondary/20 flex items-center justify-center text-secondary rotate-3">
-            <ClipboardList className="w-6 h-6" />
-          </div>
-        </header>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-          <StatCard title="إجمالي طلابي" value={studentCount} icon={Users} color="primary" />
-          <StatCard title="فصولي النشطة" value={myClasses.length} icon={School} color="secondary" />
-          <StatCard title="تقييمات اليوم" value="4" icon={CalendarCheck} color="success" />
-        </div>
-
-        <div className="bg-white border-2 border-muted p-10 rounded-[40px] relative overflow-hidden group shadow-sm">
-          <div className="absolute top-0 left-0 w-32 h-32 bg-secondary/5 rounded-full -ml-16 -mt-16 blur-2xl" />
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-right">
-            <div className="w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary shrink-0 group-hover:scale-110 group-hover:rotate-3 transition-transform">
-              <Award className="w-10 h-10" />
+    <div className="flex flex-col gap-12 max-w-[1500px] mx-auto text-right">
+      <header className="bg-slate-900 p-12 sm:p-20 rounded-[64px] text-white shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-12">
+          <div className="flex items-center gap-8">
+            <div className="w-24 h-24 rounded-[32px] bg-white flex items-center justify-center shadow-2xl rotate-3 group-hover:rotate-0 transition-transform duration-500">
+               <Award className="w-12 h-12 text-slate-900" />
             </div>
-            <div className="flex-1">
-              <h2 className="text-2xl font-black text-primary mb-2">مرحباً يا بطل المعرفة، {user?.fullName}</h2>
-              <p className="text-muted-foreground font-bold leading-relaxed max-w-3xl">
-                أنت تضع حجر الأساس لمستقبل طلابنا. يمكنك الآن البدء في رصد الدرجات، متابعة الحضور، وتحديث تقارير الأداء بكل سهولة من القائمة الجانبية.
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 shrink-0">
-              <button className="px-8 py-3 rounded-2xl bg-primary text-white font-black text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all">تحديث الدرجات</button>
-              <button className="px-8 py-3 rounded-2xl bg-muted text-primary font-bold text-sm hover:bg-muted/50 transition-all">سجل الحضور</button>
+            <div className="space-y-3">
+               <h1 className="text-4xl sm:text-5xl font-black tracking-tight">أهلاً بك، {user?.fullName?.split(' ')[0]}</h1>
+               <p className="text-white/40 text-xl font-medium leading-relaxed max-w-2xl">
+                 رسالتك السامية تبني أجيال الغد. يمكنك إدارة فصولك ومتابعة طلابك بكل سهولة.
+               </p>
             </div>
           </div>
+          <div className="flex items-center gap-4 px-10 py-6 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl">
+             <div className="text-right">
+               <p className="text-[11px] font-black text-white/30 uppercase tracking-widest mb-1">الطلاب تحت إشرافك</p>
+               <p className="text-4xl font-black">{studentCount}</p>
+             </div>
+             <Users className="w-10 h-10 text-white/20" />
+          </div>
         </div>
-      </div>
-    </AppLayout>
-  );
-}
+      </header>
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function gradeInfo(pct: number) {
-  if (pct >= 90) return { color: 'text-success', bg: 'bg-success/10', bar: 'bg-success', label: 'ممتاز' };
-  if (pct >= 75) return { color: 'text-primary', bg: 'bg-primary/10', bar: 'bg-primary', label: 'جيد جداً' };
-  if (pct >= 60) return { color: 'text-warning', bg: 'bg-warning/10', bar: 'bg-warning', label: 'جيد' };
-  return { color: 'text-destructive', bg: 'bg-destructive/10', bar: 'bg-destructive', label: 'يحتاج تحسين' };
-}
-
-function EmptyState({ icon: Icon, text }: { icon: any; text: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
-      <Icon className="w-10 h-10 text-muted-foreground/30 mb-2" />
-      <p className="text-sm text-muted-foreground">{text}</p>
-    </div>
-  );
-}
-
-// ─── Child Summary Card (Square grid) ─────────────────────────────────────────
-function ChildSummaryCard({ child, onDetail }: { child: any; onDetail: () => void }) {
-  const gi = gradeInfo(child.avgGrade);
-  const ai = gradeInfo(child.attendanceRate);
-
-  return (
-    <div className="bg-card rounded-2xl border shadow-sm p-5 flex flex-col gap-4 hover:shadow-md transition-shadow">
-      {/* Avatar + name */}
-      <div className="flex flex-col items-center text-center gap-2">
-        <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-2xl font-bold text-primary select-none">
-          {child.name.trim()[0]}
-        </div>
-        <div>
-          <h3 className="font-bold text-foreground leading-tight">{child.name}</h3>
-          {child.className && (
-            <span className="text-xs text-muted-foreground mt-0.5 block">{child.className}</span>
-          )}
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <StatsCard title="فصولي الدراسية" value={myClasses.length} icon={School} color="indigo" />
+        <StatsCard title="تقييمات اليوم" value="0" icon={CalendarCheck} color="emerald" />
+        <StatsCard title="الشكاوى النشطة" value="0" icon={AlertCircle} color="amber" />
       </div>
 
-      {/* Stats — two square tiles */}
-      <div className="grid grid-cols-2 gap-2">
-        <div className={`rounded-xl p-3 text-center ${gi.bg}`}>
-          <p className={`text-xl font-bold ${gi.color}`}>{child.avgGrade > 0 ? `${child.avgGrade}%` : '—'}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">الدرجات</p>
-          {child.avgGrade > 0 && <p className={`text-[11px] font-medium ${gi.color} mt-0.5`}>{gi.label}</p>}
-        </div>
-        <div className={`rounded-xl p-3 text-center ${ai.bg}`}>
-          <p className={`text-xl font-bold ${ai.color}`}>{child.attendanceRate > 0 ? `${child.attendanceRate}%` : '—'}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">الحضور</p>
-          {child.attendanceRate > 0 && <p className={`text-[11px] font-medium ${ai.color} mt-0.5`}>{ai.label}</p>}
-        </div>
-      </div>
-
-      {/* Detail button */}
-      <button
-        onClick={onDetail}
-        className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
-      >
-        <Eye className="w-4 h-4" />
-        عرض التفاصيل
-      </button>
-    </div>
-  );
-}
-
-// ─── Grades timeline grouped by subject ───────────────────────────────────────
-function GradesView({ grades }: { grades: any[] }) {
-  const bySubject: Record<string, any[]> = {};
-  grades.forEach(g => {
-    if (!bySubject[g.subject]) bySubject[g.subject] = [];
-    bySubject[g.subject].push(g);
-  });
-  Object.keys(bySubject).forEach(sub => {
-    bySubject[sub].sort((a, b) => a.date.localeCompare(b.date));
-  });
-
-  if (Object.keys(bySubject).length === 0)
-    return <EmptyState icon={BookOpen} text="لا توجد درجات مسجلة حتى الآن" />;
-
-  return (
-    <div className="space-y-4">
-      {Object.entries(bySubject).map(([subject, subGrades]) => {
-        const avg = Math.round(
-          subGrades.reduce((s, g) => s + (g.score / g.max_score) * 100, 0) / subGrades.length
-        );
-        const gi = gradeInfo(avg);
-        return (
-          <div key={subject} className="rounded-2xl border overflow-hidden">
-            {/* Subject header */}
-            <div className={`px-4 py-3 flex items-center justify-between ${gi.bg}`}>
-              <div className="flex items-center gap-2">
-                <BookOpen className={`w-4 h-4 ${gi.color}`} />
-                <span className="font-bold text-foreground">{subject}</span>
+      <div className="premium-card p-12">
+        <div className="flex items-center justify-between mb-10">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <ClipboardList className="w-6 h-6" />
               </div>
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full bg-background/60 ${gi.color}`}>
-                متوسط {avg}% · {gi.label}
-              </span>
-            </div>
-
-            {/* Each exam row */}
-            <div className="divide-y divide-border">
-              {subGrades.map((g: any, idx: number) => {
-                const pct = Math.round((g.score / g.max_score) * 100);
-                const egi = gradeInfo(pct);
-                const dateStr = g.date
-                  ? new Date(g.date).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short' })
-                  : '';
-                return (
-                  <div key={g.id} className="px-4 py-3 flex items-center gap-3">
-                    {/* Exam index badge */}
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${egi.bg} ${egi.color}`}>
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-foreground">{g.term || `اختبار ${idx + 1}`}</p>
-                        <p className="text-xs text-muted-foreground">{dateStr}</p>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted mt-1.5 overflow-hidden">
-                        <div className={`h-full rounded-full ${egi.bar}`} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                    <div className="text-left shrink-0 min-w-[52px]">
-                      <p className={`text-sm font-bold ${egi.color}`}>{g.score}/{g.max_score}</p>
-                      <p className={`text-[11px] ${egi.color}`}>{egi.label}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Attendance view grouped by month ─────────────────────────────────────────
-function AttendanceView({ attendance }: { attendance: any[] }) {
-  const byMonth: Record<string, any[]> = {};
-  attendance.forEach(a => {
-    const month = a.date?.slice(0, 7);
-    if (!month) return;
-    if (!byMonth[month]) byMonth[month] = [];
-    byMonth[month].push(a);
-  });
-  const months = Object.keys(byMonth).sort().reverse();
-
-  if (months.length === 0)
-    return <EmptyState icon={Calendar} text="لا يوجد سجل حضور حتى الآن" />;
-
-  const monthLabel = (key: string) =>
-    new Date(key + '-01').toLocaleDateString('ar-SA', { month: 'long', year: 'numeric' });
-
-  return (
-    <div className="space-y-4">
-      {months.map(month => {
-        const records = byMonth[month];
-        const present = records.filter(a => a.status === 'present').length;
-        const late = records.filter(a => a.status === 'late').length;
-        const absent = records.filter(a => a.status === 'absent').length;
-        const rate = Math.round(((present + late) / records.length) * 100);
-        const ri = gradeInfo(rate);
-
-        return (
-          <div key={month} className="bg-muted/30 rounded-2xl p-4">
-            {/* Month header */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-semibold text-foreground">{monthLabel(month)}</span>
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${ri.bg} ${ri.color}`}>
-                {ri.label}
-              </span>
-            </div>
-
-            {/* Stats tiles */}
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <div className="bg-success/10 rounded-xl p-2.5 text-center">
-                <CheckCircle className="w-4 h-4 text-success mx-auto mb-1" />
-                <p className="text-lg font-bold text-success">{present}</p>
-                <p className="text-xs text-muted-foreground">حاضر</p>
-              </div>
-              <div className="bg-warning/10 rounded-xl p-2.5 text-center">
-                <Clock className="w-4 h-4 text-warning mx-auto mb-1" />
-                <p className="text-lg font-bold text-warning">{late}</p>
-                <p className="text-xs text-muted-foreground">متأخر</p>
-              </div>
-              <div className="bg-destructive/10 rounded-xl p-2.5 text-center">
-                <XCircle className="w-4 h-4 text-destructive mx-auto mb-1" />
-                <p className="text-lg font-bold text-destructive">{absent}</p>
-                <p className="text-xs text-muted-foreground">غائب</p>
-              </div>
-            </div>
-
-            {/* Day squares */}
-            <div className="flex flex-wrap gap-1.5">
-              {records
-                .sort((a, b) => a.date.localeCompare(b.date))
-                .map((a: any) => (
-                  <div
-                    key={a.id}
-                    title={a.date}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-semibold ${
-                      a.status === 'present'
-                        ? 'bg-success/20 text-success'
-                        : a.status === 'late'
-                        ? 'bg-warning/20 text-warning'
-                        : 'bg-destructive/20 text-destructive'
-                    }`}
-                  >
-                    {a.date?.slice(8)}
-                  </div>
-                ))}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── Child Detail Modal ───────────────────────────────────────────────────────
-function ChildDetailModal({ child, onClose }: { child: any; onClose: () => void }) {
-  const [tab, setTab] = useState<'grades' | 'attendance'>('grades');
-  const gi = gradeInfo(child.avgGrade);
-  const ai = gradeInfo(child.attendanceRate);
-
-  return (
-    <div
-      className="fixed inset-0 bg-foreground/40 backdrop-blur-sm z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-background w-full sm:max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl border max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-xl font-bold text-primary select-none">
-              {child.name.trim()[0]}
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-foreground">{child.name}</h2>
-              {child.className && <p className="text-sm text-muted-foreground">{child.className}</p>}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+              <h2 className="text-2xl font-black text-slate-900">فصولي النشطة</h2>
+           </div>
         </div>
-
-        {/* Summary tiles */}
-        <div className="grid grid-cols-2 gap-3 px-6 py-4 shrink-0">
-          <div className={`rounded-xl p-3 text-center ${gi.bg}`}>
-            <p className={`text-2xl font-bold ${gi.color}`}>{child.avgGrade > 0 ? `${child.avgGrade}%` : '—'}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">متوسط الدرجات</p>
-            {child.avgGrade > 0 && <p className={`text-xs font-medium ${gi.color}`}>{gi.label}</p>}
-          </div>
-          <div className={`rounded-xl p-3 text-center ${ai.bg}`}>
-            <p className={`text-2xl font-bold ${ai.color}`}>{child.attendanceRate > 0 ? `${child.attendanceRate}%` : '—'}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">نسبة الحضور</p>
-            {child.attendanceRate > 0 && <p className={`text-xs font-medium ${ai.color}`}>{ai.label}</p>}
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex border-b px-6 shrink-0">
-          {([
-            { id: 'grades', label: 'الدرجات', icon: BookOpen, count: child.grades.length },
-            { id: 'attendance', label: 'الحضور', icon: Calendar, count: child.attendance.length },
-          ] as const).map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
-                tab === t.id
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <t.icon className="w-4 h-4" />
-              {t.label}
-              <span className="px-1.5 py-0.5 rounded-full bg-muted text-[10px] text-muted-foreground ms-1">
-                {t.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {tab === 'grades'
-            ? <GradesView grades={child.grades} />
-            : <AttendanceView attendance={child.attendance} />
-          }
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+           {myClasses.map(c => (
+             <div key={c.id} className="p-8 rounded-[32px] bg-slate-50 border border-slate-100 group hover:bg-white hover:shadow-2xl hover:shadow-slate-200/40 transition-all duration-500">
+               <h3 className="text-xl font-black text-slate-900 mb-2">{c.name}</h3>
+               <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{c.grade_level || 'دراسات أكاديمية'}</p>
+               <div className="mt-8 flex justify-end">
+                 <Button className="rounded-[18px] bg-white text-slate-900 border border-slate-200 hover:bg-slate-900 hover:text-white transition-all px-4 font-black text-xs">عرض الفصل</Button>
+               </div>
+             </div>
+           ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Parent Dashboard (Family Portal) ───────────────────────────────────────
+// ─── Parent Dashboard ─────────────────────────────────────────────────────────
 function ParentDashboard() {
   const { user } = useAuth();
   const [children, setChildren] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedChild, setSelectedChild] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.schoolId) return;
     (async () => {
       setLoading(true);
-      const { data: links } = await supabase
+      const { data: links } = await (supabase as any)
         .from('student_parents')
         .select('student_id')
+        .eq('school_id', user.schoolId)
         .eq('parent_id', user.id);
 
       if (!links?.length) { setChildren([]); setLoading(false); return; }
 
-      const studentIds = links.map(l => l.student_id);
-      const [{ data: students }, { data: grades }, { data: attendance }] = await Promise.all([
-        supabase.from('students').select('*, classes!students_class_id_fkey(name)').in('id', studentIds),
-        supabase.from('grades').select('*').in('student_id', studentIds).order('date', { ascending: true }),
-        supabase.from('attendance').select('*').in('student_id', studentIds).order('date', { ascending: false }),
+      const studentIds = links.map((l: any) => l.student_id);
+      const [{ data: students }, { data: grades }, { data: attendance }, { data: fees }] = await Promise.all([
+        supabase.from('students').select('*, classes!students_class_id_fkey(name)').eq('school_id', user.schoolId).in('id', studentIds),
+        supabase.from('grades').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: true }),
+        supabase.from('attendance').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: false }),
+        (supabase as any).from('fees').select('*').eq('school_id', user.schoolId).in('student_id', studentIds),
       ]);
 
       const enriched = (students || []).map(s => {
         const childGrades = (grades || []).filter(g => g.student_id === s.id);
         const childAttendance = (attendance || []).filter(a => a.student_id === s.id);
+        const childFees = (fees || []).filter((f: any) => f.student_id === s.id);
+        const totalDue = childFees.reduce((sum: number, f: any) => sum + (f.amount_due || 0), 0);
+        const totalPaid = childFees.reduce((sum: number, f: any) => sum + (f.amount_paid || 0), 0);
         const presentCount = childAttendance.filter(a => a.status === 'present').length;
         return {
           ...s,
@@ -507,100 +268,121 @@ function ParentDashboard() {
           avgGrade: childGrades.length > 0
             ? Math.round(childGrades.reduce((sum, g) => sum + (g.score / g.max_score) * 100, 0) / childGrades.length)
             : 0,
+          feesRemaining: Math.max(0, totalDue - totalPaid),
         };
       });
       setChildren(enriched);
       setLoading(false);
     })();
-  }, [user]);
-
-  const overallAvg = children.length > 0
-    ? Math.round(children.reduce((s, c) => s + c.avgGrade, 0) / children.length) : 0;
-  const overallAtt = children.length > 0
-    ? Math.round(children.reduce((s, c) => s + c.attendanceRate, 0) / children.length) : 0;
+  }, [user?.id, user?.schoolId]);
 
   return (
-    <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1400px] mx-auto">
-        {/* Welcome */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-primary p-12 rounded-[40px] text-white shadow-2xl shadow-primary/20 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl" />
-          <div className="relative z-10 flex items-center gap-8">
-            <div className="w-20 h-20 rounded-3xl bg-secondary flex items-center justify-center shadow-xl rotate-3">
-              <Award className="w-10 h-10 text-primary" />
+    <div className="flex flex-col gap-12 max-w-[1500px] mx-auto text-right">
+      <header className="bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-10 relative z-10">
+          <div className="flex items-center gap-8">
+            <div className="w-20 h-20 rounded-[28px] bg-indigo-600 flex items-center justify-center shadow-2xl shadow-indigo-200 rotate-3">
+              <Award className="w-10 h-10 text-white" />
             </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight mb-2">مرحباً، {user?.fullName} 👋</h1>
-              <p className="text-white/60 font-bold text-lg">متابعة دقيقة لمسار أبنائك التعليمي في مكان واحد.</p>
+            <div className="space-y-2">
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">مرحباً بك، {user?.fullName?.split(' ')[0]}</h1>
+              <p className="text-slate-500 text-lg font-medium">بوابتك لمتابعة مسيرة أبنائك التعليمية لحظة بلحظة</p>
             </div>
           </div>
-          {children.length > 0 && (
-            <div className="relative z-10 px-8 py-4 rounded-3xl bg-white/10 border border-white/5 backdrop-blur-md">
-              <p className="text-xs font-black text-white/50 uppercase tracking-widest mb-1">حمولة العائلة</p>
-              <p className="text-xl font-black">{children.length} {children.length === 1 ? 'ابن/ابنة' : 'أبناء'}</p>
-            </div>
-          )}
-        </header>
+          <div className="flex items-center gap-6">
+             <StatsCard title="الطلاب" value={children.length} icon={Users} color="white" />
+             <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xl shadow-slate-200">
+               <MessageSquare className="w-6 h-6" />
+             </div>
+          </div>
+        </div>
+      </header>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4 bg-muted/10 rounded-[40px] border-2 border-dashed border-muted">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm font-black text-primary/40 uppercase tracking-widest">جارٍ تأمين اتصالك بالبيانات الأسرية…</p>
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-40 gap-6 bg-white/40 backdrop-blur-md rounded-[56px] border border-white/50">
+          <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+          <p className="text-slate-400 font-black tracking-widest text-xs uppercase">جاري مزامنة بيانات العائلة</p>
+        </div>
+      ) : children.length === 0 ? (
+        <div className="premium-card p-24 text-center flex flex-col items-center max-w-3xl mx-auto">
+          <div className="w-24 h-24 rounded-[36px] bg-slate-50 flex items-center justify-center mb-10 border border-slate-100">
+            <AlertCircle className="w-12 h-12 text-slate-200" />
           </div>
-        ) : children.length === 0 ? (
-          <div className="bg-white border-2 border-muted p-16 text-center rounded-[40px]">
-            <div className="w-20 h-20 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto mb-6">
-              <AlertCircle className="w-10 h-10 text-muted-foreground" />
-            </div>
-            <h2 className="text-2xl font-black text-primary mb-3">لم يتم ربط أبنائك بعد</h2>
-            <p className="text-muted-foreground font-bold max-w-sm mx-auto leading-relaxed">
-              يرجى التواصل مع إدارة المدرسة فوراً لربط أبنائك بحسابك عبر رقم الهاتف الخاص بك المسجل لديهم.
-            </p>
+          <h2 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">لا توجد بيانات مرتبطة</h2>
+          <p className="text-slate-400 font-medium text-lg leading-relaxed mb-10">
+            يرجى التواصل مع إدارة المدرسة لربط حسابك بأبنائك عبر رقم الهاتف المسجل لديهم.
+          </p>
+          <Button className="h-16 px-12 rounded-2xl bg-slate-900 text-white font-black text-lg">طلب مساعدة من الإدارة</Button>
+        </div>
+      ) : (
+        <div className="space-y-12">
+          <div className="flex items-center gap-5 px-6">
+            <div className="w-2 h-10 bg-indigo-600 rounded-full" />
+            <h2 className="text-3xl font-black text-slate-900 tracking-tight">أبنائي الطلاب</h2>
           </div>
-        ) : (
-          <div className="space-y-12">
-            {/* Summary stats tiles */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
-              <div className="premium-card p-8 bg-white border-2 border-muted flex flex-col items-center text-center group hover:border-primary transition-all">
-                <Users className="w-8 h-8 text-primary/20 mb-4 group-hover:scale-110 transition-transform" />
-                <p className="text-4xl font-black text-primary italic tracking-tighter mb-1">{children.length}</p>
-                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">إجمالي الأبناء</p>
-              </div>
-              <div className="premium-card p-8 bg-white border-2 border-muted flex flex-col items-center text-center group hover:border-secondary transition-all">
-                <TrendingUp className="w-8 h-8 text-secondary/20 mb-4 group-hover:scale-110 transition-transform" />
-                <p className="text-4xl font-black text-secondary italic tracking-tighter mb-1">{overallAvg}%</p>
-                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">متوسط التحصيل</p>
-              </div>
-              <div className="premium-card p-8 bg-white border-2 border-muted flex flex-col items-center text-center group hover:border-emerald-500 transition-all">
-                <Calendar className="w-8 h-8 text-emerald-500/20 mb-4 group-hover:scale-110 transition-transform" />
-                <p className="text-4xl font-black text-emerald-600 italic tracking-tighter mb-1">{overallAtt}%</p>
-                <p className="text-xs font-black text-muted-foreground uppercase tracking-widest">متوسط الحضور</p>
-              </div>
-            </div>
-
-            {/* Children grid */}
-            <div>
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-2 h-8 bg-secondary rounded-full" />
-                <h2 className="text-2xl font-black text-primary tracking-tight">نافذة الأبناء</h2>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-                {children.map(child => (
-                  <ChildSummaryCard
-                    key={child.id}
-                    child={child}
-                    onDetail={() => setSelectedChild(child)}
-                  />
-                ))}
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {children.map(child => (
+              <ChildSummaryCard key={child.id} child={child} />
+            ))}
           </div>
-        )}
-      </div>
-
-      {selectedChild && (
-        <ChildDetailModal child={selectedChild} onClose={() => setSelectedChild(null)} />
+        </div>
       )}
-    </AppLayout>
+    </div>
+  );
+}
+
+function ChildSummaryCard({ child }: { child: any }) {
+  const navigate = () => window.location.assign(`/parent/children/${child.id}`);
+  
+  return (
+    <div className="premium-card p-0 overflow-hidden group hover:scale-[1.02] transition-all duration-500">
+      <div className="p-10 space-y-8">
+         <div className="flex flex-col items-center text-center gap-4">
+            <div className="w-20 h-20 rounded-[28px] bg-slate-50 flex items-center justify-center text-3xl font-black text-slate-900 border border-slate-100 shadow-inner group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+               {child.name.trim()[0]}
+            </div>
+            <div>
+               <h3 className="text-2xl font-black text-slate-900 mb-1">{child.name}</h3>
+               <Badge className="bg-slate-100 text-slate-500 border-none font-black text-[10px] uppercase tracking-widest">{child.className || 'بدون فصل'}</Badge>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-2 gap-4">
+            <div className="bg-emerald-50/50 p-6 rounded-3xl text-center border border-emerald-100/50">
+               <p className="text-2xl font-black text-emerald-600">{child.avgGrade}%</p>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">متوسط التحصيل</p>
+            </div>
+            <div className="bg-indigo-50/50 p-6 rounded-3xl text-center border border-indigo-100/50">
+               <p className="text-2xl font-black text-indigo-600">{child.attendanceRate}%</p>
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">نسبة الحضور</p>
+            </div>
+         </div>
+
+         {child.feesRemaining > 0 && (
+           <div className="bg-amber-50/50 p-6 rounded-3xl flex items-center justify-between border border-amber-100/50">
+              <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-amber-500 shadow-sm border border-amber-100">
+                    <Clock className="w-5 h-5" />
+                 </div>
+                 <p className="text-xs font-black text-amber-900 uppercase tracking-widest">مصاريف معلقة</p>
+              </div>
+              <p className="text-xl font-black text-amber-600">{child.feesRemaining} <span className="text-xs">ر.س</span></p>
+           </div>
+         )}
+         
+         <Button onClick={navigate} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center gap-3">
+           <Eye className="w-5 h-5" />
+           عرض التفاصيل الكاملة
+         </Button>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, className }: any) {
+  return (
+    <span className={cn("px-4 py-1.5 rounded-full", className)}>
+      {children}
+    </span>
   );
 }

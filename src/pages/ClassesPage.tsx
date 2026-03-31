@@ -3,7 +3,16 @@ import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Eye, Edit2, Save, X, Users, GraduationCap, User, Search, ArrowLeft } from 'lucide-react';
+import { 
+  Plus, Users, School, User, Search, Filter, 
+  MoreHorizontal, ChevronLeft, ArrowRight
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 interface ClassItem {
   id: string;
@@ -17,22 +26,27 @@ interface ClassItem {
 export default function ClassesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [selected, setSelected] = useState<ClassItem | null>(null);
-  const [editing, setEditing] = useState<ClassItem | null>(null);
   const [search, setSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
 
   const fetchData = useCallback(async () => {
+    if (!user?.schoolId) return;
     setLoading(true);
-    const [{ data: classesData }, { data: profiles }, { data: teacherRoles }, { data: students }] = await Promise.all([
-      supabase.from('classes').select('*'),
-      supabase.from('profiles').select('id, full_name'),
-      supabase.from('user_roles').select('user_id').eq('role', 'teacher'),
-      supabase.from('students').select('id, class_id'),
+    const [
+      { data: classesData },
+      { data: profiles },
+      { data: teacherRoles },
+      { data: students }
+    ] = await Promise.all([
+      supabase.from('classes').select('*').eq('school_id', user.schoolId).order('name'),
+      supabase.from('profiles').select('id, full_name').eq('school_id', user.schoolId),
+      supabase.from('user_roles').select('user_id').eq('role', 'teacher').eq('school_id', user.schoolId),
+      supabase.from('students').select('id, class_id').eq('school_id', user.schoolId),
     ]);
 
     const teacherIds = (teacherRoles || []).map(r => r.user_id);
@@ -45,17 +59,9 @@ export default function ClassesPage() {
     }));
     setClasses(enriched);
     setLoading(false);
-  }, []);
+  }, [user?.schoolId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الفصل؟')) return;
-    const { error } = await supabase.from('classes').delete().eq('id', id);
-    if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); return; }
-    setClasses(prev => prev.filter(c => c.id !== id));
-    toast({ title: 'تم الحذف' });
-  };
 
   const gradeLevels = ['الكل', ...new Set(classes.map(c => c.grade_level).filter(Boolean) as string[])];
   const filtered = classes.filter(c => {
@@ -66,41 +72,48 @@ export default function ClassesPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1400px] mx-auto">
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="page-header !mb-0 italic tracking-tighter">منظومة القاعات الدراسية</h1>
-            <p className="text-secondary/40 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              تنظيم الحلقات والمراحل التعليمية
-            </p>
-          </div>
-          {user?.role === 'admin' && (
-            <button onClick={() => setShowAdd(true)}
-              className="flex items-center gap-3 px-8 py-4 rounded-2xl bg-primary text-white font-black text-sm shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all shrink-0">
-              <Plus className="w-5 h-5" /> تأسيس فصل جديد
-            </button>
-          )}
-        </header>
-
-        {/* Search & Filter Section */}
-        <div className="flex flex-col xl:flex-row gap-8 items-stretch">
-          <div className="relative group flex-1">
-            <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary/30 group-focus-within:text-primary transition-colors" />
-            <input type="text" placeholder="البحث في القاعات (الاسم، المعلم المسؤول)..." value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pr-14 pl-6 py-5 rounded-[24px] border-2 border-muted bg-white text-primary font-bold placeholder:text-primary/20 focus:outline-none focus:border-primary transition-all shadow-sm" />
+      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
+        {/* Premium Header - Scaled Down */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
+               <h1 className="text-2xl font-black text-slate-900 tracking-tight">إدارة الفصول الدراسية</h1>
+            </div>
+            <p className="text-slate-500 font-medium text-sm pr-4">تنظيم الكثافة الطلابية وتوزيع الهيئة التدريسية</p>
           </div>
           
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide shrink-0 items-center">
+          <div className="flex flex-wrap items-center gap-4">
+             {user?.role === 'admin' && (
+               <Button onClick={() => setShowAdd(true)} className="h-11 px-6 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
+                 <Plus className="w-4.5 h-4.5" /> إنشاء فصل جديد
+               </Button>
+             )}
+          </div>
+        </header>
+
+        {/* Filters and Search - Scaled Down */}
+        <div className="flex flex-col lg:flex-row gap-4 items-center">
+          <div className="relative group flex-1 w-full">
+            <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+            <Input 
+              placeholder="ابحث عن فصل أو معلم مسؤول..." 
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
+            />
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide lg:w-auto w-full">
             {gradeLevels.map(level => (
-              <button key={level} onClick={() => setFilterLevel(level)}
-                className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border-2 shadow-sm ${
+              <button 
+                key={level} 
+                onClick={() => setFilterLevel(level)}
+                className={cn(
+                  "px-6 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border shadow-sm shrink-0",
                   filterLevel === level
-                    ? 'bg-secondary border-secondary text-primary shadow-secondary/10'
-                    : 'bg-white border-muted text-primary/40 hover:bg-muted/50 hover:text-primary'
-                }`}>
+                    ? "bg-slate-900 border-slate-900 text-white shadow-lg"
+                    : "bg-white border-white text-slate-400 hover:text-indigo-600"
+                )}>
                 {level === 'الكل' ? 'جميع المراحل' : level}
               </button>
             ))}
@@ -108,194 +121,82 @@ export default function ClassesPage() {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground font-medium animate-pulse">جارٍ تحميل الفصول...</p>
+          <div className="flex flex-col items-center justify-center py-32 gap-4">
+            <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+            <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري استرجاع السجلات</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-card rounded-3xl border border-dashed p-20 text-center">
-            <GraduationCap className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-            <p className="text-lg font-bold text-foreground mb-1">لا توجد فصول</p>
-            <p className="text-muted-foreground">جرب تغيير الفلتر أو إضافة فصل جديد.</p>
+          <div className="bg-white border-2 border-dashed border-slate-200 p-24 text-center rounded-[48px] shadow-sm">
+            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
+              <School className="w-10 h-10" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 mb-2">لا توجد فصول</h2>
+            <p className="text-slate-400 font-medium text-sm">لم يتم العثور على أي نتائج تطابق بحثك.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filtered.map(c => (
-              <div key={c.id} className="bg-white rounded-[32px] border-2 border-muted p-8 flex flex-col gap-8 hover:border-primary transition-all duration-500 hover:-translate-y-2 group animate-scale-in relative overflow-hidden shadow-sm hover:shadow-2xl hover:shadow-primary/5 text-right">
-                <div className="absolute top-0 left-0 w-32 h-32 bg-secondary/5 rounded-full -ml-16 -mt-16 blur-3xl group-hover:bg-primary/5 transition-colors" />
-                
-                <div className="flex items-start justify-between gap-6 relative z-10">
-                  <div className="flex items-center gap-5 min-w-0">
-                    <div className="w-16 h-16 rounded-2xl bg-primary text-secondary flex items-center justify-center shrink-0 shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
-                      <GraduationCap className="w-8 h-8 font-black" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-black text-primary text-2xl truncate mt-1 tracking-tight leading-tight">{c.name}</h3>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[9px] font-black uppercase tracking-widest border border-emerald-500/10">مستمر</span>
-                        {c.grade_level && (
-                          <span className="text-xs text-primary/40 font-black uppercase tracking-widest">{c.grade_level}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {user?.role === 'admin' && (
-                    <div className="flex gap-2 relative z-20">
-                      <button onClick={() => setEditing(c)} className="w-10 h-10 rounded-xl bg-muted/50 text-primary/40 hover:bg-primary hover:text-white transition-all flex items-center justify-center">
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(c.id)} className="w-10 h-10 rounded-xl bg-muted/50 text-primary/40 hover:bg-destructive hover:text-white transition-all flex items-center justify-center">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 relative z-10">
-                  <div className="bg-primary/5 rounded-[24px] p-6 border-2 border-transparent group-hover:border-primary/10 transition-all">
-                    <div className="flex items-center gap-2 text-primary/30 mb-2">
-                      <Users className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] leading-none">الكثافة</span>
-                    </div>
-                    <p className="text-3xl font-black text-primary italic leading-none">{c.student_count}</p>
-                    <p className="text-[10px] font-bold text-primary/20 mt-1">طالب مسجل</p>
-                  </div>
-                  <div className="bg-secondary/5 rounded-[24px] p-6 border-2 border-transparent group-hover:border-secondary/20 transition-all">
-                    <div className="flex items-center gap-2 text-secondary/40 mb-2">
-                      <User className="w-4 h-4" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em] leading-none">المشرف</span>
-                    </div>
-                    <p className="text-sm font-black text-primary truncate leading-tight mt-1">{c.teacher_name}</p>
-                    <p className="text-[10px] font-bold text-primary/20 mt-2">عضو هيئة تدريس</p>
-                  </div>
-                </div>
-
-                <button onClick={() => setSelected(c)}
-                  className="w-full h-14 rounded-2xl bg-primary text-white text-xs font-black uppercase tracking-widest hover:bg-primary/90 transition-all flex items-center justify-center gap-3 group/btn active:scale-95 shadow-xl shadow-primary/20 relative z-10">
-                  الولوج إلى قائمة الطلاب
-                  <ArrowLeft className="w-4 h-4 transition-transform group-hover/btn:-translate-x-2" />
-                </button>
-              </div>
+              <ClassCard key={c.id} classItem={c} onClick={() => navigate(`/classes/${c.id}`)} />
             ))}
           </div>
         )}
       </div>
 
-      {selected && <ClassDetailModal classItem={selected} onClose={() => setSelected(null)} />}
-      {editing && <EditClassModal classItem={editing} teachers={teachers} onClose={() => { setEditing(null); fetchData(); }} />}
-      {showAdd && <AddClassModal teachers={teachers} onClose={() => { setShowAdd(false); fetchData(); }} />}
+      {showAdd && (
+        <AddClassModal 
+          teachers={teachers} 
+          user={user}
+          onClose={() => { setShowAdd(false); fetchData(); }} 
+        />
+      )}
     </AppLayout>
   );
 }
 
-function ClassDetailModal({ classItem, onClose }: { classItem: ClassItem; onClose: () => void }) {
-  const [students, setStudents] = useState<{ id: string; name: string }[]>([]);
-  const [loadingStudents, setLoadingStudents] = useState(true);
-
-  useEffect(() => {
-    setLoadingStudents(true);
-    supabase.from('students').select('id, name').eq('class_id', classItem.id).order('name')
-      .then(({ data }) => { setStudents(data || []); setLoadingStudents(false); });
-  }, [classItem.id]);
+function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () => void }) {
+  const capacity = 30;
+  const percentage = Math.min((classItem.student_count || 0) / capacity * 100, 100);
 
   return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">{classItem.name}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {[
-            { label: 'المرحلة الدراسية', value: classItem.grade_level || '—' },
-            { label: 'المعلم المسؤول', value: classItem.teacher_name || '—' },
-            { label: 'عدد الطلاب', value: String(classItem.student_count ?? 0) },
-          ].map(item => (
-            <div key={item.label} className="p-3 rounded-xl bg-muted">
-              <p className="text-xs text-muted-foreground mb-0.5">{item.label}</p>
-              <p className="font-medium text-foreground">{item.value}</p>
+    <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
+      <div className="p-6 space-y-6">
+         <div className="flex items-start justify-between">
+            <div className="w-12 h-12 rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
+               <School className="w-6 h-6" />
             </div>
-          ))}
-        </div>
-        <h3 className="font-semibold text-foreground mb-3">قائمة الطلاب</h3>
-        {loadingStudents ? (
-          <div className="flex justify-center py-4">
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          </div>
-        ) : students.length === 0 ? (
-          <p className="text-sm text-muted-foreground">لا يوجد طلاب</p>
-        ) : (
-          <div className="space-y-2">
-            {students.map(s => (
-              <div key={s.id} className="p-3 rounded-xl bg-muted text-sm font-medium text-foreground flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">{s.name[0]}</div>
-                {s.name}
-              </div>
-            ))}
-          </div>
-        )}
+            <Badge variant="outline" className="rounded-lg px-3 py-1 bg-slate-50 border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+               {classItem.grade_level || 'مرحلة عامة'}
+            </Badge>
+         </div>
+
+         <div>
+            <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
+            <div className="flex items-center gap-2 text-slate-400">
+               <User className="w-3.5 h-3.5" />
+               <span className="text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
+            </div>
+         </div>
+
+         <div className="space-y-2">
+            <div className="flex justify-between items-end text-[8px] font-black uppercase tracking-widest">
+               <span className="text-slate-300">سعة الطلاب</span>
+               <span className={cn("font-black", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>{classItem.student_count} / {capacity}</span>
+            </div>
+            <Progress value={percentage} className="h-1.5 bg-slate-100" />
+         </div>
+
+         <div className="flex gap-4 pt-2 border-t border-slate-50">
+            <Button onClick={onClick} className="flex-1 h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-xs">
+               استعراض الفصل
+            </Button>
+         </div>
       </div>
     </div>
   );
 }
 
-function EditClassModal({ classItem, teachers, onClose }: {
-  classItem: ClassItem; teachers: { id: string; full_name: string }[]; onClose: () => void;
-}) {
-  const { toast } = useToast();
-  const [name, setName] = useState(classItem.name);
-  const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
-  const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
-  const [loading, setLoading] = useState(false);
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    setLoading(true);
-    const { error } = await supabase.from('classes').update({
-      name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null,
-    }).eq('id', classItem.id);
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'تم الحفظ بنجاح' }); onClose(); }
-    setLoading(false);
-  };
-
-  return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">تعديل الفصل</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
-        </div>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">اسم الفصل *</label>
-            <input value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">المرحلة الدراسية</label>
-            <input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground" placeholder="مثال: الصف الأول" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">المعلم المسؤول</label>
-            <select value={teacherId} onChange={e => setTeacherId(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground">
-              <option value="">بدون معلم</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            </select>
-          </div>
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={loading} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-              <Save className="w-4 h-4" />{loading ? 'جارٍ الحفظ...' : 'حفظ'}
-            </button>
-            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl bg-muted text-foreground font-medium">إلغاء</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function AddClassModal({ teachers, onClose }: { teachers: { id: string; full_name: string }[]; onClose: () => void }) {
+// ─── Modals (Scaled Down) ────────────────────────────────────────────────────
+function AddClassModal({ teachers, user, onClose }: { teachers: any[]; user: any; onClose: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
@@ -307,7 +208,10 @@ function AddClassModal({ teachers, onClose }: { teachers: { id: string; full_nam
     if (!name.trim()) return;
     setLoading(true);
     const { error } = await supabase.from('classes').insert({
-      name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null,
+      name: name.trim(), 
+      grade_level: gradeLevel.trim() || null, 
+      teacher_id: teacherId || null,
+      school_id: user?.schoolId
     });
     if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
     else { toast({ title: 'تمت الإضافة بنجاح' }); onClose(); }
@@ -315,36 +219,96 @@ function AddClassModal({ teachers, onClose }: { teachers: { id: string; full_nam
   };
 
   return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">إضافة فصل جديد</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">اسم الفصل *</label>
-            <input value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground focus:outline-none focus:ring-2 focus:ring-ring" placeholder="مثال: 1أ" />
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
+        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إنشاء فصل جديد</h2>
+        <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
+            <Input value={name} onChange={e => setName(e.target.value)}
+              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" placeholder="مثال: 1أ" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">المرحلة الدراسية</label>
-            <input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground" placeholder="مثال: الصف الأول" />
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
+            <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
+              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" placeholder="مثال: الصف الأول" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">المعلم المسؤول</label>
-            <select value={teacherId} onChange={e => setTeacherId(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-input bg-muted/30 text-foreground">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
+            <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
+              className="w-full h-12 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none">
               <option value="">بدون معلم</option>
               {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
             </select>
           </div>
-          <div className="flex gap-3 pt-1">
-            <button type="submit" disabled={loading} className="flex-1 py-3 rounded-xl bg-primary text-primary-foreground font-medium disabled:opacity-50">
-              {loading ? 'جارٍ الإضافة...' : 'إضافة الفصل'}
-            </button>
-            <button type="button" onClick={onClose} className="flex-1 py-3 rounded-xl bg-muted text-foreground font-medium">إلغاء</button>
+          <div className="flex gap-3 pt-4">
+            <Button type="submit" disabled={loading}
+              className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-primary transition-all text-sm">
+              {loading ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
+            </Button>
+            <Button type="button" onClick={onClose} variant="ghost"
+              className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
           </div>
         </form>
       </div>
     </div>
   );
 }
+
+export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any) {
+    const { toast } = useToast();
+    const [name, setName] = useState(classItem.name);
+    const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
+    const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
+    const [loading, setLoading] = useState(false);
+  
+    const handleSave = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!name.trim()) return;
+      setLoading(true);
+      const { error } = await supabase.from('classes').update({
+        name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null,
+      }).eq('id', classItem.id);
+      if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+      else { toast({ title: 'تم الحفظ بنجاح' }); onSuccess(); }
+      setLoading(false);
+    };
+  
+    return (
+      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
+        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
+          <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">تعديل بيانات الفصل</h2>
+          <form onSubmit={handleSave} className="space-y-5 relative z-10">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
+              <Input value={name} onChange={e => setName(e.target.value)}
+                className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
+              <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
+                className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
+              <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
+                className="w-full h-12 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none">
+                <option value="">بدون معلم</option>
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button type="submit" disabled={loading}
+                className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-primary transition-all text-sm">
+                {loading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+              </Button>
+              <Button type="button" onClick={onClose} variant="ghost"
+                className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }

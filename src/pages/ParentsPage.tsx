@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Phone, User, Eye, X, Search, Users } from 'lucide-react';
+import { Phone, User, Eye, X, Search, Users, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface ParentProfile {
   id: string;
@@ -12,23 +14,30 @@ interface ParentProfile {
 }
 
 export default function ParentsPage() {
+  const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [parents, setParents] = useState<ParentProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<ParentProfile | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!user?.schoolId) return;
     setLoading(true);
-    const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'parent');
+    const { data: roles } = await supabase.from('user_roles')
+      .select('user_id')
+      .eq('role', 'parent')
+      .eq('school_id', user.schoolId);
+      
     if (!roles?.length) { setParents([]); setLoading(false); return; }
 
     const parentIds = roles.map(r => r.user_id);
     const [{ data: profiles }, { data: links }, { data: classes }] = await Promise.all([
-      supabase.from('profiles').select('*').in('id', parentIds),
+      supabase.from('profiles').select('*').eq('school_id', user.schoolId).in('id', parentIds).order('full_name'),
       supabase.from('student_parents')
-        .select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)'),
-      supabase.from('classes').select('id, name'),
+        .select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)')
+        .eq('school_id', user.schoolId),
+      supabase.from('classes').select('id, name').eq('school_id', user.schoolId),
     ]);
 
     const result: ParentProfile[] = (profiles || []).map(p => {
@@ -49,7 +58,7 @@ export default function ParentsPage() {
     });
     setParents(result);
     setLoading(false);
-  }, []);
+  }, [user?.schoolId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -59,138 +68,69 @@ export default function ParentsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-8 animate-fade-in">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="page-header mb-1">أولياء الأمور</h1>
-            <p className="text-muted-foreground text-sm">إدارة حسابات أولياء الأمور والطلاب المرتبطين بهم.</p>
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right">
+        {/* Header Section */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">سجل أولياء الأمور</h1>
+            <p className="text-sm text-slate-400 font-medium tracking-wide">بيانات التواصل والروابط الأسرية</p>
           </div>
-          <div className="bg-secondary/5 border border-secondary/10 px-4 py-2 rounded-2xl flex items-center gap-2">
-            <User className="w-5 h-5 text-secondary" />
-            <span className="text-sm font-bold text-secondary">{parents.length} أولياء أمور</span>
+          <div className="bg-white border border-slate-100 px-6 py-3 rounded-2xl flex items-center gap-3 shadow-sm">
+            <Users className="w-5 h-5 text-primary" />
+            <span className="text-sm font-bold text-slate-700">{parents.length} ولي أمر</span>
           </div>
-        </div>
+        </header>
 
-        <div className="relative group max-w-2xl">
-          <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <input type="text" placeholder="بحث بالاسم أو الرقم..." value={search}
+        {/* Search */}
+        <div className="relative group max-w-2xl w-full">
+          <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors" />
+          <input type="text" placeholder="ابحث باسم ولي الأمر أو رقم الهاتف..." value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pr-12 pl-4 py-4 rounded-2xl border border-input bg-card text-foreground focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all shadow-sm" />
+            className="w-full pr-14 pl-6 py-4 rounded-2xl border border-slate-100 bg-white text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all shadow-sm" />
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-            <p className="text-muted-foreground font-medium animate-pulse">جارٍ تحميل البيانات...</p>
+          <div className="flex flex-col items-center justify-center py-32 gap-6 bg-white rounded-[40px] border border-slate-100 shadow-sm">
+            <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm font-medium">جاري تحميل البيانات...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-card rounded-3xl border border-dashed p-20 text-center">
-            <Search className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-            <p className="text-lg font-bold text-foreground mb-1">لا يوجد أولياء أمور</p>
-            <p className="text-muted-foreground">جرب البحث بكلمات مختلفة.</p>
+          <div className="bg-white border border-slate-100 p-24 text-center rounded-[40px] shadow-sm">
+            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
+              <User className="w-10 h-10" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">لا توجد نتائج</h2>
+            <p className="text-slate-400 font-medium max-w-sm mx-auto">لم نتمكن من العثور على أي أولياء أمور يطابقون بحثك.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filtered.map(p => (
-              <ParentCard key={p.id} parent={p} onView={() => setSelected(p)} />
+              <ParentCard key={p.id} parent={p} onClick={() => navigate(`/parents/${p.id}`)} />
             ))}
           </div>
         )}
       </div>
-
-      {selected && (
-        <ParentDetailModal parent={selected} onClose={() => setSelected(null)} />
-      )}
     </AppLayout>
   );
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
-function ParentCard({ parent, onView }: { parent: ParentProfile; onView: () => void }) {
+function ParentCard({ parent, onClick }: { parent: ParentProfile; onClick: () => void }) {
   return (
-    <div className="bg-card rounded-3xl border shadow-sm p-6 flex flex-col gap-5 hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group animate-scale-in">
-      <div className="flex items-start gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-secondary/5 border border-secondary/10 flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 group-hover:rotate-3">
-          <User className="w-7 h-7 text-secondary" />
+    <button onClick={onClick} className="flex flex-col text-right group h-full transition-all">
+      <div className="bg-white border border-slate-100 rounded-3xl p-6 flex flex-col flex-1 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:translate-y-[-4px] transition-all w-full relative overflow-hidden">
+        <div className="w-12 h-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary mb-4 group-hover:bg-primary group-hover:text-white transition-all">
+          <User className="w-6 h-6" />
         </div>
-        <div className="min-w-0 pt-1">
-          <h3 className="font-bold text-foreground text-lg truncate group-hover:text-primary transition-colors">{parent.full_name || 'بدون اسم'}</h3>
-          {parent.phone && (
-            <div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground font-medium" dir="ltr">
-              <Phone className="w-3.5 h-3.5 text-muted-foreground/60" />
-              <span>{parent.phone}</span>
-            </div>
-          )}
-        </div>
-      </div>
+        
+        <h3 className="text-lg font-bold text-slate-900 mb-1 group-hover:text-primary transition-colors">{parent.full_name || '...'}</h3>
 
-      <div className="space-y-2">
-        <label className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest">الأبناء المرتبطون</label>
-        <div className="flex flex-wrap gap-2">
-          {parent.children.length === 0 ? (
-            <span className="text-xs text-muted-foreground italic bg-muted/30 px-3 py-1.5 rounded-lg border border-dashed w-full">لا يوجد أبناء مرتبطون</span>
-          ) : (
-            <>
-              {parent.children.slice(0, 2).map(c => (
-                <span key={c.id} className="px-2.5 py-1 rounded-lg bg-secondary/5 text-secondary text-[11px] font-bold border border-secondary/10 flex items-center gap-1">
-                  <Users className="w-3 h-3" />{c.name}
-                </span>
-              ))}
-              {parent.children.length > 2 && (
-                <span className="px-2 py-1 rounded-lg bg-muted text-muted-foreground text-[11px] font-medium">+{parent.children.length - 2}</span>
-              )}
-            </>
-          )}
+        <div className="pt-5 mt-5 border-t border-slate-50 w-full flex justify-center">
+          <span className="text-[11px] font-bold text-primary uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+            استعراض الملف الشخصي
+          </span>
         </div>
       </div>
-
-      <div className="mt-auto pt-4 border-t border-border/50">
-        <button onClick={onView}
-          className="w-full py-3 rounded-xl bg-muted text-foreground text-sm font-bold hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 group/btn active:scale-95 shadow-sm">
-          <Eye className="w-4 h-4 transition-transform group-hover/btn:scale-110" />عرض التفاصيل
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Detail Modal ─────────────────────────────────────────────────────────────
-function ParentDetailModal({ parent, onClose }: { parent: ParentProfile; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-foreground/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={onClose}>
-      <div className="bg-card rounded-2xl border shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-foreground">{parent.full_name || 'بدون اسم'}</h2>
-          <button onClick={onClose} className="p-1 rounded-lg text-muted-foreground hover:bg-muted"><X className="w-5 h-5" /></button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="p-3 rounded-xl bg-muted">
-            <p className="text-xs text-muted-foreground mb-0.5">رقم الموبايل</p>
-            <p className="font-medium text-foreground" dir="ltr">{parent.phone || '—'}</p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-muted">
-            <p className="text-xs text-muted-foreground mb-2">الأبناء المرتبطون ({parent.children.length})</p>
-            {parent.children.length === 0 ? (
-              <p className="text-sm text-muted-foreground">لا يوجد أبناء مرتبطون</p>
-            ) : (
-              <div className="space-y-2">
-                {parent.children.map(child => (
-                  <div key={child.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-background">
-                    <span className="text-sm font-medium text-foreground">{child.name}</span>
-                    {child.class_name && (
-                      <span className="text-xs text-muted-foreground px-2 py-1 rounded-md bg-muted">
-                        {child.class_name}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    </button>
   );
 }

@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import AppLayout from '@/components/AppLayout';
 import { Textarea } from '@/components/ui/textarea';
 import { 
-  Send, Users, User, Megaphone, CheckCircle2, AlertCircle, Search
+  Send, Users, User, Megaphone, CheckCircle2, AlertCircle, Search, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -28,7 +28,9 @@ export default function MessagingPage() {
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name')
-        .neq('id', user?.id);
+        .eq('school_id', user?.schoolId)
+        .neq('id', user?.id)
+        .order('full_name');
       
       if (data) setProfiles(data as any);
     };
@@ -57,6 +59,7 @@ export default function MessagingPage() {
         receiver_id: targetId,
         content: content.trim(),
         is_read: false,
+        school_id: user?.schoolId
       }));
 
       const { error } = await supabase.from('messages').insert(messages);
@@ -79,141 +82,141 @@ export default function MessagingPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-fade-in max-w-[1200px] mx-auto text-right">
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1200px] mx-auto text-right">
         {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-1">
-            <h1 className="page-header !mb-0 italic tracking-tighter">منظومة البث الإداري</h1>
-            <p className="text-secondary/40 font-black text-xs uppercase tracking-[0.3em] flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              المركز الرئيسي للتحكم في التواصل والتعميمات
-            </p>
+            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">مركز البث الإداري</h1>
+            <p className="text-sm text-slate-400 font-medium tracking-wide">إرسال التعميمات والرسائل الفورية للمستخدمين</p>
           </div>
-          <div className="w-20 h-20 rounded-[32px] bg-primary flex items-center justify-center shadow-2xl rotate-3 shrink-0">
-            <Megaphone className="w-10 h-10 text-white" />
+          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 rotate-3 shrink-0">
+            <Megaphone className="w-8 h-8 text-white" />
           </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-8 space-y-8">
-            <div className="bg-white rounded-[40px] border-2 border-muted overflow-hidden shadow-sm relative">
-              <div className="absolute top-0 right-0 w-full h-1.5 bg-primary" />
-              <div className="flex bg-muted/30 border-b-2 border-muted p-2">
+          <div className="lg:col-span-8 flex flex-col gap-8">
+            <div className="bg-white rounded-[40px] border border-slate-100 overflow-hidden shadow-sm relative flex flex-col">
+              <div className="flex bg-slate-50 border-b border-slate-100 p-2">
                 <button 
                   onClick={() => setTargetType('all')}
-                  className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[24px] text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+                  className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl text-sm font-bold transition-all ${
                     targetType === 'all' 
-                      ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-[0.98]' 
-                      : 'text-primary/30 hover:bg-white hover:text-primary'
+                      ? 'bg-white text-primary shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
                   <Users className="w-5 h-5" />
-                  تعميم شامل (للجميع)
+                  تعميم للجميع
                 </button>
                 <button 
                   onClick={() => setTargetType('specific')}
-                  className={`flex-1 flex items-center justify-center gap-3 py-5 rounded-[24px] text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${
+                  className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-2xl text-sm font-bold transition-all ${
                     targetType === 'specific' 
-                      ? 'bg-primary text-white shadow-xl shadow-primary/20 scale-[0.98]' 
-                      : 'text-primary/30 hover:bg-white hover:text-primary'
+                      ? 'bg-white text-primary shadow-sm' 
+                      : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
                   <User className="w-5 h-5" />
-                  تحويل لمستخدم محدد
+                  مستخدم محدد
                 </button>
               </div>
 
-              <div className="p-10 space-y-8 text-right">
+              <div className="p-10 flex flex-col gap-8">
                 {targetType === 'specific' && (
-                  <div className="space-y-4 animate-scale-in">
-                    <label className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] pr-2">تحديد المستهدف من السجل الفيدرالي</label>
+                  <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
+                    <label className="text-xs font-bold text-slate-400 pr-1">اختر المستخدم المستهدف</label>
                     <div className="relative group">
-                      <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-primary/20 group-focus-within:text-primary transition-colors" />
+                      <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors" />
                       <input 
                         type="text"
-                        className="w-full h-16 pr-14 pl-6 rounded-2xl border-2 border-muted bg-muted/10 text-primary font-black placeholder:text-primary/10 focus:outline-none focus:border-primary transition-all"
-                        placeholder="ابحث عن هويّة المستخدم…"
+                        className="w-full h-14 pr-14 pl-6 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all shadow-inner"
+                        placeholder="ابحث بالاسم..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                     </div>
-                    <div className="max-h-56 overflow-y-auto border-2 border-muted rounded-[24px] p-3 space-y-2 bg-muted/5 custom-scrollbar">
+                    <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-2xl p-2 space-y-1 bg-white custom-scrollbar shadow-sm">
                       {filteredProfiles.map(p => (
                         <button
                           key={p.id}
                           onClick={() => setSelectedProfileId(p.id)}
-                          className={`w-full text-right px-6 py-4 rounded-xl font-black text-sm transition-all duration-300 ${
+                          className={`w-full text-right px-5 py-3.5 rounded-xl text-sm font-bold transition-all ${
                             selectedProfileId === p.id 
-                              ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                              : 'text-primary/40 hover:bg-white hover:text-primary border-transparent hover:border-muted border-2'
+                              ? 'bg-primary text-white shadow-md' 
+                              : 'text-slate-600 hover:bg-slate-50'
                           }`}
                         >
                           {p.full_name}
                         </button>
                       ))}
                       {filteredProfiles.length === 0 && (
-                        <div className="py-12 text-center opacity-20 italic">
-                          <Users className="w-10 h-10 mx-auto mb-2" />
-                          <p className="text-[10px] font-black uppercase tracking-widest">لا توجد بيانات مطابقة</p>
+                        <div className="py-8 text-center text-slate-300 font-medium italic">
+                          <p className="text-xs">لا توجد نتائج مطابقة</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-primary/40 uppercase tracking-[0.3em] pr-2">محتوى البرقية الإدارية</label>
+                <div className="flex flex-col gap-4">
+                  <label className="text-xs font-bold text-slate-400 pr-1">محتوى الإعلان / الرسالة</label>
                   <Textarea 
-                    placeholder="اكتب التعميم الذي سيظهر فوراً كإشعار منبثق للمستهدفين…"
-                    className="min-h-[250px] rounded-[32px] border-2 border-muted bg-muted/10 focus:bg-white focus:border-primary transition-all p-8 font-black text-xl leading-relaxed text-primary placeholder:text-primary/10"
+                    placeholder="اكتب التنبيه أو التعميم هنا..."
+                    className="min-h-[200px] rounded-3xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all p-7 text-lg font-medium leading-relaxed text-slate-900 placeholder:text-slate-300 shadow-inner"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                   />
                 </div>
 
-                <button 
-                  onClick={handleSend}
-                  disabled={loading}
-                  className="w-full h-20 text-xs font-black uppercase tracking-[0.4em] rounded-[24px] bg-primary text-white shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 group flex items-center justify-center"
-                >
-                  {loading ? (
-                    <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <div className="flex items-center gap-5">
-                      <span className="mt-1">بث وإرسال التعميم الفوري</span>
-                      <Send className="w-6 h-6 rotate-[180deg] group-hover:translate-x-[-10px] transition-transform" />
-                    </div>
-                  )}
-                </button>
+                <div className="flex items-center gap-4">
+                   <button 
+                    onClick={handleSend}
+                    disabled={loading}
+                    className="flex-1 h-18 rounded-2xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-4 group"
+                  >
+                    {loading ? (
+                      <div className="w-6 h-6 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <span>إرسال وبث التعميم الآن</span>
+                        <Send className="w-5 h-5 group-hover:translate-x-[-4px] transition-transform" />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-4 space-y-8">
-            <div className="bg-primary rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl shadow-primary/20">
-              <div className="absolute top-[-50px] left-[-50px] w-64 h-64 bg-white/5 rounded-full blur-3xl" />
-              <h3 className="text-xl font-black italic mb-6 relative z-10 tracking-tight">بروتوكول البث</h3>
-              <ul className="space-y-6 relative z-10">
+          <div className="lg:col-span-4 flex flex-col gap-8">
+            <div className="bg-slate-900 rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl shadow-slate-900/20">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl opacity-50" />
+              <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center mb-8">
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              </div>
+              <h3 className="text-xl font-bold mb-6 relative z-10">قواعد البث الآمن</h3>
+              <ul className="space-y-6 relative z-10 text-right">
                 {[
-                  'ستظهر الرسالة كنافذة منبثقة (Modal) فورية فور تزامن دخول المستخدم.',
-                  'يتم تفعيل تنبيه مرئي وسمعي لضمان لفت انتباه المستخدم للتعميم.',
-                  'تُحفظ البرقيات كمستندات رسمية في سجل الرسائل الفيدرالي لضمان الأرشفة.'
+                  'تظهر هذه الرسالة كتبيه منبثق للمستخدمين فور دخولهم النظام.',
+                  'يتم تسجيل وقت الإرسال وهوية الراسل في سجلات النظام الرسمية.',
+                  'يرجى التأكد من دقة المعلومات قبل البث الشامل للجميع.'
                 ].map((text, i) => (
-                  <li key={i} className="flex gap-4 text-xs font-black leading-relaxed text-white/70">
-                    <CheckCircle2 className="w-5 h-5 shrink-0 text-secondary" />
+                  <li key={i} className="flex gap-4 text-xs font-medium leading-relaxed text-slate-400">
+                    <CheckCircle2 className="w-5 h-5 shrink-0 text-primary" />
                     {text}
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="bg-secondary/10 border-2 border-secondary/20 p-8 rounded-[40px] animate-pulse">
-              <div className="flex items-center gap-3 mb-4 text-secondary">
+            <div className="bg-amber-50 border border-amber-100 p-8 rounded-[40px]">
+              <div className="flex items-center gap-3 mb-4 text-amber-600">
                 <AlertCircle className="w-5 h-5" />
-                <h4 className="font-black text-xs uppercase tracking-widest">توجيه أمني</h4>
+                <h4 className="font-bold text-sm">ملاحظة أمنية</h4>
               </div>
-              <p className="text-[10px] font-black text-secondary-foreground leading-relaxed uppercase tracking-widest">
-                يُرجى قصر استخدام ميزة البث الشامل على الإعلانات الاستراتيجية لضمان فعالية الانتباه الأكاديمي.
+              <p className="text-xs font-medium text-amber-900/60 leading-relaxed">
+                استخدم خاصية "التعميم للجميع" فقط للإعلانات الهامة جداً لضمان عدم إزعاج المستخدمين والحفاظ على فاعلية التنبيهات.
               </p>
             </div>
           </div>
