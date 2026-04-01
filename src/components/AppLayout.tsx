@@ -75,11 +75,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Scaled Footer */}
         <footer className="py-8 px-10 text-center relative z-10 border-t border-slate-100 bg-white/50 backdrop-blur-sm mt-auto">
           <div className="flex flex-col items-center gap-3">
-             <div className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center mb-1">
-                <BookOpen className="w-3 h-3 text-slate-400" />
+             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mb-1 shadow-inner">
+                <BookOpen className="w-5 h-5 text-slate-400" />
              </div>
-             <p className="text-[10px] font-black text-slate-400 tracking-widest uppercase opacity-70"> Edara Arabiya Executive System </p>
-             <p className="text-[8px] font-bold text-slate-300 tracking-[0.4em]"> نُظام إدارة المدرسة الذكي © {new Date().getFullYear()} </p>
+             <p className="text-[11px] font-black text-slate-400 tracking-widest uppercase mb-1"> Edara Arabiya — Smart School Management </p>
+             <p className="text-sm font-black text-slate-900 border-b-2 border-primary/20 pb-1"> تطوير: عبدالرحمن سيد فوزي </p>
+             <p className="text-[9px] font-bold text-slate-300 tracking-[0.4em] mt-2"> نظام الإدارة الذكية © {new Date().getFullYear()} </p>
           </div>
         </footer>
       </main>

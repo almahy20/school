@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -517,26 +517,89 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          logo_url: string | null
           name: string
+          plan: string | null
+          slug: string | null
           status: string | null
           subscription_date: string | null
+          subscription_end_date: string | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
+          logo_url?: string | null
           name: string
+          plan?: string | null
+          slug?: string | null
           status?: string | null
           subscription_date?: string | null
+          subscription_end_date?: string | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
+          logo_url?: string | null
           name?: string
+          plan?: string | null
+          slug?: string | null
           status?: string | null
           subscription_date?: string | null
+          subscription_end_date?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      school_orders: {
+        Row: {
+          admin_name: string
+          admin_phone: string
+          admin_whatsapp: string
+          created_at: string
+          id: string
+          logo_url: string | null
+          plan: string
+          receipt_note: string | null
+          receipt_url: string | null
+          rejection_note: string | null
+          school_name: string
+          school_slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          admin_name: string
+          admin_phone: string
+          admin_whatsapp: string
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          plan?: string
+          receipt_note?: string | null
+          receipt_url?: string | null
+          rejection_note?: string | null
+          school_name: string
+          school_slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          admin_name?: string
+          admin_phone?: string
+          admin_whatsapp?: string
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          plan?: string
+          receipt_note?: string | null
+          receipt_url?: string | null
+          rejection_note?: string | null
+          school_name?: string
+          school_slug?: string
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }

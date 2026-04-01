@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
@@ -38,7 +38,7 @@ export default function StudentDetailPage() {
   useEffect(() => {
     const fetchData = async () => {
       const { data: studentData, error } = await supabase.from('students').select('*, classes(*)').eq('id', id).single();
-      if (error) { toast({ title: 'Ø®Ø·Ø£', description: error.message, variant: 'destructive' }); navigate('/students'); return; }
+      if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); navigate('/students'); return; }
       setStudent(studentData);
       const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user?.schoolId);
       setClasses(classesData || []);
@@ -50,7 +50,7 @@ export default function StudentDetailPage() {
   const handleDelete = async () => {
     if (!id || !confirm('Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø­Ø°Ù Ù‡Ø°Ø§ Ø§Ù„Ø·Ø§Ù„Ø¨ØŸ')) return;
     const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) { toast({ title: 'Ø®Ø·Ø£', description: error.message, variant: 'destructive' }); return; }
+    if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); return; }
     toast({ title: 'ØªÙ… Ø§Ù„Ø­Ø°Ù Ø¨Ù†Ø¬Ø§Ø­' }); navigate('/students');
   };
 
@@ -59,7 +59,7 @@ export default function StudentDetailPage() {
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
           <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø³Ø¬Ù„ Ø§Ù„Ø·Ø§Ù„Ø¨ Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠ</p>
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">جاري تحميل سجل الطالب الأكاديمي</p>
         </div>
       </AppLayout>
     );
@@ -85,9 +85,9 @@ export default function StudentDetailPage() {
                   <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-1.5 truncate">{student.name}</h1>
                   <div className="flex items-center gap-2">
                     <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[9px] uppercase tracking-widest px-3 py-1 rounded-full">
-                       {student.classes?.name || 'ØºÙŠØ± Ù…Ø³Ø¬Ù„ Ø¨ÙØµÙ„'}
+                       {student.classes?.name || 'غير مسجل بفصل'}
                     </Badge>
-                    <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200">Ù…Ø¹Ø±Ù Ø§Ù„Ø·Ø§Ù„Ø¨: #{student.id.slice(0, 5)}</span>
+                    <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200">معرف الطالب: #{student.id.slice(0, 5)}</span>
                   </div>
                </div>
             </div>
@@ -96,7 +96,7 @@ export default function StudentDetailPage() {
           <div className="flex items-center gap-3 relative z-10">
             <Button onClick={() => setShowEdit(true)}
               className="h-11 px-6 rounded-xl bg-white border border-slate-200 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-sm gap-2 text-xs">
-              <Edit2 className="w-4 h-4" /> ØªØ¹Ø¯ÙŠÙ„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
+              <Edit2 className="w-4 h-4" /> تعديل البيانات
             </Button>
             <Button onClick={handleDelete} variant="ghost"
               className="h-11 w-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0">
@@ -107,10 +107,10 @@ export default function StudentDetailPage() {
 
         {/* Stats Grid - Scaled Down */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-           <StatsCard title="Ø§Ù„Ù…Ø¹Ø¯Ù„ Ø§Ù„ØªØ±Ø§ÙƒÙ…ÙŠ" value="98.5%" icon={Award} color="indigo" />
-           <StatsCard title="Ù†Ø³Ø¨Ø© Ø§Ù„Ø­Ø¶ÙˆØ±" value="94%" icon={Activity} color="emerald" />
-           <StatsCard title="Ø§Ù„Ø³Ù„ÙˆÙƒ Ø§Ù„Ø¹Ù…Ù„ÙŠ" value="Ø§Ù…ØªÙŠØ§Ø²" icon={Star} color="amber" smallValue />
-           <StatsCard title="Ø§Ù„Ø¯Ø±Ø¬Ø§Øª Ø§Ù„Ù…Ø±ØµÙˆØ¯Ø©" value="12" icon={BookOpen} color="slate" />
+           <StatsCard title="المعدل التراكمي" value="98.5%" icon={Award} color="indigo" />
+           <StatsCard title="نسبة الحضور" value="94%" icon={Activity} color="emerald" />
+           <StatsCard title="السلوك العملي" value="امتياز" icon={Star} color="amber" smallValue />
+           <StatsCard title="الدرجات المرصودة" value="12" icon={BookOpen} color="slate" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -121,16 +121,16 @@ export default function StudentDetailPage() {
                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                           <CheckCircle className="w-5 h-5" />
                        </div>
-                       <h2 className="text-xl font-black text-slate-900">Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠØ©</h2>
+                       <h2 className="text-xl font-black text-slate-900">البيانات الأكاديمية</h2>
                     </div>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-none font-black px-4 py-1.5 rounded-full text-[10px]">Ø­Ø§Ù„Ø© Ø§Ù„Ø·Ø§Ù„Ø¨: Ù†Ø´Ø·</Badge>
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-none font-black px-4 py-1.5 rounded-full text-[10px]">حالة الطالب: نشط</Badge>
                  </div>
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <InfoRow label="Ø§Ù„ÙØµÙ„ Ø§Ù„Ù…Ø³Ø¬Ù„" value={student.classes?.name || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'} icon={School} />
-                    <InfoRow label="Ø§Ù„Ù…Ø±Ø­Ù„Ø© Ø§Ù„Ø¯Ø±Ø§Ø³ÙŠØ©" value={student.classes?.grade_level || 'ØºÙŠØ± Ù…Ø­Ø¯Ø¯'} icon={GraduationCap} />
-                    <InfoRow label="ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ù†Ø¶Ù…Ø§Ù…" value={new Date(student.created_at).toLocaleDateString('ar-EG')} icon={Calendar} />
-                    <InfoRow label="Ù…Ø¹Ø±Ù ÙˆÙ„ÙŠ Ø§Ù„Ø£Ù…Ø±" value={student.parent_phone || 'لم يتم الربط'} />
+                    <InfoRow label="الفصل المسجل" value={student.classes?.name || 'غير محدد'} icon={School} />
+                    <InfoRow label="المرحلة الدراسية" value={student.classes?.grade_level || 'غير محدد'} icon={GraduationCap} />
+                    <InfoRow label="تاريخ الانضمام" value={new Date(student.created_at).toLocaleDateString('ar-EG')} icon={Calendar} />
+                    <InfoRow label="معرف ولي الأمر" value={student.parent_phone || 'لم يتم الربط'} icon={Phone} />
                  </div>
               </section>
 
@@ -139,12 +139,12 @@ export default function StudentDetailPage() {
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                        <Activity className="w-5 h-5" />
                     </div>
-                    <h2 className="text-xl font-black text-slate-900">Ù…Ø¤Ø´Ø±Ø§Øª Ø§Ù„Ø£Ø¯Ø§Ø¡</h2>
+                    <h2 className="text-xl font-black text-slate-900">مؤشرات الأداء</h2>
                  </div>
                  <div className="space-y-6">
-                    <PerformanceMetric label="Ø§Ù„Ù„ØºØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©" percentage={95} />
-                    <PerformanceMetric label="Ø§Ù„Ø±ÙŠØ§Ø¶ÙŠØ§Øª" percentage={88} />
-                    <PerformanceMetric label="Ø§Ù„ØªØ±Ø¨ÙŠØ© Ø§Ù„Ø¥Ø³Ù„Ø§Ù…ÙŠØ©" percentage={100} />
+                    <PerformanceMetric label="اللغة العربية" percentage={95} />
+                    <PerformanceMetric label="الرياضيات" percentage={88} />
+                    <PerformanceMetric label="التربية الإسلامية" percentage={100} />
                  </div>
               </section>
            </div>
@@ -157,16 +157,16 @@ export default function StudentDetailPage() {
                     <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
                        <Shield className="w-5 h-5" />
                     </div>
-                    <h2 className="text-lg font-black text-white leading-none">Ø§Ù„Ù…Ù„Ù Ø§Ù„Ø¥Ø¯Ø§Ø±ÙŠ</h2>
+                    <h2 className="text-lg font-black text-white leading-none">الملف الإداري</h2>
                  </div>
 
                  <div className="space-y-4 relative z-10">
-                    <AdminDetail icon={Mail} label="Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ" value="Ø£Ø­Ù…Ø¯@Ù…Ø¯Ø±Ø³Ø©.ÙƒÙˆÙ…" />
-                    <AdminDetail icon={Phone} label="Ø±Ù‚Ù… Ø§Ù„ØªÙˆØ§ØµÙ„" value="05xxxxxxxx" />
-                    <AdminDetail icon={MapPin} label="Ø§Ù„Ø¹Ù†ÙˆØ§Ù†" value="Ø§Ù„Ø±ÙŠØ§Ø¶ØŒ Ø§Ù„Ù…Ù…Ù„ÙƒØ© Ø§Ù„Ø¹Ø±Ø¨ÙŠØ© Ø§Ù„Ø³Ø¹ÙˆØ¯ÙŠØ©" />
+                    <AdminDetail icon={Mail} label="البريد الإلكتروني" value="أحمد@مدرسة.كوم" />
+                    <AdminDetail icon={Phone} label="رقم التواصل" value="05xxxxxxxx" />
+                    <AdminDetail icon={MapPin} label="العنوان" value="الرياض، المملكة العربية السعودية" />
                  </div>
 
-                 <Button className="w-full h-13 rounded-xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-xs relative z-10 shadow-xl shadow-indigo-900/40">ØªÙ†Ø²ÙŠÙ„ Ø§Ù„ØªÙ‚Ø±ÙŠØ± Ø§Ù„Ø£ÙƒØ§Ø¯ÙŠÙ…ÙŠ</Button>
+                 <Button className="w-full h-13 rounded-xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-xs relative z-10 shadow-xl shadow-indigo-900/40">تنزيل التقرير الأكاديمي</Button>
               </section>
            </div>
         </div>

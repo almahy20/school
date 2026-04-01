@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   Phone, User, GraduationCap, Eye, Edit2, Save, X, Search, Users,
   Activity, Award, Star, BookOpen, ChevronRight, Filter, MoreHorizontal,
-  Mail, Settings, Briefcase
+  Mail, Settings, Briefcase, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,13 +27,19 @@ export default function TeachersPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [teachers, setTeachers] = useState<TeacherProfile[]>([]);
+  const [pendingTeachers, setPendingTeachers] = useState<any[]>([]);
+  const [schoolSlug, setSchoolSlug] = useState('');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const fetchTeachers = useCallback(async () => {
     if (!user?.schoolId) return;
+    const { data: school } = await (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single();
+    if (school) setSchoolSlug(school.slug);
+
     const { data: profiles, error: pErr } = await supabase.from('profiles').select('id, full_name, phone').eq('school_id', user.schoolId);
-    const { data: roles, error: rErr } = await supabase.from('user_roles').select('user_id').eq('role', 'teacher').eq('school_id', user.schoolId);
+    const { data: roles, error: rErr } = await (supabase as any).from('user_roles').select('*').eq('role', 'teacher').eq('school_id', user.schoolId);
     const { data: classes, error: cErr } = await supabase.from('classes').select('id, name, teacher_id').eq('school_id', user.schoolId);
 
     if (pErr || rErr || cErr) {
@@ -41,19 +47,43 @@ export default function TeachersPage() {
       setLoading(false); return;
     }
 
-    const teacherIds = roles.map(r => r.user_id);
-    const enriched = (profiles || [])
-      .filter(p => teacherIds.includes(p.id))
+    const activeIds = roles.filter((r: any) => r.approval_status !== 'pending' && r.approval_status !== 'rejected').map((r: any) => r.user_id);
+    const pendingIds = roles.filter((r: any) => r.approval_status === 'pending').map((r: any) => r.user_id);
+
+    const enrichedActive = (profiles || [])
+      .filter(p => activeIds.includes(p.id))
       .map(p => ({
         ...p,
         classes: (classes || []).filter(c => c.teacher_id === p.id).map(c => ({ id: c.id, name: c.name })),
       }));
     
-    setTeachers(enriched);
+    const enrichedPending = (profiles || []).filter(p => pendingIds.includes(p.id));
+
+    setTeachers(enrichedActive);
+    setPendingTeachers(enrichedPending);
     setLoading(false);
-  }, [toast]);
+  }, [toast, user?.schoolId]);
 
   useEffect(() => { fetchTeachers(); }, [fetchTeachers]);
+
+  const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
+    setActionLoading(userId);
+    try {
+      const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('user_id', userId);
+      if (error) throw error;
+      toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
+      fetchTeachers();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
+    setActionLoading(null);
+  };
+
+  const copyLink = () => {
+    const link = `${window.location.origin}/register/teachers/${schoolSlug}`;
+    navigator.clipboard.writeText(link);
+    toast({ title: 'تم النسخ', description: 'تم نسخ رابط تسجيل المعلمين للحافظة' });
+  };
 
   const filtered = teachers.filter(t => t.full_name.includes(search));
 
@@ -77,12 +107,48 @@ export default function TeachersPage() {
           </div>
         </header>
 
-        {/* Stats Summary - Scaled Down */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-           <KPIStat label="إجمالي المعلمين" value={teachers.length} icon={GraduationCap} color="indigo" />
-           <KPIStat label="الفصول المغطاة" value={teachers.reduce((acc, t) => acc + t.classes.length, 0)} icon={Briefcase} color="emerald" />
-           <KPIStat label="نسبة الأداء" value="96%" icon={Star} color="amber" />
+        {/* Registration Link & Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+           <div className="md:col-span-1 premium-card p-5 border border-indigo-100 bg-indigo-50/50 flex flex-col justify-center items-start gap-3">
+             <div className="flex items-center gap-2">
+               <LinkIcon className="w-5 h-5 text-indigo-600" />
+               <h3 className="font-black text-indigo-900 text-sm">رابط انضمام المعلمين</h3>
+             </div>
+             <p className="text-[10px] text-indigo-600/70 font-medium leading-relaxed">انسخ هذا الرابط وأرسله للمعلمين الجدد لإنشاء حساباتهم.</p>
+             <Button onClick={copyLink} className="w-full mt-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 text-xs gap-2 rounded-xl shadow-lg shadow-indigo-200">
+               <Copy className="w-4 h-4" /> نسخ الرابط
+             </Button>
+           </div>
+           
+           <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+             <KPIStat label="إجمالي المعلمين المعتمدين" value={teachers.length} icon={GraduationCap} color="indigo" />
+             <KPIStat label="الفصول المغطاة" value={teachers.reduce((acc, t) => acc + t.classes.length, 0)} icon={Briefcase} color="emerald" />
+             <KPIStat label="طلبات الانضمام" value={pendingTeachers.length} icon={Clock} color="amber" />
+           </div>
         </div>
+
+        {/* Pending Approvals */}
+        {pendingTeachers.length > 0 && (
+          <div className="premium-card border-amber-100 bg-amber-50/10 p-6 overflow-hidden relative">
+            <h2 className="text-lg font-black text-amber-900 flex items-center gap-2 mb-6"><Clock className="w-5 h-5 text-amber-600" /> طلبات انضمام في انتظار المراجعة</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {pendingTeachers.map(u => (
+                 <div key={u.id} className="bg-white rounded-2xl border border-amber-100 p-5 shadow-sm hover:shadow-md transition-all">
+                    <h3 className="font-bold text-slate-900 text-sm mb-1">{u.full_name}</h3>
+                    <p className="text-xs text-slate-500 mb-4" dir="ltr">{u.phone}</p>
+                    <div className="flex gap-2">
+                      <Button onClick={() => handleAction(u.id, 'approved')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                        <ShieldCheck className="w-3.5 h-3.5" /> قبول
+                      </Button>
+                      <Button onClick={() => handleAction(u.id, 'rejected')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                        <XCircle className="w-3.5 h-3.5" /> رفض
+                      </Button>
+                    </div>
+                 </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Search & Filter - Scaled Down */}
         <div className="relative group ml-auto w-full max-w-md">

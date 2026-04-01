@@ -7,11 +7,12 @@ import {
   TrendingUp, Award, ArrowUpRight, Zap, Target,
   CheckCircle, XCircle, Clock, AlertCircle, Eye, X,
   ClipboardList, CalendarCheck, Calendar, MessageSquare,
-  ChevronRight, Activity
+  ChevronRight, Activity, LinkIcon, CopyIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -132,16 +133,87 @@ function AdminDashboard() {
            </div>
         </div>
 
-        <div className="premium-card bg-slate-100 text-slate-400 border-slate-200 flex items-center justify-center relative overflow-hidden">
-             <div className="text-center p-10 space-y-4">
-                <Target className="w-12 h-12 mx-auto opacity-20" />
-                <h3 className="text-xl font-black tracking-tight text-slate-400">لا توجد أهداف محددة</h3>
-             </div>
+        <div className="flex flex-col gap-8">
+           <RegistrationLinksCard schoolId={user?.schoolId} />
+           
+           <div className="premium-card bg-slate-100 text-slate-400 border-slate-200 flex items-center justify-center relative overflow-hidden flex-1">
+                <div className="text-center p-10 space-y-4">
+                   <Target className="w-12 h-12 mx-auto opacity-20" />
+                   <h3 className="text-xl font-black tracking-tight text-slate-400">لا توجد أهداف محددة</h3>
+                </div>
+           </div>
         </div>
       </div>
     </div>
   );
 }
+
+function RegistrationLinksCard({ schoolId }: { schoolId: string | undefined }) {
+  const [slug, setSlug] = useState('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (!schoolId) return;
+    supabase.from('schools').select('slug').eq('id', schoolId).single().then(({ data }) => {
+      if (data) setSlug(data.slug);
+    });
+  }, [schoolId]);
+
+  const copy = (type: 'teachers' | 'parents') => {
+    const link = `${window.location.origin}/register/${type}/${slug}`;
+    navigator.clipboard.writeText(link);
+    toast({ title: 'تم النسخ', description: `تم نسخ رابط تسجيل ${type === 'teachers' ? 'المعلمين' : 'أولياء الأمور'}` });
+  };
+
+  return (
+    <div className="premium-card border-indigo-100 bg-indigo-50/30 p-8 space-y-6">
+       <div className="flex items-center gap-4 mb-2">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+            <LinkIcon className="w-6 h-6" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">روابط التسجيل</h2>
+       </div>
+       
+       <div className="space-y-4">
+          <div className="space-y-1.5">
+             <label className="text-[10px] font-black text-indigo-600/50 uppercase tracking-widest mr-1">رابط المعلمين</label>
+             <div className="flex gap-2">
+                <div className="flex-1 h-12 px-4 rounded-xl bg-white border border-indigo-100 flex items-center text-xs font-bold text-slate-500 overflow-hidden whitespace-nowrap" dir="ltr">
+                   .../register/teachers/{slug}
+                </div>
+                <Button onClick={() => copy('teachers')} className="w-12 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white p-0 shrink-0">
+                   <CopyIcon className="w-5 h-5" />
+                </Button>
+             </div>
+          </div>
+
+          <div className="space-y-1.5">
+             <label className="text-[10px] font-black text-indigo-600/50 uppercase tracking-widest mr-1">رابط أولياء الأمور</label>
+             <div className="flex gap-2">
+                <div className="flex-1 h-12 px-4 rounded-xl bg-white border border-indigo-100 flex items-center text-xs font-bold text-slate-500 overflow-hidden whitespace-nowrap" dir="ltr">
+                   .../register/parents/{slug}
+                </div>
+                <Button onClick={() => copy('parents')} className="w-12 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white p-0 shrink-0">
+                   <CopyIcon className="w-5 h-5" />
+                </Button>
+             </div>
+          </div>
+       </div>
+       
+       <p className="text-[10px] font-bold text-indigo-400 leading-relaxed">
+          شارك هذه الروابط مع المعلمين وأولياء الأمور ليتمكنوا من الانضمام لمدرستك مباشرة.
+       </p>
+    </div>
+  );
+}
+
+// Re-using common icons
+const LinkIcon = ({ className }: any) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+);
+const CopyIcon = ({ className }: any) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></svg>
+);
 
 // ─── Teacher Dashboard ────────────────────────────────────────────────────────
 function TeacherDashboard() {

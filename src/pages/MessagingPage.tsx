@@ -122,65 +122,67 @@ export default function MessagingPage() {
                 </button>
               </div>
 
-              <div className="p-10 flex flex-col gap-8">
+              <div className="p-10 flex flex-col gap-10">
                 {targetType === 'specific' && (
-                  <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-2">
-                    <label className="text-xs font-bold text-slate-400 pr-1">اختر المستخدم المستهدف</label>
+                  <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">المستلم المستهدف</label>
                     <div className="relative group">
-                      <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors" />
+                      <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors" />
                       <input 
                         type="text"
-                        className="w-full h-14 pr-14 pl-6 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all shadow-inner"
-                        placeholder="ابحث بالاسم..."
+                        className="w-full h-16 pr-16 pl-6 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all shadow-inner"
+                        placeholder="ابحث عن اسم المستخدم..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                       />
                     </div>
-                    <div className="max-h-48 overflow-y-auto border border-slate-100 rounded-2xl p-2 space-y-1 bg-white custom-scrollbar shadow-sm">
+                    <div className="max-h-60 overflow-y-auto border border-slate-100 rounded-3xl p-3 space-y-1.5 bg-white custom-scrollbar shadow-sm">
                       {filteredProfiles.map(p => (
                         <button
                           key={p.id}
                           onClick={() => setSelectedProfileId(p.id)}
-                          className={`w-full text-right px-5 py-3.5 rounded-xl text-sm font-bold transition-all ${
+                          className={`w-full text-right px-6 py-4 rounded-2xl text-sm font-black transition-all ${
                             selectedProfileId === p.id 
-                              ? 'bg-primary text-white shadow-md' 
-                              : 'text-slate-600 hover:bg-slate-50'
+                              ? 'bg-slate-900 text-white shadow-xl translate-x-[-4px]' 
+                              : 'text-slate-600 hover:bg-slate-50 hover:translate-x-[-2px]'
                           }`}
                         >
                           {p.full_name}
                         </button>
                       ))}
                       {filteredProfiles.length === 0 && (
-                        <div className="py-8 text-center text-slate-300 font-medium italic">
-                          <p className="text-xs">لا توجد نتائج مطابقة</p>
+                        <div className="py-12 text-center text-slate-300 font-bold italic">
+                          <p className="text-xs">لا توجد نتائج مطابقة لبحثك</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                <div className="flex flex-col gap-4">
-                  <label className="text-xs font-bold text-slate-400 pr-1">محتوى الإعلان / الرسالة</label>
+                <div className="flex flex-col gap-5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-1">محتوى الرسالة / التعميم</label>
                   <Textarea 
-                    placeholder="اكتب التنبيه أو التعميم هنا..."
-                    className="min-h-[200px] rounded-3xl border border-slate-100 bg-slate-50 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all p-7 text-lg font-medium leading-relaxed text-slate-900 placeholder:text-slate-300 shadow-inner"
+                    placeholder="اكتب رسالتك هنا... سيتم إرسالها فوراً للمستهدفين."
+                    className="min-h-[250px] rounded-[32px] border border-slate-100 bg-slate-50 focus:bg-white focus:border-primary/20 focus:ring-4 focus:ring-primary/5 transition-all p-8 text-xl font-bold leading-relaxed text-slate-900 placeholder:text-slate-300 shadow-inner resize-none"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                   />
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6 pt-4">
                    <button 
                     onClick={handleSend}
                     disabled={loading}
-                    className="flex-1 h-18 rounded-2xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-4 group"
+                    className="flex-1 h-20 rounded-3xl bg-slate-900 text-white font-black text-lg shadow-2xl shadow-slate-900/20 hover:translate-y-[-4px] active:translate-y-0 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-5 group"
                   >
                     {loading ? (
-                      <div className="w-6 h-6 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
+                      <div className="w-8 h-8 border-[4px] border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
                       <>
-                        <span>إرسال وبث التعميم الآن</span>
-                        <Send className="w-5 h-5 group-hover:translate-x-[-4px] transition-transform" />
+                        <span className="tracking-tight">إرسال وبث الرسالة الآن</span>
+                        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center group-hover:rotate-12 transition-transform">
+                          <Send className="w-5 h-5 text-white" />
+                        </div>
                       </>
                     )}
                   </button>

@@ -23,6 +23,14 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   }
   
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+
+  // Redirect to /expired if subscription has ended (Admins/Teachers only)
+  if (user.subscriptionExpired && !user.isSuperAdmin && (user.role === 'admin' || user.role === 'teacher')) {
+    if (location.pathname !== '/settings' && location.pathname !== '/expired') {
+       return <Navigate to="/expired" replace />;
+    }
+  }
+
   if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
   
   if (user.schoolStatus === 'suspended' && !user.isSuperAdmin) {

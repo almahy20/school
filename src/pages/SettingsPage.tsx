@@ -5,9 +5,11 @@ import {
   ChevronLeft, User, Bell, Globe, HelpCircle, Shield,
   Users, Database, LogOut, Edit2, Plus, ArrowLeft
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -17,14 +19,25 @@ export default function SettingsPage() {
 
   const roleLabel = user?.role === 'admin' ? 'مدير النظام' : user?.role === 'teacher' ? 'معلم' : 'ولي أمر';
 
+  const handleRequestNotifications = async () => {
+    const { requestNotificationPermission, playNotificationSound } = await import('@/utils/notifications');
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      playNotificationSound();
+      toast({ title: 'تم تفعيل الإشعارات', description: 'ستصلك التنبيهات بذكاء مع صوت مخصص' });
+    } else {
+      toast({ title: 'فشل التفعيل', description: 'يرجى السماح بالإشعارات من إعدادات المتصفح', variant: 'destructive' });
+    }
+  };
+
   const accountSettings = [
     { label: 'إعدادات الملف الشخصي', icon: User, onClick: () => {} },
-    { label: 'تفضيلات الإشعارات', icon: Bell, onClick: () => {} },
+    { label: 'تفعيل الإشعارات الذكية', icon: Bell, onClick: handleRequestNotifications },
     { label: 'لغة التطبيق', icon: Globe, extra: 'العربية', onClick: () => {} },
   ];
 
   const supportSettings = [
-    { label: 'مركز المساعدة', icon: HelpCircle, onClick: () => {} },
+    { label: 'مركز المساعدة', icon: HelpCircle, onClick: () => window.open('https://wa.me/201029082772', '_blank') },
     { label: 'سياسة الخصوصية', icon: Shield, onClick: () => {} },
   ];
 
