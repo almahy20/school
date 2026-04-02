@@ -25,8 +25,18 @@ export default function LoginPage() {
     setLoading(true);
     const err = await login(phone.trim(), password);
     setLoading(false);
-    if (err) setError(err);
-    else navigate(from, { replace: true });
+    if (err) {
+      setError(err);
+    } else {
+      // Get the user from the auth context (we might need to wait for it or just check what's returned)
+      // Since login returns null on success, we check the user state or just use a generic check
+      // For now, I'll update it to check the user role if possible, but the best way is to let the 
+      // AuthContext handle the navigation or provide the user object.
+      // Actually, I'll just check if the login was successful and then use a small delay or a check.
+      
+      // Better: Use a dedicated check for Super Admin redirect
+      navigate(isDeveloperLogin ? '/super-admin' : '/', { replace: true });
+    }
   };
 
   return (

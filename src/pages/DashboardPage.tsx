@@ -7,21 +7,32 @@ import {
   TrendingUp, Award, ArrowUpRight, Zap, Target,
   CheckCircle, XCircle, Clock, AlertCircle, Eye, X,
   ClipboardList, CalendarCheck, Calendar, MessageSquare,
-  ChevronRight, Activity, LinkIcon, CopyIcon
+  ChevronRight, Activity, Link2, Copy
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 
+import { useNavigate } from 'react-router-dom';
+
 export default function DashboardPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user?.isSuperAdmin) {
+      navigate('/super-admin', { replace: true });
+    }
+  }, [user, navigate]);
+
   return (
     <AppLayout>
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
         {user?.role === 'parent' ? <ParentDashboard />
           : user?.role === 'teacher' ? <TeacherDashboard />
-          : <AdminDashboard />}
+          : user?.role === 'admin' ? <AdminDashboard />
+          : <div className="p-20 text-center font-bold text-slate-400">جاري تحميل بيانات المستخدم...</div>}
       </div>
     </AppLayout>
   );
@@ -73,16 +84,26 @@ function AdminDashboard() {
   const [stats, setStats] = useState({ students: 0, teachers: 0, parents: 0, classes: 0 });
 
   useEffect(() => {
-    if (!user?.schoolId) return;
+    // If not super admin, we need a schoolId to show anything
+    if (!user?.isSuperAdmin && !user?.schoolId) return;
+
+    const baseQuery = (table: string) => {
+        const q = (supabase as any).from(table).select('id', { count: 'exact', head: true });
+        if (!user?.isSuperAdmin && user?.schoolId) {
+            q.eq('school_id', user.schoolId);
+        }
+        return q;
+    };
+
     Promise.all([
-      supabase.from('students').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId),
-      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'teacher').eq('school_id', user.schoolId),
-      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'parent').eq('school_id', user.schoolId),
-      supabase.from('classes').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId),
+      baseQuery('students'),
+      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
+      supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('role', 'parent'),
+      baseQuery('classes'),
     ]).then(([s, t, p, c]) => {
       setStats({ students: s.count || 0, teachers: t.count || 0, parents: p.count || 0, classes: c.count || 0 });
     });
-  }, [user?.schoolId]);
+  }, [user?.schoolId, user?.isSuperAdmin]);
 
   return (
     <div className="flex flex-col gap-12 max-w-[1500px] mx-auto text-right">
@@ -305,46 +326,59 @@ function ParentDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user?.schoolId) return;
     (async () => {
-      setLoading(true);
-      const { data: links } = await (supabase as any)
-        .from('student_parents')
-        .select('student_id')
-        .eq('school_id', user.schoolId)
-        .eq('parent_id', user.id);
+      try {
+        setLoading(true);
+        if (!user?.schoolId) {
+          setLoading(false);
+          return;
+        }
 
-      if (!links?.length) { setChildren([]); setLoading(false); return; }
+        const { data: links } = await (supabase as any)
+          .from('student_parents')
+          .select('student_id')
+          .eq('school_id', user.schoolId)
+          .eq('parent_id', user.id);
 
-      const studentIds = links.map((l: any) => l.student_id);
-      const [{ data: students }, { data: grades }, { data: attendance }, { data: fees }] = await Promise.all([
-        supabase.from('students').select('*, classes!students_class_id_fkey(name)').eq('school_id', user.schoolId).in('id', studentIds),
-        supabase.from('grades').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: true }),
-        supabase.from('attendance').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: false }),
-        (supabase as any).from('fees').select('*').eq('school_id', user.schoolId).in('student_id', studentIds),
-      ]);
+        if (!links?.length) { 
+          setChildren([]); 
+          setLoading(false); 
+          return; 
+        }
 
-      const enriched = (students || []).map(s => {
-        const childGrades = (grades || []).filter(g => g.student_id === s.id);
-        const childAttendance = (attendance || []).filter(a => a.student_id === s.id);
-        const childFees = (fees || []).filter((f: any) => f.student_id === s.id);
-        const totalDue = childFees.reduce((sum: number, f: any) => sum + (f.amount_due || 0), 0);
-        const totalPaid = childFees.reduce((sum: number, f: any) => sum + (f.amount_paid || 0), 0);
-        const presentCount = childAttendance.filter(a => a.status === 'present').length;
-        return {
-          ...s,
-          className: (s as any).classes?.name || '',
-          grades: childGrades,
-          attendance: childAttendance,
-          attendanceRate: childAttendance.length > 0 ? Math.round((presentCount / childAttendance.length) * 100) : 0,
-          avgGrade: childGrades.length > 0
-            ? Math.round(childGrades.reduce((sum, g) => sum + (g.score / g.max_score) * 100, 0) / childGrades.length)
-            : 0,
-          feesRemaining: Math.max(0, totalDue - totalPaid),
-        };
-      });
-      setChildren(enriched);
-      setLoading(false);
+        const studentIds = links.map((l: any) => l.student_id);
+        const [{ data: students }, { data: grades }, { data: attendance }, { data: fees }] = await Promise.all([
+          supabase.from('students').select('*, classes!students_class_id_fkey(name)').eq('school_id', user.schoolId).in('id', studentIds),
+          supabase.from('grades').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: true }),
+          supabase.from('attendance').select('*').eq('school_id', user.schoolId).in('student_id', studentIds).order('date', { ascending: false }),
+          (supabase as any).from('fees').select('*').eq('school_id', user.schoolId).in('student_id', studentIds),
+        ]);
+
+        const enriched = (students || []).map(s => {
+          const childGrades = (grades || []).filter(g => g.student_id === s.id);
+          const childAttendance = (attendance || []).filter(a => a.student_id === s.id);
+          const childFees = (fees || []).filter((f: any) => f.student_id === s.id);
+          const totalDue = childFees.reduce((sum: number, f: any) => sum + (f.amount_due || 0), 0);
+          const totalPaid = childFees.reduce((sum: number, f: any) => sum + (f.amount_paid || 0), 0);
+          const presentCount = childAttendance.filter(a => a.status === 'present').length;
+          return {
+            ...s,
+            className: (s as any).classes?.name || '',
+            grades: childGrades,
+            attendance: childAttendance,
+            attendanceRate: childAttendance.length > 0 ? Math.round((presentCount / childAttendance.length) * 100) : 0,
+            avgGrade: childGrades.length > 0
+              ? Math.round(childGrades.reduce((sum, g) => sum + (g.score / g.max_score) * 100, 0) / childGrades.length)
+              : 0,
+            feesRemaining: Math.max(0, totalDue - totalPaid),
+          };
+        });
+        setChildren(enriched);
+      } catch (err) {
+        console.error('Parent dashboard fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [user?.id, user?.schoolId]);
 
@@ -404,7 +438,7 @@ function ParentDashboard() {
 }
 
 function ChildSummaryCard({ child }: { child: any }) {
-  const navigate = () => window.location.assign(`/parent/children/${child.id}`);
+  const go = useNavigate();
   
   return (
     <div className="premium-card p-0 overflow-hidden group hover:scale-[1.02] transition-all duration-500">
@@ -442,7 +476,8 @@ function ChildSummaryCard({ child }: { child: any }) {
            </div>
          )}
          
-         <Button onClick={navigate} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center gap-3">
+         <Button 
+          onClick={() => go(`/parent/children/${child.id}`)} className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center gap-3">
            <Eye className="w-5 h-5" />
            عرض التفاصيل الكاملة
          </Button>

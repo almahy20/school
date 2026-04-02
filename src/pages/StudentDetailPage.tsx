@@ -35,15 +35,16 @@ export default function StudentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
 
+  const fetchData = async () => {
+    const { data: studentData, error } = await supabase.from('students').select('*, classes(*)').eq('id', id).single();
+    if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); navigate('/students'); return; }
+    setStudent(studentData);
+    const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user?.schoolId);
+    setClasses(classesData || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      const { data: studentData, error } = await supabase.from('students').select('*, classes(*)').eq('id', id).single();
-      if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); navigate('/students'); return; }
-      setStudent(studentData);
-      const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user?.schoolId);
-      setClasses(classesData || []);
-      setLoading(false);
-    };
     fetchData();
   }, [id, navigate, toast]);
 
@@ -177,7 +178,7 @@ export default function StudentDetailPage() {
           student={student} 
           classes={classes} 
           onClose={() => setShowEdit(false)} 
-          onSuccess={() => { setShowEdit(false); window.location.reload(); }}
+          onSuccess={() => { setShowEdit(false); fetchData(); }}
         />
       )}
     </AppLayout>

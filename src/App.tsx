@@ -32,6 +32,8 @@ import MessagingPage from "./pages/MessagingPage";
 import NotFound from "./pages/NotFound";
 import ParentComplaintsPage from "./pages/ParentComplaintsPage";
 import AdminComplaintsPage from "./pages/AdminComplaintsPage";
+import AssignmentsPage from "./pages/AssignmentsPage";
+import AssignmentSubmissionsPage from "./pages/AssignmentSubmissionsPage";
 import LandingPage from "./pages/LandingPage";
 import PaymentPage from "./pages/PaymentPage";
 import SubscriptionExpiredPage from "./pages/SubscriptionExpiredPage";
@@ -42,7 +44,17 @@ const queryClient = new QueryClient();
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#060b16] flex flex-col items-center justify-center p-6" dir="rtl">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-6 animate-pulse">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500 animate-spin" />
+        </div>
+        <h2 className="text-xl font-black text-white mb-2">إدارة عربية</h2>
+        <p className="text-white/40 text-sm font-bold uppercase tracking-widest animate-pulse">جاري التحقق من الهوية...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -71,8 +83,10 @@ function AppRoutes() {
         <Route path="/parents/:id" element={<ProtectedRoute allowedRoles={['admin']}><ParentDetailPage /></ProtectedRoute>} />
         <Route path="/classes" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassesPage /></ProtectedRoute>} />
         <Route path="/classes/:id" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassDetailPage /></ProtectedRoute>} />
-        <Route path="/grades" element={<ProtectedRoute allowedRoles={['teacher']}><GradesPage /></ProtectedRoute>} />
-        <Route path="/attendance" element={<ProtectedRoute allowedRoles={['admin']}><AttendancePage /></ProtectedRoute>} />
+        <Route path="/assignments" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'parent']}><AssignmentsPage /></ProtectedRoute>} />
+        <Route path="/assignments/:id" element={<ProtectedRoute allowedRoles={['admin', 'teacher', 'parent']}><AssignmentSubmissionsPage /></ProtectedRoute>} />
+        <Route path="/grades" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><GradesPage /></ProtectedRoute>} />
+        <Route path="/attendance" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AttendancePage /></ProtectedRoute>} />
         <Route path="/fees" element={<ProtectedRoute allowedRoles={['admin']}><FeesPage /></ProtectedRoute>} />
         <Route path="/parent/children/:id" element={<ProtectedRoute allowedRoles={['parent']}><ParentChildDetailPage /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />

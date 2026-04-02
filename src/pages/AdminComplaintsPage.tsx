@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,7 +19,7 @@ interface Complaint {
   parent_id: string;
   student_id: string;
   content: string;
-  status: 'pending' | 'in_progress' | 'resolved';
+  status: 'pending' | 'in_progress' | 'resolved' | 'processing';
   created_at: string;
   parent_name?: string;
   student_name?: string;
@@ -33,21 +33,37 @@ export default function AdminComplaintsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
 
-  useEffect(() => {
-    const fetchComplaints = async () => {
+  const loadData = useCallback(async () => {
+    if (!user?.id) return;
+    try {
       setLoading(true);
-      // Fetch complaints and profiles separately for reliability
-      const { data: complaintsData, error } = await supabase.from('complaints').select(`
+      const query = (supabase as any).from('complaints').select(`
         *,
-        students(name)
-      `).eq('school_id', user?.schoolId).order('created_at', { ascending: false });
+        students!complaints_student_id_fkey(name)
+      `).order('created_at', { ascending: false });
+
+      if (!user?.isSuperAdmin && user?.schoolId) {
+        query.eq('school_id', user.schoolId);
+      }
+
+      const { data: complaintsData, error } = await query;
 
       if (error) {
-        toast({ title: 'خطأ', description: 'فشل في تحميل الشكاوى', variant: 'destructive' });
-      } else {
-        // Fetch profiles for parent names
-        const parentIds = [...new Set(complaintsData.map(c => c.parent_id))].filter(Boolean) as string[];
-        const { data: profiles } = await supabase.from('profiles').select('id, full_name').eq('school_id', user?.schoolId).in('id', parentIds);
+        if (error.code !== 'PGRST116') {
+           console.error('Complaints fetch error:', error);
+        }
+      } else if (complaintsData) {
+        const parentIds = [...new Set(complaintsData.map((c: any) => c.parent_id))].filter(Boolean) as string[];
+        
+        let profiles: any[] = [];
+        if (parentIds.length > 0) {
+          const profilesQuery = supabase.from('profiles').select('id, full_name');
+          if (!user?.isSuperAdmin && user?.schoolId) {
+              profilesQuery.eq('school_id', user.schoolId);
+          }
+          const { data } = await profilesQuery.in('id', parentIds);
+          profiles = data || [];
+        }
 
         const enriched = complaintsData.map((c: any) => ({
           ...c,
@@ -56,23 +72,77 @@ export default function AdminComplaintsPage() {
         }));
         setComplaints(enriched);
       }
+    } catch (err) {
+      console.error('Complaints load error:', err);
+    } finally {
       setLoading(false);
+    }
+  }, [user?.id, user?.schoolId, user?.isSuperAdmin]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  // Mark complaint notifications as read for admin
+  useEffect(() => {
+    if (user?.id) {
+      (supabase as any).from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'complaint_new')
+        .then();
+    }
+  }, [user?.id, complaints]);
+
+  // Real-time subscription for admin
+  useEffect(() => {
+    if (!user?.schoolId) return;
+
+    const channel = supabase
+      .channel('admin-complaints')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'complaints',
+          filter: user.isSuperAdmin ? undefined : `school_id=eq.${user.schoolId}`,
+        },
+        payload => {
+          if (payload.eventType === 'INSERT') {
+            // Reload to get names and associations correctly
+            loadData();
+            toast({ title: 'شكوى جديدة', description: 'تم استلام شكوى جديدة' });
+          } else if (payload.eventType === 'UPDATE') {
+            setComplaints(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
+          } else if (payload.eventType === 'DELETE') {
+            setComplaints(prev => prev.filter(c => c.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    fetchComplaints();
-  }, [toast]);
+  }, [user?.schoolId, user?.isSuperAdmin, loadData, toast]);
+
 
   const updateStatus = async (id: string, status: Complaint['status']) => {
-    const { error } = await supabase.from('complaints').update({ status }).eq('id', id);
+    const { error } = await (supabase as any).from('complaints').update({ status }).eq('id', id);
     if (error) {
-      toast({ title: 'خطأ', description: 'فشل تدويل الحالة', variant: 'destructive' });
+      toast({ title: 'خطأ', description: 'فشل تعديل الحالة', variant: 'destructive' });
     } else {
+      // Local state will be updated by handle payload if we wait, 
+      // but manual update for instant feel is fine
       setComplaints(prev => prev.map(c => c.id === id ? { ...c, status } : c));
       toast({ title: 'تم التحديث بنجاح' });
     }
   };
 
   const filtered = complaints.filter(c => {
-    const matchSearch = c.content.includes(search) || c.parent_name?.includes(search);
+    const matchSearch = c.content.toLowerCase().includes(search.toLowerCase()) || 
+                      c.parent_name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus === 'الكل' || c.status === filterStatus;
     return matchSearch && matchStatus;
   });
@@ -80,7 +150,6 @@ export default function AdminComplaintsPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
-        {/* Premium Header - Scaled Down */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
           <div className="space-y-2">
             <div className="flex items-center gap-3">
@@ -89,13 +158,8 @@ export default function AdminComplaintsPage() {
             </div>
             <p className="text-slate-500 font-medium text-sm pr-4">إدارة بلاغات أولياء الأمور وحلها لضمان جودة التعليم</p>
           </div>
-          
-          <div className="flex items-center gap-4">
-             {/* Dynamic counts could go here later if needed */}
-          </div>
         </header>
 
-        {/* Filters & KPI - Scaled Down */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-center">
            <div className="lg:col-span-2 relative group w-full text-right">
               <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
@@ -120,7 +184,7 @@ export default function AdminComplaintsPage() {
            </div>
         </div>
 
-        {loading ? (
+        {loading && complaints.length === 0 ? (
              <div className="flex flex-col items-center justify-center py-32 gap-4">
                <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
                <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري استرجاع البلاغات</p>
@@ -149,9 +213,10 @@ function ComplaintCard({ complaint, onStatusChange }: { complaint: Complaint; on
   const statusConfig = {
     pending: { label: 'جديد', color: 'bg-rose-50 text-rose-600', icon: AlertCircle },
     in_progress: { label: 'قيد الحل', color: 'bg-amber-50 text-amber-600', icon: Clock },
+    processing: { label: 'قيد المعالجة', color: 'bg-amber-50 text-amber-600', icon: Clock },
     resolved: { label: 'مكتمل', color: 'bg-emerald-50 text-emerald-600', icon: CheckCircle },
   };
-  const config = statusConfig[complaint.status];
+  const config = statusConfig[complaint.status] || statusConfig.pending;
 
   return (
     <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right">

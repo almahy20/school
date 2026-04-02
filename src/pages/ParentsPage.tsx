@@ -1,11 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import DataPagination from '@/components/ui/DataPagination';
 import { Phone, User, Eye, X, Search, Users, ArrowLeft, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+
+const PAGE_SIZE = 15;
 
 interface ParentProfile {
   id: string;
@@ -14,68 +18,84 @@ interface ParentProfile {
   children: { id: string; name: string; class_name?: string }[];
 }
 
+async function fetchParentsData(schoolId: string | null, isSuperAdmin: boolean) {
+  if (!isSuperAdmin && !schoolId) return { active: [], pending: [] };
+
+  const roleQuery = (supabase as any).from('user_roles').select('*').eq('role', 'parent');
+  const profileQuery = supabase.from('profiles').select('*').order('full_name');
+  const linkQuery = supabase.from('student_parents').select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)');
+  const classQuery = supabase.from('classes').select('id, name');
+
+  if (!isSuperAdmin && schoolId) {
+    roleQuery.eq('school_id', schoolId);
+    profileQuery.eq('school_id', schoolId);
+    linkQuery.eq('school_id', schoolId);
+    classQuery.eq('school_id', schoolId);
+  }
+
+  const { data: roles } = await roleQuery;
+  if (!roles?.length) return { active: [], pending: [] };
+
+  const activeIds = roles.filter((r: any) => r.approval_status !== 'pending' && r.approval_status !== 'rejected').map((r: any) => r.user_id);
+  const pendingIds = roles.filter((r: any) => r.approval_status === 'pending').map((r: any) => r.user_id);
+  const allIds = roles.map((r: any) => r.user_id);
+
+  const [{ data: profiles }, { data: links }, { data: classes }] = await Promise.all([
+    profileQuery.in('id', allIds),
+    linkQuery,
+    classQuery,
+  ]);
+
+  const activeProfiles = (profiles || []).filter(p => activeIds.includes(p.id));
+  const pendingProfiles = (profiles || []).filter(p => pendingIds.includes(p.id));
+
+  const active: ParentProfile[] = activeProfiles.map(p => {
+    const studentLinks = (links || []).filter((l: any) => l.parent_id === p.id);
+    return {
+      id: p.id,
+      full_name: p.full_name,
+      phone: p.phone,
+      children: studentLinks
+        .map((l: any) => l.students)
+        .filter(Boolean)
+        .map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          class_name: classes?.find(c => c.id === s.class_id)?.name,
+        })),
+    };
+  });
+
+  return { active, pending: pendingProfiles };
+}
+
 export default function ParentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [parents, setParents] = useState<ParentProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  
   const [search, setSearch] = useState('');
-  const [pendingParents, setPendingParents] = useState<any[]>([]);
+  const [page, setPage] = useState(1);
   const [schoolSlug, setSchoolSlug] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const fetchData = useCallback(async () => {
+  // ── React Query ──
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['parents-page', user?.schoolId, user?.isSuperAdmin],
+    queryFn: () => fetchParentsData(user?.schoolId || null, !!user?.isSuperAdmin),
+    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const parents: ParentProfile[] = data?.active || [];
+  const pendingParents: any[] = data?.pending || [];
+
+  useMemo(() => {
     if (!user?.schoolId) return;
-    setLoading(true);
-
-    const { data: school } = await (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single();
-    if (school) setSchoolSlug(school.slug);
-
-    const { data: roles } = await (supabase as any).from('user_roles')
-      .select('*')
-      .eq('role', 'parent')
-      .eq('school_id', user.schoolId);
-      
-    if (!roles?.length) { setParents([]); setPendingParents([]); setLoading(false); return; }
-
-    const activeIds = roles.filter((r: any) => r.approval_status !== 'pending' && r.approval_status !== 'rejected').map((r: any) => r.user_id);
-    const pendingIds = roles.filter((r: any) => r.approval_status === 'pending').map((r: any) => r.user_id);
-    const allIds = roles.map((r: any) => r.user_id);
-
-    const [{ data: profiles }, { data: links }, { data: classes }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('school_id', user.schoolId).in('id', allIds).order('full_name'),
-      supabase.from('student_parents')
-        .select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)')
-        .eq('school_id', user.schoolId),
-      supabase.from('classes').select('id, name').eq('school_id', user.schoolId),
-    ]);
-
-    const activeProfiles = (profiles || []).filter(p => activeIds.includes(p.id));
-    const pendingProfiles = (profiles || []).filter(p => pendingIds.includes(p.id));
-
-    const result: ParentProfile[] = activeProfiles.map(p => {
-      const studentLinks = (links || []).filter((l: any) => l.parent_id === p.id);
-      return {
-        id: p.id,
-        full_name: p.full_name,
-        phone: p.phone,
-        children: studentLinks
-          .map((l: any) => l.students)
-          .filter(Boolean)
-          .map((s: any) => ({
-            id: s.id,
-            name: s.name,
-            class_name: classes?.find(c => c.id === s.class_id)?.name,
-          })),
-      };
-    });
-    setParents(result);
-    setPendingParents(pendingProfiles);
-    setLoading(false);
+    (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single()
+      .then(({ data: school }: any) => { if (school) setSchoolSlug(school.slug); });
   }, [user?.schoolId]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
     setActionLoading(userId);
@@ -83,7 +103,7 @@ export default function ParentsPage() {
       const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('user_id', userId);
       if (error) throw error;
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على ولي الأمر' : 'تم رفض الطلب' });
-      fetchData();
+      queryClient.invalidateQueries({ queryKey: ['parents-page', user?.schoolId] });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -96,9 +116,17 @@ export default function ParentsPage() {
     toast({ title: 'تم النسخ', description: 'تم نسخ رابط التسجيل للحافظة' });
   };
 
-  const filtered = parents.filter(p =>
-    p.full_name.includes(search) || (p.phone || '').includes(search)
-  );
+  const filtered = useMemo(() => parents.filter(p =>
+    (p.full_name || '').includes(search) || (p.phone || '').includes(search)
+  ), [parents, search]);
+
+  const totalItems = filtered.length;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
   return (
     <AppLayout>
@@ -169,7 +197,7 @@ export default function ParentsPage() {
         <div className="relative group max-w-2xl w-full">
           <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors" />
           <input type="text" placeholder="ابحث باسم ولي الأمر أو رقم الهاتف..." value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
             className="w-full pr-14 pl-6 py-4 rounded-2xl border border-slate-100 bg-white text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all shadow-sm" />
         </div>
 
@@ -187,11 +215,24 @@ export default function ParentsPage() {
             <p className="text-slate-400 font-medium max-w-sm mx-auto">لم نتمكن من العثور على أي أولياء أمور يطابقون بحثك.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map(p => (
-              <ParentCard key={p.id} parent={p} onClick={() => navigate(`/parents/${p.id}`)} />
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} ولي أمر — الصفحة {page}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginated.map(p => (
+                <ParentCard key={p.id} parent={p} onClick={() => navigate(`/parents/${p.id}`)} />
+              ))}
+            </div>
+            <DataPagination
+              currentPage={page}
+              totalItems={totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </>
         )}
       </div>
     </AppLayout>

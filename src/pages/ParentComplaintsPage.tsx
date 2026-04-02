@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { MessageSquare, Users, Plus, Send, User, ChevronRight, MessageCircle } from 'lucide-react';
+import { MessageSquare, Users, Plus, Send, User, ChevronRight, MessageCircle, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -25,17 +25,70 @@ export default function ParentComplaintsPage() {
   const loadData = useCallback(async () => {
     if (!user?.schoolId) return;
     setLoading(true);
-    const [{ data: links }, { data: cmps }] = await Promise.all([
-      (supabase as any).from('student_parents').select('students!student_parents_student_id_fkey(id, name)').eq('school_id', user.schoolId).eq('parent_id', user.id),
-      (supabase as any).from('complaints').select('*').eq('school_id', user.schoolId).eq('parent_id', user.id).order('created_at', { ascending: false }),
-    ]);
-    const kids = (links || []).map((l: any) => l.students).filter(Boolean);
-    setChildren(kids || []);
-    setComplaints(cmps || []);
-    setLoading(false);
+    try {
+      const [{ data: links }, { data: cmps }] = await Promise.all([
+        (supabase as any).from('student_parents').select('students!student_parents_student_id_fkey(id, name)').eq('school_id', user.schoolId).eq('parent_id', user.id),
+        (supabase as any).from('complaints').select('*').eq('school_id', user.schoolId).eq('parent_id', user.id).order('created_at', { ascending: false }),
+      ]);
+      const kids = (links || []).map((l: any) => l.students).filter(Boolean);
+      setChildren(kids || []);
+      setComplaints(cmps || []);
+    } catch (err) {
+      console.error('Error loading complaints:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id, user?.schoolId]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { 
+    loadData(); 
+  }, [loadData]);
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`parent-complaints-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'complaints',
+          filter: `parent_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('Real-time complaint update:', payload);
+          if (payload.eventType === 'INSERT') {
+            setComplaints(prev => [payload.new, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setComplaints(prev => prev.map(c => c.id === payload.new.id ? payload.new : c));
+            toast({
+              title: 'تحديث في الشكوى',
+              description: 'تم تحديث حالة شكواك أو إضافة رد جديد',
+            });
+          } else if (payload.eventType === 'DELETE') {
+            setComplaints(prev => prev.filter(c => c.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, toast]);
+
+  useEffect(() => {
+    if (user?.id) {
+       (supabase as any).from('notifications')
+         .update({ is_read: true })
+         .eq('user_id', user.id)
+         .eq('type', 'complaint_status')
+         .then();
+    }
+  }, [user?.id, complaints]); // Mark as read when complaints update or on mount
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,7 +107,21 @@ export default function ParentComplaintsPage() {
       toast({ title: 'تم إرسال الشكوى' });
       setContent('');
       setChildId('');
+      // No need to call loadData() explicitly if realtime is working perfectly,
+      // but keeping it for safety or checking if insert payload reaches correctly
       loadData();
+    }
+  };
+
+  const getStatusConfig = (status: string) => {
+    switch(status) {
+      case 'resolved':
+        return { label: 'تم الحل', color: 'bg-emerald-500/10 text-emerald-600', icon: CheckCircle };
+      case 'in_progress':
+      case 'processing':
+        return { label: 'قيد المعالجة', color: 'bg-amber-500/10 text-amber-600', icon: Clock };
+      default:
+        return { label: 'قيد الانتظار', color: 'bg-indigo-500/10 text-indigo-600', icon: AlertCircle };
     }
   };
 
@@ -77,8 +144,8 @@ export default function ParentComplaintsPage() {
                 إرسال شكوى جديدة
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] rounded-[40px] p-0 overflow-hidden border-none shadow-none bg-transparent">
-              <div className="bg-white p-10 space-y-8 text-right">
+            <DialogContent className="sm:max-w-[600px] rounded-[40px] p-0 overflow-hidden border-none shadow-none bg-transparent outline-none">
+              <div className="bg-white p-10 space-y-8 text-right rounded-[40px]">
                 <DialogHeader>
                   <DialogTitle className="text-3xl font-black text-slate-900 leading-tight">شكوى جديدة</DialogTitle>
                 </DialogHeader>
@@ -158,7 +225,7 @@ export default function ParentComplaintsPage() {
             </Badge>
           </div>
 
-          {loading ? (
+          {loading && complaints.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-40 gap-4">
               <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin" />
               <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">جاري مزامنة بياناتك</p>
@@ -178,14 +245,17 @@ export default function ParentComplaintsPage() {
               {complaints.map(c => {
                 const child = children.find(k => k.id === c.student_id);
                 const hasResponse = !!c.admin_response;
+                const statusConfig = getStatusConfig(c.status);
+                const StatusIcon = statusConfig.icon;
+
                 return (
-                  <div key={c.id} className="group premium-card p-0 overflow-hidden shadow-premium">
+                  <div key={c.id} className="group premium-card p-0 overflow-hidden shadow-premium hover:translate-y-[-4px] transition-all duration-500">
                     <div className="p-8 space-y-6">
                       <div className="flex items-center justify-between border-b border-slate-50 pb-6 mb-2">
                         <div className="flex items-center gap-4">
                           <div className={cn(
                             "w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500",
-                            hasResponse ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"
+                            hasResponse ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
                           )}>
                             <User className="w-6 h-6" />
                           </div>
@@ -193,10 +263,11 @@ export default function ParentComplaintsPage() {
                             <div className="flex items-center gap-3 mb-1">
                               <span className="font-black text-slate-900 text-lg leading-none">شكوى تابعة لـ {child?.name || 'عامة'}</span>
                               <Badge className={cn(
-                                "rounded-full px-3 py-0.5 font-black text-[10px] uppercase tracking-tighter",
-                                hasResponse ? "bg-indigo-500/10 text-indigo-600" : "bg-amber-500/10 text-amber-600"
+                                "rounded-full px-3 py-1 font-black text-[10px] uppercase tracking-tighter flex items-center gap-1.5 border-none",
+                                statusConfig.color
                               )}>
-                                {hasResponse ? 'تم الرد' : 'قيد الانتظار'}
+                                <StatusIcon className="w-3 h-3" />
+                                {statusConfig.label}
                               </Badge>
                             </div>
                             <p className="text-slate-300 font-bold text-[11px] uppercase tracking-widest leading-none">
@@ -207,7 +278,7 @@ export default function ParentComplaintsPage() {
                       </div>
 
                       <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
-                        <p className="text-slate-700 font-bold text-lg leading-relaxed text-right">{c.content}</p>
+                        <p className="text-slate-700 font-bold text-lg leading-relaxed text-right whitespace-pre-wrap">{c.content}</p>
                       </div>
 
                       {hasResponse && (

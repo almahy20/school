@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth, AppRole } from '@/contexts/AuthContext';
 import { ReactNode } from 'react';
 
@@ -10,6 +10,7 @@ interface Props {
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const { user, loading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   
   if (loading) {
     return (
@@ -39,7 +40,7 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
          <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md border border-rose-100">
             <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">الاشتراك موقوف</h1>
             <p className="text-slate-500 font-bold mb-8">عذراً، تم إيقاف الاشتراك الخاص بمدرستك. يرجى التواصل مع إدارة النظام للمزيد من التفاصيل.</p>
-            <button onClick={() => window.location.href='/login'} className="h-12 px-8 rounded-xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all">العودة لتسجيل الدخول</button>
+            <button onClick={() => navigate('/login', { replace: true })} className="h-12 px-8 rounded-xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all">العودة لتسجيل الدخول</button>
          </div>
       </div>
     );

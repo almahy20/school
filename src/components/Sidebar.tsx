@@ -1,41 +1,52 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  LayoutDashboard, Users, GraduationCap, UserCheck, School, LogOut, BookOpen, ClipboardList, CalendarCheck, Settings, X, MessageSquare, ChevronLeft, ShieldAlert
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { playNotificationSound } from '@/utils/notifications';
+import { LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, School, LogOut, BookOpen, ClipboardList, CalendarCheck, Settings, X, MessageSquare, ChevronLeft, ShieldAlert, Bell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const adminLinks = [
+interface SidebarLink {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  badge?: 'notifications';
+}
+
+const adminLinks: SidebarLink[] = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
   { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
-  { to: '/manage-complaints', label: 'الشكاوى من أولياء الأمور', icon: MessageSquare },
+  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck },
   { to: '/classes', label: 'الفصول الدراسية', icon: School },
+  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
   { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
   { to: '/fees', label: 'المصروفات', icon: ClipboardList },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
 ];
 
-const superAdminLinks = [
+const superAdminLinks: SidebarLink[] = [
   { to: '/super-admin', label: 'إدارة المدارس المركزية', icon: ShieldAlert },
   { to: '/manage-complaints', label: 'شكاوى مديري المدارس', icon: MessageSquare },
   { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
   { to: '/settings', label: 'إعدادات المنصة', icon: Settings },
 ];
 
-const teacherLinks = [
+const teacherLinks: SidebarLink[] = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
   { to: '/students', label: 'طلابي', icon: Users },
   { to: '/classes', label: 'فصولي', icon: School },
+  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
   { to: '/grades', label: 'الدرجات والتقييم', icon: ClipboardList },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
-const parentLinks = [
+const parentLinks: SidebarLink[] = [
   { to: '/', label: 'متابعة الأبناء', icon: Users },
-  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare },
+  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
+  { to: '/complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
@@ -46,6 +57,72 @@ interface SidebarProps {
 export default function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let isMounted = true;
+
+    // Initial count with error handling to prevent 403/401 console spam
+    const fetchUnread = async () => {
+      try {
+        const { count, error } = await (supabase as any)
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false);
+        
+        if (error) {
+          // If we get a 403/401, it might be a temporary session issue during navigation
+          if (error.code !== '42501' && error.code !== 'PGRST301') {
+            console.warn('Notification fetch warning:', error.message);
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setUnreadCount(count || 0);
+        }
+      } catch (err) {
+        // Silently handle unexpected errors in the background fetch
+      }
+    };
+
+    fetchUnread();
+
+    // Realtime listener - unique channel per user to avoid conflicts
+    const channel = supabase
+      .channel(`sidebar-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (isMounted) {
+            setUnreadCount(prev => prev + 1);
+            playNotificationSound();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  const [audioEnabled, setAudioEnabled] = useState(false);
+
+  const testSound = () => {
+    setAudioEnabled(true);
+    playNotificationSound();
+  };
 
   const getLinks = () => {
     if (user?.isSuperAdmin) return superAdminLinks;
@@ -115,7 +192,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             end={link.to === '/'}
             onClick={onClose}
             className={({ isActive }) => cn(
-              "flex items-center justify-between px-6 h-14 rounded-[20px] transition-all duration-500 group text-right whitespace-nowrap overflow-hidden",
+              "flex items-center justify-between px-6 h-14 rounded-[20px] transition-all duration-500 group text-right whitespace-nowrap overflow-hidden relative",
               isActive 
                 ? "bg-white text-slate-900 shadow-xl shadow-white/5" 
                 : "text-white/30 hover:text-white hover:bg-white/5"
@@ -127,11 +204,39 @@ export default function Sidebar({ onClose }: SidebarProps) {
                   <link.icon className={cn("w-5 h-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-slate-900" : "text-white/20 group-hover:text-white")} />
                   <span className="text-[14px] font-black tracking-tight">{link.label}</span>
                 </div>
+                
+                {/* Notification Badge */}
+                {link.badge === 'notifications' && (
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <div className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center animate-pulse shadow-lg shadow-rose-500/20">
+                        {unreadCount}
+                      </div>
+                    )}
+                    <button 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        testSound();
+                      }}
+                      className={cn(
+                        "p-1.5 rounded-lg transition-all hover:bg-white/10 group/sound",
+                        audioEnabled ? "text-emerald-400" : "text-white/30 hover:text-white"
+                      )}
+                      title={audioEnabled ? "الصوت مفعّل" : "تفعيل/تجربة تنبيه الصوت"}
+                    >
+                      <Bell className={cn("w-3.5 h-3.5", !audioEnabled && "animate-bounce")} />
+                    </button>
+                  </div>
+                )}
+
                 {/* Active Indicator Dot */}
-                <div className={cn(
-                  "w-1.5 h-1.5 rounded-full transition-all duration-500 scale-0",
-                  isActive && "scale-100 bg-slate-900"
-                )} />
+                {!link.badge && (
+                  <div className={cn(
+                    "w-1.5 h-1.5 rounded-full transition-all duration-500 scale-0",
+                    isActive && "scale-100 bg-slate-900"
+                  )} />
+                )}
               </>
             )}
           </NavLink>

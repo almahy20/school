@@ -38,15 +38,27 @@ export default function UsersManagementPage() {
   const [createLoading, setCreateLoading] = useState(false);
 
   const fetchUsers = useCallback(async () => {
-    if (!user?.schoolId) return;
-    setLoading(true);
     try {
-      const { data: profiles } = await supabase.from('profiles').select('*').eq('school_id', user.schoolId);
-      const { data: roles } = await supabase.from('user_roles').select('*').eq('school_id', user.schoolId);
+      setLoading(true);
+      // If not super admin, we need a schoolId
+      if (!user?.isSuperAdmin && !user?.schoolId) {
+        setLoading(false);
+        return;
+      }
+      
+      const profileQuery = supabase.from('profiles').select('*');
+      const roleQuery = supabase.from('user_roles').select('*');
+      
+      if (!user?.isSuperAdmin && user?.schoolId) {
+        profileQuery.eq('school_id', user.schoolId);
+        roleQuery.eq('school_id', user.schoolId);
+      }
+
+      const { data: profiles } = await profileQuery;
+      const { data: roles } = await roleQuery;
       const authData = await callAdminApi('list');
 
       if (profiles && roles) {
-        const profileIds = new Set(profiles.map(p => p.id));
         const merged: ManagedUser[] = profiles.map((p) => {
           const userRole = roles.find((r) => r.user_id === p.id);
           const authUser = authData?.users?.find((u: any) => u.id === p.id);

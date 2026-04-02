@@ -1,8 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useClasses } from '@/hooks/queries';
+import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Users, School, User, Search, Filter, 
   MoreHorizontal, ChevronLeft, ArrowRight
@@ -27,50 +30,80 @@ export default function ClassesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [teachers, setTeachers] = useState<{ id: string; full_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAdd, setShowAdd] = useState(false);
+  const queryClient = useQueryClient();
+
   const [search, setSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
+  const [showAdd, setShowAdd] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 15;
 
-  const fetchData = useCallback(async () => {
-    if (!user?.schoolId) return;
-    setLoading(true);
-    const [
-      { data: classesData },
-      { data: profiles },
-      { data: teacherRoles },
-      { data: students }
-    ] = await Promise.all([
-      supabase.from('classes').select('*').eq('school_id', user.schoolId).order('name'),
-      supabase.from('profiles').select('id, full_name').eq('school_id', user.schoolId),
-      supabase.from('user_roles').select('user_id').eq('role', 'teacher').eq('school_id', user.schoolId),
-      supabase.from('students').select('id, class_id').eq('school_id', user.schoolId),
-    ]);
+  // ── React Query for basic fields ──
+  const { data: rawClasses = [], isLoading: classesLoading } = useClasses();
 
-    const teacherIds = (teacherRoles || []).map(r => r.user_id);
-    setTeachers((profiles || []).filter(p => teacherIds.includes(p.id)));
+  // We still need to join teachers & students locally if we didn't do it in hook
+  const { data: enrichedClasses = [], isLoading: metaLoading } = useQuery({
+    queryKey: ['classes-enriched', user?.schoolId, rawClasses],
+    queryFn: async () => {
+      if (rawClasses.length === 0) return [];
+      
+      const teacherIds = [...new Set(rawClasses.map(c => c.teacher_id).filter(Boolean))];
+      const classIds = rawClasses.map(c => c.id);
 
-    const enriched = (classesData || []).map(c => ({
-      ...c,
-      teacher_name: profiles?.find(p => p.id === c.teacher_id)?.full_name || 'غير محدد',
-      student_count: (students || []).filter(s => s.class_id === c.id).length,
-    }));
-    setClasses(enriched);
-    setLoading(false);
-  }, [user?.schoolId]);
+      let profilesData: any[] = [];
+      if (teacherIds.length > 0) {
+        const { data } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
+        profilesData = data || [];
+      }
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+      let studentsData: any[] = [];
+      if (classIds.length > 0) {
+        // Just getting count via grouping or simple select
+        const { data } = await supabase.from('students').select('class_id').in('class_id', classIds);
+        studentsData = data || [];
+      }
 
-  const gradeLevels = ['الكل', ...new Set(classes.map(c => c.grade_level).filter(Boolean) as string[])];
-  const filtered = classes.filter(c => {
+      return rawClasses.map(c => ({
+        ...c,
+        teacher_name: profilesData.find(p => p.id === c.teacher_id)?.full_name || 'غير محدد',
+        student_count: studentsData.filter(s => s.class_id === c.id).length
+      }));
+    },
+    enabled: rawClasses.length > 0
+  });
+
+  const loading = classesLoading || (rawClasses.length > 0 && metaLoading);
+
+  // Also need teachers for the Add/Edit dropdown
+  const { data: teachers = [] } = useQuery({
+    queryKey: ['teachers-dropdown', user?.schoolId],
+    queryFn: async () => {
+      const { data: roles } = await supabase.from('user_roles').select('user_id').eq('role', 'teacher').eq('school_id', user?.schoolId);
+      if (!roles?.length) return [];
+      const teacherIds = roles.map(r => r.user_id);
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', teacherIds);
+      return profiles || [];
+    },
+    enabled: !!user?.schoolId
+  });
+
+  const gradeLevels = useMemo(() => ['الكل', ...new Set(enrichedClasses.map(c => c.grade_level).filter(Boolean) as string[])], [enrichedClasses]);
+  const filtered = useMemo(() => enrichedClasses.filter(c => {
     const matchSearch = !search || c.name.includes(search) || (c.teacher_name || '').includes(search);
     const matchLevel = filterLevel === 'الكل' || c.grade_level === filterLevel;
     return matchSearch && matchLevel;
-  });
+  }), [enrichedClasses, search, filterLevel]);
 
-  return (
+  const totalItems = filtered.length;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  // Reset page when search or filter changes
+  useState(() => {
+    setPage(1);
+  });  return (
     <AppLayout>
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
         {/* Premium Header - Scaled Down */}
@@ -134,11 +167,25 @@ export default function ClassesPage() {
             <p className="text-slate-400 font-medium text-sm">لم يتم العثور على أي نتائج تطابق بحثك.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map(c => (
-              <ClassCard key={c.id} classItem={c} onClick={() => navigate(`/classes/${c.id}`)} />
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} فصل — الصفحة {page}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginated.map(c => (
+                <ClassCard key={c.id} classItem={c} onClick={() => navigate(`/classes/${c.id}`)} />
+              ))}
+            </div>
+            
+            <DataPagination
+              currentPage={page}
+              totalItems={totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </>
         )}
       </div>
 
@@ -146,7 +193,8 @@ export default function ClassesPage() {
         <AddClassModal 
           teachers={teachers} 
           user={user}
-          onClose={() => { setShowAdd(false); fetchData(); }} 
+          onClose={() => { setShowAdd(false); }}
+          onSuccess={() => { setShowAdd(false); queryClient.invalidateQueries({ queryKey: ['classes', user?.schoolId] }); }} 
         />
       )}
     </AppLayout>
@@ -196,7 +244,7 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
 }
 
 // ─── Modals (Scaled Down) ────────────────────────────────────────────────────
-function AddClassModal({ teachers, user, onClose }: { teachers: any[]; user: any; onClose: () => void }) {
+function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]; user: any; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
@@ -213,8 +261,13 @@ function AddClassModal({ teachers, user, onClose }: { teachers: any[]; user: any
       teacher_id: teacherId || null,
       school_id: user?.schoolId
     });
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else { toast({ title: 'تمت الإضافة بنجاح' }); onClose(); }
+    if (error) {
+      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
+    } else { 
+      toast({ title: 'تمت الإضافة بنجاح' });
+      if (onSuccess) onSuccess(); 
+      else onClose();
+    }
     setLoading(false);
   };
 

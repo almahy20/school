@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 const PLAN_LABELS: Record<string, { name: string; price: number; days: number }> = {
-  monthly:     { name: 'شهرية',        price: 199,  days: 30 },
+  monthly:     { name: 'شهرية',        price: 500,  days: 30 },
   half_yearly: { name: 'نصف سنوية',    price: 999,  days: 180 },
   yearly:      { name: 'سنوية',        price: 1799, days: 365 },
 };
@@ -72,7 +72,6 @@ export default function PaymentPage() {
         .update({
           receipt_url: receiptUrl,
           receipt_note: receiptNote.trim() || null,
-          updated_at: new Date().toISOString(),
         })
         .eq('id', orderId);
 

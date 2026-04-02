@@ -31,25 +31,27 @@ export default function ComplaintsPage() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
 
-  useEffect(() => {
+  const fetchData = async () => {
     if (!user?.schoolId) return;
-    const fetchData = async () => {
-      const [{ data: complaintsData }, { data: studentsData }] = await Promise.all([
-        supabase.from('complaints')
-          .select('*, students(name)')
-          .eq('school_id', user.schoolId)
-          .eq('parent_id', user.id)
-          .order('created_at', { ascending: false }),
-        supabase.from('students')
-          .select('id, name')
-          .eq('school_id', user.schoolId)
-          .eq('parent_id', user.id),
-      ]);
+    setLoading(true);
+    const [{ data: complaintsData }, { data: studentsData }] = await Promise.all([
+      supabase.from('complaints')
+        .select('*, students(name)')
+        .eq('school_id', user.schoolId)
+        .eq('parent_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase.from('students')
+        .select('id, name')
+        .eq('school_id', user.schoolId)
+        .eq('parent_id', user.id),
+    ]);
 
-      setComplaints(complaintsData?.map((c: any) => ({ ...c, student_name: c.students?.name || 'غير محدد' })) || []);
-      setStudents(studentsData || []);
-      setLoading(false);
-    };
+    setComplaints(complaintsData?.map((c: any) => ({ ...c, student_name: c.students?.name || 'غير محدد' })) || []);
+    setStudents(studentsData || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchData();
   }, [user?.id, user?.schoolId]);
 
@@ -101,7 +103,7 @@ export default function ComplaintsPage() {
           parent_id={user!.id}
           user={user}
           onClose={() => setShowAdd(false)} 
-          onSuccess={() => { setShowAdd(false); window.location.reload(); }} 
+          onSuccess={() => { setShowAdd(false); fetchData(); }} 
         />
       )}
     </AppLayout>

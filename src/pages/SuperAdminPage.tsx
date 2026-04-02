@@ -34,31 +34,30 @@ export default function SuperAdminPage() {
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
 
+  const fetchData = async () => {
+    setLoading(true);
+    const { data: schoolsData, error } = await (supabase as any)
+      .from('schools')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      toast({ title: 'خطأ في التحميل', description: error.message, variant: 'destructive' });
+    } else {
+      setSchools(schoolsData as School[]);
+    }
+    const { data: ordersData } = await (supabase as any)
+      .from('school_orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setOrders(ordersData || []);
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (user && !user.isSuperAdmin) {
       navigate('/');
       return;
     }
-
-    const fetchData = async () => {
-      setLoading(true);
-      const { data: schoolsData, error } = await (supabase as any)
-        .from('schools')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) {
-        toast({ title: 'خطأ في التحميل', description: error.message, variant: 'destructive' });
-      } else {
-        setSchools(schoolsData as School[]);
-      }
-      const { data: ordersData } = await (supabase as any)
-        .from('school_orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setOrders(ordersData || []);
-      setLoading(false);
-    };
-
     fetchData();
   }, [user, navigate, toast]);
 
@@ -283,9 +282,9 @@ export default function SuperAdminPage() {
         )}
       </div>
 
-      {showAddModal && <AddSchoolModal onClose={() => setShowAddModal(false)} onSuccess={() => { setShowAddModal(false); window.location.reload(); }} />}
-      {selectedSchool && <SchoolDetailsModal school={selectedSchool} onClose={() => setSelectedSchool(null)} onSuccess={() => { setSelectedSchool(null); window.location.reload(); }} />}
-      {selectedOrder && <ActivateOrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onSuccess={() => { setSelectedOrder(null); window.location.reload(); }} />}
+      {showAddModal && <AddSchoolModal onClose={() => setShowAddModal(false)} onSuccess={() => { setShowAddModal(false); fetchData(); }} />}
+      {selectedSchool && <SchoolDetailsModal school={selectedSchool} onClose={() => setSelectedSchool(null)} onSuccess={() => { setSelectedSchool(null); fetchData(); }} />}
+      {selectedOrder && <ActivateOrderModal order={selectedOrder} onClose={() => setSelectedOrder(null)} onSuccess={() => { setSelectedOrder(null); fetchData(); }} />}
     </AppLayout>
   );
 }
@@ -354,7 +353,7 @@ function AddSchoolModal({ onClose, onSuccess }: any) {
             persistSession: false,
             autoRefreshToken: false,
             detectSessionInUrl: false,
-            storageKey: 'school-management-signup'
+            storageKey: 'sb-temp-school-management'
           } 
         }
       );
@@ -365,30 +364,14 @@ function AddSchoolModal({ onClose, onSuccess }: any) {
       const { data: authData, error: authError } = await tempSupabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: adminName.trim(), phone: normalizedPhone, role: 'admin' } }
+        options: { data: { full_name: adminName.trim(), phone: normalizedPhone, role: 'admin', school_id: school.id } }
       });
 
       if (authError) throw new Error(authError.message);
 
-      if (authData.user) {
-        // 3. Create User Role (CRITICAL: doing this first)
-        const { error: roleError } = await (supabase as any).from('user_roles').insert({
-           user_id: authData.user.id,
-           role: 'admin',
-           school_id: school.id
-        });
-        if (roleError) console.error('Role Error:', roleError);
-
-        // 4. Create Profile
-        const { error: profileError } = await (supabase as any).from('profiles').upsert({
-           id: authData.user.id,
-           full_name: adminName.trim(),
-           phone: normalizedPhone,
-           email: email,
-           school_id: school.id
-        });
-        if (profileError) console.error('Profile Error:', profileError);
-      }
+      // Note: No need to manually create user_roles or profiles here.
+      // The database trigger 'on_auth_user_created' in the 'perfect_database_reset' migration
+      // handles this automatically using the metadata we passed in 'signUp'.
 
       setSuccessData({ slug: slug.trim(), phone: normalizedPhone, pass: password });
       toast({ title: 'تم إنشاء المدرسة بنجاح' });
@@ -616,54 +599,120 @@ function SchoolDetailsModal({ school, onClose, onSuccess }: { school: School, on
 // ─── Activate Order Modal ──────────────────────────────────────────────────────
 function ActivateOrderModal({ order, onClose, onSuccess }: { order: any; onClose: () => void; onSuccess: () => void }) {
   const { toast } = useToast();
-  const [adminEmail, setAdminEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [plan, setPlan] = useState(order.plan || 'monthly');
   const [loading, setLoading] = useState(false);
+  const [manualPassword, setManualPassword] = useState(order.admin_password || '');
 
   const PLAN_DAYS: Record<string, number> = { monthly: 30, half_yearly: 180, yearly: 365 };
 
   const handleActivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adminEmail.trim() || !password.trim()) return;
+    const finalPassword = manualPassword || order.admin_password;
+    if (!finalPassword || finalPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'يجب أن تكون كلمة المرور 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     try {
       const endDate = new Date();
       endDate.setDate(endDate.getDate() + (PLAN_DAYS[plan] || 30));
 
-      // 1. Create school
-      const { data: school, error: schoolErr } = await (supabase as any)
+      // 1. Check if school already exists (due to a previous partial failure)
+      let school;
+      const { data: existingSchool } = await (supabase as any)
         .from('schools')
-        .insert({
-          name: order.school_name,
-          slug: order.school_slug,
-          plan: plan,
+        .select('*')
+        .eq('slug', order.school_slug)
+        .maybeSingle();
+
+      if (existingSchool) {
+        school = existingSchool;
+        // Optionally update the existing school to an active status/dates if it was suspended
+        await (supabase as any).from('schools').update({
           status: 'active',
-          subscription_end_date: endDate.toISOString(),
-          logo_url: order.logo_url || null,
-        })
-        .select()
-        .single();
-      if (schoolErr) throw schoolErr;
+          plan: plan,
+          subscription_end_date: endDate.toISOString()
+        }).eq('id', school.id);
+      } else {
+        const { data: newSchool, error: schoolErr } = await (supabase as any)
+          .from('schools')
+          .insert({
+            name: order.school_name,
+            slug: order.school_slug,
+            plan: plan,
+            status: 'active',
+            subscription_end_date: endDate.toISOString(),
+            logo_url: order.logo_url || null,
+          })
+          .select()
+          .single();
+        if (schoolErr) throw schoolErr;
+        school = newSchool;
+      }
 
-      // 2. Create admin auth account
-      const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
-        email: adminEmail.trim(),
-        password: password.trim(),
-        email_confirm: true,
-        user_metadata: { full_name: order.admin_name, role: 'admin', school_id: school.id },
+      // 2. Create admin auth account using a temporary client to avoid logging out
+      const { createClient } = await import('@supabase/supabase-js');
+      const tempSupabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        { 
+          auth: { 
+            persistSession: false, 
+            autoRefreshToken: false, 
+            detectSessionInUrl: false,
+            storageKey: 'sb-temp-activate'
+          } 
+        }
+      );
+
+      const normalizedPhone = order.admin_phone.replace(/\D/g, '');
+      const adminEmail = `${normalizedPhone}@school.local`;
+      const password = manualPassword || order.admin_password;
+
+      const { error: authErr } = await tempSupabase.auth.signUp({
+        email: adminEmail,
+        password: password,
+        options: { 
+          data: { 
+            full_name: order.admin_name, 
+            phone: order.admin_phone, 
+            role: 'admin', 
+            school_id: school.id 
+          } 
+        }
       });
-      if (authErr) throw authErr;
+      
+      if (authErr && !authErr.message.includes('already registered')) {
+        throw authErr;
+      }
 
-      if (authData.user) {
-        await (supabase as any).from('user_roles').insert({
-          user_id: authData.user.id, role: 'admin',
-          school_id: school.id, approval_status: 'approved'
+      // 3. Atomically activate and promote the user to admin for this school
+      // This is now done via a robust RPC to ensure consistency even if user already exists
+      const normalizedPhone2 = order.admin_phone.replace(/\D/g, '');
+      const adminEmail2 = `${normalizedPhone2}@school.local`;
+      const { data: profile } = await supabase.from('profiles').select('id').eq('email', adminEmail2).maybeSingle();
+      
+      if (profile) {
+        const { error: rpcErr } = await (supabase as any).rpc('activate_school_admin', {
+          p_user_id: profile.id,
+          p_school_id: school.id,
+          p_full_name: order.admin_name,
+          p_phone: order.admin_phone
         });
-        await (supabase as any).from('profiles').upsert({
-          id: authData.user.id, full_name: order.admin_name,
-          phone: order.admin_phone, email: adminEmail.trim(), school_id: school.id
-        });
+        if (rpcErr) throw rpcErr;
+      } else {
+        // This case should theoretically not happen as signUp creates a profile,
+        // but as a fallback, we wait a bit more for the profile to appear if it's a fresh signup
+        await new Promise(r => setTimeout(r, 2000));
+        const { data: p2 } = await supabase.from('profiles').select('id').eq('email', adminEmail2).maybeSingle();
+        if (p2) {
+          await (supabase as any).rpc('activate_school_admin', {
+            p_user_id: p2.id,
+            p_school_id: school.id,
+            p_full_name: order.admin_name,
+            p_phone: order.admin_phone
+          });
+        }
       }
 
       // 3. Mark order approved
@@ -673,8 +722,8 @@ function ActivateOrderModal({ order, onClose, onSuccess }: { order: any; onClose
       const waMsg = encodeURIComponent(
         `🎉 *تم تفعيل حسابك — إدارة عربية*\n\n` +
         `🏫 *المدرسة:* ${order.school_name}\n` +
-        `📧 *الإيميل:* ${adminEmail}\n` +
-        `🔑 *كلمة المرور:* ${password}\n` +
+        `📱 *رقم الدخول:* ${order.admin_phone}\n` +
+        `🔑 *كلمة المرور:* ${manualPassword || order.admin_password}\n` +
         `🌐 *رابط الدخول:* ${window.location.origin}/login\n` +
         `📅 *انتهاء الاشتراك:* ${endDate.toLocaleDateString('ar-EG')}\n\n` +
         `✅ يمكنك تسجيل الدخول الآن ومشاركة روابط التسجيل مع معلميك وأولياء الأمور.`
@@ -701,22 +750,29 @@ function ActivateOrderModal({ order, onClose, onSuccess }: { order: any; onClose
         </div>
 
         <form onSubmit={handleActivate} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">اسم المدير</label>
-            <Input value={order.admin_name} disabled className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 font-bold text-sm" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">إيميل المدير *</label>
-            <Input type="email" value={adminEmail} onChange={e => setAdminEmail(e.target.value)} required
-              placeholder="admin@school.com" dir="ltr"
-              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">كلمة المرور *</label>
-            <Input type="text" value={password} onChange={e => setPassword(e.target.value)} required
-              placeholder="كلمة مرور قوية" dir="ltr"
-              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
-            <p className="text-[10px] text-slate-400 pr-1">ستُرسل لمدير المدرسة تلقائياً عبر واتساب.</p>
+          <div className="grid grid-cols-2 gap-3 font-bold text-xs">
+            <div className="p-4 rounded-2xl bg-indigo-50 border border-indigo-100">
+              <p className="text-indigo-400 mb-1">اسم المدير</p>
+              <p className="text-indigo-900">{order.admin_name}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+              <p className="text-amber-600 mb-1">رقم الدخول</p>
+              <p className="text-amber-900">{order.admin_phone}</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-violet-50 border border-violet-100 col-span-2">
+              <p className="text-violet-600 mb-1">كلمة المرور</p>
+              {order.admin_password ? (
+                <p className="text-violet-900 font-mono">{order.admin_password}</p>
+              ) : (
+                <Input
+                  value={manualPassword}
+                  onChange={(e) => setManualPassword(e.target.value)}
+                  placeholder="أدخل كلمة مرور (6 أحرف على الأقل)"
+                  className="h-10 px-4 rounded-xl border-violet-200 bg-white font-bold text-sm"
+                  dir="ltr"
+                />
+              )}
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الباقة</label>
@@ -729,12 +785,11 @@ function ActivateOrderModal({ order, onClose, onSuccess }: { order: any; onClose
           </div>
 
           <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 text-sm text-emerald-700 font-medium">
-            <strong>ما سيحدث تلقائياً:</strong>
+            <strong>ما سيحدث عند الضغط:</strong>
             <ul className="mt-2 space-y-1 text-emerald-600 text-xs">
               <li>✅ إنشاء المدرسة في قاعدة البيانات</li>
-              <li>✅ إنشاء حساب المدير بالإيميل وكلمة المرور</li>
+              <li>✅ إنشاء حساب المدير برقم الهاتف وكلمة المرور المختارة</li>
               <li>✅ إرسال بيانات الدخول للمدير على واتساب</li>
-              <li>✅ تحديث حالة الطلب إلى "مفعّل"</li>
             </ul>
           </div>
 

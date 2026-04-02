@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import DataPagination from '@/components/ui/DataPagination';
 import { 
   Phone, User, GraduationCap, Eye, Edit2, Save, X, Search, Users,
   Activity, Award, Star, BookOpen, ChevronRight, Filter, MoreHorizontal,
@@ -15,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
+const PAGE_SIZE = 15;
+
 interface TeacherProfile {
   id: string;
   full_name: string;
@@ -22,49 +26,78 @@ interface TeacherProfile {
   classes: { id: string; name: string }[];
 }
 
+async function fetchTeachersData(schoolId: string | null, isSuperAdmin: boolean) {
+  const profileQuery = supabase.from('profiles').select('id, full_name, phone');
+  const roleQuery = (supabase as any).from('user_roles').select('*').eq('role', 'teacher');
+  const classQuery = supabase.from('classes').select('id, name, teacher_id');
+
+  if (!isSuperAdmin && schoolId) {
+    profileQuery.eq('school_id', schoolId);
+    roleQuery.eq('school_id', schoolId);
+    classQuery.eq('school_id', schoolId);
+  }
+
+  const [{ data: profiles }, { data: roles }, { data: classes }] = await Promise.all([
+    profileQuery, roleQuery, classQuery
+  ]);
+
+  const active: TeacherProfile[] = (profiles || [])
+    .filter(p => (roles || []).some((r: any) => r.user_id === p.id && r.approval_status === 'approved'))
+    .map(p => ({
+      ...p,
+      classes: (classes || []).filter(c => c.teacher_id === p.id).map(c => ({ id: c.id, name: c.name }))
+    }));
+
+  const pending = (roles || [])
+    .filter((r: any) => r.approval_status === 'pending')
+    .map((r: any) => {
+      const p = (profiles || []).find(prof => prof.id === r.user_id);
+      return { ...r, full_name: p?.full_name, phone: p?.phone };
+    });
+
+  return { active, pending };
+}
+
 export default function TeachersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [teachers, setTeachers] = useState<TeacherProfile[]>([]);
-  const [pendingTeachers, setPendingTeachers] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [schoolSlug, setSchoolSlug] = useState('');
-  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
-  const fetchTeachers = useCallback(async () => {
+  // ── React Query (cached 5 min) ──
+  const { data, isLoading: loading } = useQuery({
+    queryKey: ['teachers-page', user?.schoolId, user?.isSuperAdmin],
+    queryFn: () => fetchTeachersData(user?.schoolId || null, !!user?.isSuperAdmin),
+    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const teachers: TeacherProfile[] = data?.active || [];
+  const pendingTeachers: any[] = data?.pending || [];
+
+  // Load school slug for invite link
+  useState(() => {
     if (!user?.schoolId) return;
-    const { data: school } = await (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single();
-    if (school) setSchoolSlug(school.slug);
+    (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single()
+      .then(({ data: s }: any) => { if (s) setSchoolSlug(s.slug); });
+  });
 
-    const { data: profiles, error: pErr } = await supabase.from('profiles').select('id, full_name, phone').eq('school_id', user.schoolId);
-    const { data: roles, error: rErr } = await (supabase as any).from('user_roles').select('*').eq('role', 'teacher').eq('school_id', user.schoolId);
-    const { data: classes, error: cErr } = await supabase.from('classes').select('id, name, teacher_id').eq('school_id', user.schoolId);
+  const filtered = useMemo(() =>
+    teachers.filter(t => (t.full_name || '').includes(search)),
+    [teachers, search]
+  );
 
-    if (pErr || rErr || cErr) {
-      toast({ title: 'خطأ', description: 'فشل في تحميل بيانات المعلمين', variant: 'destructive' });
-      setLoading(false); return;
-    }
+  const totalItems = filtered.length;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
-    const activeIds = roles.filter((r: any) => r.approval_status !== 'pending' && r.approval_status !== 'rejected').map((r: any) => r.user_id);
-    const pendingIds = roles.filter((r: any) => r.approval_status === 'pending').map((r: any) => r.user_id);
-
-    const enrichedActive = (profiles || [])
-      .filter(p => activeIds.includes(p.id))
-      .map(p => ({
-        ...p,
-        classes: (classes || []).filter(c => c.teacher_id === p.id).map(c => ({ id: c.id, name: c.name })),
-      }));
-    
-    const enrichedPending = (profiles || []).filter(p => pendingIds.includes(p.id));
-
-    setTeachers(enrichedActive);
-    setPendingTeachers(enrichedPending);
-    setLoading(false);
-  }, [toast, user?.schoolId]);
-
-  useEffect(() => { fetchTeachers(); }, [fetchTeachers]);
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
   const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
     setActionLoading(userId);
@@ -72,7 +105,7 @@ export default function TeachersPage() {
       const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('user_id', userId);
       if (error) throw error;
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
-      fetchTeachers();
+      queryClient.invalidateQueries({ queryKey: ['teachers-page', user?.schoolId] });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -84,8 +117,6 @@ export default function TeachersPage() {
     navigator.clipboard.writeText(link);
     toast({ title: 'تم النسخ', description: 'تم نسخ رابط تسجيل المعلمين للحافظة' });
   };
-
-  const filtered = teachers.filter(t => t.full_name.includes(search));
 
   return (
     <AppLayout>
@@ -156,7 +187,7 @@ export default function TeachersPage() {
           <Input 
             placeholder="ابحث عن معلم..." 
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
             className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
           />
         </div>
@@ -175,11 +206,24 @@ export default function TeachersPage() {
             <p className="text-slate-400 font-medium text-sm">لم يتم العثور على أي نتائج تطابق بحثك.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map(t => (
-              <TeacherCard key={t.id} teacher={t} onClick={() => navigate(`/teachers/${t.id}`)} />
-            ))}
-          </div>
+          <>
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} معلم — الصفحة {page}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginated.map(t => (
+                <TeacherCard key={t.id} teacher={t} onClick={() => navigate(`/teachers/${t.id}`)} />
+              ))}
+            </div>
+            <DataPagination
+              currentPage={page}
+              totalItems={totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </>
         )}
       </div>
     </AppLayout>

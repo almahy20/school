@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
+import { useStudents } from '@/hooks/queries';
+import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Search, GraduationCap, School, User, 
   Eye, Edit2, Trash2, Filter, MoreHorizontal,
@@ -15,69 +18,65 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 
-interface Student {
-  id: string;
-  name: string;
-  class_id: string | null;
-  parent_phone: string | null;
-  classes?: { name: string; grade_level: string | null };
-}
+const PAGE_SIZE = 15;
 
 export default function StudentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // ── React Query (cached, no re-fetch on navigation) ──
+  const { data: students = [], isLoading: loading } = useStudents();
+
+  // ── Local UI state ──
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('الكل');
   const [showAdd, setShowAdd] = useState(false);
+  const [page, setPage] = useState(1);
+
+  // Derive classes list for filter dropdown
+  const availableClasses = useMemo(() => [
+    'الكل',
+    ...new Set(students.map(s => (s as any).classes?.name).filter(Boolean) as string[])
+  ], [students]);
+
+  // Filter
+  const filtered = useMemo(() => students.filter(s => {
+    const matchSearch = !search || (s.name || '').includes(search);
+    const matchClass = filterClass === 'الكل' || (s as any).classes?.name === filterClass;
+    return matchSearch && matchClass;
+  }), [students, search, filterClass]);
+
+  // Paginate (reset to page 1 when filters change)
+  const totalItems = filtered.length;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  const handleFilterChange = (val: string) => { setFilterClass(val); setPage(1); };
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+
+  // For the Add modal we still need classes & parents lists
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
   const [parents, setParents] = useState<{id: string, full_name: string}[]>([]);
 
-  useEffect(() => {
+  // Load classes + parents for the Add modal (lightweight, only when modal opens)
+  const loadModalData = async () => {
     if (!user?.schoolId) return;
-    const fetchData = async () => {
-      const { data: studentsData } = await supabase
-        .from('students')
-        .select('*, classes(*)')
-        .eq('school_id', user.schoolId)
-        .order('name');
-      const { data: classesData } = await supabase
-        .from('classes')
-        .select('id, name')
-        .eq('school_id', user.schoolId);
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .eq('role', 'parent')
-        .eq('school_id', user.schoolId);
-      const parentIds = (rolesData || []).map(r => r.user_id);
-      let parentProfiles = null;
-      if (parentIds.length > 0) {
-        const result = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .eq('school_id', user.schoolId)
-          .in('id', parentIds)
-          .order('full_name');
-        parentProfiles = result.data;
-      }
-      setStudents(studentsData || []);
-      setClasses(classesData || []);
-      setParents(parentProfiles || []);
-      setLoading(false);
-    };
-    fetchData();
-  }, [user?.schoolId]);
-
-  const filtered = students.filter(s => {
-    const matchSearch = !search || s.name.includes(search);
-    const matchClass = filterClass === 'الكل' || s.classes?.name === filterClass;
-    return matchSearch && matchClass;
-  });
-
-  const availableClasses = ['الكل', ...new Set(students.map(s => s.classes?.name).filter(Boolean) as string[])];
+    const [{ data: classesData }, { data: rolesData }] = await Promise.all([
+      supabase.from('classes').select('id, name').eq('school_id', user.schoolId),
+      supabase.from('user_roles').select('user_id').eq('role', 'parent').eq('school_id', user.schoolId),
+    ]);
+    setClasses(classesData || []);
+    const parentIds = (rolesData || []).map(r => r.user_id);
+    if (parentIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles').select('id, full_name').in('id', parentIds).order('full_name');
+      setParents(profilesData || []);
+    }
+  };
 
   return (
     <AppLayout>
@@ -108,7 +107,7 @@ export default function StudentsPage() {
             <Input 
               placeholder="ابحث عن اسم الطالب..." 
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => handleSearch(e.target.value)}
               className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
             />
           </div>
@@ -116,7 +115,7 @@ export default function StudentsPage() {
             {availableClasses.map(cls => (
               <button 
                 key={cls} 
-                onClick={() => setFilterClass(cls)}
+                onClick={() => handleFilterChange(cls)}
                 className={cn(
                   "px-6 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border shadow-sm shrink-0",
                   filterClass === cls
@@ -143,20 +142,45 @@ export default function StudentsPage() {
             <p className="text-slate-400 font-medium text-sm max-w-xs mx-auto">لم نعثر على أي طلاب يطابقون معايير البحث الحالية.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filtered.map(s => (
-              <StudentCard key={s.id} student={s} onClick={() => navigate(`/students/${s.id}`)} />
-            ))}
-          </div>
+          <>
+            {/* Results summary */}
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} طالب — الصفحة {page}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginated.map(s => (
+                <StudentCard key={s.id} student={s as any} onClick={() => navigate(`/students/${s.id}`)} />
+              ))}
+            </div>
+            <DataPagination
+              currentPage={page}
+              totalItems={totalItems}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+            />
+          </>
         )}
       </div>
 
-      {showAdd && <AddStudentModal classes={classes} parents={parents} user={user} onClose={() => setShowAdd(false)} onSuccess={() => { setShowAdd(false); window.location.reload(); }} />}
+      {showAdd && (
+        <AddStudentModal 
+          classes={classes} 
+          parents={parents} 
+          user={user} 
+          onClose={() => setShowAdd(false)} 
+          onSuccess={() => { 
+            setShowAdd(false);
+            queryClient.invalidateQueries({ queryKey: ['students', user?.schoolId] }); 
+          }} 
+        />
+      )}
     </AppLayout>
   );
 }
 
-function StudentCard({ student, onClick }: { student: Student, onClick: () => void }) {
+function StudentCard({ student, onClick }: { student: any; onClick: () => void }) {
   return (
     <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
       <div className="p-6 space-y-6">
