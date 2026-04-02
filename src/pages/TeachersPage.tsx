@@ -102,10 +102,10 @@ export default function TeachersPage() {
   const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
     setActionLoading(userId);
     try {
-      const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('user_id', userId);
+      const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('id', userId);
       if (error) throw error;
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
-      queryClient.invalidateQueries({ queryKey: ['teachers-page', user?.schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['teachers-page', user?.schoolId, !!user?.isSuperAdmin] });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }

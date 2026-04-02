@@ -58,25 +58,19 @@ export default function StudentsPage() {
   const handleFilterChange = (val: string) => { setFilterClass(val); setPage(1); };
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
-  // For the Add modal we still need classes & parents lists
+  // For the Add modal we still need classes
   const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
-  const [parents, setParents] = useState<{id: string, full_name: string}[]>([]);
 
-  // Load classes + parents for the Add modal (lightweight, only when modal opens)
+  // Load classes for the Add modal
   const loadModalData = async () => {
     if (!user?.schoolId) return;
-    const [{ data: classesData }, { data: rolesData }] = await Promise.all([
-      supabase.from('classes').select('id, name').eq('school_id', user.schoolId),
-      supabase.from('user_roles').select('user_id').eq('role', 'parent').eq('school_id', user.schoolId),
-    ]);
+    const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user.schoolId);
     setClasses(classesData || []);
-    const parentIds = (rolesData || []).map(r => r.user_id);
-    if (parentIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from('profiles').select('id, full_name').in('id', parentIds).order('full_name');
-      setParents(profilesData || []);
-    }
   };
+
+  useEffect(() => {
+    if (showAdd) loadModalData();
+  }, [showAdd]);
 
   return (
     <AppLayout>
@@ -167,7 +161,6 @@ export default function StudentsPage() {
       {showAdd && (
         <AddStudentModal 
           classes={classes} 
-          parents={parents} 
           user={user} 
           onClose={() => setShowAdd(false)} 
           onSuccess={() => { 
@@ -216,34 +209,26 @@ function StudentCard({ student, onClick }: { student: any; onClick: () => void }
 }
 
 // ─── Add Student Modal ────────────────────────────────────────────────────────
-function AddStudentModal({ classes, parents, user, onClose, onSuccess }: any) {
+function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [classId, setClassId] = useState('');
-  const [parentId, setParentId] = useState('');
+  const [parentPhone, setParentPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    setLoading(true);
     const { data: student, error } = await supabase.from('students').insert({ 
       name: name.trim(), 
       class_id: classId || null,
+      parent_phone: parentPhone.trim() || null,
       school_id: user?.schoolId
     }).select().single();
     if (error) {
       toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
       setLoading(false);
       return;
-    }
-    // Link to parent if selected
-    if (student && parentId) {
-      await supabase.from('student_parents').insert({
-        student_id: student.id,
-        parent_id: parentId,
-        school_id: user?.schoolId,
-      });
     }
     toast({ title: 'تمت الإضافة بنجاح' });
     onSuccess();
@@ -271,12 +256,10 @@ function AddStudentModal({ classes, parents, user, onClose, onSuccess }: any) {
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">ولي الأمر</label>
-              <select value={parentId} onChange={e => setParentId(e.target.value)}
-                className="w-full h-14 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none">
-                <option value="">لا يوجد / غير محدد</option>
-                {parents.map((p: any) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-              </select>
+              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>
+              <Input value={parentPhone} onChange={e => setParentPhone(e.target.value)}
+                className="h-14 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm"
+                placeholder="05xxxxxxxx" dir="ltr" />
             </div>
           </div>
           <div className="flex gap-3 pt-4">
@@ -293,23 +276,12 @@ function AddStudentModal({ classes, parents, user, onClose, onSuccess }: any) {
   );
 }
 
-export function EditStudentModal({ student, classes, parents, user, onClose, onSuccess }: any) {
+export function EditStudentModal({ student, classes, user, onClose, onSuccess }: any) {
     const { toast } = useToast();
     const [name, setName] = useState(student.name);
     const [classId, setClassId] = useState(student.class_id || '');
-    const [parentId, setParentId] = useState('');
+    const [parentPhone, setParentPhone] = useState(student.parent_phone || '');
     const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-      // Fetch current parent
-      supabase.from('student_parents')
-        .select('parent_id')
-        .eq('student_id', student.id)
-        .single()
-        .then(({ data }) => {
-          if (data) setParentId(data.parent_id);
-        });
-    }, [student.id]);
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -320,22 +292,11 @@ export function EditStudentModal({ student, classes, parents, user, onClose, onS
         // 1. Update student
         const { error } = await supabase.from('students').update({ 
           name: name.trim(), 
-          class_id: classId || null 
+          class_id: classId || null,
+          parent_phone: parentPhone.trim() || null
         }).eq('id', student.id);
         
         if (error) throw error;
-
-        // 2. Update parent link
-        if (parentId) {
-          await supabase.from('student_parents').upsert({
-            student_id: student.id,
-            parent_id: parentId,
-            school_id: user?.schoolId,
-          }, { onConflict: 'student_id,parent_id' });
-        } else {
-          // Remove link if set to empty
-          await supabase.from('student_parents').delete().eq('student_id', student.id);
-        }
 
         toast({ title: 'تم التحديث بنجاح' });
         onSuccess();
@@ -368,12 +329,10 @@ export function EditStudentModal({ student, classes, parents, user, onClose, onS
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">ولي الأمر</label>
-                <select value={parentId} onChange={e => setParentId(e.target.value)}
-                  className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
-                  <option value="">لا يوجد / غير محدد</option>
-                  {parents.map((p: any) => <option key={p.id} value={p.id}>{p.full_name}</option>)}
-                </select>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>
+                <Input value={parentPhone} onChange={e => setParentPhone(e.target.value)}
+                  className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm shadow-inner"
+                  placeholder="05xxxxxxxx" dir="ltr" />
               </div>
             </div>
 

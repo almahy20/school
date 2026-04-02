@@ -32,6 +32,7 @@ export default function StudentDetailPage() {
   const { user } = useAuth();
   const [student, setStudent] = useState<Student | null>(null);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [parents, setParents] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
 
@@ -39,8 +40,22 @@ export default function StudentDetailPage() {
     const { data: studentData, error } = await supabase.from('students').select('*, classes(*)').eq('id', id).single();
     if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); navigate('/students'); return; }
     setStudent(studentData);
-    const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user?.schoolId);
+    
+    // Fetch classes and parents for the edit modal
+    const [{ data: classesData }, { data: rolesData }] = await Promise.all([
+      supabase.from('classes').select('id, name').eq('school_id', user?.schoolId),
+      supabase.from('user_roles').select('user_id').eq('role', 'parent').eq('school_id', user?.schoolId),
+    ]);
+    
     setClasses(classesData || []);
+    
+    const parentIds = (rolesData || []).map(r => r.user_id);
+    if (parentIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles').select('id, full_name').in('id', parentIds).order('full_name');
+      setParents(profilesData || []);
+    }
+    
     setLoading(false);
   };
 
@@ -177,6 +192,8 @@ export default function StudentDetailPage() {
         <EditStudentModal 
           student={student} 
           classes={classes} 
+          parents={parents}
+          user={user}
           onClose={() => setShowEdit(false)} 
           onSuccess={() => { setShowEdit(false); fetchData(); }}
         />
