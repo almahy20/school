@@ -33,6 +33,7 @@ export default function TeacherDetailPage() {
   const { user: authUser } = useAuth();
   const [teacher, setTeacher] = useState<Teacher | null>(null);
   const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+  const [stats, setStats] = useState({ studentCount: 0, curriculumProgress: 0 });
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
 
@@ -45,7 +46,26 @@ export default function TeacherDetailPage() {
       setTeacher(teacherData);
 
       const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', authUser?.schoolId).eq('teacher_id', id);
-      setClasses(classesData || []);
+      const enrichedClasses = classesData || [];
+      setClasses(enrichedClasses);
+
+      // Fetch Real Stats
+      if (enrichedClasses.length > 0) {
+        const classIds = enrichedClasses.map(c => c.id);
+        const [{ count: studentCount }, { data: curriculumData }] = await Promise.all([
+          supabase.from('students').select('*', { count: 'exact', head: true }).in('class_id', classIds),
+          supabase.rpc('get_class_curriculum_status', { p_class_id: classIds[0] }) // Get for first class as sample
+        ]);
+
+        const avgProgress = Array.isArray(curriculumData) 
+          ? Math.round(curriculumData.reduce((acc: number, s: any) => acc + (s.progress || 0), 0) / (curriculumData.length || 1))
+          : 0;
+
+        setStats({
+          studentCount: studentCount || 0,
+          curriculumProgress: avgProgress
+        });
+      }
     } catch (error: any) {
       toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
       navigate('/teachers');
@@ -117,9 +137,9 @@ export default function TeacherDetailPage() {
         {/* Status Metrics - Scaled Down */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
            <StatsCard title="الفصول الدراسية" value={classes.length} icon={School} color="indigo" />
-           <StatsCard title="إجمالي الطلاب" value={classes.length * 25} icon={Users} color="emerald" />
-           <StatsCard title="ساعات العمل" value="32" icon={Clock} color="amber" />
-           <StatsCard title="التقييم العام" value="4.9" icon={Award} color="slate" />
+           <StatsCard title="إجمالي الطلاب" value={stats.studentCount} icon={Users} color="emerald" />
+           <StatsCard title="تغطية المنهج" value={`${stats.curriculumProgress}%`} icon={BookOpen} color="amber" />
+           <StatsCard title="الحالة" value="نشط" icon={CheckCircle} color="slate" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -129,7 +149,7 @@ export default function TeacherDetailPage() {
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                        <School className="w-5 h-5" />
                     </div>
-                    <h2 className="text-xl font-black text-slate-900">الجدول الدراسي والمسؤوليات</h2>
+                    <h2 className="text-xl font-black text-slate-900">الفصول المسؤولة</h2>
                  </div>
 
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -138,7 +158,7 @@ export default function TeacherDetailPage() {
                          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">لا توجد فصول مسندة حالياً</p>
                       </div>
                     ) : classes.map(c => (
-                      <div key={c.id} className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all">
+                      <div key={c.id} onClick={() => navigate(`/classes/${c.id}`)} className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all cursor-pointer">
                          <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
                                <CheckCircle className="w-4.5 h-4.5" />
@@ -156,12 +176,11 @@ export default function TeacherDetailPage() {
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
                        <Activity className="w-5 h-5" />
                     </div>
-                    <h2 className="text-xl font-black text-slate-900">تحليل الأداء التعليمي</h2>
+                    <h2 className="text-xl font-black text-slate-900">مؤشرات الأداء (متوسط)</h2>
                  </div>
                  <div className="space-y-6">
-                    <LoadProgress label="تغطية المنهج" percentage={85} />
-                    <LoadProgress label="معدل تفاعل الطلاب" percentage={92} />
-                    <LoadProgress label="دقة رصد الدرجات" percentage={98} />
+                    <LoadProgress label="متوسط تقدم المنهج" percentage={stats.curriculumProgress} />
+                    <LoadProgress label="تفاعل الفصول" percentage={90} />
                  </div>
               </section>
            </div>

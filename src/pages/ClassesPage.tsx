@@ -273,35 +273,35 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
-        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إنشاء فصل جديد</h2>
-        <form onSubmit={handleSubmit} className="space-y-5 relative z-10">
-          <div className="space-y-1.5">
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
+        <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">إنشاء فصل جديد</h2>
+        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+          <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
             <Input value={name} onChange={e => setName(e.target.value)}
-              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" placeholder="مثال: 1أ" />
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: 1أ" />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
             <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
-              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" placeholder="مثال: الصف الأول" />
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: الصف الأول" />
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-              className="w-full h-12 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none">
+              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
               <option value="">بدون معلم</option>
               {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
             </select>
           </div>
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-4 pt-6">
             <Button type="submit" disabled={loading}
-              className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-primary transition-all text-sm">
+              className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
               {loading ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
-              className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+              className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
           </div>
         </form>
       </div>
@@ -330,35 +330,35 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
   
     return (
       <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
-          <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">تعديل بيانات الفصل</h2>
-          <form onSubmit={handleSave} className="space-y-5 relative z-10">
-            <div className="space-y-1.5">
+        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
+          <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">تعديل بيانات الفصل</h2>
+          <form onSubmit={handleSave} className="space-y-6 relative z-10">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
               <Input value={name} onChange={e => setName(e.target.value)}
-                className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" />
+                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
               <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
-                className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm" />
+                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
               <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-                className="w-full h-12 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none">
+                className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                 <option value="">بدون معلم</option>
                 {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
             </div>
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-4 pt-6">
               <Button type="submit" disabled={loading}
-                className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-primary transition-all text-sm">
+                className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
                 {loading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
               </Button>
               <Button type="button" onClick={onClose} variant="ghost"
-                className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+                className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
             </div>
           </form>
         </div>

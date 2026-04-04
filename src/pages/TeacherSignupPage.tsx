@@ -13,7 +13,7 @@ export default function TeacherSignupPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [schoolInfo, setSchoolInfo] = useState<{ id: string, name: string } | null>(null);
+  const [schoolInfo, setSchoolInfo] = useState<{ id: string, name: string, logo: string } | null>(null);
   const { signup } = useAuth();
   const navigate = useNavigate();
 
@@ -29,8 +29,8 @@ export default function TeacherSignupPage() {
         setError('المدرسة غير موجودة');
         return;
       }
-      const { data: dbSchool } = await supabase.from('schools').select('id, name').eq('id', data as string).single();
-      if (dbSchool) setSchoolInfo({ id: dbSchool.id, name: dbSchool.name });
+      const { data: dbSchool } = await supabase.from('schools').select('id, name, logo_url').eq('id', data as string).single();
+      if (dbSchool) setSchoolInfo({ id: dbSchool.id, name: dbSchool.name, logo: dbSchool.logo_url || '' });
     }
     loadSchool();
   }, [school_slug]);
@@ -64,8 +64,12 @@ export default function TeacherSignupPage() {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden text-right">
       <div className="w-full max-w-[480px] relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group">
-            <BookOpen className="w-10 h-10 text-primary" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group overflow-hidden">
+            {schoolInfo?.logo ? (
+              <img src={schoolInfo.logo} alt="School Logo" className="w-full h-full object-contain" />
+            ) : (
+              <BookOpen className="w-10 h-10 text-primary" />
+            )}
           </div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">تسجيل كمعلم جديد</h1>
           <p className="text-sm font-medium text-slate-400">

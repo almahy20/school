@@ -11,6 +11,7 @@ interface ManagedUser {
   phone: string;
   role: AppRole;
   banned: boolean;
+  approvalStatus: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
 
@@ -68,6 +69,7 @@ export default function UsersManagementPage() {
             phone: p.phone || '',
             role: (userRole?.role as AppRole) || 'parent',
             banned: !!authUser?.banned_until && new Date(authUser.banned_until) > new Date(),
+            approvalStatus: (userRole?.approval_status as any) || 'approved',
             createdAt: p.created_at,
           };
         });
@@ -112,6 +114,28 @@ export default function UsersManagementPage() {
       await callAdminApi('ban', userId, { banned: !currentlyBanned });
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, banned: !currentlyBanned } : u));
       toast({ title: 'تم التحديث', description: currentlyBanned ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
+    setActionLoading(null);
+  };
+
+  const handleApprove = async (userId: string, status: 'approved' | 'rejected') => {
+    setActionLoading(userId);
+    try {
+      // Direct supabase update for role status if admin-users function doesn't handle it yet
+      const { error } = await supabase
+        .from('user_roles')
+        .update({ approval_status: status })
+        .eq('user_id', userId);
+      
+      if (error) throw error;
+
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, approvalStatus: status } : u));
+      toast({ 
+        title: status === 'approved' ? 'تمت الموافقة' : 'تم الرفض', 
+        description: status === 'approved' ? 'تم تفعيل صلاحيات المستخدم بنجاح' : 'تم رفض طلب الانضمام' 
+      });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -283,9 +307,18 @@ export default function UsersManagementPage() {
                         )}
                       </td>
                       <td className="px-8 py-6 text-center">
-                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold ${u.banned ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                          <div className={`w-1.5 h-1.5 rounded-full ${u.banned ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
-                          {u.banned ? 'محظور' : 'نشط'}
+                        <div className="flex flex-col items-center gap-2">
+                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold ${u.banned ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${u.banned ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
+                            {u.banned ? 'محظور' : 'نشط'}
+                          </div>
+                          
+                          {u.approvalStatus === 'pending' && (
+                            <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 animate-pulse">بانتظار الموافقة</span>
+                          )}
+                          {u.approvalStatus === 'rejected' && (
+                            <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">مرفوض</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-8 py-6 text-center">
@@ -293,6 +326,26 @@ export default function UsersManagementPage() {
                           <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">إدارة ذاتية</span>
                         ) : (
                           <div className="flex items-center justify-center gap-2">
+                            {u.approvalStatus === 'pending' && (
+                              <>
+                                <button
+                                  onClick={() => handleApprove(u.id, 'approved')}
+                                  disabled={actionLoading === u.id}
+                                  className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+                                  title="موافقة"
+                                >
+                                  <UserCheck className="w-5 h-5" />
+                                </button>
+                                <button
+                                  onClick={() => handleApprove(u.id, 'rejected')}
+                                  disabled={actionLoading === u.id}
+                                  className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all"
+                                  title="رفض"
+                                >
+                                  <X className="w-5 h-5" />
+                                </button>
+                              </>
+                            )}
                             {editingId === u.id ? (
                               <>
                                 <button

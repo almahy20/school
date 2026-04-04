@@ -5,12 +5,15 @@ import {
   ChevronLeft, User, Bell, Globe, HelpCircle, Shield,
   Users, Database, LogOut, Edit2, Plus, ArrowLeft
 } from 'lucide-react';
+import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
 import { useToast } from '@/hooks/use-toast';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function SettingsPage() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { isSubscribed, subscribeToPush } = usePushNotifications();
 
   const handleLogout = async () => {
     await logout();
@@ -19,20 +22,13 @@ export default function SettingsPage() {
 
   const roleLabel = user?.role === 'admin' ? 'مدير النظام' : user?.role === 'teacher' ? 'معلم' : 'ولي أمر';
 
-  const handleRequestNotifications = async () => {
-    const { requestNotificationPermission, playNotificationSound } = await import('@/utils/notifications');
-    const granted = await requestNotificationPermission();
-    if (granted) {
-      playNotificationSound();
-      toast({ title: 'تم تفعيل الإشعارات', description: 'ستصلك التنبيهات بذكاء مع صوت مخصص' });
-    } else {
-      toast({ title: 'فشل التفعيل', description: 'يرجى السماح بالإشعارات من إعدادات المتصفح', variant: 'destructive' });
-    }
-  };
-
   const accountSettings = [
     { label: 'إعدادات الملف الشخصي', icon: User, onClick: () => {} },
-    { label: 'تفعيل الإشعارات الذكية', icon: Bell, onClick: handleRequestNotifications },
+    { 
+      label: isSubscribed ? 'الإشعارات مفعلة' : 'تفعيل الإشعارات الذكية', 
+      icon: Bell, 
+      onClick: subscribeToPush 
+    },
     { label: 'لغة التطبيق', icon: Globe, extra: 'العربية', onClick: () => {} },
   ];
 
@@ -128,23 +124,27 @@ export default function SettingsPage() {
 
           <div className="flex flex-col gap-8">
             {user?.role === 'admin' && (
-              <div className="space-y-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-2">إدارة النظام</h3>
-                <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
-                  {adminSettings.map((item) => (
-                    <button
-                      key={item.label}
-                      onClick={item.onClick}
-                      className="w-full flex items-center gap-4 p-6 hover:bg-slate-50/50 transition-all text-right group"
-                    >
-                      <div className="w-12 h-12 rounded-2xl bg-slate-900/5 flex items-center justify-center shrink-0 group-hover:bg-slate-900 group-hover:text-white transition-all">
-                        <item.icon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
-                      </div>
-                      <span className="flex-1 text-base font-bold text-slate-700 group-hover:text-slate-900 transition-colors">{item.label}</span>
-                      <ArrowLeft className="w-4 h-4 text-slate-100 group-hover:text-slate-900 group-hover:translate-x-[-4px] transition-all" />
-                    </button>
-                  ))}
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pr-2">إدارة النظام</h3>
+                  <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden divide-y divide-slate-50 shadow-sm">
+                    {adminSettings.map((item) => (
+                      <button
+                        key={item.label}
+                        onClick={item.onClick}
+                        className="w-full flex items-center gap-4 p-6 hover:bg-slate-50/50 transition-all text-right group"
+                      >
+                        <div className="w-12 h-12 rounded-2xl bg-slate-900/5 flex items-center justify-center shrink-0 group-hover:bg-slate-900 group-hover:text-white transition-all">
+                          <item.icon className="w-6 h-6 text-slate-400 group-hover:text-white transition-colors" />
+                        </div>
+                        <span className="flex-1 text-base font-bold text-slate-700 group-hover:text-slate-900 transition-colors">{item.label}</span>
+                        <ArrowLeft className="w-4 h-4 text-slate-100 group-hover:text-slate-900 group-hover:translate-x-[-4px] transition-all" />
+                      </button>
+                    ))}
+                  </div>
                 </div>
+                
+                <SchoolBrandingSettings />
               </div>
             )}
 

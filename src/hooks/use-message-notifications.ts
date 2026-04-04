@@ -83,7 +83,7 @@ export function useMessageNotifications() {
 
           const senderName = profile?.full_name || 'مستخدم';
 
-          playChime();
+          // playChime(); // Disabled sound by request
           vibrate();
           showDesktopNotification(senderName, msg.content);
         }

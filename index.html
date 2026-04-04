@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>إدارة عربية — نظام إدارة المدارس الذكي</title>
-    <meta name="description" content="منصة إدارة المدارس الذكية — إدارة الطلاب والمعلمين والحضور والرسائل في مكان واحد. تطوير: عبدالرحمن سيد فوزي" />
+    <title>النظام الذكي — نظام إدارة المدارس المتكامل</title>
+    <meta name="description" content="منصة إدارة المدارس الذكية — إدارة الطلاب والمعلمين والحضور والرسائل في مكان واحد." />
     <meta name="author" content="عبدالرحمن سيد فوزي" />
     <meta name="keywords" content="إدارة مدرسة, نظام مدرسي, SaaS, تعليم, حضور, معلمين, أولياء أمور" />
 
@@ -14,17 +14,17 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="إدارة عربية" />
+    <meta name="apple-mobile-web-app-title" content="المدرسة" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="إدارة عربية — نظام إدارة المدارس الذكي" />
-    <meta property="og:description" content="منصة SaaS احترافية لإدارة المدارس العربية. تطوير: عبدالرحمن سيد فوزي" />
+    <meta property="og:title" content="النظام الذكي — نظام إدارة المدارس المتكامل" />
+    <meta property="og:description" content="منصة احترافية لإدارة المدارس والتحصيل العلمي." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ar_EG" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="إدارة عربية" />
+    <meta name="twitter:title" content="النظام الذكي" />
     <meta name="twitter:description" content="نظام إدارة المدارس الذكي" />
 
     <!-- Preconnect for performance -->
@@ -36,16 +36,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script>
-      // Register Service Worker
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registered:', reg.scope))
-            .catch(err => console.log('SW error:', err));
-        });
-      }
-    </script>
   </body>
 </html>
 

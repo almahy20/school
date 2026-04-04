@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/hooks/use-toast';
+import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface ExamTemplate {
   id: string;
@@ -40,8 +42,11 @@ const EXAM_TYPES = [
 
 export default function GradesPage() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [classes, setClasses] = useState<any[]>([]);
   const [selectedClass, setSelectedClass] = useState('');
+  const [subjects, setSubjects] = useState<any[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState('');
   const [templates, setTemplates] = useState<ExamTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
   const [studentGrades, setStudentGrades] = useState<StudentGrade[]>([]);
@@ -49,35 +54,89 @@ export default function GradesPage() {
   const [saving, setSaving] = useState(false);
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
 
-  // Load classes
+  // Load branding
+  useEffect(() => {
+    const fetchBranding = async () => {
+      if (user?.schoolId) {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        if (data) {
+          const timestamp = Date.now();
+          const logo = data.icon_url || data.logo_url || '';
+          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+          
+          setSchoolBranding({
+            name: data.name,
+            logo: logoWithCacheBust
+          });
+        }
+      }
+    };
+    fetchBranding();
+  }, [user?.schoolId]);
+
+  // Load all classes for the school
   useEffect(() => {
     if (!user?.schoolId) return;
-    supabase.from('classes')
-      .select('*')
-      .eq('school_id', user.schoolId)
-      .eq('teacher_id', user.id)
-      .then(({ data }) => {
-        setClasses(data || []);
-        if (data?.length) setSelectedClass(data[0].id);
-        setLoading(false);
-      });
-  }, [user?.id, user?.schoolId]);
+    setLoading(true);
+    
+    const query = supabase.from('classes')
+      .select('*, curriculums(*)')
+      .eq('school_id', user.schoolId);
+    
+    // If not admin, filter by teacher
+    if (user.role !== 'admin' && !user.isSuperAdmin) {
+      query.eq('teacher_id', user.id);
+    }
 
-  // Load templates for selected class
+    query.then(({ data }) => {
+      setClasses(data || []);
+      if (data?.length) setSelectedClass(data[0].id);
+      setLoading(false);
+    });
+  }, [user?.id, user?.schoolId, user?.role, user?.isSuperAdmin]);
+
+  // Load subjects when class is selected
+  useEffect(() => {
+    if (!selectedClass) {
+      setSubjects([]);
+      return;
+    }
+    const currentClass = classes.find(c => c.id === selectedClass);
+    if (currentClass?.curriculum_id) {
+      supabase.from('curriculum_subjects')
+        .select('subject_name')
+        .eq('curriculum_id', currentClass.curriculum_id)
+        .then(({ data }) => {
+          setSubjects(data || []);
+          if (data?.length) setSelectedSubject(data[0].subject_name);
+        });
+    } else {
+      setSubjects([]);
+    }
+  }, [selectedClass, classes]);
+
+  // Load templates for selected class AND subject
   useEffect(() => {
     if (!selectedClass || !user?.schoolId) return;
-    supabase.from('exam_templates').select('*')
+    
+    const query = supabase.from('exam_templates')
+      .select('*')
       .eq('school_id', user.schoolId)
-      .eq('class_id', selectedClass)
-      .eq('teacher_id', user.id)
-      .order('created_at', { ascending: false })
+      .eq('class_id', selectedClass);
+    
+    if (selectedSubject) {
+      query.eq('subject', selectedSubject);
+    }
+
+    query.order('created_at', { ascending: false })
       .then(({ data }) => {
         setTemplates((data as ExamTemplate[]) || []);
         setSelectedTemplate(null);
         setStudentGrades([]);
       });
-  }, [selectedClass, user?.id, user?.schoolId]);
+  }, [selectedClass, selectedSubject, user?.id, user?.schoolId]);
 
   // Load students & grades when template selected
   useEffect(() => {
@@ -122,20 +181,30 @@ export default function GradesPage() {
 
     const toUpsert = studentGrades
       .filter(sg => sg.score !== '')
-      .map(sg => ({
-        ...(sg.gradeId ? { id: sg.gradeId } : {}),
-        student_id: sg.studentId,
-        teacher_id: user.id,
-        school_id: user.schoolId,
-        subject: selectedTemplate.subject,
-        score: Number(sg.score),
-        max_score: selectedTemplate.max_score,
-        term: selectedTemplate.term,
-        exam_template_id: selectedTemplate.id,
-      }));
+      .map(sg => {
+        const item: any = {
+          student_id: sg.studentId,
+          teacher_id: user.id,
+          school_id: user.schoolId,
+          subject: selectedTemplate.subject,
+          score: sg.score,
+          max_score: selectedTemplate.max_score,
+          term: selectedTemplate.term,
+          exam_template_id: selectedTemplate.id,
+        };
+        // Always provide an ID for upsert to avoid null constraint violations in batch
+        item.id = sg.gradeId || crypto.randomUUID();
+        return item;
+      });
 
     if (toUpsert.length > 0) {
-      await supabase.from('grades').upsert(toUpsert, { onConflict: 'id' });
+      const { error } = await supabase.from('grades').upsert(toUpsert);
+      if (error) {
+        console.error('Upsert error:', error);
+        toast({ title: 'خطأ في الحفظ', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'تم حفظ الدرجات بنجاح', description: 'تم تحديث سجلات الطلاب بنجاح.' });
+      }
     }
 
     // Refresh grades
@@ -180,7 +249,7 @@ export default function GradesPage() {
                <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
                <h1 className="text-2xl font-black text-slate-900 tracking-tight">رصد الدرجات والتقييمات</h1>
             </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">توثيق الأداء الأكاديمي وإصدار تقارير التقييم المستمر</p>
+            <p className="text-slate-500 font-medium text-sm pr-4">إدارة الأداء الأكاديمي للطلاب</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-4">
@@ -191,10 +260,19 @@ export default function GradesPage() {
                </select>
                <Users className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
              </div>
+
+             <div className="relative group min-w-[180px]">
+               <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}
+                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer">
+                 <option value="">جميع المواد</option>
+                 {subjects.map(s => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
+               </select>
+               <BookOpen className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
+             </div>
              
              {selectedClass && (
                <Button onClick={() => setShowCreateTemplate(true)} className="h-11 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
-                 <Plus className="w-4.5 h-4.5" /> تقييم جديد
+                 <Plus className="w-4.5 h-4.5" /> إنشاء اختبار
                </Button>
              )}
           </div>
@@ -218,14 +296,14 @@ export default function GradesPage() {
             {/* Left Sidebar: Templates List - Scaled Down */}
             <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-6">
                <div className="flex items-center justify-between px-3">
-                  <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">قوالب التقييم النشطة</h2>
-                  <Badge variant="outline" className="bg-white text-indigo-600 font-black px-3 py-0.5 rounded-full text-[9px]">{templates.length} تقييمات</Badge>
+                  <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">الاختبارات والتقييمات</h2>
+                  <Badge variant="outline" className="bg-white text-indigo-600 font-black px-3 py-0.5 rounded-full text-[9px]">{templates.length} اختبار</Badge>
                </div>
 
                <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
                   {templates.length === 0 ? (
                     <div className="bg-white/40 backdrop-blur-sm border border-dashed border-slate-200 p-12 text-center rounded-[32px]">
-                       <p className="text-slate-400 font-black text-[9px] uppercase tracking-widest opacity-60">لا توجد قوالب حالية</p>
+                       <p className="text-slate-400 font-black text-[9px] uppercase tracking-widest opacity-60">لا توجد اختبارات لهذه المادة</p>
                     </div>
                   ) : templates.map(t => {
                     const isSelected = selectedTemplate?.id === t.id;
@@ -236,7 +314,7 @@ export default function GradesPage() {
                           "premium-card p-5 cursor-pointer transition-all duration-500 overflow-hidden relative group",
                           isSelected 
                             ? "bg-slate-900 text-white shadow-xl shadow-slate-200 border-none translate-x-2 scale-[1.03]" 
-                            : "hover:translate-x-2"
+                            : "hover:translate-x-2 shadow-sm"
                         )}>
                         <div className="flex items-start justify-between gap-4 mb-3 relative z-10">
                            <div className="flex-1">
@@ -258,7 +336,7 @@ export default function GradesPage() {
                             )}>
                               {t.exam_type === 'daily' ? 'يومي' : t.exam_type === 'monthly' ? 'شهري' : 'نهائي'}
                             </span>
-                            <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>درجة عظمى: {t.max_score}</span>
+                            <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>الدرجة: {t.max_score}</span>
                         </div>
                         {isSelected && (
                           <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/20 rounded-bl-[80px] pointer-events-none" />
@@ -267,23 +345,6 @@ export default function GradesPage() {
                     );
                   })}
                </div>
-
-               {selectedTemplate && (
-                 <section className="bg-slate-900 rounded-[40px] p-8 space-y-6 shadow-2xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
-                    <div className="flex items-center gap-3 relative z-10">
-                       <TrendingUp className="w-4 h-4 text-indigo-400" />
-                       <h3 className="text-base font-black text-white">إحصائيات الأداء</h3>
-                    </div>
-                    <div className="space-y-4 relative z-10">
-                       <div className="flex justify-between items-end">
-                          <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">متوسط درجات الفصل</span>
-                          <span className="text-2xl font-black text-indigo-400">{average} / {selectedTemplate.max_score}</span>
-                       </div>
-                       <Progress value={(average/selectedTemplate.max_score)*100} className="h-1.5 bg-white/10" />
-                    </div>
-                 </section>
-               )}
             </div>
 
             {/* Right Column: Grade entry rows - Scaled Down */}
@@ -293,8 +354,8 @@ export default function GradesPage() {
                     <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-[32px] flex items-center justify-center mx-auto mb-6 text-slate-200">
                       <Sparkles className="w-10 h-10" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 mb-2">اختر تقييماً للبدء</h3>
-                    <p className="text-slate-400 font-medium text-sm max-w-xs mx-auto">قم بتحديد أحد القوالب في الجانب الأيمن أو أنشئ تقييماً جديداً لرصد درجات الطلاب.</p>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">اختر اختباراً للبدء برصد الدرجات</h3>
+                    <p className="text-slate-400 font-medium text-sm max-w-xs mx-auto">قم باختيار الفصل والمادة، ثم حدد الاختبار من القائمة الجانبية لإدخال الدرجات.</p>
                  </div>
               ) : (
                 <div className="premium-card p-0 overflow-hidden flex flex-col shadow-xl animate-in slide-in-from-left-6 duration-700">
@@ -309,7 +370,7 @@ export default function GradesPage() {
                                <Badge className="bg-white border-slate-100 font-black text-[8px] uppercase">{selectedTemplate.subject}</Badge>
                             </div>
                             <div className="flex items-center gap-3 text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">
-                               <span className="flex items-center gap-1.5"><ClipboardList className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {studentGrades.length}</span>
+                               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {studentGrades.length}</span>
                                <div className="w-1 h-1 rounded-full bg-slate-200" />
                                <span>الفصل: {selectedTemplate.term}</span>
                             </div>
@@ -329,7 +390,7 @@ export default function GradesPage() {
                          </div>
                          <Button onClick={handleSaveAll} disabled={saving} className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs shadow-lg gap-2 shrink-0">
                             {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4.5 h-4.5" />}
-                            {saving ? 'جاري الرصد...' : 'حفظ الدرجات'}
+                            {saving ? 'جاري الحفظ...' : 'حفظ الدرجات'}
                          </Button>
                       </div>
                    </div>
@@ -349,19 +410,17 @@ export default function GradesPage() {
                                </div>
                                <div className="min-w-0">
                                   <h3 className="text-base font-black text-slate-800 transition-colors truncate leading-tight mb-1 group-hover:text-indigo-600">{sg.studentName}</h3>
-                                  <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest opacity-60">سجل أكاديمي نشط</p>
+                                  <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest opacity-60">إدخال درجة الطالب</p>
                                </div>
                              </div>
 
-                             <div className="relative group/input w-full sm:w-32">
+                             <div className="relative group/input w-full sm:w-48">
                                <input
-                                 type="number"
-                                 min="0"
-                                 max={selectedTemplate.max_score}
+                                 type="text"
                                  value={sg.score}
                                  onChange={e => handleScoreChange(sg.studentId, e.target.value)}
-                                 placeholder="0"
-                                 className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-lg text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
+                                 placeholder="درجة أو نص..."
+                                 className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
                                />
                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-200 uppercase pointer-events-none tracking-widest">
                                  / {selectedTemplate.max_score}
@@ -383,6 +442,7 @@ export default function GradesPage() {
           classId={selectedClass}
           teacherId={user!.id}
           user={user}
+          subjects={subjects}
           onClose={() => setShowCreateTemplate(false)}
           onCreated={(t: any) => {
             setTemplates(prev => [t, ...prev]);
@@ -396,7 +456,7 @@ export default function GradesPage() {
 }
 
 // ─── Create Template Modal (Scaled Down) ─────────────────────────────────────
-function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: any) {
+function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCreated }: any) {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [examType, setExamType] = useState('monthly');
@@ -404,6 +464,10 @@ function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: a
   const [weight, setWeight] = useState('1');
   const [term, setTerm] = useState('الفصل الأول');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (subjects.length > 0) setSubject(subjects[0].subject_name);
+  }, [subjects]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -431,19 +495,20 @@ function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: a
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
       <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
-        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إنشاء تقييم جديد</h2>
+        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إعداد اختبار جديد</h2>
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">مسمى التقييم</label>
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الاختبار</label>
             <Input value={title} onChange={e => setTitle(e.target.value)}
               className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: اختبار الشهر الأول" />
+              placeholder="مثال: تقييم الأسبوع الرابع" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المادة الدراسية *</label>
-            <Input value={subject} onChange={e => setSubject(e.target.value)}
-              className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: لغة عربية" />
+            <select value={subject} onChange={e => setSubject(e.target.value)}
+              className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
+              {subjects.map((s: any) => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -464,12 +529,12 @@ function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: a
           </div>
           <div className="grid grid-cols-2 gap-4">
              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة العظمى</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة النهائية</label>
                 <Input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
                   className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
              </div>
              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن النسبي (%)</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن (%)</label>
                 <Input type="number" value={weight} onChange={e => setWeight(e.target.value)}
                   className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
              </div>
@@ -477,7 +542,7 @@ function CreateTemplateModal({ classId, teacherId, user, onClose, onCreated }: a
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={loading}
               className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-indigo-600 transition-all text-sm">
-              {loading ? 'جاري الرصد...' : 'تأكيد الإنشاء'}
+              {loading ? 'جاري الحفظ...' : 'تأكيد وحفظ'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
               className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>

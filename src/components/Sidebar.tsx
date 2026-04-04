@@ -2,8 +2,14 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { playNotificationSound } from '@/utils/notifications';
-import { LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, School, LogOut, BookOpen, ClipboardList, CalendarCheck, Settings, X, MessageSquare, ChevronLeft, ShieldAlert, Bell } from 'lucide-react';
+import { playNotificationSound, sendLocalNotification } from '@/utils/notifications';
+import { useUnreadNotificationsCount } from '@/hooks/queries';
+import { 
+  LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
+  School, LogOut, BookOpen, ClipboardList, CalendarCheck, 
+  Settings, X, MessageSquare, ChevronLeft, ShieldAlert, 
+  Bell, Layers, CreditCard, Send, Home
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarLink {
@@ -15,22 +21,23 @@ interface SidebarLink {
 
 const adminLinks: SidebarLink[] = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
-  { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
+  { to: '/messages', label: 'بث الرسائل', icon: Send },
   { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck },
   { to: '/classes', label: 'الفصول الدراسية', icon: School },
-  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
+  { to: '/curriculum-management', label: 'إدارة المناهج', icon: Layers },
+  { to: '/grades', label: 'الدرجات والتقييم', icon: ClipboardList },
   { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
-  { to: '/fees', label: 'المصروفات', icon: ClipboardList },
+  { to: '/fees', label: 'المصروفات', icon: CreditCard },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
 ];
 
 const superAdminLinks: SidebarLink[] = [
-  { to: '/super-admin', label: 'إدارة المدارس المركزية', icon: ShieldAlert },
-  { to: '/manage-complaints', label: 'شكاوى مديري المدارس', icon: MessageSquare },
-  { to: '/messages', label: 'بث الرسائل', icon: MessageSquare },
+  { to: '/super-admin', label: 'إدارة المدارس', icon: ShieldAlert },
+  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare },
+  { to: '/messages', label: 'بث الرسائل', icon: Send },
   { to: '/settings', label: 'إعدادات المنصة', icon: Settings },
 ];
 
@@ -38,15 +45,14 @@ const teacherLinks: SidebarLink[] = [
   { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
   { to: '/students', label: 'طلابي', icon: Users },
   { to: '/classes', label: 'فصولي', icon: School },
-  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
+  { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
   { to: '/grades', label: 'الدرجات والتقييم', icon: ClipboardList },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
 const parentLinks: SidebarLink[] = [
-  { to: '/', label: 'متابعة الأبناء', icon: Users },
-  { to: '/assignments', label: 'الواجبات والتكليفات', icon: BookOpen },
-  { to: '/complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
+  { to: '/', label: 'الرئيسية', icon: Home },
+  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare, badge: 'notifications' },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
@@ -57,72 +63,63 @@ interface SidebarProps {
 export default function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { data: initialUnreadCount = 0, refetch } = useUnreadNotificationsCount();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      if (user?.schoolId) {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        if (data) {
+          // Add cache busting timestamp to ensure fresh image load
+          const timestamp = Date.now();
+          const logo = data.icon_url || data.logo_url || '';
+          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+          
+          setSchoolBranding({
+            name: data.name,
+            logo: logoWithCacheBust
+          });
+        }
+      }
+    };
+    fetchBranding();
+  }, [user?.schoolId]);
+
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
 
   useEffect(() => {
     if (!user?.id) return;
 
     let isMounted = true;
 
-    // Initial count with error handling to prevent 403/401 console spam
-    const fetchUnread = async () => {
-      try {
-        const { count, error } = await (supabase as any)
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false);
-        
-        if (error) {
-          // If we get a 403/401, it might be a temporary session issue during navigation
-          if (error.code !== '42501' && error.code !== 'PGRST301') {
-            console.warn('Notification fetch warning:', error.message);
-          }
-          return;
-        }
-
-        if (isMounted) {
-          setUnreadCount(count || 0);
-        }
-      } catch (err) {
-        // Silently handle unexpected errors in the background fetch
-      }
-    };
-
-    fetchUnread();
-
-    // Realtime listener - unique channel per user to avoid conflicts
     const channel = supabase
       .channel(`sidebar-notifications-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (isMounted) {
-            setUnreadCount(prev => prev + 1);
-            playNotificationSound();
-          }
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, 
+      (payload) => {
+        if (isMounted) {
+          setUnreadCount(prev => prev + 1);
+          
+          // Show local browser notification with school branding
+          sendLocalNotification(
+            schoolBranding.name, 
+            payload.new.content || 'لديك إشعار جديد',
+            schoolBranding.logo
+          );
+          
+          refetch(); // Keep React Query in sync
         }
-      )
+      })
       .subscribe();
 
     return () => {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [user?.id]);
-
-  const [audioEnabled, setAudioEnabled] = useState(false);
-
-  const testSound = () => {
-    setAudioEnabled(true);
-    playNotificationSound();
-  };
+  }, [user?.id, refetch, schoolBranding]);
 
   const getLinks = () => {
     if (user?.isSuperAdmin) return superAdminLinks;
@@ -145,46 +142,62 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   return (
     <aside className="h-full w-72 bg-slate-900 flex flex-col relative z-[90] border-l border-white/5 shadow-2xl overflow-hidden text-right">
-      {/* Dynamic Background Pattern */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
+      {/* Premium Background Effects */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
       
       {/* Mobile Close Button */}
-      <div className="lg:hidden absolute top-4 left-4 z-[100]">
-        <button onClick={onClose} className="p-2 rounded-lg bg-white/5 text-white/40 hover:text-white transition-all">
+      <div className="lg:hidden absolute top-6 left-6 z-[100]">
+        <button onClick={onClose} className="p-3 rounded-2xl bg-white/5 text-white/40 hover:text-white hover:bg-white/10 transition-all border border-white/5">
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Brand Section (Scaled Down) */}
-      <div className="p-8 pb-4 relative flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/10 shadow-2xl backdrop-blur-md rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
-          <BookOpen className="w-5 h-5 text-white" />
+      {/* Brand Section */}
+      <div className="p-10 pb-6 relative flex items-center gap-4">
+        <div className="w-12 h-12 rounded-[18px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center border border-white/10 shadow-2xl shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-all duration-500 shrink-0 group overflow-hidden">
+          {schoolBranding.logo ? (
+            <img 
+              src={schoolBranding.logo} 
+              alt="School Logo" 
+              className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = 'none';
+                setSchoolBranding(prev => ({ ...prev, logo: '' }));
+              }}
+            />
+          ) : (
+            <BookOpen className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />
+          )}
         </div>
         <div className="min-w-0">
-           <h1 className="text-lg font-black text-white tracking-tight leading-none mb-1">إدارة عربية</h1>
-           <p className="text-[8px] font-black text-white/20 uppercase tracking-[0.2em]">Smart Education</p>
+           <h1 className="text-xl font-black text-white tracking-tight leading-none mb-1.5 truncate">{schoolBranding.name}</h1>
+           <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.25em]">Smart Education</p>
         </div>
       </div>
 
-      {/* User Section (Scaled Down) */}
-      <div className="px-5 py-6">
-        <div className="p-4 rounded-[24px] bg-white/5 border border-white/5 backdrop-blur-xl relative group">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-white text-xl font-black border border-white/10 group-hover:bg-white/20 transition-all shrink-0">
+      {/* User Section */}
+      <div className="px-6 py-8">
+        <div className="p-5 rounded-[28px] bg-white/5 border border-white/5 backdrop-blur-3xl relative group overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center text-white text-2xl font-black border border-white/10 shadow-inner group-hover:scale-105 transition-transform shrink-0">
               {user?.fullName?.[0] || '?'}
             </div>
-            <div className="min-w-0">
-              <p className="text-sm font-black text-white truncate leading-none mb-1.5">{user?.fullName}</p>
-              <span className="inline-flex px-2 py-0.5 rounded-full bg-white/5 text-[9px] font-black text-white/30 uppercase tracking-widest border border-white/5">
-                {roleLabel}
-              </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black text-white truncate leading-none mb-2">{user?.fullName}</p>
+              <div className="flex items-center gap-2">
+                 <span className="inline-flex px-2.5 py-1 rounded-lg bg-indigo-500/10 text-[9px] font-black text-indigo-400 uppercase tracking-widest border border-indigo-500/20">
+                   {roleLabel}
+                 </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Navigation (Premium Scaling) */}
-      <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scrollbar flex flex-col justify-start pt-1 pb-4">
+      {/* Navigation */}
+      <nav className="flex-1 px-5 space-y-2 overflow-y-auto custom-scrollbar flex flex-col justify-start pt-2 pb-8">
         {links.map(link => (
           <NavLink 
             key={link.to} 
@@ -192,67 +205,44 @@ export default function Sidebar({ onClose }: SidebarProps) {
             end={link.to === '/'}
             onClick={onClose}
             className={({ isActive }) => cn(
-              "flex items-center justify-between px-6 h-14 rounded-[20px] transition-all duration-500 group text-right whitespace-nowrap overflow-hidden relative",
+              "flex items-center justify-between px-6 h-14 rounded-[22px] transition-all duration-500 group text-right whitespace-nowrap relative overflow-hidden",
               isActive 
-                ? "bg-white text-slate-900 shadow-xl shadow-white/5" 
-                : "text-white/30 hover:text-white hover:bg-white/5"
+                ? "bg-white text-slate-900 shadow-2xl shadow-indigo-500/10" 
+                : "text-white/30 hover:text-white hover:bg-white/[0.03]"
             )}
           >
-            {({ isActive }) => (
-              <>
-                <div className="flex items-center gap-3.5">
-                  <link.icon className={cn("w-5 h-5 shrink-0 transition-transform group-hover:scale-110", isActive ? "text-slate-900" : "text-white/20 group-hover:text-white")} />
-                  <span className="text-[14px] font-black tracking-tight">{link.label}</span>
-                </div>
-                
-                {/* Notification Badge */}
-                {link.badge === 'notifications' && (
-                  <div className="flex items-center gap-2">
-                    {unreadCount > 0 && (
-                      <div className="w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center animate-pulse shadow-lg shadow-rose-500/20">
-                        {unreadCount}
-                      </div>
-                    )}
-                    <button 
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        testSound();
-                      }}
-                      className={cn(
-                        "p-1.5 rounded-lg transition-all hover:bg-white/10 group/sound",
-                        audioEnabled ? "text-emerald-400" : "text-white/30 hover:text-white"
-                      )}
-                      title={audioEnabled ? "الصوت مفعّل" : "تفعيل/تجربة تنبيه الصوت"}
-                    >
-                      <Bell className={cn("w-3.5 h-3.5", !audioEnabled && "animate-bounce")} />
-                    </button>
-                  </div>
-                )}
-
-                {/* Active Indicator Dot */}
-                {!link.badge && (
-                  <div className={cn(
-                    "w-1.5 h-1.5 rounded-full transition-all duration-500 scale-0",
-                    isActive && "scale-100 bg-slate-900"
-                  )} />
-                )}
-              </>
+            <div className="flex items-center gap-4 relative z-10">
+              <div className={cn(
+                "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-500",
+                "group-hover:scale-110",
+                "group-[.active]:bg-indigo-600 group-[.active]:text-white",
+                "bg-white/5 text-white/40"
+              )}>
+                <link.icon className="w-4.5 h-4.5" />
+              </div>
+              <span className="text-xs font-black tracking-tight">{link.label}</span>
+            </div>
+            
+            {link.badge === 'notifications' && unreadCount > 0 && (
+              <span className="px-2.5 py-1 rounded-lg bg-rose-500 text-white text-[9px] font-black shadow-lg shadow-rose-500/20 animate-pulse relative z-10">
+                {unreadCount}
+              </span>
             )}
+            
+            <ChevronLeft className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 group-[.active]:opacity-100 transition-all -translate-x-4 group-hover:translate-x-0 relative z-10" />
           </NavLink>
         ))}
       </nav>
 
-      {/* Footer / Logout */}
-      <div className="p-6 mt-auto border-t border-white/5">
+      {/* Logout Footer */}
+      <div className="p-6 border-t border-white/5 bg-white/[0.01]">
         <button 
-          onClick={handleLogout} 
-          className="flex items-center justify-center gap-3 w-full h-14 rounded-[20px] bg-white/5 text-white/30 hover:bg-rose-500/10 hover:text-rose-400 transition-all text-xs font-black uppercase tracking-widest border border-white/5"
+          onClick={handleLogout}
+          className="w-full h-14 rounded-[22px] flex items-center justify-center gap-3 text-rose-400 hover:text-white hover:bg-rose-500 transition-all duration-500 font-black text-xs group shadow-lg hover:shadow-rose-500/20"
         >
-          <LogOut className="w-5 h-5" />
-          <span>إنهاء الجلسة</span>
+          <LogOut className="w-4.5 h-4.5 group-hover:rotate-12 transition-transform" />
+          <span>تسجيل الخروج الآمن</span>
         </button>
-        <p className="text-[10px] font-black text-white/5 text-center mt-4 tracking-[0.3em] uppercase">V 3.0 PREMIUM</p>
       </div>
     </aside>
   );

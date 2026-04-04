@@ -19,5 +19,10 @@ export type { AttendanceRecord } from './useAttendance';
 export { useGrades, useAddGrade, useDeleteGrade } from './useGrades';
 export type { Grade } from './useGrades';
 
-export { useAssignments, useSubmissions, useCreateAssignment, useDeleteAssignment } from './useAssignments';
-export type { Assignment, Submission } from './useAssignments';
+
+
+export { useParentChildOverview, useParentChildActivities, useParentChildren, useChildFullDetails } from './useParentDashboard';
+
+export { useUnreadNotificationsCount, useNotifications } from './useNotifications';
+
+export { useAdminStats, useTeacherStats } from './useStats';

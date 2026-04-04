@@ -1,93 +1,44 @@
-// ==========================================
-// Service Worker — إدارة عربية
-// ==========================================
-const CACHE_NAME = 'edara-arabiya-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-];
-
-// ─── Install ─────────────────────────────
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    })
-  );
+self.addEventListener("install", (e) => {
   self.skipWaiting();
 });
 
-// ─── Activate ─────────────────────────────
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key))
-      )
-    )
-  );
-  self.clients.claim();
+self.addEventListener("activate", (e) => {
+  e.waitUntil(self.clients.claim());
 });
 
-// ─── Fetch Strategy: Network First, fallback to cache ─────
-self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests and Supabase API calls
-  if (
-    event.request.method !== 'GET' ||
-    event.request.url.includes('supabase.co') ||
-    event.request.url.includes('chrome-extension')
-  ) {
-    return;
-  }
-
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Cache successful responses
-        if (response.status === 200) {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, cloned);
-          });
-        }
-        return response;
-      })
-      .catch(() => {
-        // Serve from cache on network failure
-        return caches.match(event.request).then((cached) => {
-          return cached || caches.match('/index.html');
-        });
-      })
-  );
+// Mandatory fetch handler for PWA installability
+self.addEventListener("fetch", (event) => {
+  // Respond with original request - mandatory for PWA detection
+  event.respondWith(fetch(event.request).catch(() => {
+    // Optional: Return a fallback offline page here
+  }));
 });
 
-// ─── Push Notifications ────────────────────
-self.addEventListener('push', (event) => {
+self.addEventListener("push", function (event) {
   let data = {};
   try {
-    data = event.data ? event.data.json() : {};
-  } catch (e) {
-    data = { title: 'إدارة عربية', body: event.data ? event.data.text() : 'إشعار جديد' };
+     data = event.data.json();
+  } catch(e) {
+     data = { title: "إشعار جديد", body: event.data.text() };
   }
 
   const options = {
-    body: data.body || 'لديك إشعار جديد',
-    icon: data.icon || '/placeholder.svg',
-    badge: '/placeholder.svg',
-    dir: 'rtl',
-    lang: 'ar',
-    vibrate: [200, 100, 200],
-    sound: '/notification-sound.mp3', // Standard path for the notification sound
-    data: {
-      url: data.url || '/',
+    body: data.body || 'لديك إشعار جديد من المدرسة',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: data.icon || '/icons/icon-192.png',
+    vibrate: [300, 100, 400],
+    data: { 
+      url: data.data?.url || data.url || '/',
+      schoolName: data.title || 'إدارة عربية'
     },
     actions: [
-      { action: 'open', title: 'فتح التطبيق' },
-      { action: 'close', title: 'إغلاق' },
+      { action: 'open', title: 'عرض التفاصيل' }
     ],
+    tag: data.tag || 'school-notification',
+    renotify: true,
+    requireInteraction: true, // Keep notification until user interacts
+    dir: 'rtl',
+    lang: 'ar'
   };
 
   event.waitUntil(
@@ -95,24 +46,30 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// ─── Notification Click ───────────────────
-self.addEventListener('notificationclick', (event) => {
+self.addEventListener('notificationclick', function(event) {
   event.notification.close();
+  
+  const urlToOpen = new URL(event.notification.data?.url || '/', self.location.origin).href;
 
-  if (event.action === 'close') return;
-
-  const url = event.notification.data?.url || '/';
   event.waitUntil(
-    clients
-      .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if (client.url.includes(self.location.origin) && 'focus' in client) {
-            client.navigate(url);
-            return client.focus();
-          }
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // 1. Check if there is already a window/tab open with the target URL
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
         }
-        return clients.openWindow(url);
-      })
+      }
+      
+      // 2. If no window is open with the URL, check if any window is open at all
+      if (windowClients.length > 0) {
+        return windowClients[0].navigate(urlToOpen).then(client => client?.focus());
+      }
+      
+      // 3. If no window is open, open a new window/tab
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(urlToOpen);
+      }
+    })
   );
 });

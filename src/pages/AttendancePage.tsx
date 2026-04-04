@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface AttendanceRecord {
   studentId: string;
@@ -30,6 +31,23 @@ export default function AttendancePage() {
   const [saving, setSaving] = useState(false);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
+
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'إدارة عربية', logo: '' });
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      if (user?.schoolId) {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        if (data) {
+          setSchoolBranding({
+            name: data.name,
+            logo: data.icon_url || data.logo_url || ''
+          });
+        }
+      }
+    };
+    fetchBranding();
+  }, [user?.schoolId]);
 
   useEffect(() => {
     if (!user?.schoolId) return;
@@ -100,7 +118,7 @@ export default function AttendancePage() {
       });
 
       if (error) throw error;
-      toast({ title: 'تم الاعتماد بنجاح', description: 'تم رصد سجل الحضور النهائي للفصل' });
+      toast({ title: 'تم الاعتماد بنجاح', description: 'تم رصد سجل الحضور النهائي للفصل وإرسال التنبيهات للأهالي تلقائياً.' });
     } catch (error: any) {
       console.error('Attendance Save Error:', error);
       toast({ 

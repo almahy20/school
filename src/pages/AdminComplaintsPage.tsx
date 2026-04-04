@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface Complaint {
   id: string;
@@ -32,6 +33,26 @@ export default function AdminComplaintsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      if (user?.schoolId) {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        if (data) {
+          const timestamp = Date.now();
+          const logo = data.icon_url || data.logo_url || '';
+          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+          
+          setSchoolBranding({
+            name: data.name,
+            logo: logoWithCacheBust
+          });
+        }
+      }
+    };
+    fetchBranding();
+  }, [user?.schoolId]);
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -129,12 +150,14 @@ export default function AdminComplaintsPage() {
 
 
   const updateStatus = async (id: string, status: Complaint['status']) => {
-    const { error } = await (supabase as any).from('complaints').update({ status }).eq('id', id);
+    const { error } = await (supabase as any).from('complaints')
+      .update({ status })
+      .eq('id', id);
+
     if (error) {
-      toast({ title: 'خطأ', description: 'فشل تعديل الحالة', variant: 'destructive' });
+      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
     } else {
-      // Local state will be updated by handle payload if we wait, 
-      // but manual update for instant feel is fine
+      // Note: The database trigger notify_complaint_update will handle the notification and push
       setComplaints(prev => prev.map(c => c.id === id ? { ...c, status } : c));
       toast({ title: 'تم التحديث بنجاح' });
     }
@@ -156,7 +179,7 @@ export default function AdminComplaintsPage() {
                <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
                <h1 className="text-2xl font-black text-slate-900 tracking-tight">مركز الشكاوى والمقترحات</h1>
             </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">إدارة بلاغات أولياء الأمور وحلها لضمان جودة التعليم</p>
+            <p className="text-slate-500 font-medium text-sm pr-4">إدارة بلاغات أولياء الأمور وحلها لضمان الجودة</p>
           </div>
         </header>
 

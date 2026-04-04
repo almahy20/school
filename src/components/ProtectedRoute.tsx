@@ -5,9 +5,10 @@ import { ReactNode } from 'react';
 interface Props {
   children: ReactNode;
   allowedRoles?: AppRole[];
+  isSuperAdminOnly?: boolean;
 }
 
-export default function ProtectedRoute({ children, allowedRoles }: Props) {
+export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnly }: Props) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -25,6 +26,18 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
 
+  // 1. Check Approval Status
+  if (user.approvalStatus === 'pending' && location.pathname !== '/waiting-approval') {
+    return <Navigate to="/waiting-approval" replace />;
+  }
+  
+  // If user is approved but trying to access waiting page, send them back
+  if (user.approvalStatus === 'approved' && location.pathname === '/waiting-approval') {
+    return <Navigate to="/" replace />;
+  }
+
+  if (isSuperAdminOnly && !user.isSuperAdmin) return <Navigate to="/" replace />;
+
   // Redirect to /expired if subscription has ended (Admins/Teachers only)
   if (user.subscriptionExpired && !user.isSuperAdmin && (user.role === 'admin' || user.role === 'teacher')) {
     if (location.pathname !== '/settings' && location.pathname !== '/expired') {
@@ -32,7 +45,7 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
     }
   }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role) && !user.isSuperAdmin) return <Navigate to="/" replace />;
   
   if (user.schoolStatus === 'suspended' && !user.isSuperAdmin) {
     return (

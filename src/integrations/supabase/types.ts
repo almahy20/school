@@ -102,6 +102,7 @@ export type Database = {
       classes: {
         Row: {
           created_at: string
+          curriculum_id: string | null
           grade_level: string | null
           id: string
           name: string
@@ -110,6 +111,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          curriculum_id?: string | null
           grade_level?: string | null
           id?: string
           name: string
@@ -118,6 +120,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          curriculum_id?: string | null
           grade_level?: string | null
           id?: string
           name?: string
@@ -137,6 +140,13 @@ export type Database = {
             columns: ["teacher_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classes_curriculum_id_fkey"
+            columns: ["curriculum_id"]
+            isOneToOne: false
+            referencedRelation: "curriculums"
             referencedColumns: ["id"]
           },
         ]
@@ -725,6 +735,76 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_roles_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      curriculum_subjects: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          curriculum_id: string
+          id: string
+          subject_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          curriculum_id: string
+          id?: string
+          subject_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          curriculum_id?: string
+          id?: string
+          subject_name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curriculum_subjects_curriculum_id_fkey"
+            columns: ["curriculum_id"]
+            isOneToOne: false
+            referencedRelation: "curriculums"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      curriculums: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+          school_id: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+          school_id: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+          school_id?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "curriculums_school_id_fkey"
             columns: ["school_id"]
             isOneToOne: false
             referencedRelation: "schools"

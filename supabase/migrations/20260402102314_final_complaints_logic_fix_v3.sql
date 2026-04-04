@@ -8,7 +8,7 @@ ALTER TABLE public.complaints DROP CONSTRAINT IF EXISTS complaints_status_check;
 ALTER TABLE public.complaints ADD CONSTRAINT complaints_status_check 
     CHECK (status IN ('pending', 'processing', 'resolved', 'in_progress'));
 
--- 2. Fix the notification trigger function to use 'parent_id' instead of 'user_id'
+-- 2. Fix the notification trigger function to use the correct notifications schema
 CREATE OR REPLACE FUNCTION public.notify_complaint_update()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -17,9 +17,9 @@ BEGIN
             user_id,
             school_id,
             title,
-            content,
+            message,
             type,
-            link
+            metadata
         )
         VALUES (
             NEW.parent_id,
@@ -34,7 +34,7 @@ BEGIN
                 ELSE 'تم تغيير حالة شكواك إلى: ' || NEW.status
             END,
             'complaint',
-            '/parent/complaints'
+            jsonb_build_object('url', '/parent/complaints', 'complaint_id', NEW.id)
         );
     END IF;
     RETURN NEW;

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Eye, EyeOff, Lock, Phone, ArrowLeft } from 'lucide-react';
 
 export default function LoginPage() {
@@ -13,6 +14,30 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
+
+  useEffect(() => {
+    // Check if there is a school slug in the URL query
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('school');
+    
+    if (slug) {
+      const fetchBranding = async () => {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('slug', slug).single();
+        if (data) {
+          const timestamp = Date.now();
+          const logo = data.icon_url || data.logo_url || '';
+          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+          
+          setSchoolBranding({
+            name: data.name,
+            logo: logoWithCacheBust
+          });
+        }
+      };
+      fetchBranding();
+    }
+  }, [location.search]);
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
 
@@ -48,11 +73,15 @@ export default function LoginPage() {
       <div className="w-full max-w-[460px] relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         {/* Brand Section */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group hover:scale-105 transition-all duration-500">
-            <BookOpen className="w-10 h-10 text-primary group-hover:rotate-6 transition-transform" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group hover:scale-105 transition-all duration-500 overflow-hidden">
+            {schoolBranding.logo ? (
+              <img src={schoolBranding.logo} alt="School Logo" className="w-full h-full object-contain" />
+            ) : (
+              <BookOpen className="w-10 h-10 text-primary group-hover:rotate-6 transition-transform" />
+            )}
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">إدارة عربية</h1>
-          <p className="text-sm font-medium text-slate-400">المنصة التعليمية الشاملة لإدارة مدرستك</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">{schoolBranding.name}</h1>
+          <p className="text-sm font-medium text-slate-400">نظام الإدارة المدرسية الذكي</p>
         </div>
 
         {/* Login Card */}

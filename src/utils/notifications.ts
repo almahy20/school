@@ -11,9 +11,10 @@ export const requestNotificationPermission = async () => {
 };
 
 export const playNotificationSound = () => {
+  // Sound disabled by request
+  /*
   try {
     const audio = new Audio(NOTIFICATION_SOUND_URL);
-    // Pre-load and play
     audio.load();
     const playPromise = audio.play();
     if (playPromise !== undefined) {
@@ -24,6 +25,7 @@ export const playNotificationSound = () => {
   } catch (e) {
     console.error('Audio playback failed:', e);
   }
+  */
 };
 
 export const sendLocalNotification = (title: string, body: string, icon?: string) => {

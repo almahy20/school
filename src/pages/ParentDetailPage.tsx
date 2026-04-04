@@ -18,6 +18,13 @@ interface ChildItem {
   id: string;
   name: string;
   class_name?: string;
+  curriculum?: {
+    name: string;
+    subjects: {
+      subject_name: string;
+      content: string;
+    }[];
+  } | null;
 }
 
 export default function ParentDetailPage() {
@@ -33,24 +40,39 @@ export default function ParentDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const [{ data: profile, error: pErr }, { data: links }, { data: classes }] = await Promise.all([
+      const [{ data: profile, error: pErr }, { data: links }, { data: classes }, { data: curriculums }, { data: curriculumSubjects }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', id).single(),
         supabase.from('student_parents')
           .select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)')
           .eq('parent_id', id)
           .eq('school_id', user?.schoolId),
-        supabase.from('classes').select('id, name').eq('school_id', user?.schoolId),
+        supabase.from('classes').select('id, name, curriculum_id').eq('school_id', user?.schoolId),
+        supabase.from('curriculums').select('*').eq('school_id', user?.schoolId),
+        supabase.from('curriculum_subjects').select('*, curriculums!inner(school_id)').eq('curriculums.school_id', user?.schoolId),
       ]);
       if (pErr) throw pErr;
       setParent(profile as unknown as ParentProfile);
       const kids = (links || [])
         .map((l: any) => l.students)
         .filter(Boolean)
-        .map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          class_name: classes?.find(c => c.id === s.class_id)?.name,
-        }));
+        .map((s: any) => {
+          const studentClass = classes?.find(c => c.id === s.class_id);
+          const studentCurriculum = curriculums?.find(curr => curr.id === studentClass?.curriculum_id);
+          const studentCurriculumSubjects = curriculumSubjects?.filter(sub => sub.curriculum_id === studentCurriculum?.id);
+
+          return {
+            id: s.id,
+            name: s.name,
+            class_name: studentClass?.name,
+            curriculum: studentCurriculum ? {
+              name: studentCurriculum.name,
+              subjects: studentCurriculumSubjects?.map(sub => ({
+                subject_name: sub.subject_name,
+                content: sub.content,
+              })) || [],
+            } : null,
+          };
+        });
       setChildren(kids);
     } catch (error: any) {
       toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
@@ -136,12 +158,32 @@ export default function ParentDetailPage() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {children.map((c) => (
-                    <div key={c.id} className="p-6 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-lg transition-all flex items-center justify-between">
-                      <span className="text-base font-bold text-slate-700">{c.name}</span>
-                      {c.class_name && (
-                        <span className="text-[10px] font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/10">
-                          {c.class_name}
-                        </span>
+                    <div key={c.id} className="p-6 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:shadow-lg transition-all flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-base font-bold text-slate-700">{c.name}</span>
+                        {c.class_name && (
+                          <span className="text-[10px] font-bold text-primary px-3 py-1.5 rounded-xl bg-primary/5 border border-primary/10">
+                            {c.class_name}
+                          </span>
+                        )}
+                      </div>
+                      {c.curriculum && (
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                          <h3 className="text-sm font-bold text-slate-600 mb-2">
+                            المنهج: {c.curriculum.name}
+                          </h3>
+                          {c.curriculum.subjects.length > 0 ? (
+                            <ul className="space-y-1 text-sm text-slate-500">
+                              {c.curriculum.subjects.map((subject, index) => (
+                                <li key={index}>
+                                  <span className="font-medium">{subject.subject_name}:</span> {subject.content}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-sm text-slate-500">لا توجد مواد لهذا المنهج.</p>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}

@@ -71,7 +71,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
               <BookOpen className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-black text-white tracking-tight">إدارة عربية</span>
+            <span className="text-lg font-black text-white tracking-tight">النظام الذكي</span>
           </div>
           <div className="flex items-center gap-4">
             <a href="#features" className="text-white/50 hover:text-white text-sm font-bold transition-colors hidden md:block">المميزات</a>
@@ -95,20 +95,16 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-4 py-2 mb-8">
             <Sparkles className="w-4 h-4 text-indigo-400" />
-            <span className="text-indigo-300 text-sm font-bold">منصة SaaS للمدارس العربية</span>
+            <span className="text-indigo-300 text-sm font-bold">منصة إدارة المدارس المتكاملة</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-black leading-tight mb-6 bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
-            أدِر مدرستك
-            <br />
-            <span className="bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent">
-              بذكاء وسهولة
-            </span>
+          <h1 className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tight leading-[1.1]">
+            أدر مدرستك بذكاء <br /> 
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">في مكان واحد</span>
           </h1>
 
-          <p className="text-white/50 text-xl leading-relaxed max-w-2xl mx-auto mb-12 font-medium">
-            منصة متكاملة لإدارة الطلاب والمعلمين والحضور والرسائل وأولياء الأمور.
-            ابدأ خلال دقائق، بدون تعقيد.
+          <p className="text-lg md:text-xl text-slate-400 font-medium mb-12 max-w-2xl mx-auto leading-relaxed">
+            نظام سحابي متكامل لإدارة الطلاب، المعلمين، الحضور، والدرجات مع نظام إشعارات فورية وتواصل مباشر مع أولياء الأمور.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -141,7 +137,153 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* Demo Video Section */}
+          <div className="mt-24 relative max-w-5xl mx-auto group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-[40px] blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative bg-slate-900 rounded-[32px] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group cursor-pointer">
+               <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center opacity-40 group-hover:scale-105 transition-transform duration-700"></div>
+               <div className="relative z-10 w-24 h-24 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                  <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/40">
+                    <Zap className="w-8 h-8 text-white fill-current" />
+                  </div>
+               </div>
+               <div className="absolute bottom-8 right-8 left-8 flex justify-between items-end z-10">
+                  <div className="text-right">
+                     <p className="text-white font-black text-2xl mb-1">شاهد كيف يعمل النظام</p>
+                     <p className="text-white/60 text-sm font-medium">فيديو توضيحي للمميزات الرئيسية (دقيقتين)</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest">
+                     Demo Video
+                  </div>
+               </div>
+            </div>
+          </div>
         </div>
+      </section>
+
+      {/* ── Real Screenshots ── */}
+      <section className="py-24 px-6 bg-white/[0.02]">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-white mb-4">واجهة عصرية تليق بمدرستك</h2>
+            <p className="text-white/40 text-lg font-medium">تصميم يركز على تجربة المستخدم وسهولة الوصول للمعلومة</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+            <div className="space-y-8">
+               <div className="p-8 rounded-[32px] bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20">
+                  <h3 className="text-2xl font-black text-white mb-4">لوحة تحكم ولي الأمر</h3>
+                  <p className="text-white/50 leading-relaxed font-medium mb-6">متابعة دقيقة لمسيرة الطالب التعليمية، الجدول الأسبوعي، والأنشطة اليومية في صفحة واحدة مبسطة.</p>
+                  <ul className="space-y-3">
+                     {['شريط تقدم المنهج لكل مادة', 'الجدول الأسبوعي التفاعلي', 'تتبع الحضور والغياب اللحظي'].map(f => (
+                        <li key={f} className="flex items-center gap-3 text-sm font-bold text-indigo-300">
+                           <CheckCircle2 className="w-4 h-4" /> {f}
+                        </li>
+                     ))}
+                  </ul>
+               </div>
+               <div className="p-8 rounded-[32px] bg-white/[0.03] border border-white/10">
+                  <h3 className="text-2xl font-black text-white mb-4">إدارة المنهج الدراسي</h3>
+                  <p className="text-white/50 leading-relaxed font-medium mb-6">بناء هيكل تعليمي متكامل يبدأ من الصفوف وصولاً إلى الدروس والوحدات الزمنية.</p>
+               </div>
+            </div>
+            <div className="relative group">
+               <div className="absolute -inset-4 bg-indigo-600/20 rounded-[48px] blur-2xl group-hover:bg-indigo-600/30 transition-all"></div>
+               <img 
+                 src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
+                 alt="System Screenshot" 
+                 className="relative rounded-[40px] border border-white/10 shadow-2xl group-hover:translate-y-[-8px] transition-transform duration-700"
+               />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Comparison Table ── */}
+      <section className="py-24 px-6 border-t border-white/5">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black text-white mb-4">لماذا "إدارة عربية"؟</h2>
+            <p className="text-white/40 text-lg font-medium">مقارنة سريعة توضح الفارق في الجودة والسهولة</p>
+          </div>
+          
+          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.02] backdrop-blur-md">
+             <table className="w-full text-right">
+                <thead>
+                   <tr className="border-b border-white/10 bg-white/5">
+                      <th className="p-6 text-sm font-black uppercase tracking-widest text-white/40">الميزة</th>
+                      <th className="p-6 text-sm font-black text-indigo-400 text-center">إدارة عربية</th>
+                      <th className="p-6 text-sm font-black text-white/40 text-center">الأنظمة التقليدية</th>
+                   </tr>
+                </thead>
+                <tbody className="text-sm font-bold">
+                   {[
+                      ['سرعة التنفيذ', 'لحظي (Real-time)', 'بطيء / تحديث يدوي'],
+                      ['واجهة المستخدم', 'عصرية / Tailwind', 'قديمة / معقدة'],
+                      ['المنهج الدراسي', 'متكامل ومفصل', 'أساسي فقط'],
+                      ['الدخول للجوال', 'تطبيق PWA متكامل', 'نسخة ويب غير متجاوبة'],
+                      ['التكلفة', 'باقات مرنة', 'عقود سنوية ضخمة']
+                   ].map(([feature, us, them], idx) => (
+                      <tr key={idx} className="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                         <td className="p-6 text-white/70">{feature}</td>
+                         <td className="p-6 text-center text-emerald-400">{us}</td>
+                         <td className="p-6 text-center text-white/20">{them}</td>
+                      </tr>
+                   ))}
+                </tbody>
+             </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Testimonials ── */}
+      <section className="py-24 px-6 border-t border-white/5">
+        <div className="max-w-7xl mx-auto">
+           <div className="text-center mb-16">
+              <h2 className="text-4xl font-black text-white mb-4">قالوا عن المنصة</h2>
+              <p className="text-white/40 text-lg font-medium">ثقة شركائنا هي سر نجاحنا</p>
+           </div>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {[
+                { name: 'د. أحمد سالم', school: 'مدارس النخبة الدولية', text: 'أفضل استثمار قمنا به لتنظيم شؤون مدرستنا. سهولة الاستخدام لا تُصدق.' },
+                { name: 'أ. مريم علي', school: 'مدرسة براعم الغد', text: 'أولياء الأمور سعداء جداً بمتابعة أبنائهم عبر الجوال. النظام سريع وموثوق.' },
+                { name: 'م. خالد حسن', school: 'أكاديمية المستقبل', text: 'الدعم الفني متميز، والنظام يتطور باستمرار بميزات ذكية فعلاً.' }
+              ].map((t, idx) => (
+                <div key={idx} className="p-8 rounded-[32px] bg-white/[0.03] border border-white/10 hover:border-indigo-500/30 transition-all">
+                   <div className="flex gap-1 mb-4">
+                      {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 text-amber-500 fill-current" />)}
+                   </div>
+                   <p className="text-white/60 font-medium leading-relaxed mb-6 italic">"{t.text}"</p>
+                   <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 flex items-center justify-center text-indigo-400 font-black">
+                         {t.name[0]}
+                      </div>
+                      <div>
+                         <p className="text-white font-black text-sm">{t.name}</p>
+                         <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest">{t.school}</p>
+                      </div>
+                   </div>
+                </div>
+              ))}
+           </div>
+        </div>
+      </section>
+
+      {/* ── CTA Final ── */}
+      <section className="py-24 px-6 relative">
+         <div className="max-w-4xl mx-auto p-12 sm:p-20 rounded-[64px] bg-gradient-to-br from-indigo-600 to-violet-700 text-center relative overflow-hidden shadow-2xl shadow-indigo-600/20">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            <div className="relative z-10">
+               <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 tracking-tight">ابدأ رحلة التميز اليوم</h2>
+               <p className="text-white/70 text-lg font-medium mb-12 max-w-xl mx-auto">انضم إلى أكثر من ٥٠ مدرسة تستخدم النظام حالياً لتطوير العملية التعليمية.</p>
+               <button 
+                 onClick={() => handlePlanSelect(PLANS[1])}
+                 className="h-16 px-12 rounded-2xl bg-white text-indigo-600 font-black text-lg shadow-xl hover:scale-105 active:scale-95 transition-all"
+               >
+                  جرب مجاناً لمدة ١٤ يوم
+               </button>
+            </div>
+         </div>
       </section>
 
       {/* ── Features ── */}

@@ -118,10 +118,7 @@ async function fetchAppUser(supaUser: SupabaseUser, retryCount = 0): Promise<App
   })();
 
   activeFetchPromises.set(supaUser.id, fetchPromise);
-  
-  // Safety timeout: if fetchAppUser takes > 10s, resolve with null
-  const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 10000));
-  return Promise.race([fetchPromise, timeoutPromise]) as Promise<AppUser | null>;
+  return fetchPromise;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -146,28 +143,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-    const initSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const appUser = await fetchAppUser(session.user);
-          const accessError = await checkUserAccess(appUser);
-          setUser(accessError ? null : appUser);
-        }
-      } catch (err) {
-        console.error('Session init error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initSession();
-
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
       const appUser = await fetchAppUser(session.user);
-      const accessError = await checkUserAccess(appUser);
-      setUser(accessError ? null : appUser);
+      // Removed checkUserAccess filter to keep pending users in the 'user' state
+      setUser(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+        return appUser;
+      });
     } else {
       setUser(null);
     }
@@ -175,6 +159,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          const appUser = await fetchAppUser(session.user);
+          if (isMounted) {
+            setUser(prev => {
+              if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+              return appUser;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Session init error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    initSession();
 
     // Handle Auth Events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -194,9 +198,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         if (session?.user) {
           const appUser = await fetchAppUser(session.user);
-          const accessError = await checkUserAccess(appUser);
           if (isMounted) {
-            setUser(accessError ? null : appUser);
+            setUser(prev => {
+              if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+              return appUser;
+            });
             setLoading(false);
           }
         } else {
@@ -217,6 +223,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    let timeoutId: any;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      // Session timeout after 30 minutes of inactivity
+      timeoutId = setTimeout(() => {
+        if (user) {
+          console.log('Session timeout due to inactivity');
+          logout();
+        }
+      }, 30 * 60 * 1000);
+    };
+
+    if (user) {
+      window.addEventListener('mousemove', resetTimer);
+      window.addEventListener('keypress', resetTimer);
+      window.addEventListener('scroll', resetTimer);
+      window.addEventListener('click', resetTimer);
+      resetTimer();
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keypress', resetTimer);
+      window.removeEventListener('scroll', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [user]);
+
   const login = async (phone: string, password: string): Promise<string | null> => {
     try {
       const email = phoneToEmail(phone);
@@ -235,11 +272,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return 'حسابك غير مكتمل أو قيد المراجعة. يرجى مراجعة إدارة المنصة.';
         }
 
-        const accessError = await checkUserAccess(appUser);
-        if (accessError) {
+        // Allow pending users to log in, but reject 'rejected' status
+        if (appUser.approvalStatus === 'rejected') {
           await supabase.auth.signOut();
-          return accessError;
+          return 'تم رفض طلب انضمامك للمكتب الثقافي/المدرسة';
         }
+
         setUser(appUser);
       }
       return null;

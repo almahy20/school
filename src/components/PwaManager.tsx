@@ -7,16 +7,17 @@ export default function PwaManager() {
 
   useEffect(() => {
     const updateManifest = async () => {
-      let name = "إدارة عربية";
-      let shortName = "إدارة";
-      let icon = "/placeholder.svg";
+      let name = "المدرسة";
+      let shortName = "المدرسة";
+      let icon = "/icons/icon-192.png";
       let slug = "";
+      let themeColor = "#1e293b";
 
       // 1. Determine school context
       if (user?.schoolId) {
         const { data } = await supabase
           .from('schools')
-          .select('name, slug, logo_url')
+          .select('name, slug, logo_url, icon_url, theme_color')
           .eq('id', user.schoolId)
           .single();
         
@@ -24,50 +25,60 @@ export default function PwaManager() {
         if (school) {
           name = school.name;
           shortName = school.name.split(' ')[0];
-          icon = school.logo_url || "/placeholder.svg";
+          icon = school.icon_url || school.logo_url || "/icons/icon-192.png";
           slug = school.slug;
+          themeColor = school.theme_color || "#1e293b";
         }
       } else {
-        // Check URL for registration slugs
+        // Check URL for registration slugs or query params
         const pathParts = window.location.pathname.split('/');
         const isReg = pathParts.includes('register');
         const urlSlug = pathParts[pathParts.length - 1];
+        const params = new URLSearchParams(window.location.search);
+        const querySlug = params.get('school');
         
-        if (isReg && urlSlug) {
+        const finalSlug = querySlug || (isReg ? urlSlug : null);
+        
+        if (finalSlug) {
            const { data } = await supabase
             .from('schools')
-            .select('name, slug, logo_url')
-            .eq('slug', urlSlug)
+            .select('name, slug, logo_url, icon_url, theme_color')
+            .eq('slug', finalSlug)
             .single();
           
           const school = data as any;
           if (school) {
             name = school.name;
             shortName = school.name.split(' ')[0];
-            icon = school.logo_url || "/placeholder.svg";
+            icon = school.icon_url || school.logo_url || "/icons/icon-192.png";
             slug = school.slug;
+            themeColor = school.theme_color || "#1e293b";
           }
         }
       }
+
+      // Add cache busting to icon to force refresh when changed in dashboard
+      const timestamp = Date.now();
+      const cacheBustIcon = icon.includes('?') ? `${icon}&v=${timestamp}` : `${icon}?v=${timestamp}`;
 
       // @ts-ignore - Deep type instantiation
       const manifest = {
         name: name,
         short_name: shortName,
-        description: "نظام إدارة المدارس الذكي — منصة إدارة عربية",
+        description: `نظام إدارة ${name} الذكي`,
         start_url: window.location.origin + (slug ? `/?school=${slug}` : "/"),
         display: "standalone",
         background_color: "#0a0f1e",
-        theme_color: "#1e293b",
+        theme_color: themeColor,
         icons: [
           {
-            src: icon.startsWith('http') ? icon : window.location.origin + (icon.startsWith('/') ? icon : '/' + icon),
+            src: cacheBustIcon.startsWith('http') ? cacheBustIcon : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon),
             sizes: "192x192",
             type: "image/png",
             purpose: "any maskable"
           },
           {
-            src: icon.startsWith('http') ? icon : window.location.origin + (icon.startsWith('/') ? icon : '/' + icon),
+            src: cacheBustIcon.startsWith('http') ? cacheBustIcon : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon),
             sizes: "512x512",
             type: "image/png"
           }
@@ -84,16 +95,25 @@ export default function PwaManager() {
         link.href = manifestURL;
       }
 
-      // 4. Update Title & Favicon
+      // 4. Update Title & Favicon & Theme Color
       document.title = name;
+      
       const favicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement;
       if (favicon) {
-        favicon.href = icon;
+        favicon.href = cacheBustIcon;
       }
+
+      let metaTheme = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
+      if (!metaTheme) {
+        metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        document.head.appendChild(metaTheme);
+      }
+      metaTheme.content = themeColor;
     };
 
     updateManifest();
-  }, [user?.schoolId]);
+  }, [user?.schoolId, user?.id]);
 
   return null;
 }

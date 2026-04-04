@@ -7,6 +7,7 @@ import {
   Send, Users, User, Megaphone, CheckCircle2, AlertCircle, Search, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendPushToUsers } from '@/utils/pushNotifications';
 
 interface Profile {
   id: string;
@@ -37,6 +38,23 @@ export default function MessagingPage() {
     fetchProfiles();
   }, [user]);
 
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'إدارة عربية', logo: '' });
+
+  useEffect(() => {
+    const fetchBranding = async () => {
+      if (user?.schoolId) {
+        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        if (data) {
+          setSchoolBranding({
+            name: data.name,
+            logo: data.icon_url || data.logo_url || ''
+          });
+        }
+      }
+    };
+    fetchBranding();
+  }, [user?.schoolId]);
+
   const handleSend = async () => {
     if (!content.trim()) {
       toast.error('يرجى كتابة نص الرسالة');
@@ -63,8 +81,19 @@ export default function MessagingPage() {
       }));
 
       const { error } = await supabase.from('messages').insert(messages);
-
       if (error) throw error;
+
+      // Also insert into notifications for in-app history and auto-push
+      const notificationRecords = targets.map(targetId => ({
+        user_id: targetId,
+        school_id: user?.schoolId,
+        type: 'broadcast_message',
+        title: schoolBranding.name,
+        message: content.trim(),
+        metadata: { url: '/messages' }
+      }));
+
+      await supabase.from('notifications').insert(notificationRecords);
 
       toast.success(targetType === 'all' ? 'تم بث الرسالة للجميع بنجاح' : 'تم إرسال الرسالة بنجاح');
       setContent('');

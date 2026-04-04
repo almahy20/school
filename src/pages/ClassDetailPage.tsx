@@ -6,8 +6,9 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, School, Users, Edit2, Trash2, 
-  User, GraduationCap, ChevronLeft, MoreHorizontal,
-  Calendar, Clock, Shield, Award, Activity, Search, Filter
+  User, ChevronLeft, MoreHorizontal,
+  Calendar, Clock, Shield, Award, Activity, Search, Filter,
+  BookOpen, CheckCircle2, Circle, Plus, X, Zap
 } from 'lucide-react';
 import { EditClassModal } from './ClassesPage';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,7 @@ export default function ClassDetailPage() {
         supabase.from('students').select('id, name, class_id').eq('class_id', id).eq('school_id', user?.schoolId).order('name'),
       ]);
       if (cErr) throw cErr;
+      
       const teacherName = profiles?.find(p => p.id === classData.teacher_id)?.full_name || 'غير محدد';
       const enriched: ClassItem = {
         ...classData,
@@ -65,7 +67,7 @@ export default function ClassDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [id, navigate, toast]);
+  }, [id, navigate, toast, user?.schoolId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -94,7 +96,7 @@ export default function ClassDetailPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {/* Premium Header - Scaled Down */}
+        {/* Premium Header */}
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden">
           <div className="flex items-center gap-6 relative z-10">
             <button onClick={() => navigate('/classes')}
@@ -117,21 +119,23 @@ export default function ClassDetailPage() {
             </div>
           </div>
           
-          {user?.role === 'admin' && (
-            <div className="flex items-center gap-3 relative z-10">
-              <Button onClick={() => setShowEdit(true)}
-                className="h-11 px-6 rounded-xl bg-white border border-slate-200 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-sm gap-2 text-xs">
-                <Edit2 className="w-4 h-4" /> تعديل البيانات
-              </Button>
-              <Button onClick={handleDelete} variant="ghost"
-                className="h-11 w-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0">
-                <Trash2 className="w-4.5 h-4.5" />
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center gap-3 relative z-10">
+            {user?.role === 'admin' && (
+              <div className="flex items-center gap-3 border-r pr-3 mr-3 border-slate-100">
+                <Button onClick={() => setShowEdit(true)}
+                  className="h-11 px-6 rounded-xl bg-white border border-slate-200 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-sm gap-2 text-xs">
+                  <Edit2 className="w-4 h-4" /> تعديل
+                </Button>
+                <Button onClick={handleDelete} variant="ghost"
+                  className="h-11 w-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0">
+                  <Trash2 className="w-4.5 h-4.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </header>
 
-        {/* Stats Grid - Scaled Down */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
            <StatsCard title="إجمالي الطلاب" value={classItem.student_count} icon={Users} color="indigo" />
            <StatsCard title="المعلم المسؤول" value={classItem.teacher_name} icon={User} color="emerald" smallValue />
@@ -140,52 +144,52 @@ export default function ClassDetailPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-8">
-            <section className="premium-card p-8 space-y-6">
-               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
-                  <div className="flex items-center gap-3">
-                     <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                        <Users className="w-5 h-5" />
-                     </div>
-                     <h2 className="text-xl font-black text-slate-900">قائمة طلاب الفصل</h2>
-                  </div>
-                  
-                  <div className="relative group w-full sm:w-64">
-                    <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="بحث سريع..." 
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="w-full pr-10 pl-4 py-2 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-600/5 transition-all text-xs font-bold" 
-                    />
-                  </div>
-               </div>
+              <section className="premium-card p-8 space-y-6">
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-50 pb-6">
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+                          <Users className="w-5 h-5" />
+                       </div>
+                       <h2 className="text-xl font-black text-slate-900">قائمة طلاب الفصل</h2>
+                    </div>
+                    
+                    <div className="relative group w-full sm:w-64">
+                      <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+                      <input 
+                        type="text" 
+                        placeholder="بحث سريع..." 
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="w-full pr-10 pl-4 py-2 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-600/5 transition-all text-xs font-bold" 
+                      />
+                    </div>
+                 </div>
 
-               {filteredStudents.length === 0 ? (
-                 <div className="p-16 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
-                    <Users className="w-14 h-14 text-slate-100 mx-auto mb-4" />
-                    <p className="text-sm font-black text-slate-900"> القائمة فارغة </p>
-                    <p className="text-[10px] text-slate-400 font-medium">لا يوجد طلاب مسجلين حالياً</p>
-                 </div>
-               ) : (
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredStudents.map((s, idx) => (
-                      <div key={s.id} onClick={() => navigate(`/students/${s.id}`)} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-lg transition-all duration-300 group flex items-center justify-between cursor-pointer">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-all shadow-sm shrink-0">
-                            {idx + 1}
+                 {filteredStudents.length === 0 ? (
+                   <div className="p-16 text-center bg-slate-50 rounded-[32px] border border-dashed border-slate-200">
+                      <Users className="w-14 h-14 text-slate-100 mx-auto mb-4" />
+                      <p className="text-sm font-black text-slate-900"> القائمة فارغة </p>
+                      <p className="text-[10px] text-slate-400 font-medium">لا يوجد طلاب مسجلين حالياً</p>
+                   </div>
+                 ) : (
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filteredStudents.map((s, idx) => (
+                        <div key={s.id} onClick={() => navigate(`/students/${s.id}`)} className="p-5 rounded-2xl bg-slate-50 border border-slate-100 hover:bg-white hover:shadow-lg transition-all duration-300 group flex items-center justify-between cursor-pointer">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-[10px] font-black text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-all shadow-sm shrink-0">
+                              {idx + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">{s.name}</h3>
+                              <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none mt-1">طالب منتظم</p>
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">{s.name}</h3>
-                            <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none mt-1">طالب منتظم</p>
-                          </div>
+                          <ChevronLeft className="w-4 h-4 text-slate-200 group-hover:text-indigo-600 transition-colors" />
                         </div>
-                        <ChevronLeft className="w-4 h-4 text-slate-200 group-hover:text-indigo-600 transition-colors" />
-                      </div>
-                    ))}
-                 </div>
-               )}
-            </section>
+                      ))}
+                   </div>
+                 )}
+              </section>
           </div>
 
           <div className="space-y-8">
