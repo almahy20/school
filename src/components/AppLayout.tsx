@@ -120,6 +120,9 @@ function MandatoryNotifications() {
     }
   };
 
+  // Disabling this modal as per user request (it was found annoying)
+  return null;
+  
   if (!show || (isSubscribed && isPWA && backgroundAllowed)) return null;
 
   return (
@@ -264,8 +267,8 @@ export default function AppLayout({ children }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
-  const defaultLogo = "https://mecutwhreywjwstirpka.supabase.co/storage/v1/object/public/branding/logo.png";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo, themeColor: '#1A3C8F' });
+  const defaultLogo = "";
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
 
   useEffect(() => {
     const fetchBranding = async () => {
@@ -273,7 +276,7 @@ export default function AppLayout({ children }: Props) {
         if (user?.schoolId) {
           const { data, error } = await supabase
             .from('schools')
-            .select('name, logo_url, icon_url, theme_color')
+            .select('name, logo_url')
             .eq('id', user.schoolId)
             .maybeSingle();
             
@@ -284,14 +287,14 @@ export default function AppLayout({ children }: Props) {
 
           if (data) {
             const timestamp = Date.now();
-            const logo = data.icon_url || data.logo_url || '';
+            const logo = data.logo_url || '';
             const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
 
-            setSchoolBranding({
+            setSchoolBranding(prev => ({
+              ...prev,
               name: data.name,
               logo: logoWithCacheBust,
-              themeColor: data.theme_color
-            });
+            }));
           }
         }
       } catch (err) {
@@ -346,7 +349,7 @@ export default function AppLayout({ children }: Props) {
       {/* Mobile Glass Header */}
       <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden" style={{ backgroundColor: schoolBranding.themeColor || '#1A3C8F' }}>
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900">
             {schoolBranding.logo ? (
               <img 
                 src={schoolBranding.logo} 
@@ -402,7 +405,7 @@ export default function AppLayout({ children }: Props) {
         {/* Desktop Header Navigation */}
         <div className="hidden lg:flex items-center justify-between px-12 py-8 relative z-50">
            <div className="flex items-center gap-4">
-              <div className="p-1 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border" style={{ backgroundColor: `${schoolBranding.themeColor || '#1A3C8F'}10`, color: schoolBranding.themeColor || '#1A3C8F', borderColor: `${schoolBranding.themeColor || '#1A3C8F'}20` }}>
+              <div className="p-1 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-600 border-slate-200">
                  نظام الإدارة الذكي — {schoolBranding.name}
               </div>
            </div>

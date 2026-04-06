@@ -1,485 +1,329 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth, AppRole } from '@/contexts/AuthContext';
-import { Shield, Users, Phone, Trash2, Edit2, Ban, CheckCircle, Search, X, Save, UserPlus, ShieldCheck, UserCheck } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
+import { AppRole } from '@/types/auth';
+import { 
+  ShieldCheck, Users, Phone, Trash2, Edit2, Ban, 
+  CheckCircle, Search, X, Save, UserPlus, ShieldPlus, 
+  UserCheck, ShieldAlert, MoreHorizontal, LinkIcon 
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-
-interface ManagedUser {
-  id: string;
-  fullName: string;
-  phone: string;
-  role: AppRole;
-  banned: boolean;
-  approvalStatus: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-}
-
-async function callAdminApi(action: string, userId?: string, data?: Record<string, unknown>) {
-  const { data: { session } } = await supabase.auth.getSession();
-  const res = await supabase.functions.invoke('admin-users', {
-    body: { action, userId, data },
-  });
-  if (res.error) throw new Error(res.error.message);
-  if (res.data?.error) throw new Error(res.data.error);
-  return res.data;
-}
+import { 
+  useUsers, 
+  useCreateUser, 
+  useDeleteUser, 
+  useUpdateUserRole, 
+  useUpdateUserStatus,
+  useUpdateUserProfile
+} from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 export default function UsersManagementPage() {
-  const { user } = useAuth();
+  const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [users, setUsers] = useState<ManagedUser[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ fullName: '', phone: '' });
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ fullName: '', phone: '', password: '', role: 'parent' as AppRole });
-  const [createLoading, setCreateLoading] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      // If not super admin, we need a schoolId
-      if (!user?.isSuperAdmin && !user?.schoolId) {
-        setLoading(false);
-        return;
-      }
-      
-      const profileQuery = supabase.from('profiles').select('*');
-      const roleQuery = supabase.from('user_roles').select('*');
-      
-      if (!user?.isSuperAdmin && user?.schoolId) {
-        profileQuery.eq('school_id', user.schoolId);
-        roleQuery.eq('school_id', user.schoolId);
-      }
+  // ── Queries ──
+  const { 
+    data: users = [], 
+    isLoading: loading, 
+    error, 
+    refetch 
+  } = useUsers();
 
-      const { data: profiles } = await profileQuery;
-      const { data: roles } = await roleQuery;
-      const authData = await callAdminApi('list');
+  // ── Mutations ──
+  const createUserMutation = useCreateUser();
+  const deleteUserMutation = useDeleteUser();
+  const updateRoleMutation = useUpdateUserRole();
+  const updateStatusMutation = useUpdateUserStatus();
+  const updateProfileMutation = useUpdateUserProfile();
 
-      if (profiles && roles) {
-        const merged: ManagedUser[] = profiles.map((p) => {
-          const userRole = roles.find((r) => r.user_id === p.id);
-          const authUser = authData?.users?.find((u: any) => u.id === p.id);
-          return {
-            id: p.id,
-            fullName: p.full_name || '',
-            phone: p.phone || '',
-            role: (userRole?.role as AppRole) || 'parent',
-            banned: !!authUser?.banned_until && new Date(authUser.banned_until) > new Date(),
-            approvalStatus: (userRole?.approval_status as any) || 'approved',
-            createdAt: p.created_at,
-          };
-        });
-        setUsers(merged);
-      }
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-    }
-    setLoading(false);
-  }, [toast, user?.schoolId]);
-
-  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => 
+      u.fullName.toLowerCase().includes(search.toLowerCase()) || 
+      u.phone.includes(search)
+    );
+  }, [users, search]);
 
   const handleDelete = async (userId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟')) return;
-    setActionLoading(userId);
+    if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً من قاعدة البيانات والخدمات السحابية؟')) return;
     try {
-      await callAdminApi('delete', userId);
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      toast({ title: 'تم الحذف', description: 'تم حذف المستخدم بنجاح' });
+      await deleteUserMutation.mutateAsync(userId);
+      toast({ title: 'تم الحذف بنجاح' });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setActionLoading(null);
   };
 
   const handleRoleChange = async (userId: string, newRole: AppRole) => {
-    setActionLoading(userId);
     try {
-      await callAdminApi('update_role', userId, { role: newRole });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
-      toast({ title: 'تم التحديث', description: 'تم تغيير الدور بنجاح' });
+      await updateRoleMutation.mutateAsync({ userId, role: newRole });
+      toast({ title: 'تم تغيير الرتبة بنجاح' });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setActionLoading(null);
   };
 
-  const handleBanToggle = async (userId: string, currentlyBanned: boolean) => {
-    setActionLoading(userId);
+  const handleStatusChange = async (userId: string, status: 'approved' | 'rejected') => {
     try {
-      await callAdminApi('ban', userId, { banned: !currentlyBanned });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, banned: !currentlyBanned } : u));
-      toast({ title: 'تم التحديث', description: currentlyBanned ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب' });
+      await updateStatusMutation.mutateAsync({ userId, status });
+      toast({ title: status === 'approved' ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب' });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setActionLoading(null);
   };
 
-  const handleApprove = async (userId: string, status: 'approved' | 'rejected') => {
-    setActionLoading(userId);
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      // Direct supabase update for role status if admin-users function doesn't handle it yet
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ approval_status: status })
-        .eq('user_id', userId);
-      
-      if (error) throw error;
-
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, approvalStatus: status } : u));
-      toast({ 
-        title: status === 'approved' ? 'تمت الموافقة' : 'تم الرفض', 
-        description: status === 'approved' ? 'تم تفعيل صلاحيات المستخدم بنجاح' : 'تم رفض طلب الانضمام' 
-      });
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-    }
-    setActionLoading(null);
-  };
-
-  const startEdit = (u: ManagedUser) => {
-    setEditingId(u.id);
-    setEditForm({ fullName: u.fullName, phone: u.phone });
-  };
-
-  const saveEdit = async (userId: string) => {
-    setActionLoading(userId);
-    try {
-      await callAdminApi('update_profile', userId, { full_name: editForm.fullName, phone: editForm.phone });
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, fullName: editForm.fullName, phone: editForm.phone } : u));
-      setEditingId(null);
-      toast({ title: 'تم الحفظ', description: 'تم تحديث البيانات بنجاح' });
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-    }
-    setActionLoading(null);
-  };
-
-  const handleCreateUser = async () => {
-    if (!createForm.phone.trim() || !createForm.password.trim()) {
-      toast({ title: 'خطأ', description: 'يرجى إدخال رقم الهاتف وكلمة المرور', variant: 'destructive' });
-      return;
-    }
-    setCreateLoading(true);
-    try {
-      await callAdminApi('create_user', undefined, {
-        phone: createForm.phone,
-        password: createForm.password,
-        full_name: createForm.fullName,
-        role: createForm.role,
-        school_id: user?.schoolId,
-      });
-      toast({ title: 'تم الإنشاء', description: 'تم إنشاء المستخدم بنجاح' });
+      await createUserMutation.mutateAsync(createForm);
+      toast({ title: 'تم إنشاء المستخدم بنجاح' });
       setShowCreateDialog(false);
       setCreateForm({ fullName: '', phone: '', password: '', role: 'parent' });
-      fetchUsers();
+    } catch (err: any) {
+      toast({ title: 'خطأ في الإنشاء', description: err.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUpdateProfile = async (userId: string) => {
+    try {
+      await updateProfileMutation.mutateAsync({ 
+        userId, 
+        full_name: editForm.fullName, 
+        phone: editForm.phone 
+      });
+      toast({ title: 'تم تحديث البيانات بنجاح' });
+      setEditingId(null);
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setCreateLoading(false);
   };
-
-  const roleLabel = (role: AppRole) => {
-    switch (role) {
-      case 'admin': return 'مدير النظام';
-      case 'teacher': return 'معلم';
-      case 'parent': return 'ولي أمر';
-    }
-  };
-
-  const filtered = users.filter(u =>
-    u.fullName.includes(search) || u.phone.includes(search) || roleLabel(u.role).includes(search)
-  ).sort((a,b) => a.fullName.localeCompare(b.fullName));
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right">
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight">إدارة المستخدمين</h1>
-            <p className="text-sm text-slate-400 font-medium tracking-wide">التحكم في هويات وصلاحيات الدخول للنظام</p>
-          </div>
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-100 rounded-2xl shadow-sm">
-              <Users className="w-5 h-5 text-primary" />
-              <span className="text-lg font-bold text-slate-900">{users.length}</span>
-              <span className="text-xs font-medium text-slate-400">مستخدم</span>
+          <div className="space-y-4 relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
+                 <ShieldCheck className="w-7 h-7" />
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">إدارة المستخدمين والصلاحيات</h1>
             </div>
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-primary text-white font-bold text-sm shadow-lg shadow-primary/10 hover:shadow-xl hover:translate-y-[-2px] transition-all"
-            >
-              <UserPlus className="w-5 h-5" />
-              إضافة مستخدم
-            </button>
+            <p className="text-slate-500 font-medium text-lg pr-1">تحكم كامل في الكادر التعليمي، الإداري، وأولياء الأمور داخل منظومة {currentUser?.schoolId && 'المدرسة'}.</p>
+          </div>
+
+          <div className="flex items-center gap-4 relative z-10">
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="h-16 px-8 rounded-3xl bg-slate-900 text-white font-black text-xs hover:scale-105 active:scale-95 transition-all gap-3 shadow-2xl shadow-slate-200">
+                  <UserPlus className="w-5 h-5 text-indigo-400" /> إضافة مستخدم جديد
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px] rounded-[40px] p-0 border-none bg-transparent">
+                 <div className="bg-white p-12 space-y-8 text-right rounded-[40px]">
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">إنشاء حساب جديد</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleCreate} className="space-y-6">
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الاسم الكامل</label>
+                          <Input value={createForm.fullName} onChange={e => setCreateForm({...createForm, fullName: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" required />
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم الهاتف</label>
+                          <Input value={createForm.phone} onChange={e => setCreateForm({...createForm, phone: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" required />
+                       </div>
+                       <div className="space-y-1.5">
+                          <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">كلمة المرور</label>
+                          <Input type="password" value={createForm.password} onChange={e => setCreateForm({...createForm, password: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" required />
+                       </div>
+                       <div className="space-y-1.5 pt-2">
+                          <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest block mb-3">رتبة المستخدم</label>
+                          <div className="flex flex-wrap gap-2 justify-end">
+                             {['admin', 'teacher', 'parent'].map(r => (
+                               <button type="button" key={r} onClick={() => setCreateForm({...createForm, role: r as AppRole})}
+                                 className={cn("px-5 py-2 rounded-xl text-[10px] font-black transition-all", createForm.role === r ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-400 hover:bg-slate-200")}>
+                                 {r === 'admin' ? 'إدمن' : r === 'teacher' ? 'معلم' : 'ولي أمر'}
+                               </button>
+                             ))}
+                          </div>
+                       </div>
+                       <Button type="submit" disabled={createUserMutation.isPending} className="w-full h-14 mt-6 rounded-2xl bg-indigo-600 text-white font-black text-sm shadow-xl shadow-indigo-100">
+                         {createUserMutation.isPending ? 'جاري الإنشاء...' : 'إنشاء الحساب الآن'}
+                       </Button>
+                    </form>
+                 </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </header>
 
-        {/* Search */}
-        <div className="relative group max-w-2xl w-full">
-          <Search className="w-5 h-5 absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-primary transition-colors" />
-          <input
-            type="text"
-            placeholder="ابحث بالاسم، رقم الهاتف، أو الدور..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pr-14 pl-6 py-4 rounded-2xl border border-slate-100 bg-white text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all shadow-sm"
-          />
+        <div className="relative group w-full lg:max-w-2xl self-start">
+           <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+           <Input 
+             placeholder="البحث بالاسم أو رقم الهاتف..." 
+             value={search}
+             onChange={e => setSearch(e.target.value)}
+             className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white text-base font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5 transition-all text-right" 
+           />
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[40px] border border-slate-100 shadow-sm">
-            <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin mb-4" />
-            <p className="text-slate-400 text-sm font-medium">جاري مزامنة قاعدة البيانات...</p>
+        <QueryStateHandler
+          loading={loading}
+          error={error}
+          data={users}
+          onRetry={refetch}
+          isEmpty={filteredUsers.length === 0}
+          loadingMessage="جاري مزامنة بيانات الكوادر..."
+          emptyMessage="لم يتم العثور على مستخدمين يطابقون بحثك."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+             {filteredUsers.map(u => (
+               <ManagedUserCard 
+                 key={u.id} 
+                 user={u} 
+                 currentAdminId={currentUser?.id}
+                 onDelete={handleDelete}
+                 onRoleChange={handleRoleChange}
+                 onStatusChange={handleStatusChange}
+                 onEditProfile={(u) => { setEditingId(u.id); setEditForm({ fullName: u.fullName, phone: u.phone }); }}
+                 isUpdating={deleteUserMutation.isPending || updateRoleMutation.isPending || updateStatusMutation.isPending}
+               />
+             ))}
           </div>
-        ) : (
-          <div className="bg-white border border-slate-100 shadow-sm rounded-[40px] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-100">
-                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">هوية المستخدم</th>
-                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">التواصل</th>
-                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">الدور الصلاحيات</th>
-                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">حالة الحساب</th>
-                    <th className="px-8 py-6 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">إجراءات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {filtered.map((u) => (
-                    <tr key={u.id} className={`group transition-all ${u.banned ? 'bg-rose-50/20' : 'hover:bg-slate-50/30'}`}>
-                      <td className="px-8 py-6">
-                        {editingId === u.id ? (
-                          <input
-                            value={editForm.fullName}
-                            onChange={e => setEditForm(f => ({ ...f, fullName: e.target.value }))}
-                            className="w-full px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 font-bold focus:outline-none focus:border-primary transition-all"
-                          />
-                        ) : (
-                          <div className="flex flex-col">
-                            <span className="text-lg font-bold text-slate-900 group-hover:text-primary transition-colors">
-                              {u.fullName || '—'}
-                            </span>
-                            {u.id === user?.id && <span className="text-[10px] font-bold text-primary uppercase tracking-widest mt-1">حسابك الحالي</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-8 py-6" dir="ltr">
-                        {editingId === u.id ? (
-                          <input
-                            value={editForm.phone}
-                            onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
-                            className="w-full px-6 py-3 rounded-xl border border-slate-200 bg-white text-slate-900 font-bold focus:outline-none focus:border-primary transition-all"
-                            dir="ltr"
-                          />
-                        ) : (
-                          <span className="text-base font-medium text-slate-400 group-hover:text-slate-700 transition-colors">
-                            {u.phone || '—'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-8 py-6">
-                        {u.id === user?.id ? (
-                          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-primary/5 text-primary border border-primary/10">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            {roleLabel(u.role)}
-                          </div>
-                        ) : (
-                          <div className="relative max-w-[150px]">
-                            <select
-                              value={u.role}
-                              onChange={e => handleRoleChange(u.id, e.target.value as AppRole)}
-                              disabled={actionLoading === u.id}
-                              className="w-full px-4 py-2.5 rounded-xl border border-slate-100 bg-slate-50 text-slate-900 font-bold text-xs focus:outline-none focus:border-primary/20 appearance-none cursor-pointer disabled:opacity-50 hover:bg-white transition-all shadow-inner"
-                            >
-                              <option value="admin">مدير نظام</option>
-                              <option value="teacher">معلم / موظف</option>
-                              <option value="parent">ولي أمر</option>
-                            </select>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-8 py-6 text-center">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold ${u.banned ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${u.banned ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`} />
-                            {u.banned ? 'محظور' : 'نشط'}
-                          </div>
-                          
-                          {u.approvalStatus === 'pending' && (
-                            <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest bg-amber-50 px-2 py-1 rounded-lg border border-amber-100 animate-pulse">بانتظار الموافقة</span>
-                          )}
-                          {u.approvalStatus === 'rejected' && (
-                            <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest bg-rose-50 px-2 py-1 rounded-lg border border-rose-100">مرفوض</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 text-center">
-                        {u.id === user?.id ? (
-                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">إدارة ذاتية</span>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            {u.approvalStatus === 'pending' && (
-                              <>
-                                <button
-                                  onClick={() => handleApprove(u.id, 'approved')}
-                                  disabled={actionLoading === u.id}
-                                  className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
-                                  title="موافقة"
-                                >
-                                  <UserCheck className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={() => handleApprove(u.id, 'rejected')}
-                                  disabled={actionLoading === u.id}
-                                  className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all"
-                                  title="رفض"
-                                >
-                                  <X className="w-5 h-5" />
-                                </button>
-                              </>
-                            )}
-                            {editingId === u.id ? (
-                              <>
-                                <button
-                                  onClick={() => saveEdit(u.id)}
-                                  disabled={actionLoading === u.id}
-                                  className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-500/10"
-                                >
-                                  <Save className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={() => setEditingId(null)}
-                                  className="w-10 h-10 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-all"
-                                >
-                                  <X className="w-5 h-5" />
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => startEdit(u)}
-                                  className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-primary hover:bg-primary/5 transition-all"
-                                  title="تعديل"
-                                >
-                                  <Edit2 className="w-4.5 h-4.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleBanToggle(u.id, u.banned)}
-                                  disabled={actionLoading === u.id}
-                                  className={`w-10 h-10 rounded-xl transition-all ${u.banned ? 'bg-emerald-50 text-emerald-500 hover:bg-emerald-500 hover:text-white' : 'bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white'}`}
-                                  title={u.banned ? 'تفعيل' : 'حظر'}
-                                >
-                                  {u.banned ? <UserCheck className="w-5 h-5" /> : <Ban className="w-5 h-5" />}
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(u.id)}
-                                  disabled={actionLoading === u.id}
-                                  className="w-10 h-10 rounded-xl bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all"
-                                  title="حذف"
-                                >
-                                  <Trash2 className="w-4.5 h-4.5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {filtered.length === 0 && (
-                <div className="py-24 text-center">
-                  <div className="w-20 h-20 rounded-full bg-slate-50 mx-auto flex items-center justify-center mb-6">
-                    <Search className="w-10 h-10 text-slate-200" />
-                  </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-2">لا توجد نتائج</h3>
-                  <p className="text-slate-400 font-medium">لم نتمكن من العثور على مستخدمين يطابقون استفسارك.</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        </QueryStateHandler>
       </div>
 
-      {showCreateDialog && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4 text-right animate-in fade-in" onClick={() => setShowCreateDialog(false)}>
-          <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[32px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-            <h2 className="text-2xl font-bold text-slate-900 mb-8 tracking-tight">إضافة مستخدم جديد للنظام</h2>
-            
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 pr-1">الاسم الكامل *</label>
-                <input
-                  value={createForm.fullName}
-                  onChange={e => setCreateForm(f => ({ ...f, fullName: e.target.value }))}
-                  className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all shadow-inner"
-                  placeholder="الاسم الرباعي للمستخدم"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 pr-1">رقم الهاتف *</label>
-                  <input
-                    value={createForm.phone}
-                    onChange={e => setCreateForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all shadow-inner"
-                    placeholder="05xxxxxxxx"
-                    dir="ltr"
-                  />
+      {editingId && (
+        <Dialog open={!!editingId} onOpenChange={() => setEditingId(null)}>
+           <DialogContent className="sm:max-w-[450px] rounded-[40px] p-0 border-none bg-transparent">
+             <div className="bg-white p-12 space-y-8 text-right rounded-[40px]">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-black text-slate-900 leading-tight">تعديل الملف الشخصي</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-6">
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الاسم الكامل</label>
+                      <Input value={editForm.fullName} onChange={e => setEditForm({...editForm, fullName: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" />
+                   </div>
+                   <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم الهاتف</label>
+                      <Input value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} className="h-12 rounded-xl bg-slate-50 border-none font-bold" />
+                   </div>
+                   <div className="flex gap-4 pt-4">
+                      <Button onClick={() => handleUpdateProfile(editingId)} disabled={updateProfileMutation.isPending} className="flex-1 h-12 rounded-xl bg-indigo-600 text-white font-black text-xs shadow-lg">حفظ التغييرات</Button>
+                      <Button variant="ghost" onClick={() => setEditingId(null)} className="flex-1 h-12 rounded-xl font-black text-xs">إلغاء</Button>
+                   </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 pr-1">كلمة المرور المؤقتة</label>
-                  <input
-                    type="password"
-                    value={createForm.password}
-                    onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
-                    className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all shadow-inner"
-                    placeholder="••••••••"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 pr-1">تحديد صلاحية النظام</label>
-                <select
-                  value={createForm.role}
-                  onChange={e => setCreateForm(f => ({ ...f, role: e.target.value as AppRole }))}
-                  className="w-full px-6 py-4 rounded-2xl border border-slate-100 bg-slate-50 text-slate-900 font-bold focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white transition-all appearance-none shadow-inner"
-                >
-                  <option value="parent">ولي أمر / مستخدم</option>
-                  <option value="teacher">معلم / موظف</option>
-                  <option value="admin">مدير نظام</option>
-                </select>
-              </div>
-
-              <div className="flex gap-4 pt-4">
-                <button
-                  onClick={handleCreateUser}
-                  disabled={createLoading}
-                  className="flex-1 h-16 rounded-2xl bg-primary text-white font-bold text-sm shadow-xl shadow-primary/20 hover:translate-y-[-2px] active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {createLoading ? 'جاري الإنشاء...' : 'تأكيد إنشاء الحساب'}
-                </button>
-                <button 
-                  onClick={() => setShowCreateDialog(false)}
-                  className="flex-1 h-16 rounded-2xl bg-slate-50 text-slate-500 font-bold text-sm hover:bg-slate-100 transition-all"
-                >إلغاء</button>
-              </div>
-            </div>
-          </div>
-        </div>
+             </div>
+           </DialogContent>
+        </Dialog>
       )}
     </AppLayout>
+  );
+}
+
+function ManagedUserCard({ user, currentAdminId, onDelete, onRoleChange, onStatusChange, onEditProfile, isUpdating }: any) {
+  const isMe = user.id === currentAdminId;
+  const roleColors: any = {
+    admin: "bg-indigo-600 text-white shadow-indigo-100",
+    teacher: "bg-emerald-500 text-white shadow-emerald-100",
+    parent: "bg-amber-500 text-white shadow-amber-100"
+  };
+
+  return (
+    <div className="group premium-card p-0 overflow-hidden hover:scale-[1.02] transition-all duration-500 shadow-xl shadow-slate-200/20 text-right">
+       <div className={cn("h-1.5 w-full", roleColors[user.role] || "bg-slate-200")} />
+       <div className="p-8 space-y-6">
+          <div className="flex items-start justify-between">
+             <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200 border border-slate-100 group-hover:rotate-6 transition-transform">
+                   <Users className="w-7 h-7" />
+                </div>
+                <div>
+                   <h3 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors leading-tight mb-1">{user.fullName}</h3>
+                   <div className="flex items-center gap-2">
+                      <Badge className={cn("rounded-lg px-2.5 py-0.5 font-black text-[8px] uppercase tracking-widest border-none", roleColors[user.role])}>
+                         {user.role === 'admin' ? 'مدير نظام' : user.role === 'teacher' ? 'معلم' : 'ولي أمر'}
+                      </Badge>
+                      {isMe && <Badge className="rounded-lg bg-slate-900 text-white font-black text-[8px] uppercase px-2 py-0.5 border-none">أنت</Badge>}
+                   </div>
+                </div>
+             </div>
+             <div className="flex flex-col items-end gap-2">
+                <Badge className={cn(
+                  "rounded-full px-2.5 py-0.5 text-[8px] font-black uppercase border-none",
+                  user.approvalStatus === 'approved' ? "bg-emerald-50 text-emerald-600" : user.approvalStatus === 'pending' ? "bg-amber-50 text-amber-600 animate-pulse" : "bg-rose-50 text-rose-600"
+                )}>
+                   {user.approvalStatus === 'approved' ? 'مفعل' : user.approvalStatus === 'pending' ? 'قيد الانتظار' : 'مرفوض'}
+                </Badge>
+             </div>
+          </div>
+
+          <div className="space-y-2.5 text-[11px] font-bold text-slate-400">
+             <div className="flex items-center gap-3">
+                <Phone className="w-4 h-4 text-slate-200" />
+                <span dir="ltr">{user.phone}</span>
+             </div>
+             <div className="flex items-center gap-3">
+                <ShieldPlus className="w-4 h-4 text-slate-200" />
+                <span>عضو منذ {new Date(user.createdAt).toLocaleDateString('ar-EG')}</span>
+             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
+             <Button variant="ghost" onClick={() => onEditProfile(user)} className="h-10 px-4 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all font-black text-[10px] gap-2">
+                <Edit2 className="w-3.5 h-3.5" /> تعديل
+             </Button>
+             
+             {!isMe && (
+               <>
+                 <Button variant="ghost" 
+                   onClick={() => onRoleChange(user.id, user.role === 'teacher' ? 'admin' : user.role === 'parent' ? 'teacher' : 'parent')}
+                   disabled={isUpdating}
+                   className="h-10 px-4 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all font-black text-[10px] gap-2"
+                 >
+                    <ShieldAlert className="w-3.5 h-3.5" /> ترقية/تغيير
+                 </Button>
+                 
+                 {user.approvalStatus !== 'approved' ? (
+                   <Button variant="ghost" onClick={() => onStatusChange(user.id, 'approved')} disabled={isUpdating}
+                     className="h-10 px-4 rounded-xl text-emerald-500 hover:bg-emerald-50 transition-all font-black text-[10px] gap-2">
+                      <UserCheck className="w-3.5 h-3.5" /> تفعيل
+                   </Button>
+                 ) : (
+                   <Button variant="ghost" onClick={() => onStatusChange(user.id, 'rejected')} disabled={isUpdating}
+                     className="h-10 px-4 rounded-xl text-rose-500 hover:bg-rose-50 transition-all font-black text-[10px] gap-2">
+                      <Ban className="w-3.5 h-3.5" /> تعطيل
+                   </Button>
+                 )}
+
+                 <Button variant="ghost" onClick={() => onDelete(user.id)} disabled={isUpdating}
+                   className="h-10 px-4 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all font-black text-[10px] gap-2">
+                    <Trash2 className="w-3.5 h-3.5" /> حذف
+                 </Button>
+               </>
+             )}
+          </div>
+       </div>
+    </div>
   );
 }

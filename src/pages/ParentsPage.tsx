@@ -1,117 +1,50 @@
 import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useParents, useParentAction, useBranding } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { Phone, User, Eye, X, Search, Users, ArrowLeft, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 const PAGE_SIZE = 15;
 
-interface ParentProfile {
-  id: string;
-  full_name: string;
-  phone: string | null;
-  children: { id: string; name: string; class_name?: string }[];
-}
-
-async function fetchParentsData(schoolId: string | null, isSuperAdmin: boolean) {
-  if (!isSuperAdmin && !schoolId) return { active: [], pending: [] };
-
-  const roleQuery = (supabase as any).from('user_roles').select('*').eq('role', 'parent');
-  const profileQuery = supabase.from('profiles').select('*').order('full_name');
-  const linkQuery = supabase.from('student_parents').select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)');
-  const classQuery = supabase.from('classes').select('id, name');
-
-  if (!isSuperAdmin && schoolId) {
-    roleQuery.eq('school_id', schoolId);
-    profileQuery.eq('school_id', schoolId);
-    linkQuery.eq('school_id', schoolId);
-    classQuery.eq('school_id', schoolId);
-  }
-
-  const { data: roles } = await roleQuery;
-  if (!roles?.length) return { active: [], pending: [] };
-
-  const activeIds = roles.filter((r: any) => r.approval_status !== 'pending' && r.approval_status !== 'rejected').map((r: any) => r.user_id);
-  const pendingIds = roles.filter((r: any) => r.approval_status === 'pending').map((r: any) => r.user_id);
-  const allIds = roles.map((r: any) => r.user_id);
-
-  const [{ data: profiles }, { data: links }, { data: classes }] = await Promise.all([
-    profileQuery.in('id', allIds),
-    linkQuery,
-    classQuery,
-  ]);
-
-  const activeProfiles = (profiles || []).filter(p => activeIds.includes(p.id));
-  const pendingProfiles = (profiles || []).filter(p => pendingIds.includes(p.id));
-
-  const active: ParentProfile[] = activeProfiles.map(p => {
-    const studentLinks = (links || []).filter((l: any) => l.parent_id === p.id);
-    return {
-      id: p.id,
-      full_name: p.full_name,
-      phone: p.phone,
-      children: studentLinks
-        .map((l: any) => l.students)
-        .filter(Boolean)
-        .map((s: any) => ({
-          id: s.id,
-          name: s.name,
-          class_name: classes?.find(c => c.id === s.class_id)?.name,
-        })),
-    };
-  });
-
-  return { active, pending: pendingProfiles };
-}
+// No need for separate fetch function here, moved to useParents hook
 
 export default function ParentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const { data: allParents = [], isLoading: loading, error, refetch, isRefetching } = useParents();
+  const { data: branding } = useBranding();
+  const actionMutation = useParentAction();
   
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [schoolSlug, setSchoolSlug] = useState('');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // ── React Query ──
-  const { data, isLoading: loading } = useQuery({
-    queryKey: ['parents-page', user?.schoolId, user?.isSuperAdmin],
-    queryFn: () => fetchParentsData(user?.schoolId || null, !!user?.isSuperAdmin),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
-  });
+  const { parents, pendingParents } = useMemo(() => ({
+    parents: allParents.filter(p => p.approval_status === 'approved'),
+    pendingParents: allParents.filter(p => p.approval_status === 'pending')
+  }), [allParents]);
 
-  const parents: ParentProfile[] = data?.active || [];
-  const pendingParents: any[] = data?.pending || [];
-
-  useMemo(() => {
-    if (!user?.schoolId) return;
-    (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single()
-      .then(({ data: school }: any) => { if (school) setSchoolSlug(school.slug); });
-  }, [user?.schoolId]);
-
-  const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
-    setActionLoading(userId);
+  const handleAction = async (userRoleId: string, status: 'approved' | 'rejected') => {
     try {
-      const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('user_id', userId);
-      if (error) throw error;
+      await actionMutation.mutateAsync({ userRoleId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على ولي الأمر' : 'تم رفض الطلب' });
-      queryClient.invalidateQueries({ queryKey: ['parents-page', user?.schoolId] });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setActionLoading(null);
   };
 
   const copyLink = () => {
-    const link = `${window.location.origin}/register/parents/${schoolSlug}`;
+    if (!branding?.slug) {
+      toast({ title: 'تنبيه', description: 'جاري تحميل بيانات المدرسة...', variant: 'default' });
+      return;
+    }
+    const link = `${window.location.origin}/register/parents/${branding.slug}`;
     navigator.clipboard.writeText(link);
     toast({ title: 'تم النسخ', description: 'تم نسخ رابط التسجيل للحافظة' });
   };
@@ -180,10 +113,18 @@ export default function ParentsPage() {
                     <h3 className="font-bold text-slate-900 text-sm mb-1">{u.full_name}</h3>
                     <p className="text-xs text-slate-500 mb-4" dir="ltr">{u.phone}</p>
                     <div className="flex gap-2">
-                      <Button onClick={() => handleAction(u.id, 'approved')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                      <Button 
+                        onClick={() => handleAction(u.user_role_id!, 'approved')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0"
+                      >
                         <ShieldCheck className="w-3.5 h-3.5" /> قبول
                       </Button>
-                      <Button onClick={() => handleAction(u.id, 'rejected')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                      <Button 
+                        onClick={() => handleAction(u.user_role_id!, 'rejected')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0"
+                      >
                         <XCircle className="w-3.5 h-3.5" /> رفض
                       </Button>
                     </div>
@@ -201,21 +142,17 @@ export default function ParentsPage() {
             className="w-full pr-14 pl-6 py-4 rounded-2xl border border-slate-100 bg-white text-slate-900 font-medium placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary/20 transition-all shadow-sm" />
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 gap-6 bg-white rounded-[40px] border border-slate-100 shadow-sm">
-            <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
-            <p className="text-slate-400 text-sm font-medium">جاري تحميل البيانات...</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white border border-slate-100 p-24 text-center rounded-[40px] shadow-sm">
-            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-              <User className="w-10 h-10" />
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">لا توجد نتائج</h2>
-            <p className="text-slate-400 font-medium max-w-sm mx-auto">لم نتمكن من العثور على أي أولياء أمور يطابقون بحثك.</p>
-          </div>
-        ) : (
-          <>
+        <QueryStateHandler
+          loading={loading}
+          error={error}
+          data={allParents}
+          onRetry={refetch}
+          isRefetching={isRefetching}
+          loadingMessage="جاري مزامنة بيانات أولياء الأمور..."
+          errorMessage="فشل تحميل قائمة أولياء الأمور."
+          isEmpty={filtered.length === 0}
+        >
+          <div className="space-y-10">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
                 {totalItems} ولي أمر — الصفحة {page}
@@ -223,7 +160,7 @@ export default function ParentsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {paginated.map(p => (
-                <ParentCard key={p.id} parent={p} onClick={() => navigate(`/parents/${p.id}`)} />
+                <ParentCard key={p.id} parent={p as any} onClick={() => navigate(`/parents/${p.id}`)} />
               ))}
             </div>
             <DataPagination
@@ -232,8 +169,8 @@ export default function ParentsPage() {
               pageSize={PAGE_SIZE}
               onPageChange={setPage}
             />
-          </>
-        )}
+          </div>
+        </QueryStateHandler>
       </div>
     </AppLayout>
   );

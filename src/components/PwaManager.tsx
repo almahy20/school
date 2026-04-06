@@ -9,7 +9,7 @@ export default function PwaManager() {
     const updateManifest = async () => {
       let name = "المدرسة الذكية";
       let shortName = "المدرسة";
-      const defaultIcon = "https://mecutwhreywjwstirpka.supabase.co/storage/v1/object/public/branding/logo.png";
+      const defaultIcon = "/icons/icon-192.png";
       let icon = defaultIcon;
       let slug = "";
       let themeColor = "#1e293b";
@@ -19,7 +19,7 @@ export default function PwaManager() {
         try {
           const { data, error } = await supabase
             .from('schools')
-            .select('name, slug, logo_url, icon_url, theme_color')
+            .select('name, slug, logo_url')
             .eq('id', user.schoolId)
             .maybeSingle();
           
@@ -29,9 +29,9 @@ export default function PwaManager() {
             const school = data as any;
             name = school.name;
             shortName = school.name.split(' ')[0];
-            icon = school.icon_url || school.logo_url || "/icons/icon-192.png";
+            icon = school.logo_url || "/icons/icon-192.png";
             slug = school.slug;
-            themeColor = school.theme_color || "#1e293b";
+            themeColor = "#1e293b";
           }
         } catch (err) {
           console.error('Fatal error in PwaManager fetch:', err);
@@ -50,7 +50,7 @@ export default function PwaManager() {
            try {
              const { data, error } = await supabase
               .from('schools')
-              .select('name, slug, logo_url, icon_url, theme_color')
+              .select('name, slug, logo_url')
               .eq('slug', finalSlug)
               .maybeSingle();
             
@@ -60,9 +60,9 @@ export default function PwaManager() {
               const school = data as any;
               name = school.name;
               shortName = school.name.split(' ')[0];
-              icon = school.icon_url || school.logo_url || "/icons/icon-192.png";
+              icon = school.logo_url || "/icons/icon-192.png";
               slug = school.slug;
-              themeColor = school.theme_color || "#1e293b";
+              themeColor = "#1e293b";
             }
           } catch (err) {
             console.error('Fatal error in PwaManager fetch by slug:', err);

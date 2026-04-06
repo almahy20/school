@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import {
   Upload, CheckCircle2, Loader2, Phone, ArrowLeft,
-  BookOpen, Clock, AlertCircle, ExternalLink
+  BookOpen, Clock, AlertCircle, ExternalLink, ShieldCheck
 } from 'lucide-react';
+import { useOrder, useUpdateOrder } from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 const PLAN_LABELS: Record<string, { name: string; price: number; days: number }> = {
-  monthly:     { name: 'شهرية',        price: 500,  days: 30 },
-  half_yearly: { name: 'نصف سنوية',    price: 999,  days: 180 },
-  yearly:      { name: 'سنوية',        price: 1799, days: 365 },
+  monthly:     { name: 'الباقة الشهرية',        price: 500,  days: 30 },
+  half_yearly: { name: 'الباقة النصف سنوية',    price: 999,  days: 180 },
+  yearly:      { name: 'الباقة السنوية',        price: 1799, days: 365 },
 };
 
 const DEVELOPER_WHATSAPP = '201029082772';
@@ -17,44 +19,39 @@ const DEVELOPER_WHATSAPP = '201029082772';
 export default function PaymentPage() {
   const { orderId } = useParams();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState('');
   const [receiptNote, setReceiptNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  useEffect(() => {
-    if (!orderId) { navigate('/'); return; }
-    (supabase as any)
-      .from('school_orders')
-      .select('*')
-      .eq('id', orderId)
-      .single()
-      .then(({ data, error: err }: any) => {
-        if (err || !data) { navigate('/'); return; }
-        setOrder(data);
-        setLoading(false);
-      });
-  }, [orderId, navigate]);
+  // ── Queries ──
+  const { data: order, isLoading, error: orderError, refetch } = useOrder(orderId);
+  const updateOrderMutation = useUpdateOrder();
+
+  const planInfo = useMemo(() => 
+    order?.plan ? PLAN_LABELS[order.plan] : { name: order?.package_type || 'باقة مخصصة', price: 0, days: 0 },
+    [order?.plan, order?.package_type]
+  );
 
   const handleReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
     setReceiptPreview(URL.createObjectURL(file));
+    setErrorMessage('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!receiptFile) { setError('يرجى رفع صورة الإيصال'); return; }
-    setSubmitting(true);
-    setError('');
+    if (!receiptFile) { setErrorMessage('يرجى اختيار صورة الإيصال أولاً لإتمام العملية.'); return; }
+    if (!orderId) return;
+
+    setErrorMessage('');
 
     try {
-      // Upload receipt to Supabase Storage
+      // 1. Upload receipt to Storage
       const ext = receiptFile.name.split('.').pop();
       const path = `receipts/${orderId}-${Date.now()}.${ext}`;
       const { error: uploadErr } = await supabase.storage
@@ -66,257 +63,264 @@ export default function PaymentPage() {
       const { data: urlData } = supabase.storage.from('school-assets').getPublicUrl(path);
       const receiptUrl = urlData.publicUrl;
 
-      // Update order with receipt
-      const { error: updateErr } = await (supabase as any)
-        .from('school_orders')
-        .update({
-          receipt_url: receiptUrl,
-          receipt_note: receiptNote.trim() || null,
-        })
-        .eq('id', orderId);
+      // 2. Update order with receipt metadata
+      await updateOrderMutation.mutateAsync({
+        id: orderId,
+        receipt_url: receiptUrl,
+        receipt_note: receiptNote.trim() || null,
+      });
 
-      if (updateErr) throw updateErr;
-
-      // Build WhatsApp notification message for developer
-      const plan = PLAN_LABELS[order.plan] || { name: order.plan, price: 0, days: 0 };
+      // 3. Build & Send WhatsApp notification
       const waMsg = encodeURIComponent(
-        `🏫 *طلب مدرسة جديد — إدارة عربية*\n\n` +
-        `📌 *المدرسة:* ${order.school_name}\n` +
-        `👤 *المدير:* ${order.admin_name}\n` +
-        `📱 *الهاتف:* ${order.admin_phone}\n` +
-        `💬 *واتساب:* ${order.admin_whatsapp}\n` +
-        `📦 *الباقة:* ${plan.name} (${plan.price} ج.م)\n` +
-        `🗓️ *المدة:* ${plan.days} يوم\n\n` +
-        `🧾 *الإيصال:* ${receiptUrl}\n` +
+        `🏫 *طلب مدرسة جديد تم دفعه*\n\n` +
+        `📌 *المدرسة:* ${order?.school_name}\n` +
+        `👤 *المدير:* ${order?.admin_name}\n` +
+        `📱 *الهاتف:* ${order?.admin_phone}\n` +
+        `📦 *الباقة:* ${planInfo.name} (${planInfo.price} ج.م)\n\n` +
+        `🧾 *رابط الإيصال:* ${receiptUrl}\n` +
         (receiptNote ? `📝 *ملاحظة:* ${receiptNote}\n` : '') +
-        `\n✅ يرجى مراجعة الطلب وتفعيل المدرسة من لوحة التحكم.`
+        `\n⚠️ يرجى التفعيل من لوحة تحكم السوبر أدمن.`
       );
 
-      // Open WhatsApp for developer notification
       window.open(`https://wa.me/${DEVELOPER_WHATSAPP}?text=${waMsg}`, '_blank');
-
       setSubmitted(true);
     } catch (err: any) {
-      setError(err.message || 'حدث خطأ، يرجى المحاولة مجدداً');
+      setErrorMessage(err.message || 'فشلت عملية الإرسال، يرجى المحاولة مرة أخرى أو التواصل مع الدعم التقني.');
     }
-    setSubmitting(false);
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0f1e] flex items-center justify-center" dir="rtl">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 text-indigo-400 animate-spin mx-auto mb-4" />
-          <p className="text-white/40 font-bold">جاري تحميل بيانات الطلب...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const planInfo = PLAN_LABELS[order?.plan] || { name: order?.plan, price: 0, days: 0 };
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-[#0a0f1e] flex items-center justify-center p-6" dir="rtl">
-        <div className="max-w-lg w-full text-center animate-in fade-in zoom-in-95">
-          <div className="w-24 h-24 rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-8">
-            <CheckCircle2 className="w-14 h-14 text-emerald-400" />
+      <div className="min-h-screen bg-[#060a14] flex items-center justify-center p-8 sm:p-12" dir="rtl">
+        <div className="max-w-xl w-full text-center space-y-10 animate-in fade-in zoom-in-95 duration-700">
+          <div className="w-32 h-32 rounded-[40px] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(16,185,129,0.1)]">
+            <CheckCircle2 className="w-16 h-16 text-emerald-400" />
           </div>
-          <h1 className="text-3xl font-black text-white mb-4">تم إرسال الطلب بنجاح! 🎉</h1>
-          <div className="bg-[#0d1526] border border-white/10 rounded-3xl p-8 mb-8 text-right">
-            <div className="flex items-start gap-3 mb-5">
-              <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-white font-bold mb-1">جاري مراجعة الدفع</p>
-                <p className="text-white/50 text-sm leading-relaxed">
-                  سيتم مراجعة إيصال الدفع والتواصل معك على واتساب خلال <strong className="text-white">24 ساعة</strong> لتفعيل المدرسة وإرسال بيانات الدخول.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Phone className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-white font-bold mb-1">واتساب المطور</p>
-                <a
-                  href={`https://wa.me/${DEVELOPER_WHATSAPP}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-indigo-400 hover:text-indigo-300 text-sm font-bold flex items-center gap-1.5 transition-colors"
-                >
-                  للتواصل المباشر اضغط هنا <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            </div>
+          
+          <div className="space-y-4">
+            <h1 className="text-4xl font-black text-white tracking-tight">تم إرسال الطلب بنجاح!</h1>
+            <p className="text-white/40 font-medium text-lg">سجلنا طلبك وسنقوم بفحص إيصال الدفع فوراً.</p>
           </div>
 
-          <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-2xl p-4 mb-8">
-            <p className="text-indigo-300 text-sm font-medium">
-              📋 رقم طلبك: <span className="font-mono text-white">{orderId}</span>
-              <br />احتفظ بهذا الرقم للمراجعة.
-            </p>
+          <div className="bg-[#0b1221] border border-white/5 rounded-[40px] p-10 text-right space-y-8 shadow-2xl relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+             
+             <div className="flex items-start gap-5 group">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0 border border-amber-500/10">
+                   <Clock className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-white font-black text-lg mb-1.5">مرحلة المراجعة</p>
+                  <p className="text-white/40 text-sm leading-relaxed">
+                    يتم مراجعة الدفعات يدوياً لضمان أعلى مستويات الأمان. سيتم تفعيل حساب مدرستك خلال <strong className="text-emerald-400">2-4 ساعات</strong> كحد أقصى.
+                  </p>
+                </div>
+             </div>
+
+             <div className="flex items-start gap-5">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 shrink-0 border border-indigo-500/10">
+                   <Phone className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-white font-black text-lg mb-1.5">الدعم الفني المباشر</p>
+                  <a
+                    href={`https://wa.me/${DEVELOPER_WHATSAPP}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-indigo-400 hover:text-white text-sm font-black flex items-center gap-2 transition-all group"
+                  >
+                    للتواصل المباشر مع فريق التفعيل اضغط هنا <ExternalLink className="w-4 h-4 group-hover:translate-x-[-4px]" />
+                  </a>
+                </div>
+             </div>
           </div>
 
-          <button
-            onClick={() => navigate('/')}
-            className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 text-white font-bold text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            العودة للصفحة الرئيسية
-          </button>
+          <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <div className="flex-1 px-8 py-4 rounded-2xl bg-white/5 border border-white/5 text-pink-400 font-mono text-sm">
+               رقم العملية: {orderId?.slice(0, 8).toUpperCase()}
+            </div>
+            <button
+              onClick={() => navigate('/')}
+              className="px-8 h-14 rounded-2xl bg-white/5 border border-white/10 text-white font-black text-sm hover:bg-white/10 transition-all flex items-center gap-3 active:scale-95 shadow-xl"
+            >
+              <ArrowLeft className="w-5 h-5" /> العودة للرئيسية
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] py-12 px-6" dir="rtl">
-      <div className="max-w-xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-black text-white">إتمام الدفع</h1>
-            <p className="text-white/40 text-sm font-medium">مدرسة: {order?.school_name}</p>
-          </div>
-        </div>
-
-        {/* Order Summary */}
-        <div className="bg-[#0d1526] border border-white/10 rounded-3xl p-6 mb-6">
-          <h2 className="text-white font-black mb-5 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-black">1</span>
-            ملخص الطلب
-          </h2>
-          <div className="space-y-3">
-            {[
-              { label: 'المدرسة', value: order?.school_name },
-              { label: 'المدير', value: order?.admin_name },
-              { label: 'الباقة', value: planInfo.name },
-              { label: 'المدة', value: `${planInfo.days} يوم` },
-              { label: 'المبلغ المطلوب', value: `${planInfo.price.toLocaleString('ar-EG')} ج.م`, highlight: true },
-            ].map((row) => (
-              <div key={row.label} className="flex justify-between items-center">
-                <span className="text-white/40 text-sm font-medium">{row.label}</span>
-                <span className={`text-sm font-bold ${row.highlight ? 'text-emerald-400 text-base' : 'text-white'}`}>
-                  {row.value}
-                </span>
+    <div className="min-h-screen bg-[#060a14] py-16 px-6 sm:px-12" dir="rtl">
+      <div className="max-w-2xl mx-auto space-y-12">
+        <QueryStateHandler
+          loading={isLoading}
+          error={orderError}
+          data={order}
+          onRetry={refetch}
+          loadingMessage="جاري جلب تفاصيل طلب المدرسة المعتمد..."
+          primaryColor="indigo"
+        >
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-10 border-b border-white/5 relative">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 rounded-[28px] bg-indigo-600 flex items-center justify-center shadow-[0_0_40px_rgba(79,70,229,0.3)]">
+                <ShieldCheck className="w-8 h-8 text-white" />
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Payment Instructions */}
-        <div className="bg-gradient-to-br from-emerald-600/10 to-emerald-700/5 border border-emerald-500/20 rounded-3xl p-6 mb-6">
-          <h2 className="text-white font-black mb-5 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center text-xs font-black">2</span>
-            تعليمات الدفع
-          </h2>
-
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-5 mb-5">
-            <p className="text-emerald-300 font-bold text-sm leading-relaxed text-center">
-              حوّل المبلغ على <strong className="text-white text-base">فودافون كاش</strong>
-              <br />على الرقم:{' '}
-              <strong className="text-white text-2xl font-black tracking-wide">01029082772</strong>
-              <br />
-              <span className="text-white/50 text-xs mt-1 inline-block">باسم: عبدالرحمن سيد فوزي</span>
-            </p>
+              <div className="space-y-1.5">
+                <h1 className="text-3xl font-black text-white tracking-tight">إكمال عملية الدفع</h1>
+                <div className="flex items-center gap-2">
+                   <p className="text-white/30 text-sm font-bold uppercase tracking-widest leading-none">مدرسة {order?.school_name}</p>
+                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                </div>
+              </div>
+            </div>
+            <Badge className="bg-white/5 border-white/10 text-white/40 font-black text-[9px] px-4 py-2 rounded-xl">نظام تفعيل المدرسة 2025</Badge>
           </div>
 
-          <ul className="space-y-2 text-sm text-white/50 font-medium">
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              تأكد من صحة المبلغ ({planInfo.price.toLocaleString('ar-EG')} ج.م) قبل التحويل
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              احتفظ بصورة الإيصال لرفعها أدناه
-            </li>
-            <li className="flex items-start gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-              سيتم التواصل معك خلال 24 ساعة على الواتساب المسجل
-            </li>
-          </ul>
-        </div>
+          <div className="grid grid-cols-1 gap-8">
+            {/* 1. Summary Card */}
+            <div className="bg-[#0b1221] border border-white/5 rounded-[48px] p-10 space-y-8 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
+              <h2 className="text-xl font-black text-white flex items-center gap-4">
+                <span className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-sm font-black shadow-lg shadow-indigo-600/20">1</span>
+                بيانات التعاقد
+              </h2>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <SummaryItem label="مدير النظام" value={order?.admin_name} />
+                <SummaryItem label="الباقة المختارة" value={planInfo.name} highlight />
+                <SummaryItem label="فترة التراخيص" value={`${planInfo.days} يوم بصلاحيات كاملة`} />
+                <div className="p-6 rounded-3xl bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center justify-center gap-1">
+                   <p className="text-[10px] font-black text-emerald-400/50 uppercase tracking-widest mb-1">المبلغ المطلوب سداده</p>
+                   <p className="text-3xl font-black text-emerald-400">{planInfo.price.toLocaleString('ar-EG')} <span className="text-sm">ج.م</span></p>
+                </div>
+              </div>
+            </div>
 
-        {/* Receipt Upload Form */}
-        <form onSubmit={handleSubmit} className="bg-[#0d1526] border border-white/10 rounded-3xl p-6 space-y-5">
-          <h2 className="text-white font-black flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-xs font-black">3</span>
-            رفع إيصال الدفع
-          </h2>
+            {/* 2. Payment Instructions */}
+            <div className="bg-indigo-600 rounded-[48px] p-10 text-white shadow-2xl shadow-indigo-900/40 relative overflow-hidden group border-4 border-indigo-500/20">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
+              <h2 className="text-xl font-black text-white mb-10 flex items-center gap-4 relative z-10">
+                <span className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-sm font-black border border-white/20">2</span>
+                منصة التحويل الفوري
+              </h2>
 
-          {/* Receipt Upload */}
-          <div>
-            <label className="block text-xs font-black text-white/50 uppercase tracking-widest mb-2">
-              صورة الإيصال *
-            </label>
-            <label className="cursor-pointer block">
-              <div className={`w-full rounded-2xl border-2 border-dashed transition-all overflow-hidden ${
-                receiptPreview
-                  ? 'border-emerald-500/50 bg-emerald-500/5'
-                  : 'border-white/10 bg-white/3 hover:border-indigo-500/50 hover:bg-indigo-500/5'
-              }`}>
-                {receiptPreview ? (
-                  <div className="relative">
-                    <img src={receiptPreview} alt="receipt" className="w-full max-h-60 object-contain p-4" />
-                    <div className="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                      ✓ تم الاختيار
+              <div className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-[32px] p-8 space-y-8 relative z-10 mb-8 hover:scale-[1.02] transition-transform duration-500 text-center">
+                <div className="space-y-4">
+                  <p className="text-indigo-100 font-bold text-sm tracking-widest uppercase">حوّل المبلغ عبر فودافون كاش على</p>
+                  <p className="text-5xl font-black text-white tracking-widest font-mono">01029082772</p>
+                  <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.3em] font-medium leading-relaxed">باسم: عبدالرحمن سيد فوزي</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+                 <InstructionStep text="تأكد من صحة المبلغ قبل التحويل" />
+                 <InstructionStep text="احتفظ بلقطة شاشة للإيصال فوراً" />
+                 <InstructionStep text="سيتم التفعيل بعد رفع الصورة أدناه" />
+              </div>
+            </div>
+
+            {/* 3. Upload Form */}
+            <form onSubmit={handleSubmit} className="bg-[#0b1221] border border-white/5 rounded-[56px] p-10 sm:p-12 space-y-10 shadow-3xl">
+              <h2 className="text-2xl font-black text-white flex items-center gap-4">
+                <span className="w-10 h-10 rounded-[14px] bg-indigo-600 flex items-center justify-center text-base font-black shadow-xl shadow-indigo-600/30">3</span>
+                توثيق عملية الدافع
+              </h2>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-black text-white/20 uppercase tracking-[0.3em] mb-4">صورة إيصال التحويل المعتمدة *</label>
+                  <label className="cursor-pointer block group">
+                    <div className={cn(
+                      "w-full rounded-[40px] border-4 border-dashed transition-all duration-700 min-h-[300px] flex items-center justify-center p-4",
+                      receiptPreview 
+                        ? "border-emerald-500/20 bg-emerald-500/[0.02]" 
+                        : "border-white/5 bg-white/[0.02] hover:border-indigo-500/30 hover:bg-indigo-500/[0.03]"
+                    )}>
+                      {receiptPreview ? (
+                        <div className="relative w-full h-full flex items-center justify-center max-h-[400px]">
+                          <img src={receiptPreview} alt="Receipt preview" className="max-w-full max-h-[350px] object-contain rounded-2xl shadow-2xl" />
+                          <div className="absolute -top-4 -right-4 bg-emerald-500 text-white p-3 rounded-2xl shadow-xl animate-in zoom-in-0 duration-500">
+                             <CheckCircle2 className="w-6 h-6" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-4">
+                           <div className="w-20 h-20 rounded-3xl bg-white/5 flex items-center justify-center text-white/20 mx-auto group-hover:scale-110 group-hover:rotate-6 transition-all duration-500">
+                              <Upload className="w-10 h-10" />
+                           </div>
+                           <div>
+                              <p className="text-white font-black">اسحب أو اضغط لرفع الإيصال</p>
+                              <p className="text-white/20 text-xs font-bold mt-1 uppercase tracking-widest">يدعم الصور والـ PDF حتى 10 ميجا</p>
+                           </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-10 text-center">
-                    <Upload className="w-8 h-8 text-white/20 mb-3" />
-                    <p className="text-white/40 font-bold text-sm">اضغط لرفع صورة الإيصال</p>
-                    <p className="text-white/20 text-xs mt-1">PNG, JPG, PDF — حتى 5MB</p>
+                    <input type="file" accept="image/*,.pdf" onChange={handleReceiptChange} className="hidden" />
+                  </label>
+                </div>
+
+                <div className="space-y-4">
+                  <label className="block text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">ملاحظات المراجعة (اختياري)</label>
+                  <textarea
+                    value={receiptNote}
+                    onChange={(e) => setReceiptNote(e.target.value)}
+                    placeholder="هل قمت بالتحويل من محفظة برقم مختلف؟ اكتب الملاحظة هنا..."
+                    rows={3}
+                    className="w-full px-8 py-6 rounded-3xl bg-white/5 border border-white/10 text-white font-bold placeholder:text-white/10 focus:outline-none focus:ring-[12px] focus:ring-indigo-500/5 focus:border-indigo-500/20 transition-all resize-none text-sm leading-relaxed"
+                  />
+                </div>
+
+                {errorMessage && (
+                  <div className="flex items-center gap-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 p-6 rounded-3xl animate-in fade-in slide-in-from-top-4">
+                    <AlertCircle className="w-6 h-6 shrink-0" />
+                    <p className="text-sm font-black leading-relaxed">{errorMessage}</p>
                   </div>
                 )}
+
+                <button
+                  type="submit"
+                  disabled={updateOrderMutation.isPending}
+                  className="w-full h-20 rounded-[28px] bg-indigo-600 hover:bg-slate-100 text-white hover:text-slate-900 font-black text-lg shadow-[0_20px_50px_rgba(79,70,229,0.3)] transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4 group"
+                >
+                  {updateOrderMutation.isPending ? (
+                    <><Loader2 className="w-7 h-7 animate-spin" /> جاري التوثيق...</>
+                  ) : (
+                    <>
+                      إرسال الطلب وتشغيل الواتساب
+                      <ArrowLeft className="w-6 h-6 border-none" />
+                    </>
+                  )}
+                </button>
+                
+                <p className="text-center text-[10px] font-black text-white/20 uppercase tracking-[0.2em] leading-relaxed">
+                   سيتم توجيهك لتطبيق واتساب لتأكيد الاستلام من قبل الدعم الفني فور الإرسال.
+                </p>
               </div>
-              <input type="file" accept="image/*,.pdf" onChange={handleReceiptChange} className="hidden" />
-            </label>
+            </form>
           </div>
-
-          {/* Note */}
-          <div>
-            <label className="block text-xs font-black text-white/50 uppercase tracking-widest mb-2">
-              ملاحظات (اختياري)
-            </label>
-            <textarea
-              value={receiptNote}
-              onChange={(e) => setReceiptNote(e.target.value)}
-              placeholder="أي ملاحظات إضافية حول عملية الدفع..."
-              rows={3}
-              className="w-full px-5 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-medium placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-none text-sm"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm font-bold p-4 rounded-xl">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {submitting ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /> جاري الإرسال...</>
-            ) : (
-              <>
-                <Phone className="w-5 h-5" />
-                إرسال وإبلاغ المطور على واتساب
-              </>
-            )}
-          </button>
-
-          <p className="text-white/20 text-xs text-center font-medium leading-relaxed">
-            بالضغط على الزر ستُفتح نافذة واتساب لإبلاغ المطور تلقائياً بطلبك وصورة الإيصال.
-          </p>
-        </form>
+        </QueryStateHandler>
       </div>
+    </div>
+  );
+}
+
+function SummaryItem({ label, value, highlight }: any) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-black text-white/20 uppercase tracking-widest">{label}</p>
+      <p className={cn("text-base font-black text-white", highlight && "text-indigo-400")}>{value}</p>
+    </div>
+  );
+}
+
+function InstructionStep({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/5 group hover:bg-white/10 transition-colors">
+       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+       <span className="text-[10px] font-black text-indigo-100 leading-tight uppercase tracking-tight">{text}</span>
     </div>
   );
 }

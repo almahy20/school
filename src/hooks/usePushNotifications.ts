@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -11,14 +11,7 @@ export function usePushNotifications() {
 
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY; // We'll assume the user will set this
 
-  useEffect(() => {
-    if ('Notification' in window) {
-      setPermission(Notification.permission);
-      checkSubscription();
-    }
-  }, []);
-
-  const checkSubscription = async () => {
+  const checkSubscription = useCallback(async () => {
     if ('serviceWorker' in navigator && 'PushManager' in window && user?.id) {
       try {
         const registration = await navigator.serviceWorker.ready;
@@ -28,7 +21,14 @@ export function usePushNotifications() {
         console.error('Error checking push subscription:', error);
       }
     }
-  };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if ('Notification' in window) {
+      setPermission(Notification.permission);
+      checkSubscription();
+    }
+  }, [checkSubscription]);
 
   const urlBase64ToUint8Array = (base64String: string) => {
     // ─── Ensure we have no spaces or quotes ───
@@ -36,7 +36,7 @@ export function usePushNotifications() {
     
     const padding = '='.repeat((4 - cleaned.length % 4) % 4);
     const base64 = (cleaned + padding)
-      .replace(/\-/g, '+')
+      .replace(/-/g, '+')
       .replace(/_/g, '/');
     
     try {

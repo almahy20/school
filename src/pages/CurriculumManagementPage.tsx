@@ -1,11 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
 import { 
-  BookOpen, Plus, Edit3, Trash2, Save, X, Layers, Search, CheckCircle2,
-  ArrowRight, ChevronDown, Circle
+  BookOpen, Plus, Edit3, Trash2, Layers, Search, 
+  ArrowRight, ChevronDown, CheckCircle2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,198 +17,161 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-
-interface Curriculum {
-  id: string;
-  name: string;
-  status: 'active' | 'inactive';
-  school_id: string;
-}
-
-interface CurriculumSubject {
-  id: string;
-  curriculum_id: string;
-  subject_name: string;
-  content: string | null;
-}
-
-interface ClassItem {
-  id: string;
-  name: string;
-  curriculum_id: string | null;
-}
+import { Badge } from "@/components/ui/badge";
+import { 
+  useCurriculums, 
+  useCurriculumSubjects, 
+  useUpsertCurriculum, 
+  useDeleteCurriculum, 
+  useUpsertSubject, 
+  useDeleteSubject, 
+  useAssignCurriculumToClass,
+  useClasses
+} from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function CurriculumManagementPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [curriculums, setCurriculums] = useState<Curriculum[]>([]);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Selection & UI State
+  const [selectedCurriculum, setSelectedCurriculum] = useState<any | null>(null);
   const [showAddCurriculum, setShowAddCurriculum] = useState(false);
   const [newCurriculum, setNewCurriculum] = useState({ name: '', status: 'active' as 'active' | 'inactive' });
-  const [editingCurriculum, setEditingCurriculum] = useState<Curriculum | null>(null);
-  const [selectedCurriculum, setSelectedCurriculum] = useState<Curriculum | null>(null);
-  const [curriculumSubjects, setCurriculumSubjects] = useState<CurriculumSubject[]>([]);
-  const [loadingSubjects, setLoadingSubjects] = useState(false);
+  const [editingCurriculum, setEditingCurriculum] = useState<any | null>(null);
   const [showAddSubject, setShowAddSubject] = useState(false);
   const [newSubject, setNewSubject] = useState({ subject_name: '', content: '' });
-  const [editingSubject, setEditingSubject] = useState<CurriculumSubject | null>(null);
-  const [assignClassCurriculum, setAssignClassCurriculum] = useState<ClassItem | null>(null);
+  const [editingSubject, setEditingSubject] = useState<any | null>(null);
+  const [assignClassCurriculum, setAssignClassCurriculum] = useState<any | null>(null);
   const [selectedCurriculumForClass, setSelectedCurriculumForClass] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch Curriculums and Classes
-  useEffect(() => {
-    if (!user?.schoolId) return;
-    setLoading(true);
-    Promise.all([
-      supabase.from('curriculums').select('*').eq('school_id', user.schoolId).order('created_at', { ascending: true }),
-      supabase.from('classes').select('id, name, curriculum_id').eq('school_id', user.schoolId).order('name', { ascending: true }),
-    ]).then(([{ data: curriculumsData, error: curriculumsError }, { data: classesData, error: classesError }]) => {
-      if (curriculumsError) toast({ title: 'خطأ', description: curriculumsError.message, variant: 'destructive' });
-      else setCurriculums(curriculumsData || []);
+  // ── Queries ──
+  const { data: curriculums = [], isLoading: curriculumsLoading, error: curriculumsError, refetch: refetchCurriculums } = useCurriculums();
+  const { data: classes = [], isLoading: classesLoading } = useClasses();
+  const { data: curriculumSubjects = [], isLoading: subjectsLoading, error: subjectsError, refetch: refetchSubjects } = useCurriculumSubjects(selectedCurriculum?.id || null);
 
-      if (classesError) toast({ title: 'خطأ', description: classesError.message, variant: 'destructive' });
-      else setClasses(classesData || []);
-      
-      setLoading(false);
-    });
-  }, [user?.schoolId]);
-
-  // Fetch Subjects for selected curriculum
-  useEffect(() => {
-    if (!selectedCurriculum) {
-      setCurriculumSubjects([]);
-      return;
-    }
-    setLoadingSubjects(true);
-    supabase.from('curriculum_subjects')
-      .select('*')
-      .eq('curriculum_id', selectedCurriculum.id)
-      .order('subject_name', { ascending: true })
-      .then(({ data, error }) => {
-        if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-        else setCurriculumSubjects(data || []);
-        setLoadingSubjects(false);
-      });
-  }, [selectedCurriculum]);
+  // ── Mutations ──
+  const upsertCurriculumMutation = useUpsertCurriculum();
+  const deleteCurriculumMutation = useDeleteCurriculum();
+  const upsertSubjectMutation = useUpsertSubject();
+  const deleteSubjectMutation = useDeleteSubject();
+  const assignCurriculumMutation = useAssignCurriculumToClass();
 
   const handleAddCurriculum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCurriculum.name.trim()) return;
-    const { data, error } = await supabase.from('curriculums').insert({
-      name: newCurriculum.name.trim(),
-      status: newCurriculum.status,
-      school_id: user?.schoolId,
-    }).select().single();
-
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculums([...curriculums, data]);
+    try {
+      await upsertCurriculumMutation.mutateAsync({
+        name: newCurriculum.name.trim(),
+        status: newCurriculum.status,
+      });
       setShowAddCurriculum(false);
       setNewCurriculum({ name: '', status: 'active' });
       toast({ title: 'تم إضافة المنهج بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleEditCurriculum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCurriculum || !editingCurriculum.name.trim()) return;
-    const { data, error } = await supabase.from('curriculums').update({
-      name: editingCurriculum.name.trim(),
-      status: editingCurriculum.status,
-    }).eq('id', editingCurriculum.id).select().single();
-
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculums(curriculums.map(c => c.id === data.id ? data : c));
+    try {
+      await upsertCurriculumMutation.mutateAsync({
+        id: editingCurriculum.id,
+        name: editingCurriculum.name.trim(),
+        status: editingCurriculum.status,
+      });
       setEditingCurriculum(null);
-      if (selectedCurriculum?.id === data.id) setSelectedCurriculum(data);
       toast({ title: 'تم تحديث المنهج بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleDeleteCurriculum = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا المنهج؟ سيتم إلغاء ربطه بجميع الفصول التابعة له.')) return;
-    const { error } = await supabase.from('curriculums').delete().eq('id', id);
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculums(curriculums.filter(c => c.id !== id));
+    try {
+      await deleteCurriculumMutation.mutateAsync(id);
       if (selectedCurriculum?.id === id) setSelectedCurriculum(null);
-      // Also update classes that were linked to this curriculum
-      setClasses(classes.map(cls => cls.curriculum_id === id ? { ...cls, curriculum_id: null } : cls));
       toast({ title: 'تم حذف المنهج بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleAddSubjectToCurriculum = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCurriculum || !newSubject.subject_name.trim()) return;
-    const { data, error } = await supabase.from('curriculum_subjects').insert({
-      curriculum_id: selectedCurriculum.id,
-      subject_name: newSubject.subject_name.trim(),
-      content: newSubject.content.trim() || null,
-    }).select().single();
-
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculumSubjects([...curriculumSubjects, data]);
+    try {
+      await upsertSubjectMutation.mutateAsync({
+        curriculum_id: selectedCurriculum.id,
+        subject_name: newSubject.subject_name.trim(),
+        content: newSubject.content.trim() || null,
+      });
       setShowAddSubject(false);
       setNewSubject({ subject_name: '', content: '' });
       toast({ title: 'تم إضافة المادة للمنهج بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleEditCurriculumSubject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingSubject || !editingSubject.subject_name.trim()) return;
-    const { data, error } = await supabase.from('curriculum_subjects').update({
-      subject_name: editingSubject.subject_name.trim(),
-      content: editingSubject.content?.trim() || null,
-    }).eq('id', editingSubject.id).select().single();
-
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculumSubjects(curriculumSubjects.map(s => s.id === data.id ? data : s));
+    try {
+      await upsertSubjectMutation.mutateAsync({
+        id: editingSubject.id,
+        curriculum_id: editingSubject.curriculum_id,
+        subject_name: editingSubject.subject_name.trim(),
+        content: editingSubject.content?.trim() || null,
+      });
       setEditingSubject(null);
       toast({ title: 'تم تحديث المادة بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
-  const handleDeleteCurriculumSubject = async (id: string) => {
+  const handleDeleteCurriculumSubject = async (id: string, curriculumId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذه المادة من المنهج؟')) return;
-    const { error } = await supabase.from('curriculum_subjects').delete().eq('id', id);
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setCurriculumSubjects(curriculumSubjects.filter(s => s.id !== id));
+    try {
+      await deleteSubjectMutation.mutateAsync({ id, curriculumId });
       toast({ title: 'تم حذف المادة بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleAssignCurriculumToClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assignClassCurriculum) return;
-
-    const { data, error } = await supabase.from('classes').update({
-      curriculum_id: selectedCurriculumForClass,
-    }).eq('id', assignClassCurriculum.id).select().single();
-
-    if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    else {
-      setClasses(classes.map(cls => cls.id === data.id ? data : cls));
+    try {
+      await assignCurriculumMutation.mutateAsync({
+        classId: assignClassCurriculum.id,
+        curriculumId: selectedCurriculumForClass,
+      });
       setAssignClassCurriculum(null);
       setSelectedCurriculumForClass(null);
-      toast({ title: 'تم ربط المنهج بالفصل بنجاح' });
+      toast({ title: 'تم تحديث ربط المنهج بالفصل بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
-  const filteredCurriculums = curriculums.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredCurriculums = useMemo(() => {
+    return curriculums.filter(c => 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [curriculums, searchQuery]);
+
+  const loading = curriculumsLoading || classesLoading;
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1500px] mx-auto text-right animate-in fade-in slide-in-from-bottom-4 duration-1000">
+      <div className="flex flex-col gap-10 max-w-[1500px] mx-auto text-right animate-in fade-in slide-in-from-bottom-4 duration-1000 pb-20">
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
@@ -220,7 +182,7 @@ export default function CurriculumManagementPage() {
               </div>
               <h1 className="text-4xl font-black text-slate-900 tracking-tight">إدارة المناهج الدراسية</h1>
             </div>
-            <p className="text-slate-500 font-medium text-lg pr-1">قم بإنشاء وتخصيص المناهج الدراسية وربطها بالفصول.</p>
+            <p className="text-slate-500 font-medium text-lg pr-1">بناء الخطط الأكاديمية وربط المسارات التعليمية بالفصول الدراسية.</p>
           </div>
           
           <Button 
@@ -236,11 +198,9 @@ export default function CurriculumManagementPage() {
           {/* Curriculums List */}
           <div className="xl:col-span-4 space-y-8">
             <div className="flex flex-col gap-6 px-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Layers className="w-5 h-5 text-indigo-600" />
-                  <h2 className="text-xl font-black text-slate-900">المناهج المتاحة</h2>
-                </div>
+              <div className="flex items-center gap-3">
+                <Layers className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-xl font-black text-slate-900">المسارات المتاحة</h2>
               </div>
 
               <div className="relative group">
@@ -254,28 +214,22 @@ export default function CurriculumManagementPage() {
               </div>
             </div>
             
-            {loading ? (
-              <div className="space-y-6">
-                {[1, 2, 3].map(i => <div key={i} className="h-28 bg-white rounded-[32px] animate-pulse border border-slate-100" />)}
-              </div>
-            ) : filteredCurriculums.length === 0 ? (
-              <div className="p-20 text-center bg-white rounded-[48px] border border-dashed border-slate-200 shadow-inner">
-                <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center text-slate-200 mx-auto mb-6">
-                   <BookOpen className="w-10 h-10" />
-                </div>
-                <p className="text-slate-400 font-black text-lg">{searchQuery ? 'لا توجد نتائج للبحث' : 'بانتظار إنشاء مناهج'}</p>
-                <p className="text-slate-300 text-xs mt-2 font-medium">{searchQuery ? 'جرب كلمات بحث أخرى' : 'ابدأ بإنشاء أول منهج دراسي'}</p>
-              </div>
-            ) : (
+            <QueryStateHandler
+              loading={curriculumsLoading}
+              error={curriculumsError}
+              data={curriculums}
+              onRetry={refetchCurriculums}
+              isEmpty={filteredCurriculums.length === 0}
+              loadingMessage="جاري مزامنة المناهج..."
+              emptyMessage={searchQuery ? 'لا توجد نتائج للبحث' : 'ابدأ بإنشاء أول منهج دراسي'}
+            >
               <div className="space-y-5">
                 {filteredCurriculums.map(curriculum => (
                   <div
                     key={curriculum.id}
                     onClick={() => setSelectedCurriculum(curriculum)}
-                    role="button"
-                    tabIndex={0}
                     className={cn(
-                      "w-full p-8 rounded-[40px] border-2 transition-all flex items-center justify-between group relative overflow-hidden cursor-pointer",
+                      "w-full p-8 rounded-[40px] border-2 transition-all flex items-center justify-between group relative cursor-pointer outline-none focus:ring-4 focus:ring-indigo-600/5",
                       selectedCurriculum?.id === curriculum.id 
                         ? "bg-white border-indigo-600 shadow-2xl shadow-indigo-100" 
                         : "bg-white border-transparent hover:border-slate-100 hover:shadow-xl shadow-sm"
@@ -292,8 +246,8 @@ export default function CurriculumManagementPage() {
                       </div>
                       <div className="text-right">
                         <h3 className={cn("font-black text-xl transition-colors", selectedCurriculum?.id === curriculum.id ? "text-indigo-600" : "text-slate-900")}>{curriculum.name}</h3>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5">
-                          الحالة: {curriculum.status === 'active' ? 'نشط' : 'غير نشط'}
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1.5 leading-none">
+                          {curriculum.status === 'active' ? 'مسار تعليمي نشط' : 'مسار غير نشط'}
                         </p>
                       </div>
                     </div>
@@ -311,17 +265,11 @@ export default function CurriculumManagementPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <div className={cn(
-                        "w-9 h-9 rounded-full flex items-center justify-center transition-all",
-                        selectedCurriculum?.id === curriculum.id ? "bg-indigo-50 text-indigo-600" : "bg-slate-50 text-slate-300"
-                      )}>
-                         <ArrowRight className={cn("w-5 h-5 transition-transform", selectedCurriculum?.id === curriculum.id ? "rotate-180" : "group-hover:translate-x-[-4px]")} />
-                      </div>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
+            </QueryStateHandler>
           </div>
 
           {/* Curriculum Details & Subjects */}
@@ -338,11 +286,11 @@ export default function CurriculumManagementPage() {
                       <div className="space-y-2">
                          <h2 className="text-4xl font-black text-slate-900 tracking-tight">{selectedCurriculum.name}</h2>
                          <div className="flex items-center gap-3">
-                            <span className={cn("text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full", selectedCurriculum.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600')}>
-                              {selectedCurriculum.status === 'active' ? 'نشط' : 'غير نشط'}
-                            </span>
+                            <Badge variant="outline" className={cn("px-4 py-1 rounded-full font-black text-[9px] uppercase", selectedCurriculum.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100')}>
+                               {selectedCurriculum.status === 'active' ? 'نشط' : 'غير نشط'}
+                            </Badge>
                             <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
-                            <span className="text-slate-400 font-bold text-xs">{curriculumSubjects.length} مواد دراسية</span>
+                            <span className="text-slate-400 font-black text-[10px] uppercase tracking-widely">{curriculumSubjects.length} مواد دراسية حالية</span>
                          </div>
                       </div>
                    </div>
@@ -356,65 +304,55 @@ export default function CurriculumManagementPage() {
                 </div>
 
                 {/* Subjects in Curriculum */}
-                <div className="space-y-10">
-                   {loadingSubjects ? (
-                     <div className="space-y-4">
-                        {[1, 2, 3].map(i => <div key={i} className="h-20 bg-slate-50 rounded-3xl animate-pulse border border-slate-100" />)}
-                     </div>
-                   ) : curriculumSubjects.length === 0 ? (
-                     <div className="p-32 text-center flex flex-col items-center gap-6 bg-slate-50/50 border border-dashed border-slate-200 rounded-[48px] relative overflow-hidden group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <div className="w-24 h-24 rounded-[40px] bg-white flex items-center justify-center text-slate-200 shadow-inner border border-slate-100 relative z-10 group-hover:scale-110 transition-transform">
-                           <Layers className="w-12 h-12" />
-                        </div>
-                        <div className="relative z-10 space-y-2">
-                           <p className="text-slate-900 font-black text-xl">لا توجد مواد في هذا المنهج</p>
-                           <p className="text-slate-400 font-medium max-w-xs mx-auto leading-relaxed">ابدأ بإضافة المواد التي يتضمنها هذا المنهج.</p>
-                        </div>
-                     </div>
-                   ) : (
-                     <div className="grid grid-cols-1 gap-6">
-                        {curriculumSubjects.map(subject => (
-                          <div key={subject.id} className="p-6 rounded-3xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                                <BookOpen className="w-6 h-6" />
-                              </div>
-                              <div>
-                                <p className="text-lg font-bold text-slate-900">{subject.subject_name}</p>
-                                <p className="text-xs text-slate-500 mt-1">{subject.content || 'لا يوجد محتوى محدد'}</p>
-                              </div>
+                <QueryStateHandler
+                  loading={subjectsLoading}
+                  error={subjectsError}
+                  data={curriculumSubjects}
+                  onRetry={refetchSubjects}
+                  loadingMessage="جاري تحميل الخطة الدراسية..."
+                  emptyMessage="لا توجد موارد تعليمية مضافة حالياً."
+                  isEmpty={curriculumSubjects.length === 0}
+                >
+                  <div className="grid grid-cols-1 gap-6">
+                      {curriculumSubjects.map(subject => (
+                        <div key={subject.id} className="p-8 rounded-[32px] border border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-6 group/sub hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all duration-500">
+                          <div className="flex items-center gap-6">
+                            <div className="w-14 h-14 rounded-2xl bg-white border border-slate-100 text-indigo-600 flex items-center justify-center shrink-0 shadow-sm group-hover/sub:scale-110 transition-transform">
+                              <BookOpen className="w-7 h-7" />
                             </div>
-                            <div className="flex items-center gap-2">
-                              <button 
-                                onClick={() => setEditingSubject(subject)}
-                                className="w-9 h-9 rounded-xl bg-white text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center shadow-sm"
-                              >
-                                <Edit3 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={() => handleDeleteCurriculumSubject(subject.id)}
-                                className="w-9 h-9 rounded-xl bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center shadow-sm"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                            <div className="space-y-1">
+                              <p className="text-xl font-black text-slate-900">{subject.subject_name}</p>
+                              <p className="text-xs font-medium text-slate-500 leading-relaxed max-w-lg">{subject.content || 'لم يتم تحديد المحتوى الأكاديمي لهذه المادة بعد.'}</p>
                             </div>
                           </div>
-                        ))}
-                     </div>
-                   )}
-                </div>
+                          <div className="flex items-center gap-2 self-end md:self-center">
+                            <button 
+                              onClick={() => setEditingSubject(subject)}
+                              className="w-10 h-10 rounded-xl bg-white text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center shadow-sm"
+                            >
+                              <Edit3 className="w-5 h-5" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteCurriculumSubject(subject.id, subject.curriculum_id)}
+                              className="w-10 h-10 rounded-xl bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center shadow-sm"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </QueryStateHandler>
 
                 {/* Classes linked to this curriculum */}
-                <div className="space-y-6 pt-10 border-t border-slate-50">
+                <div className="space-y-8 pt-12 border-t border-slate-50">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-3">
-                      <Layers className="w-5 h-5 text-indigo-600" />
-                      الفصول المرتبطة بهذا المنهج
-                    </h3>
+                    <div className="space-y-1">
+                       <h3 className="text-2xl font-black text-slate-900 flex items-center gap-3 tracking-tight">الفصول الدراسية المرتبطة</h3>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-1">تحديد الفصول التي تتبع هذا المسار التعليمي</p>
+                    </div>
                     <Button 
                       variant="outline" 
-                      size="sm"
                       onClick={() => {
                         const availableClasses = classes.filter(cls => !cls.curriculum_id);
                         if (availableClasses.length === 0) {
@@ -424,39 +362,36 @@ export default function CurriculumManagementPage() {
                         setAssignClassCurriculum(availableClasses[0]);
                         setSelectedCurriculumForClass(selectedCurriculum.id);
                       }}
-                      className="rounded-xl border-indigo-100 text-indigo-600 hover:bg-indigo-50 font-black text-[10px] uppercase tracking-widest h-10 px-5"
+                      className="rounded-2xl border-slate-200 text-slate-900 hover:bg-slate-50 font-black text-xs h-12 px-8 shadow-sm"
                     >
-                      ربط فصل جديد
+                      <Layers className="w-4 h-4 ml-2" />
+                      ربط فصل إضافي
                     </Button>
                   </div>
                   
                   {classes.filter(cls => cls.curriculum_id === selectedCurriculum.id).length === 0 ? (
-                    <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-sm font-bold text-slate-400">لا توجد فصول مرتبطة بهذا المنهج حالياً.</p>
+                    <div className="p-14 text-center bg-slate-50/50 rounded-[40px] border border-dashed border-slate-200">
+                      <p className="text-sm font-bold text-slate-400">لا توجد فصول مرتبطة بهذا المسار التعليمي حالياً.</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {classes.filter(cls => cls.curriculum_id === selectedCurriculum.id).map(cls => (
-                        <div key={cls.id} className="p-4 rounded-xl bg-white border border-slate-100 flex items-center justify-between group/cls">
-                          <span className="text-base font-bold text-slate-700">{cls.name}</span>
+                        <div key={cls.id} className="p-6 rounded-3xl bg-white border border-slate-100 flex items-center justify-between group/cls hover:border-rose-100 transition-all">
+                          <div className="flex items-center gap-4">
+                             <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-xs uppercase">
+                               {cls.name.trim()[0]}
+                             </div>
+                             <span className="text-lg font-black text-slate-900">{cls.name}</span>
+                          </div>
                           <Button 
                             variant="ghost" 
                             size="sm"
                             onClick={() => {
                               if (confirm(`هل أنت متأكد من إلغاء ربط المنهج بالفصل ${cls.name}؟`)) {
-                                // Trigger update directly for better UX
-                                supabase.from('classes').update({
-                                  curriculum_id: null,
-                                }).eq('id', cls.id).then(({ error }) => {
-                                  if (error) toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-                                  else {
-                                    setClasses(classes.map(c => c.id === cls.id ? { ...c, curriculum_id: null } : c));
-                                    toast({ title: 'تم إلغاء الربط بنجاح' });
-                                  }
-                                });
+                                assignCurriculumMutation.mutate({ classId: cls.id, curriculumId: null });
                               }
                             }}
-                            className="text-rose-500 hover:bg-rose-50 opacity-0 group-hover/cls:opacity-100 transition-opacity"
+                            className="text-rose-500 hover:bg-rose-50 opacity-0 group-hover/cls:opacity-100 transition-all font-black text-[10px] uppercase"
                           >
                             إلغاء الربط
                           </Button>
@@ -475,188 +410,131 @@ export default function CurriculumManagementPage() {
                     </div>
                  </div>
                  <div className="space-y-4 relative z-10">
-                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">يرجى اختيار منهج دراسي</h3>
-                    <p className="text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">قم باختيار منهج من القائمة الجانبية لعرض وإدارة مواده الدراسية وربطه بالفصول.</p>
+                    <h3 className="text-3xl font-black text-slate-900 tracking-tight">يرجى اختيار مسار دراسي</h3>
+                    <p className="text-slate-400 font-medium max-w-sm mx-auto leading-relaxed">قم باختيار منهج من القائمة لاستعراض مواده التعليمية وإدارة الفصول التابعة له.</p>
                  </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Classes without curriculum - Removed as it's now integrated above */}
-
-        {/* Add Curriculum Modal */}
+        {/* Modals - Simplified logic using mutations */}
         <Dialog open={showAddCurriculum} onOpenChange={setShowAddCurriculum}>
           <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
             <DialogHeader className="text-right">
               <DialogTitle className="text-2xl font-black text-slate-900">إنشاء منهج جديد</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-400">أدخل تفاصيل المنهج الدراسي الجديد.</DialogDescription>
+              <DialogDescription className="text-sm font-bold text-slate-400">تحديد اسم وحالة المنهج الجديد.</DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleAddCurriculum} className="mt-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المنهج</label>
-                <Input 
-                  autoFocus
-                  placeholder="مثال: منهج الصف الأول، منهج العلوم..."
-                  value={newCurriculum.name} 
-                  onChange={e => setNewCurriculum({...newCurriculum, name: e.target.value})}
-                  className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المنهج</label>
+                <Input value={newCurriculum.name} onChange={e => setNewCurriculum({...newCurriculum, name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">الحالة</label>
-                <select
-                  value={newCurriculum.status}
-                  onChange={e => setNewCurriculum({...newCurriculum, status: e.target.value as 'active' | 'inactive'})}
-                  className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner appearance-none"
-                >
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الحالة</label>
+                <select value={newCurriculum.status} onChange={e => setNewCurriculum({...newCurriculum, status: e.target.value as 'active' | 'inactive'})} className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg appearance-none">
                   <option value="active">نشط</option>
                   <option value="inactive">غير نشط</option>
                 </select>
               </div>
               <div className="flex gap-4 pt-4">
-                <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">إنشاء المنهج</Button>
+                <Button type="submit" disabled={upsertCurriculumMutation.isPending} className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">
+                  {upsertCurriculumMutation.isPending ? 'جاري الحفظ...' : 'إنشاء المنهج'}
+                </Button>
                 <Button type="button" onClick={() => setShowAddCurriculum(false)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Edit Curriculum Modal */}
         <Dialog open={!!editingCurriculum} onOpenChange={() => setEditingCurriculum(null)}>
           <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
             <DialogHeader className="text-right">
               <DialogTitle className="text-2xl font-black text-slate-900">تعديل المنهج</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-400">تعديل تفاصيل المنهج الدراسي.</DialogDescription>
+              <DialogDescription className="text-sm font-bold text-slate-400">تعديل البيانات الأساسية للمسار التعليمي.</DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleEditCurriculum} className="mt-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المنهج</label>
-                <Input 
-                  autoFocus
-                  value={editingCurriculum?.name || ''} 
-                  onChange={e => setEditingCurriculum({...editingCurriculum!, name: e.target.value})}
-                  className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المنهج</label>
+                <Input value={editingCurriculum?.name || ''} onChange={e => setEditingCurriculum({...editingCurriculum!, name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">الحالة</label>
-                <select
-                  value={editingCurriculum?.status || 'active'}
-                  onChange={e => setEditingCurriculum({...editingCurriculum!, status: e.target.value as 'active' | 'inactive'})}
-                  className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner appearance-none"
-                >
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الحالة</label>
+                <select value={editingCurriculum?.status || 'active'} onChange={e => setEditingCurriculum({...editingCurriculum!, status: e.target.value as 'active' | 'inactive'})} className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg appearance-none">
                   <option value="active">نشط</option>
                   <option value="inactive">غير نشط</option>
                 </select>
               </div>
               <div className="flex gap-4 pt-4">
-                <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">حفظ التغييرات</Button>
+                <Button type="submit" disabled={upsertCurriculumMutation.isPending} className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">حفظ التغييرات</Button>
                 <Button type="button" onClick={() => setEditingCurriculum(null)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Add Subject to Curriculum Modal */}
         <Dialog open={showAddSubject} onOpenChange={setShowAddSubject}>
           <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
             <DialogHeader className="text-right">
-              <DialogTitle className="text-2xl font-black text-slate-900">إضافة مادة للمنهج</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-400">أدخل تفاصيل المادة الجديدة للمنهج: {selectedCurriculum?.name}</DialogDescription>
+              <DialogTitle className="text-2xl font-black text-slate-900">إضافة مادة تعليمية</DialogTitle>
+              <DialogDescription className="text-sm font-bold text-slate-400">أدخل تفاصيل المادة الجديدة للمنهج.</DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleAddSubjectToCurriculum} className="mt-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
-                <Input 
-                  autoFocus
-                  placeholder="مثال: الرياضيات، اللغة العربية..."
-                  value={newSubject.subject_name} 
-                  onChange={e => setNewSubject({...newSubject, subject_name: e.target.value})}
-                  className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
+                <Input placeholder="مثال: لغتي الجميلة" value={newSubject.subject_name} onChange={e => setNewSubject({...newSubject, subject_name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى الحالي للمادة</label>
-                <Textarea 
-                  placeholder="مثال: من سورة الناس إلى المعارج، الوحدة الأولى: الأعداد النسبية..."
-                  value={newSubject.content || ''} 
-                  onChange={e => setNewSubject({...newSubject, content: e.target.value})}
-                  className="min-h-[100px] px-6 py-4 rounded-2xl border-slate-100 bg-slate-50 text-base font-bold leading-relaxed focus:bg-white transition-all resize-none"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى التعليمي</label>
+                <Textarea value={newSubject.content} onChange={e => setNewSubject({...newSubject, content: e.target.value})} className="min-h-[120px] px-6 py-4 rounded-2xl bg-slate-50 border-none text-base font-bold resize-none" />
               </div>
               <div className="flex gap-4 pt-4">
-                <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">إضافة المادة</Button>
+                <Button type="submit" disabled={upsertSubjectMutation.isPending} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-white font-black text-lg">إضافة المادة</Button>
                 <Button type="button" onClick={() => setShowAddSubject(false)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Edit Curriculum Subject Modal */}
         <Dialog open={!!editingSubject} onOpenChange={() => setEditingSubject(null)}>
           <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
             <DialogHeader className="text-right">
-              <DialogTitle className="text-2xl font-black text-slate-900">تعديل مادة المنهج</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-400">تعديل تفاصيل المادة في المنهج.</DialogDescription>
+              <DialogTitle className="text-2xl font-black text-slate-900">تعديل المادة</DialogTitle>
+              <DialogDescription className="text-sm font-bold text-slate-400">تحديث بيانات المادة الدراسية.</DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleEditCurriculumSubject} className="mt-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
-                <Input 
-                  autoFocus
-                  value={editingSubject?.subject_name || ''} 
-                  onChange={e => setEditingSubject({...editingSubject!, subject_name: e.target.value})}
-                  className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
+                <Input value={editingSubject?.subject_name || ''} onChange={e => setEditingSubject({...editingSubject!, subject_name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى الحالي للمادة</label>
-                <Textarea 
-                  placeholder="مثال: من سورة الناس إلى المعارج، الوحدة الأولى: الأعداد النسبية..."
-                  value={editingSubject?.content || ''} 
-                  onChange={e => setEditingSubject({...editingSubject!, content: e.target.value})}
-                  className="min-h-[100px] px-6 py-4 rounded-2xl border-slate-100 bg-slate-50 text-base font-bold leading-relaxed focus:bg-white transition-all resize-none"
-                />
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى التعليمي</label>
+                <Textarea value={editingSubject?.content || ''} onChange={e => setEditingSubject({...editingSubject!, content: e.target.value})} className="min-h-[120px] px-6 py-4 rounded-2xl bg-slate-50 border-none text-base font-bold resize-none" />
               </div>
               <div className="flex gap-4 pt-4">
-                <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">حفظ التغييرات</Button>
+                <Button type="submit" disabled={upsertSubjectMutation.isPending} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-white font-black text-lg">حفظ التعديلات</Button>
                 <Button type="button" onClick={() => setEditingSubject(null)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
 
-        {/* Assign Curriculum to Class Modal */}
         <Dialog open={!!assignClassCurriculum} onOpenChange={() => setAssignClassCurriculum(null)}>
           <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
             <DialogHeader className="text-right">
-              <DialogTitle className="text-2xl font-black text-slate-900">ربط منهج بفصل</DialogTitle>
-              <DialogDescription className="text-sm font-bold text-slate-400">
-                ربط المنهج الدراسي بالفصل: {assignClassCurriculum?.name}
-              </DialogDescription>
+              <DialogTitle className="text-2xl font-black text-slate-900">ربط المسار التعليمي</DialogTitle>
+              <DialogDescription className="text-sm font-bold text-slate-400">الفصل: {assignClassCurriculum?.name}</DialogDescription>
             </DialogHeader>
-            
             <form onSubmit={handleAssignCurriculumToClass} className="mt-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-xs font-black text-slate-400 mr-2 uppercase tracking-widest">اختر المنهج</label>
-                <select
-                  value={selectedCurriculumForClass || ''}
-                  onChange={e => setSelectedCurriculumForClass(e.target.value || null)}
-                  className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg focus:bg-white transition-all shadow-inner appearance-none"
-                >
-                  <option value="">إلغاء الربط</option>
-                  {curriculums.map(curr => (
-                    <option key={curr.id} value={curr.id}>{curr.name}</option>
-                  ))}
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المناهج المتاحة</label>
+                <select value={selectedCurriculumForClass || ''} onChange={e => setSelectedCurriculumForClass(e.target.value || null)} className="w-full h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg appearance-none">
+                  <option value="">إلغاء الربط الحالي</option>
+                  {curriculums.map(curr => <option key={curr.id} value={curr.id}>{curr.name}</option>)}
                 </select>
               </div>
               <div className="flex gap-4 pt-4">
-                <Button type="submit" className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">حفظ الربط</Button>
+                <Button type="submit" disabled={assignCurriculumMutation.isPending} className="flex-1 h-14 rounded-2xl bg-slate-900 text-white font-black text-lg">تثبيت الربط</Button>
                 <Button type="button" onClick={() => setAssignClassCurriculum(null)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
               </div>
             </form>

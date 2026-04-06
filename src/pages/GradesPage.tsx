@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   BookOpen, Plus, ClipboardList, Check, Trash2, Users, Save, 
   Search, X, ArrowLeft, ChevronLeft, LayoutGrid, Award,
@@ -13,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface ExamTemplate {
@@ -43,143 +44,65 @@ const EXAM_TYPES = [
 export default function GradesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [classes, setClasses] = useState<any[]>([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [subjects, setSubjects] = useState<any[]>([]);
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [templates, setTemplates] = useState<ExamTemplate[]>([]);
+  
+  // Selection state
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
-  const [studentGrades, setStudentGrades] = useState<StudentGrade[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
+  const [showCreateTemplate, setShowCreateTemplate] = useState(false);
 
-  // Load branding
-  useEffect(() => {
-    const fetchBranding = async () => {
-      if (user?.schoolId) {
-        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
-        if (data) {
-          const timestamp = Date.now();
-          const logo = data.icon_url || data.logo_url || '';
-          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-          
-          setSchoolBranding({
-            name: data.name,
-            logo: logoWithCacheBust
-          });
-        }
-      }
-    };
-    fetchBranding();
-  }, [user?.schoolId]);
+  // ── Queries ──
+  const { data: branding } = useBranding();
+  const { data: classes = [], isLoading: classesLoading, error: classesError, refetch: refetchClasses } = useClasses();
+  
+  const selectedClass = useMemo(() => 
+    classes.find(c => c.id === selectedClassId), 
+    [classes, selectedClassId]
+  );
 
-  // Load all classes for the school
+  const { data: subjects = [], isLoading: subjectsLoading, error: subjectsError } = useCurriculumSubjects(selectedClass?.curriculum_id || null);
+  const { data: templates = [], isLoading: templatesLoading, error: templatesError } = useExamTemplates(selectedClassId, selectedSubject);
+  const { data: dbGrades = [], isLoading: gradesLoading, error: gradesError, refetch: refetchGrades, isRefetching } = useStudentGrades(selectedTemplate?.id || null, selectedClassId);
+
+  // Local state for pending grade changes
+  const [localGrades, setLocalGrades] = useState<StudentGrade[]>([]);
+
+  // Sync local grades with DB data - use stringify to prevent infinite loop from unstable references
   useEffect(() => {
-    if (!user?.schoolId) return;
-    setLoading(true);
-    
-    const query = supabase.from('classes')
-      .select('*, curriculums(*)')
-      .eq('school_id', user.schoolId);
-    
-    // If not admin, filter by teacher
-    if (user.role !== 'admin' && !user.isSuperAdmin) {
-      query.eq('teacher_id', user.id);
+    if (dbGrades && dbGrades.length > 0) {
+      setLocalGrades(dbGrades);
     }
+  }, [JSON.stringify(dbGrades)]);
 
-    query.then(({ data }) => {
-      setClasses(data || []);
-      if (data?.length) setSelectedClass(data[0].id);
-      setLoading(false);
-    });
-  }, [user?.id, user?.schoolId, user?.role, user?.isSuperAdmin]);
-
-  // Load subjects when class is selected
+  // Handle first class selection
   useEffect(() => {
-    if (!selectedClass) {
-      setSubjects([]);
-      return;
+    if (classes.length > 0 && !selectedClassId) {
+      setSelectedClassId(classes[0].id);
     }
-    const currentClass = classes.find(c => c.id === selectedClass);
-    if (currentClass?.curriculum_id) {
-      supabase.from('curriculum_subjects')
-        .select('subject_name')
-        .eq('curriculum_id', currentClass.curriculum_id)
-        .then(({ data }) => {
-          setSubjects(data || []);
-          if (data?.length) setSelectedSubject(data[0].subject_name);
-        });
-    } else {
-      setSubjects([]);
-    }
-  }, [selectedClass, classes]);
+  }, [classes, selectedClassId]);
 
-  // Load templates for selected class AND subject
+  // Handle first subject selection
   useEffect(() => {
-    if (!selectedClass || !user?.schoolId) return;
-    
-    const query = supabase.from('exam_templates')
-      .select('*')
-      .eq('school_id', user.schoolId)
-      .eq('class_id', selectedClass);
-    
-    if (selectedSubject) {
-      query.eq('subject', selectedSubject);
+    if (subjects.length > 0 && !selectedSubject) {
+      setSelectedSubject(subjects[0].subject_name);
     }
+  }, [subjects, selectedSubject]);
 
-    query.order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setTemplates((data as ExamTemplate[]) || []);
-        setSelectedTemplate(null);
-        setStudentGrades([]);
-      });
-  }, [selectedClass, selectedSubject, user?.id, user?.schoolId]);
-
-  // Load students & grades when template selected
-  useEffect(() => {
-    if (!selectedTemplate) { setStudentGrades([]); return; }
-    const fetchStudentsGrades = async () => {
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name')
-        .eq('school_id', user?.schoolId)
-        .eq('class_id', selectedTemplate.class_id)
-        .order('name');
-      if (!students?.length) { setStudentGrades([]); return; }
-
-      const studentIds = students.map(s => s.id);
-      const { data: grades } = await supabase.from('grades').select('*')
-        .eq('school_id', user?.schoolId)
-        .in('student_id', studentIds)
-        .eq('exam_template_id', selectedTemplate.id);
-
-      setStudentGrades(students.map(s => {
-        const existing = grades?.find(g => g.student_id === s.id);
-        return {
-          studentId: s.id,
-          studentName: s.name,
-          score: existing ? String(existing.score) : '',
-          gradeId: existing?.id,
-        };
-      }));
-    };
-    fetchStudentsGrades();
-  }, [selectedTemplate]);
+  // ── Mutations ──
+  const upsertMutation = useUpsertGrades();
+  const deleteMutation = useDeleteExamTemplate();
 
   const handleScoreChange = (studentId: string, value: string) => {
-    setStudentGrades(prev => prev.map(sg =>
+    setLocalGrades(prev => prev.map(sg =>
       sg.studentId === studentId ? { ...sg, score: value } : sg
     ));
   };
 
   const handleSaveAll = async () => {
     if (!selectedTemplate || !user) return;
-    setSaving(true);
 
-    const toUpsert = studentGrades
+    const toUpsert = localGrades
       .filter(sg => sg.score !== '')
       .map(sg => {
         const item: any = {
@@ -187,7 +110,7 @@ export default function GradesPage() {
           teacher_id: user.id,
           school_id: user.schoolId,
           subject: selectedTemplate.subject,
-          score: sg.score,
+          score: Number(sg.score),
           max_score: selectedTemplate.max_score,
           term: selectedTemplate.term,
           exam_template_id: selectedTemplate.id,
@@ -196,69 +119,63 @@ export default function GradesPage() {
         return item;
       });
 
-    if (toUpsert.length > 0) {
-      const { error } = await supabase.from('grades').upsert(toUpsert);
-      if (error) {
-        console.error('Upsert error:', error);
-        toast({ title: 'خطأ في الحفظ', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'تم حفظ الدرجات بنجاح', description: 'تم تحديث سجلات الطلاب بنجاح.' });
-        
-        // Refresh local state by re-fetching
-        const studentIds = studentGrades.map(sg => sg.studentId);
-        const { data: grades } = await supabase.from('grades').select('*')
-          .eq('school_id', user.schoolId)
-          .in('student_id', studentIds)
-          .eq('exam_template_id', selectedTemplate.id);
+    if (toUpsert.length === 0) return;
 
-        if (grades) {
-          setStudentGrades(prev => prev.map(sg => {
-            const existing = grades.find(g => g.student_id === sg.studentId);
-            return { 
-              ...sg, 
-              score: existing ? String(existing.score) : sg.score, 
-              gradeId: existing?.id 
-            };
-          }));
-        }
-      }
+    try {
+      await upsertMutation.mutateAsync(toUpsert);
+      toast({ title: 'تم حفظ الدرجات بنجاح', description: 'تم تحديث سجلات الطلاب بنجاح.' });
+    } catch (err: any) {
+      toast({ title: 'خطأ في الحفظ', description: err.message, variant: 'destructive' });
     }
-    setSaving(false);
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا التقييم؟ سيتم حذف جميع الدرجات المرتبطة به.')) return;
-    await supabase.from('grades').delete().eq('exam_template_id', templateId);
-    await supabase.from('exam_templates').delete().eq('id', templateId);
-    setTemplates(prev => prev.filter(t => t.id !== templateId));
-    if (selectedTemplate?.id === templateId) {
-      setSelectedTemplate(null);
-      setStudentGrades([]);
+    try {
+      await deleteMutation.mutateAsync(templateId);
+      toast({ title: 'تم الحذف بنجاح' });
+      if (selectedTemplate?.id === templateId) {
+        setSelectedTemplate(null);
+      }
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: 'فشل في حذف التقييم', variant: 'destructive' });
     }
   };
 
-  const filteredGrades = studentGrades.filter(sg => sg.studentName.includes(searchQuery));
+   const filteredGrades = localGrades.filter(sg => 
+      (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
   
-  const average = studentGrades.length > 0 
-    ? Math.round(studentGrades.reduce((sum, sg) => sum + (Number(sg.score) || 0), 0) / studentGrades.length) 
-    : 0;
+   const average = localGrades.length > 0 
+     ? Math.round(localGrades.reduce((sum, sg) => sum + (Number(sg.score) || 0), 0) / localGrades.length) 
+     : 0;
+
 
   return (
     <AppLayout>
       <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         {/* Premium Header - Scaled Down */}
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">رصد الدرجات والتقييمات</h1>
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
+               {branding?.logo_url ? (
+                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
+               ) : (
+                 <BookOpen className="w-8 h-8 text-indigo-600" />
+               )}
             </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">إدارة الأداء الأكاديمي للطلاب</p>
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'سجل الدرجات'}</h1>
+                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">منصة المعلم</Badge>
+              </div>
+              <p className="text-slate-500 font-medium text-sm">إدارة التقييمات الأكاديمية ونتائج الطلاب</p>
+            </div>
           </div>
-          
+
           <div className="flex flex-wrap items-center gap-4">
              <div className="relative group min-w-[180px]">
-               <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+               <select value={selectedClassId} onChange={e => { setSelectedClassId(e.target.value); setSelectedSubject(''); setSelectedTemplate(null); }}
                  className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer">
                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                </select>
@@ -266,36 +183,35 @@ export default function GradesPage() {
              </div>
 
              <div className="relative group min-w-[180px]">
-               <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}
-                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer">
-                 <option value="">جميع المواد</option>
-                 {subjects.map(s => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
+               <select value={selectedSubject} onChange={e => { setSelectedSubject(e.target.value); setSelectedTemplate(null); }}
+                 disabled={subjects.length === 0}
+                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer disabled:opacity-50">
+                 {subjects.map((s: any) => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
                </select>
                <BookOpen className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
              </div>
              
-             {selectedClass && (
+             {selectedClassId && (
                <Button onClick={() => setShowCreateTemplate(true)} className="h-11 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
-                 <Plus className="w-4.5 h-4.5" /> إنشاء اختبار
+                 <Plus className="w-4.5 h-4.5" /> إضافة اختبار
                </Button>
              )}
           </div>
         </header>
 
-        {loading ? (
-           <div className="flex flex-col items-center justify-center py-32 gap-4">
-             <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-             <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري مزامنة السجلات الأكاديمية</p>
-           </div>
-        ) : classes.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-200 p-24 text-center rounded-[48px] shadow-sm">
-            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-              <ClipboardList className="w-10 h-10" />
-            </div>
-            <h2 className="text-xl font-black text-slate-900 mb-2">لا توجد فصول دراسية</h2>
-            <p className="text-slate-400 font-medium text-sm">لم يتم تعيين فصول دراسية لحسابك التعليمي بعد.</p>
-          </div>
-        ) : (
+        <QueryStateHandler
+          loading={classesLoading || templatesLoading || gradesLoading || subjectsLoading}
+          error={classesError || templatesError || gradesError || subjectsError}
+          data={classes}
+          onRetry={() => {
+            refetchClasses();
+            refetchGrades();
+          }}
+          isRefetching={isRefetching}
+          loadingMessage="جاري مزامنة السجلات الأكاديمية..."
+          emptyMessage="لم يتم العثور على فصول دراسية."
+          isEmpty={classes.length === 0}
+        >
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
             {/* Left Sidebar: Templates List - Scaled Down */}
             <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-6">
@@ -374,7 +290,7 @@ export default function GradesPage() {
                                <Badge className="bg-white border-slate-100 font-black text-[8px] uppercase">{selectedTemplate.subject}</Badge>
                             </div>
                             <div className="flex items-center gap-3 text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">
-                               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {studentGrades.length}</span>
+                               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {localGrades.length}</span>
                                <div className="w-1 h-1 rounded-full bg-slate-200" />
                                <span>الفصل: {selectedTemplate.term}</span>
                             </div>
@@ -392,9 +308,9 @@ export default function GradesPage() {
                               className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-slate-100 bg-white text-xs font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 transition-all" 
                             />
                          </div>
-                         <Button onClick={handleSaveAll} disabled={saving} className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs shadow-lg gap-2 shrink-0">
-                            {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4.5 h-4.5" />}
-                            {saving ? 'جاري الحفظ...' : 'حفظ الدرجات'}
+                         <Button onClick={handleSaveAll} disabled={upsertMutation.isPending} className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs shadow-lg gap-2 shrink-0">
+                            {upsertMutation.isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4.5 h-4.5" />}
+                            {upsertMutation.isPending ? 'جاري الحفظ...' : 'حفظ الدرجات'}
                          </Button>
                       </div>
                    </div>
@@ -438,18 +354,17 @@ export default function GradesPage() {
               )}
             </div>
           </div>
-        )}
+        </QueryStateHandler>
       </div>
 
       {showCreateTemplate && (
         <CreateTemplateModal
-          classId={selectedClass}
+          classId={selectedClassId}
           teacherId={user!.id}
           user={user}
           subjects={subjects}
           onClose={() => setShowCreateTemplate(false)}
           onCreated={(t: any) => {
-            setTemplates(prev => [t, ...prev]);
             setSelectedTemplate(t);
             setShowCreateTemplate(false);
           }}
@@ -467,32 +382,31 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
   const [maxScore, setMaxScore] = useState('100');
   const [weight, setWeight] = useState('1');
   const [term, setTerm] = useState('الفصل الأول');
-  const [loading, setLoading] = useState(false);
+  const createMutation = useCreateExamTemplate();
 
   useEffect(() => {
-    if (subjects.length > 0) setSubject(subjects[0].subject_name);
-  }, [subjects]);
+    if (subjects.length > 0 && !subject) setSubject(subjects[0].subject_name);
+  }, [subjects, subject]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim()) return;
-    setLoading(true);
-    const { data, error } = await supabase.from('exam_templates').insert({
-      class_id: classId,
-      teacher_id: teacherId,
-      school_id: user?.schoolId,
-      subject: subject.trim(),
-      exam_type: examType,
-      max_score: Number(maxScore),
-      weight: Number(weight),
-      term,
-      title: title.trim() || subject.trim(),
-    }).select().single();
-
-    if (!error && data) {
-      onCreated(data as ExamTemplate);
+    
+    try {
+      const data = await createMutation.mutateAsync({
+        class_id: classId,
+        teacher_id: teacherId,
+        subject: subject.trim(),
+        exam_type: examType,
+        max_score: Number(maxScore),
+        weight: Number(weight),
+        term,
+        title: title.trim() || subject.trim(),
+      });
+      onCreated(data);
+    } catch (err) {
+      // toast handled via mutation? or here
     }
-    setLoading(false);
   };
 
   return (
@@ -544,9 +458,9 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
              </div>
           </div>
           <div className="flex gap-3 pt-4">
-            <Button type="submit" disabled={loading}
+            <Button type="submit" disabled={createMutation.isPending}
               className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-indigo-600 transition-all text-sm">
-              {loading ? 'جاري الحفظ...' : 'تأكيد وحفظ'}
+              {createMutation.isPending ? 'جاري الحفظ...' : 'تأكيد وحفظ'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
               className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>

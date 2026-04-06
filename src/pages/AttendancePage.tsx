@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   CalendarCheck, Users, Check, X, Clock, Search, 
   ChevronLeft, ArrowLeft, MoreHorizontal, LayoutGrid,
@@ -12,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
+import { useClasses, useBranding, useClassAttendance, useUpsertAttendance } from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface AttendanceRecord {
@@ -23,179 +24,138 @@ interface AttendanceRecord {
 export default function AttendancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [classes, setClasses] = useState<any[]>([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [students, setStudents] = useState<any[]>([]);
-  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  
+  // Selection state
+  const [selectedClassId, setSelectedClassId] = useState<string>('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [search, setSearch] = useState('');
 
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'إدارة عربية', logo: '' });
+  // ── Queries ──
+  const { data: branding } = useBranding();
+  const { data: classes = [], isLoading: classesLoading } = useClasses();
+  const { data: dbAttendance = [], isLoading: attendanceLoading, error, refetch, isRefetching } = useClassAttendance(selectedClassId, date);
 
+  // Local state for pending attendance changes
+  const [localAttendance, setLocalAttendance] = useState<AttendanceRecord[]>([]);
+
+  // Sync local state with DB data
   useEffect(() => {
-    const fetchBranding = async () => {
-      if (user?.schoolId) {
-        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
-        if (data) {
-          setSchoolBranding({
-            name: data.name,
-            logo: data.icon_url || data.logo_url || ''
-          });
-        }
-      }
-    };
-    fetchBranding();
-  }, [user?.schoolId]);
+    if (dbAttendance) {
+      setLocalAttendance(dbAttendance);
+    }
+  }, [JSON.stringify(dbAttendance)]);
 
+  // Handle first class selection
   useEffect(() => {
-    if (!user?.schoolId) return;
-    const fetchClasses = async () => {
-      let query = supabase.from('classes').select('*').eq('school_id', user.schoolId);
-      if (user.role !== 'admin') {
-        query = query.eq('teacher_id', user.id);
-      }
-      const { data } = await query;
-      setClasses(data || []);
-      if (data?.length) setSelectedClass(data[0].id);
-      setLoading(false);
-    };
-    fetchClasses();
-  }, [user?.schoolId, user?.id, user?.role]);
+    if (classes.length > 0 && !selectedClassId) {
+      setSelectedClassId(classes[0].id);
+    }
+  }, [classes, selectedClassId]);
 
-  useEffect(() => {
-    if (!selectedClass) return;
-    const fetchAttendance = async () => {
-      const { data: studentsData } = await supabase
-        .from('students')
-        .select('id, name')
-        .eq('school_id', user?.schoolId)
-        .eq('class_id', selectedClass)
-        .order('name');
-      const { data: records } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('school_id', user?.schoolId)
-        .eq('class_id', selectedClass)
-        .eq('date', date);
-
-      if (studentsData) {
-        setStudents(studentsData);
-        setAttendance(studentsData.map(s => {
-          const record = records?.find(r => r.student_id === s.id);
-          return { studentId: s.id, studentName: s.name, status: (record?.status as any) || null };
-        }));
-      }
-    };
-    fetchAttendance();
-  }, [selectedClass, date, user?.schoolId]);
+  // ── Mutations ──
+  const upsertMutation = useUpsertAttendance();
 
   const updateStatus = (studentId: string, status: 'present' | 'absent' | 'late') => {
-    setAttendance(prev => prev.map(a => a.studentId === studentId ? { ...a, status } : a));
+    setLocalAttendance(prev => prev.map(a => a.studentId === studentId ? { ...a, status } : a));
   };
 
   const handleSave = async () => {
-    if (!selectedClass || !user?.schoolId) return;
-    setSaving(true);
-    try {
-      const records = attendance.filter(a => a.status !== null).map(a => ({
+    if (!selectedClassId || !user?.schoolId) return;
+    
+    const recordsToPush = localAttendance
+      .filter(a => a.status !== null)
+      .map(a => ({
         student_id: a.studentId,
+        class_id: selectedClassId,
         date,
         status: a.status,
         school_id: user.schoolId,
-        class_id: selectedClass // Ensure class_id is present for composite key/policy
+        teacher_id: user.id
       }));
 
-      if (records.length === 0) {
-        toast({ title: 'تنبيه', description: 'لا توجد سجلات مكتملة لرصدها' });
-        setSaving(false);
-        return;
-      }
+    if (recordsToPush.length === 0) {
+      toast({ title: 'تنبيه', description: 'لا توجد سجلات مكتملة لرصدها' });
+      return;
+    }
 
-      const { error } = await supabase.from('attendance').upsert(records, { 
-        onConflict: 'student_id,date' 
-      });
-
-      if (error) throw error;
-      toast({ title: 'تم الاعتماد بنجاح', description: 'تم رصد سجل الحضور النهائي للفصل وإرسال التنبيهات للأهالي تلقائياً.' });
-      
-      // Refresh data locally after success to ensure UI is in sync
-      const { data: updatedRecords } = await supabase
-        .from('attendance')
-        .select('*')
-        .eq('school_id', user.schoolId)
-        .eq('class_id', selectedClass)
-        .eq('date', date);
-      
-      if (updatedRecords) {
-        setAttendance(prev => prev.map(a => {
-          const record = updatedRecords.find(r => r.student_id === a.studentId);
-          return { ...a, status: (record?.status as any) || a.status };
-        }));
-      }
-    } catch (error: any) {
-      console.error('Attendance Save Error:', error);
-      toast({ 
-        title: 'فشل في الحفظ', 
-        description: error.message || 'حدث خطأ أثناء رصد الحضور', 
-        variant: 'destructive' 
-      });
-    } finally {
-      setSaving(false);
+    try {
+      await upsertMutation.mutateAsync(recordsToPush);
+      toast({ title: 'تم الاعتماد بنجاح', description: 'تم رصد سجل الحضور النهائي للفصل.' });
+    } catch (err: any) {
+      toast({ title: 'فشل في الحفظ', description: err.message, variant: 'destructive' });
     }
   };
 
   const markAllPresent = () => {
-    setAttendance(prev => prev.map(a => ({ ...a, status: 'present' })));
+    setLocalAttendance(prev => prev.map(a => ({ ...a, status: 'present' })));
   };
 
   const stats = {
-    present: attendance.filter(a => a.status === 'present').length,
-    absent: attendance.filter(a => a.status === 'absent').length,
-    late: attendance.filter(a => a.status === 'late').length,
-    total: attendance.length
+    present: localAttendance.filter(a => a.status === 'present').length,
+    absent: localAttendance.filter(a => a.status === 'absent').length,
+    late: localAttendance.filter(a => a.status === 'late').length,
+    total: localAttendance.length
   };
 
-  const filteredAttendance = attendance.filter(a => a.studentName.includes(search));
+  const filteredAttendance = localAttendance.filter(a => (a.studentName || '').toLowerCase().includes(search.toLowerCase()));
+  const loading = classesLoading || (attendanceLoading && !isRefetching);
 
   return (
     <AppLayout>
       <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {/* Premium Header - Scaled Down */}
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">سجل الحضور الذكي</h1>
+          <div className="flex items-center gap-6">
+            <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
+               {branding?.logo_url ? (
+                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
+               ) : (
+                 <CalendarCheck className="w-8 h-8 text-indigo-600" />
+               )}
             </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">إدارة ورصد الغياب اليومي وضبط الانضباط المدرسي</p>
+            <div className="space-y-1">
+              <div className="flex items-center gap-3">
+                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'سجل الحصص'}</h1>
+                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">منصة التحضير</Badge>
+              </div>
+              <p className="text-slate-500 font-medium text-sm">متابعة حضور وانصراف الطلاب يومياً</p>
+            </div>
           </div>
-          
-          <div className="flex flex-wrap items-center gap-4">
-             <div className="relative group">
-               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                 className="h-11 pr-10 pl-6 rounded-xl border border-slate-100 bg-white text-xs font-black shadow-sm focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer" />
-               <Calendar className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600" />
+
+          <div className="flex flex-wrap items-center gap-5">
+             <div className="relative group min-w-[200px]">
+               <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+               <input 
+                type="date" 
+                value={date} 
+                onChange={e => setDate(e.target.value)}
+                className="w-full pr-12 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer" 
+               />
              </div>
-             <div className="h-8 w-px bg-slate-200 hidden md:block mx-1" />
-             <div className="relative group min-w-[180px]">
-               <select value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
-                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-sm appearance-none cursor-pointer">
-                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-               </select>
-               <Users className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
+
+             <div className="relative group min-w-[200px]">
+               <Users className="absolute right-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+                <select 
+                  value={selectedClassId} 
+                  onChange={e => setSelectedClassId(e.target.value)}
+                  className="w-full pr-12 pl-8 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer"
+                >
+                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
              </div>
           </div>
         </header>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-            <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري مزامنة السجلات اليومية</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <QueryStateHandler
+          loading={loading}
+          error={error}
+          data={dbAttendance}
+          onRetry={refetch}
+          isRefetching={isRefetching}
+          loadingMessage="جاري مزامنة بيانات الحصص والطلاب..."
+          emptyMessage="لم يتم العثور على طلاب في هذا الفصل."
+          isEmpty={selectedClassId && localAttendance.length === 0}
+        >
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start select-none">
             {/* Sidebar Summary - Scaled Down */}
             <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-6">
                <section className="bg-slate-900 rounded-[40px] p-8 space-y-8 shadow-2xl relative overflow-hidden">
@@ -216,18 +176,22 @@ export default function AttendancePage() {
                   <div className="space-y-3 relative z-10 pt-4 border-t border-white/5">
                      <div className="flex justify-between items-end">
                         <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">نسبة الانضباط اليومي</span>
-                        <span className="text-2xl font-black text-indigo-400">{stats.total > 0 ? Math.round((stats.present/stats.total)*100) : 0}%</span>
+                        <span className="text-2xl font-black text-indigo-400">{stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0}%</span>
                      </div>
-                     <Progress value={(stats.present/stats.total)*100} className="h-1.5 bg-white/10" />
+                     <Progress value={stats.total > 0 ? (stats.present / stats.total) * 100 : 0} className="h-1.5 bg-white/10" />
                   </div>
 
                   <div className="flex flex-col gap-3 relative z-10">
                      <Button onClick={markAllPresent} variant="ghost" className="h-11 rounded-xl bg-white/5 text-white font-black hover:bg-white/10 transition-all text-xs gap-3">
                         تعيين الجميع حضور
                      </Button>
-                     <Button onClick={handleSave} disabled={saving} className="h-13 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-xs shadow-xl shadow-indigo-900/40 gap-3">
-                        {saving ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-5 h-5" />}
-                        {saving ? 'جاري الرصد...' : 'اعتماد السجل النهائي'}
+                     <Button 
+                      onClick={handleSave} 
+                      disabled={upsertMutation.isPending} 
+                      className="h-13 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-xs shadow-xl shadow-indigo-900/40 gap-3"
+                     >
+                        {upsertMutation.isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check className="w-5 h-5" />}
+                        {upsertMutation.isPending ? 'جاري الرصد...' : 'اعتماد السجل النهائي'}
                      </Button>
                   </div>
                </section>
@@ -303,7 +267,7 @@ export default function AttendancePage() {
               </div>
             </div>
           </div>
-        )}
+        </QueryStateHandler>
       </div>
     </AppLayout>
   );

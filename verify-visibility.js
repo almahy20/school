@@ -2,7 +2,11 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
-const envPath = path.resolve('d:/البرمجه/react/edara-arabiya-main/.env');
+const envPath = path.resolve('.env');
+if (!fs.existsSync(envPath)) {
+  console.error("Error: .env file not found at " + envPath);
+  process.exit(1);
+}
 const env = fs.readFileSync(envPath, 'utf8');
 const url = env.match(/VITE_SUPABASE_URL="?(.*?)"?$/m)?.[1]?.trim();
 const key = env.match(/VITE_SUPABASE_PUBLISHABLE_KEY="?(.*?)"?$/m)?.[1]?.trim();

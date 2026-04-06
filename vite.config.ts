@@ -9,8 +9,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     strictPort: false,
     hmr: {
-      host: "localhost",
-      protocol: "ws",
+      port: 8080,
     },
   },
   plugins: [react()].filter(Boolean),

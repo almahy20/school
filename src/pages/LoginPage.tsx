@@ -14,7 +14,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const defaultLogo = "https://mecutwhreywjwstirpka.supabase.co/storage/v1/object/public/branding/logo.png";
+  const defaultLogo = "";
   const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export default function LoginPage() {
         try {
           const { data, error } = await supabase
             .from('schools')
-            .select('name, logo_url, icon_url, theme_color')
+            .select('name, logo_url')
             .eq('slug', slug)
             .maybeSingle();
             
@@ -37,13 +37,8 @@ export default function LoginPage() {
           }
 
           if (data) {
-            // Update theme color CSS variable
-            if (data.theme_color) {
-              document.documentElement.style.setProperty('--school-primary', data.theme_color);
-            }
-
             const timestamp = Date.now();
-            const logo = data.icon_url || data.logo_url || '';
+            const logo = data.logo_url || '';
             const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
             
             setSchoolBranding({

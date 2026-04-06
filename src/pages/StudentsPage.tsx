@@ -1,16 +1,15 @@
 import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useQueryClient } from '@tanstack/react-query';
-import { useStudents } from '@/hooks/queries';
+import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useClasses, useBranding } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Search, GraduationCap, School, User, 
-  Eye, Edit2, Trash2, Filter, MoreHorizontal,
+  Eye, Edit2, Edit3, Trash2, Filter, MoreHorizontal,
   ChevronLeft, ArrowRight, BookOpen, Clock, Activity,
-  Calendar, CheckCircle, Shield, AlertCircle, RefreshCw
+  Calendar, CheckCircle, Shield, AlertCircle, RefreshCw,
+  Phone, MapPin
 } from 'lucide-react';
 import { sendPushToUser } from '@/utils/pushNotifications';
 import { useNavigate } from 'react-router-dom';
@@ -27,42 +26,22 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  // ── React Query (cached, no re-fetch on navigation) ──
-  const { 
-    data: students = [], 
-    isLoading: loading,
-    error,
-    refetch,
-    isRefetching 
-  } = useStudents();
+  // ── React Query Hooks ──
+  const { data: students = [], isLoading: loading, error, refetch, isRefetching } = useStudents();
+  const { data: branding } = useBranding();
+  const { data: classes = [] } = useClasses();
+  const deleteMutation = useDeleteStudent();
 
   // ── Local UI state ──
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('الكل');
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'إدارة عربية', logo: '' });
   
   // Detail Modal State
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
-
-  useEffect(() => {
-    const fetchBranding = async () => {
-      if (user?.schoolId) {
-        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
-        if (data) {
-          setSchoolBranding({
-            name: data.name,
-            logo: data.icon_url || data.logo_url || ''
-          });
-        }
-      }
-    };
-    fetchBranding();
-  }, [user?.schoolId]);
+  const [showEdit, setShowEdit] = useState(false);
 
   // Derive classes list for filter dropdown
   const availableClasses = useMemo(() => [
@@ -88,35 +67,24 @@ export default function StudentsPage() {
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
   const handleShowDetail = (student: any) => {
-    setSelectedStudent(student);
-    setShowDetail(true);
+    navigate(`/students/${student.id}`);
   };
 
   const handleDeleteStudent = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا الطالب؟')) return;
-    const { error } = await supabase.from('students').delete().eq('id', id);
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في حذف الطالب', variant: 'destructive' });
-    } else {
+    try {
+      await deleteMutation.mutateAsync(id);
       toast({ title: 'تم الحذف', description: 'تم حذف الطالب بنجاح' });
       setShowDetail(false);
-      queryClient.invalidateQueries({ queryKey: ['students', user?.schoolId] });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message || 'فشل في حذف الطالب', variant: 'destructive' });
     }
   };
 
-  // For the Add modal we still need classes
-  const [classes, setClasses] = useState<{id: string, name: string}[]>([]);
-
-  // Load classes for the Add modal
-  const loadModalData = async () => {
-    if (!user?.schoolId) return;
-    const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', user.schoolId);
-    setClasses(classesData || []);
-  };
-
+  // Reset page when search/filter changed
   useEffect(() => {
-    if (showAdd) loadModalData();
-  }, [showAdd]);
+    setPage(1);
+  }, [search, filterClass]);
 
   return (
     <AppLayout>
@@ -236,11 +204,25 @@ export default function StudentsPage() {
             { label: 'العنوان', value: selectedStudent.address || 'غير مسجل', icon: MapPin, fullWidth: true },
           ]}
           actions={user?.role === 'admin' ? [
-            { label: 'تعديل البيانات', icon: Edit3, onClick: () => navigate(`/students/${selectedStudent.id}`) },
+            { label: 'عرض السجل الأكاديمي', icon: Activity, onClick: () => navigate(`/students/${selectedStudent.id}`) },
+            { label: 'تعديل البيانات', icon: Edit3, onClick: () => { setShowDetail(false); setShowEdit(true); } },
             { label: 'حذف السجل', icon: Trash2, variant: 'destructive', onClick: () => handleDeleteStudent(selectedStudent.id) }
           ] : [
             { label: 'عرض السجل الأكاديمي', icon: Activity, onClick: () => navigate(`/students/${selectedStudent.id}`) }
           ]}
+        />
+      )}
+
+      {showEdit && selectedStudent && (
+        <EditStudentModal
+          student={selectedStudent}
+          classes={classes}
+          user={user}
+          onClose={() => setShowEdit(false)}
+          onSuccess={() => {
+            setShowEdit(false);
+            setSelectedStudent(null);
+          }}
         />
       )}
 
@@ -249,10 +231,7 @@ export default function StudentsPage() {
           classes={classes} 
           user={user} 
           onClose={() => setShowAdd(false)} 
-          onSuccess={() => { 
-            setShowAdd(false);
-            queryClient.invalidateQueries({ queryKey: ['students', user?.schoolId] }); 
-          }} 
+          onSuccess={() => setShowAdd(false)} 
         />
       )}
     </AppLayout>
@@ -300,27 +279,25 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
   const [name, setName] = useState('');
   const [classId, setClassId] = useState('');
   const [parentPhone, setParentPhone] = useState('');
-  const [loading, setLoading] = useState(false);
+  const addMutation = useAddStudent();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    setLoading(true);
-    const normalizedPhone = parentPhone.replace(/\D/g, '');
-    const { data: student, error } = await supabase.from('students').insert({ 
-      name: name.trim(), 
-      class_id: classId || null,
-      parent_phone: normalizedPhone || null,
-      school_id: user?.schoolId
-    }).select().single();
-    if (error) {
-      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-      setLoading(false);
-      return;
+    
+    try {
+      const normalizedPhone = parentPhone.replace(/\D/g, '');
+      await addMutation.mutateAsync({
+        name: name.trim(),
+        class_id: classId || null,
+        parent_phone: normalizedPhone || null,
+        school_id: user?.schoolId
+      });
+      toast({ title: 'تمت الإضافة بنجاح' });
+      onSuccess();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message || 'فشل في إضافة الطالب', variant: 'destructive' });
     }
-    toast({ title: 'تمت الإضافة بنجاح' });
-    onSuccess();
-    setLoading(false);
   };
 
   return (
@@ -351,9 +328,9 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
             </div>
           </div>
           <div className="flex gap-4 pt-6">
-            <Button type="submit" disabled={loading}
+            <Button type="submit" disabled={addMutation.isPending}
               className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-              {loading ? 'جاري الحفظ...' : 'تأكيد الحفظ'}
+              {addMutation.isPending ? 'جاري الحفظ...' : 'تأكيد الحفظ'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
               className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
@@ -369,46 +346,25 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
     const [name, setName] = useState(student.name);
     const [classId, setClassId] = useState(student.class_id || '');
     const [parentPhone, setParentPhone] = useState(student.parent_phone || '');
-    const [loading, setLoading] = useState(false);
+    const updateMutation = useUpdateStudent();
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!name.trim()) return;
-      setLoading(true);
-
+      
       try {
-        // 1. Update student
-        const normalizedPhone = parentPhone.replace(/\D/g, '');
-        const { error } = await supabase.from('students').update({ 
+        const normalizedPhone = (parentPhone || '').replace(/\D/g, '');
+        await updateMutation.mutateAsync({ 
+          id: student.id,
           name: name.trim(), 
           class_id: classId || null,
           parent_phone: normalizedPhone || null
-        }).eq('id', student.id);
-        
-        if (error) throw error;
-
-        // 2. Notify Parent if linked
-        const { data: parentLink } = await supabase
-          .from('student_parents')
-          .select('parent_id')
-          .eq('student_id', student.id)
-          .maybeSingle();
-        
-        if (parentLink) {
-          await sendPushToUser({
-            userId: parentLink.parent_id,
-            title: schoolBranding.name,
-            body: `تحديث بيانات الطالب: تم تحديث بيانات الطالب ${name.trim()} من قبل الإدارة.`,
-            url: `/parent/children/${student.id}`
-          });
-        }
+        });
 
         toast({ title: 'تم التحديث بنجاح' });
         onSuccess();
       } catch (err: any) {
         toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-      } finally {
-        setLoading(false);
       }
     };
   
@@ -442,9 +398,9 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
             </div>
 
             <div className="flex gap-4 pt-6">
-              <Button type="submit" disabled={loading}
+              <Button type="submit" disabled={updateMutation.isPending}
                 className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-                {loading ? 'جاري الحفظ...' : 'حفظ التغييرات'}
+                {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التغييرات'}
               </Button>
               <Button type="button" onClick={onClose} variant="ghost"
                 className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>

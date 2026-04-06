@@ -24,8 +24,11 @@ import {
   useParentChildActivities,
   useAdminStats,
   useTeacherStats,
-  useClasses 
+  useAdminActivities,
+  useClasses,
+  useBranding
 } from '@/hooks/queries';
+
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -97,6 +100,7 @@ function StatsCard({ title, value, icon: Icon, color, trend, subValue }: any) {
 function AdminDashboard() {
   const { user } = useAuth();
   const { data: stats = { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0 } } = useAdminStats();
+  const { data: activities = [], isLoading: activitiesLoading } = useAdminActivities();
 
   const userName = user?.fullName ? user.fullName.split(' ')[0] : 'أدمن';
 
@@ -135,8 +139,8 @@ function AdminDashboard() {
         <StatsCard title="إجمالي الطلاب" value={stats.students || 0} icon={Users} color="white" trend="نشط" />
         <StatsCard 
           title="التحصيل المالي" 
-          value={`${(stats.totalPaid || 0).toLocaleString()} ر.س`} 
-          subValue={`من إجمالي ${(stats.totalDue || 0).toLocaleString()} ر.س`} 
+          value={`${(stats.totalPaid || 0).toLocaleString()} ج.م`} 
+          subValue={`من إجمالي ${(stats.totalDue || 0).toLocaleString()} ج.م`} 
           icon={Wallet} 
           color="indigo" 
         />
@@ -165,17 +169,51 @@ function AdminDashboard() {
              <Button variant="ghost" className="h-12 px-6 rounded-xl text-slate-400 font-black text-xs uppercase tracking-widest hover:bg-slate-50">عرض سجل العمليات</Button>
            </div>
            
-           <div className="space-y-8">
-              <div className="p-24 text-center flex flex-col items-center gap-6 bg-slate-50/50 border border-dashed border-slate-200 rounded-[48px] relative overflow-hidden group">
-                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                 <div className="w-20 h-20 rounded-[32px] bg-white flex items-center justify-center text-slate-200 shadow-inner border border-slate-100 relative z-10 group-hover:scale-110 transition-transform">
-                    <Activity className="w-10 h-10" />
+           <div className="space-y-6">
+              {activitiesLoading ? (
+                <div className="space-y-4">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="h-20 bg-slate-50 animate-pulse rounded-3xl" />
+                  ))}
+                </div>
+              ) : activities.length > 0 ? (
+                activities.map((act: any) => {
+                  const Icon = act.type === 'complaint' ? MessageSquare : act.type === 'registration' ? UserCheck : Wallet;
+                  return (
+                    <div key={act.id} className="group p-6 rounded-3xl border border-slate-100 bg-white hover:bg-slate-50 hover:shadow-xl hover:shadow-indigo-500/5 transition-all flex items-center justify-between">
+                      <div className="flex items-center gap-5">
+                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+                            <Icon className="w-6 h-6" />
+                         </div>
+                         <div>
+                            <h3 className="text-base font-black text-slate-900 mb-1">{act.title}</h3>
+                            <p className="text-xs font-medium text-slate-400">{act.description}</p>
+                         </div>
+                      </div>
+                      <div className="text-left">
+                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">{new Date(act.date).toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' })}</p>
+                         <Badge variant="outline" className={cn(
+                           "border-none font-bold text-[8px] py-0.5 px-2 rounded-lg",
+                           act.status === 'pending' ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
+                         )}>
+                           {act.status === 'pending' ? 'قيد الانتظار' : 'مكتمل'}
+                         </Badge>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                 <div className="p-24 text-center flex flex-col items-center gap-6 bg-slate-50/50 border border-dashed border-slate-200 rounded-[48px] relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="w-20 h-20 rounded-[32px] bg-white flex items-center justify-center text-slate-200 shadow-inner border border-slate-100 relative z-10 group-hover:scale-110 transition-transform">
+                       <Activity className="w-10 h-10" />
+                    </div>
+                    <div className="relative z-10 space-y-2">
+                       <p className="text-slate-900 font-black text-lg">لا توجد نشاطات مؤخرة</p>
+                       <p className="text-slate-400 font-medium text-sm">سيظهر هنا أي تحديثات تتم على بيانات الطلاب أو المعلمين.</p>
+                    </div>
                  </div>
-                 <div className="relative z-10 space-y-2">
-                    <p className="text-slate-900 font-black text-lg">لا توجد نشاطات مؤخرة</p>
-                    <p className="text-slate-400 font-medium text-sm">سيظهر هنا أي تحديثات تتم على بيانات الطلاب أو المعلمين.</p>
-                 </div>
-              </div>
+              )}
            </div>
         </div>
 
@@ -200,19 +238,10 @@ function AdminDashboard() {
   );
 }
 
-function RegistrationLinksCard({ schoolId }: { schoolId: string | undefined }) {
+function RegistrationLinksCard() {
   const { toast } = useToast();
-  const { data: schoolData } = useQuery({
-    queryKey: ['school-slug', schoolId],
-    queryFn: async () => {
-      if (!schoolId) return null;
-      const { data, error } = await supabase.from('schools').select('slug').eq('id', schoolId).single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!schoolId,
-  });
-  const slug = schoolData?.slug || '';
+  const { data: branding } = useBranding();
+  const slug = branding?.slug || '';
 
   const copy = (type: 'teachers' | 'parents') => {
     const link = `${window.location.origin}/register/${type}/${slug}`;

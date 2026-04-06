@@ -1,174 +1,56 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
-  MessageSquare, Search, Filter, Clock, CheckCircle, 
-  AlertCircle, ChevronLeft, MoreHorizontal, User,
-  Mail, Phone, Shield, ArrowUpRight, History
+  MessageSquare, Search, Clock, CheckCircle, 
+  AlertCircle, ArrowUpRight, User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { sendPushToUser } from '@/utils/pushNotifications';
-
-interface Complaint {
-  id: string;
-  parent_id: string;
-  student_id: string;
-  content: string;
-  status: 'pending' | 'in_progress' | 'resolved' | 'processing';
-  created_at: string;
-  parent_name?: string;
-  student_name?: string;
-}
+import { useComplaints, useUpsertComplaint } from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function AdminComplaintsPage() {
-  const { user } = useAuth();
   const { toast } = useToast();
-  const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة', logo: '' });
 
-  useEffect(() => {
-    const fetchBranding = async () => {
-      if (user?.schoolId) {
-        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
-        if (data) {
-          const timestamp = Date.now();
-          const logo = data.icon_url || data.logo_url || '';
-          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-          
-          setSchoolBranding({
-            name: data.name,
-            logo: logoWithCacheBust
-          });
-        }
-      }
-    };
-    fetchBranding();
-  }, [user?.schoolId]);
+  // ── Queries ──
+  const { 
+    data: complaints = [], 
+    isLoading: loading, 
+    error, 
+    refetch 
+  } = useComplaints();
 
-  const loadData = useCallback(async () => {
-    if (!user?.id) return;
+  // ── Mutations ──
+  const upsertComplaintMutation = useUpsertComplaint();
+
+  const updateStatus = async (id: string, currentContent: string, status: any) => {
     try {
-      setLoading(true);
-      const query = (supabase as any).from('complaints').select(`
-        *,
-        students!complaints_student_id_fkey(name)
-      `).order('created_at', { ascending: false });
-
-      if (!user?.isSuperAdmin && user?.schoolId) {
-        query.eq('school_id', user.schoolId);
-      }
-
-      const { data: complaintsData, error } = await query;
-
-      if (error) {
-        if (error.code !== 'PGRST116') {
-           console.error('Complaints fetch error:', error);
-        }
-      } else if (complaintsData) {
-        const parentIds = [...new Set(complaintsData.map((c: any) => c.parent_id))].filter(Boolean) as string[];
-        
-        let profiles: any[] = [];
-        if (parentIds.length > 0) {
-          const profilesQuery = supabase.from('profiles').select('id, full_name');
-          if (!user?.isSuperAdmin && user?.schoolId) {
-              profilesQuery.eq('school_id', user.schoolId);
-          }
-          const { data } = await profilesQuery.in('id', parentIds);
-          profiles = data || [];
-        }
-
-        const enriched = complaintsData.map((c: any) => ({
-          ...c,
-          parent_name: profiles?.find(p => p.id === c.parent_id)?.full_name || 'ولي أمر',
-          student_name: c.students?.name || 'غير محدد',
-        }));
-        setComplaints(enriched);
-      }
-    } catch (err) {
-      console.error('Complaints load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, user?.schoolId, user?.isSuperAdmin]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Mark complaint notifications as read for admin
-  useEffect(() => {
-    if (user?.id) {
-      (supabase as any).from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('type', 'complaint_new')
-        .then();
-    }
-  }, [user?.id, complaints]);
-
-  // Real-time subscription for admin
-  useEffect(() => {
-    if (!user?.schoolId) return;
-
-    const channel = supabase
-      .channel('admin-complaints')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'complaints',
-          filter: user.isSuperAdmin ? undefined : `school_id=eq.${user.schoolId}`,
-        },
-        payload => {
-          if (payload.eventType === 'INSERT') {
-            // Reload to get names and associations correctly
-            loadData();
-            toast({ title: 'شكوى جديدة', description: 'تم استلام شكوى جديدة' });
-          } else if (payload.eventType === 'UPDATE') {
-            setComplaints(prev => prev.map(c => c.id === payload.new.id ? { ...c, ...payload.new } : c));
-          } else if (payload.eventType === 'DELETE') {
-            setComplaints(prev => prev.filter(c => c.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.schoolId, user?.isSuperAdmin, loadData, toast]);
-
-
-  const updateStatus = async (id: string, status: Complaint['status']) => {
-    const { error } = await (supabase as any).from('complaints')
-      .update({ status })
-      .eq('id', id);
-
-    if (error) {
-      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    } else {
-      // Note: The database trigger notify_complaint_update will handle the notification and push
-      setComplaints(prev => prev.map(c => c.id === id ? { ...c, status } : c));
+      await upsertComplaintMutation.mutateAsync({ 
+        id, 
+        content: currentContent, // Required by schema
+        status 
+      });
       toast({ title: 'تم التحديث بنجاح' });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
-  const filtered = complaints.filter(c => {
-    const matchSearch = c.content.toLowerCase().includes(search.toLowerCase()) || 
-                      c.parent_name?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'الكل' || c.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filtered = useMemo(() => {
+    return complaints.filter(c => {
+      const matchSearch = c.content.toLowerCase().includes(search.toLowerCase()) || 
+                        c.parent_name?.toLowerCase().includes(search.toLowerCase());
+      const matchStatus = filterStatus === 'الكل' || c.status === filterStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [complaints, search, filterStatus]);
 
   return (
     <AppLayout>
@@ -179,7 +61,7 @@ export default function AdminComplaintsPage() {
                <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
                <h1 className="text-2xl font-black text-slate-900 tracking-tight">مركز الشكاوى والمقترحات</h1>
             </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">إدارة بلاغات أولياء الأمور وحلها لضمان الجودة</p>
+            <p className="text-slate-500 font-medium text-sm pr-4">متابعة بلاغات أولياء الأمور وحلها لضمان استمرارية الجودة التعليمية.</p>
           </div>
         </header>
 
@@ -187,7 +69,7 @@ export default function AdminComplaintsPage() {
            <div className="lg:col-span-2 relative group w-full text-right">
               <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
               <Input 
-                placeholder="بحث بالعنوان أو اسم ولي الأمر..." 
+                placeholder="بحث بالمحتوى أو اسم ولي الأمر..." 
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
@@ -207,33 +89,28 @@ export default function AdminComplaintsPage() {
            </div>
         </div>
 
-        {loading && complaints.length === 0 ? (
-             <div className="flex flex-col items-center justify-center py-32 gap-4">
-               <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-               <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري استرجاع البلاغات</p>
-             </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-200 p-24 text-center rounded-[48px] shadow-sm">
-            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-              <MessageSquare className="w-10 h-10" />
-            </div>
-            <h2 className="text-xl font-black text-slate-900 mb-2">لا يوجد شكاوى حالياً</h2>
-            <p className="text-slate-400 font-medium text-sm">سجلك خالٍ من البلاغات المعلقة.</p>
-          </div>
-        ) : (
+        <QueryStateHandler
+          loading={loading}
+          error={error}
+          data={complaints}
+          onRetry={refetch}
+          isEmpty={filtered.length === 0}
+          loadingMessage="جاري مزامنة البلاغات..."
+          emptyMessage={search ? 'لم نجد نتائج مطابقة لطلبك' : 'لا توجد شكاوى معلقة حالياً'}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filtered.map(c => (
-              <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} />
+              <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} isUpdating={upsertComplaintMutation.isPending} />
             ))}
           </div>
-        )}
+        </QueryStateHandler>
       </div>
     </AppLayout>
   );
 }
 
-function ComplaintCard({ complaint, onStatusChange }: { complaint: Complaint; onStatusChange: (id: string, s: any) => void }) {
-  const statusConfig = {
+function ComplaintCard({ complaint, onStatusChange, isUpdating }: { complaint: any; onStatusChange: (id: string, content: string, s: any) => void, isUpdating: boolean }) {
+  const statusConfig: any = {
     pending: { label: 'جديد', color: 'bg-rose-50 text-rose-600', icon: AlertCircle },
     in_progress: { label: 'قيد الحل', color: 'bg-amber-50 text-amber-600', icon: Clock },
     processing: { label: 'قيد المعالجة', color: 'bg-amber-50 text-amber-600', icon: Clock },
@@ -251,7 +128,7 @@ function ComplaintCard({ complaint, onStatusChange }: { complaint: Complaint; on
                 </Avatar>
                 <div className="min-w-0">
                    <h3 className="text-sm font-black text-slate-900 truncate leading-none mb-1.5">{complaint.parent_name}</h3>
-                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">بلاغ رسمي</span>
+                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">بلاغ في {new Date(complaint.created_at).toLocaleDateString('ar-EG')}</span>
                 </div>
              </div>
              <Badge className={cn("px-3 py-1 rounded-lg font-black text-[9px] border-none", config.color)}>
@@ -268,14 +145,16 @@ function ComplaintCard({ complaint, onStatusChange }: { complaint: Complaint; on
                 <div className="text-[9px] font-black text-slate-300 uppercase tracking-widest">بخصوص الطالب</div>
                 <div className="text-[10px] font-black text-slate-900">{complaint.student_name}</div>
              </div>
-             <span className="text-[9px] font-black text-slate-300 uppercase">{new Date(complaint.created_at).toLocaleDateString('ar-EG')}</span>
           </div>
 
           <div className="flex gap-3 pt-2">
              {complaint.status !== 'resolved' && (
-               <Button onClick={() => onStatusChange(complaint.id, complaint.status === 'pending' ? 'in_progress' : 'resolved')}
-                 className="flex-1 h-10 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs gap-2">
-                 <ArrowUpRight className="w-4 h-4" /> {complaint.status === 'pending' ? 'بدء المعالجة' : 'إغلاق الشكوى'}
+               <Button 
+                 onClick={() => onStatusChange(complaint.id, complaint.content, complaint.status === 'pending' ? 'in_progress' : 'resolved')}
+                 disabled={isUpdating}
+                 className="flex-1 h-10 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs gap-2"
+               >
+                 <ArrowUpRight className="w-4 h-4" /> {isUpdating ? 'جاري التحديث...' : complaint.status === 'pending' ? 'بدء المعالجة' : 'إغلاق الشكوى'}
                </Button>
              )}
              <Button variant="ghost" className="h-10 px-4 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-900 transition-all text-xs border border-transparent hover:border-slate-100">

@@ -3,51 +3,99 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 export interface AttendanceRecord {
-  id: string;
-  student_id: string;
-  date: string;
-  status: 'present' | 'absent' | 'late';
-  class_id: string | null;
-  school_id: string | null;
-  students?: { name: string };
-  classes?: { name: string };
+  studentId: string;
+  studentName: string;
+  status: 'present' | 'absent' | 'late' | null;
+  grade_level?: string;
+  class_name?: string;
 }
 
-async function fetchAttendance(schoolId: string | null, isSuperAdmin: boolean, dateFilter?: string): Promise<AttendanceRecord[]> {
-  const q = supabase.from('attendance').select('*, students(name), classes(name)');
-  if (!isSuperAdmin && schoolId) {
-    q.eq('school_id', schoolId);
-  }
-  if (dateFilter) {
-    q.eq('date', dateFilter);
-  }
-  const { data, error } = await q.order('date', { ascending: false }).limit(200);
-  if (error) throw error;
-  return (data as AttendanceRecord[]) || [];
-}
-
-export function useAttendance(dateFilter?: string) {
+export function useClassAttendance(classId: string | null, date: string) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ['attendance', user?.schoolId, dateFilter],
-    queryFn: () => fetchAttendance(user?.schoolId || null, !!user?.isSuperAdmin, dateFilter),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 2 * 60 * 1000, // 2 min - attendance changes frequently
-    gcTime: 5 * 60 * 1000,
+    queryKey: ['attendance', user?.schoolId, classId, date],
+    queryFn: async () => {
+      if (!user?.schoolId || !classId) return [];
+
+      // Fetch students in class
+      const { data: students, error: sError } = await supabase
+        .from('students')
+        .select('id, name')
+        .eq('school_id', user.schoolId)
+        .eq('class_id', classId)
+        .order('name');
+      if (sError) throw sError;
+      if (!students?.length) return [];
+
+      // Fetch attendance records for class and date
+      const { data: records, error: rError } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('school_id', user.schoolId)
+        .eq('class_id', classId)
+        .eq('date', date);
+      if (rError) throw rError;
+
+      return students.map(s => {
+        const record = records?.find(r => r.student_id === s.id);
+        return { 
+          studentId: s.id, 
+          studentName: s.name, 
+          status: (record?.status as any) || null 
+        };
+      }) as AttendanceRecord[];
+    },
+    enabled: !!(user?.schoolId && classId),
+    staleTime: 1 * 60 * 1000, 
   });
 }
 
-export function useAddAttendance() {
+export function useUpsertAttendance() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (records: Omit<AttendanceRecord, 'id' | 'students' | 'classes'>[]) => {
-      const { error } = await supabase.from('attendance').upsert(records, { onConflict: 'student_id,date' });
+    mutationFn: async (records: any[]) => {
+      if (!records || records.length === 0) return;
+      const classId = records[0].class_id;
+      const date = records[0].date;
+
+      // 1. Delete existing records for this class & date
+      await supabase
+        .from('attendance')
+        .delete()
+        .eq('class_id', classId)
+        .eq('date', date);
+
+      // 2. Insert new records
+      const { error } = await supabase.from('attendance').insert(records);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['attendance', user?.schoolId] });
+    onSuccess: (_, variables) => {
+      if (variables.length > 0) {
+        queryClient.invalidateQueries({ 
+          queryKey: ['attendance', user?.schoolId, variables[0].class_id, variables[0].date] 
+        });
+      }
     },
   });
 }
+
+export function useStudentAttendance(studentId: string | null) {
+  return useQuery({
+    queryKey: ['attendance', studentId],
+    queryFn: async () => {
+      if (!studentId) return [];
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('date', { ascending: false });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!studentId,
+  });
+}
+

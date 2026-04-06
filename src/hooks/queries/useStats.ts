@@ -93,3 +93,69 @@ export function useTeacherStats() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+export function useAdminActivities() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['admin-activities', user?.schoolId],
+    queryFn: async () => {
+      if (!user?.schoolId) return [];
+      
+      const [complaints, rolesRes, payments] = await Promise.all([
+        supabase.from('complaints').select('id, content, created_at, status').eq('school_id', user.schoolId).order('created_at', { ascending: false }).limit(5),
+        (supabase as any).from('user_roles').select('id, created_at, approval_status, user_id').eq('school_id', user.schoolId).eq('approval_status', 'pending').order('created_at', { ascending: false }).limit(5),
+        supabase.from('fee_payments').select('id, amount, payment_date, fees(student_id, students(name))').eq('school_id', user.schoolId).order('payment_date', { ascending: false }).limit(5),
+      ]);
+
+      const userIds = (rolesRes.data || []).map((r: any) => r.user_id).filter(Boolean);
+      const profilesMap: Record<string, string> = {};
+      
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, full_name').in('id', userIds);
+        if (profs) {
+          profs.forEach(p => { profilesMap[p.id] = p.full_name; });
+        }
+      }
+
+      const activities: any[] = [];
+
+      (complaints.data || []).forEach((c: any) => {
+        activities.push({
+          id: c.id,
+          type: 'complaint',
+          title: 'شكوى جديدة',
+          description: c.content.length > 60 ? c.content.substring(0, 60) + '...' : c.content,
+          date: c.created_at,
+          status: c.status
+        });
+      });
+
+      (rolesRes.data || []).forEach((r: any) => {
+        activities.push({
+          id: r.id,
+          type: 'registration',
+          title: 'طلب انضمام جديد',
+          description: `المستخدم: ${profilesMap[r.user_id] || 'غير معروف'}`,
+          date: r.created_at,
+          status: r.approval_status
+        });
+      });
+
+      (payments.data || []).forEach((p: any) => {
+        activities.push({
+          id: p.id,
+          type: 'payment',
+          title: 'تم دفع رسوم',
+          description: `المبلغ: ${p.amount} ج.م للطالب ${(p.fees as any)?.students?.name || 'غير معروف'}`,
+          date: p.payment_date,
+          status: 'success'
+        });
+      });
+
+      return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+
+    },
+    enabled: !!user?.schoolId && user?.role === 'admin',
+    staleTime: 60 * 1000,
+  });
+}

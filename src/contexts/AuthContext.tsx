@@ -2,20 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { supabase } from '@/integrations/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
-export type AppRole = 'admin' | 'teacher' | 'parent';
-
-export interface AppUser {
-  id: string;
-  email: string;
-  phone: string;
-  fullName: string;
-  role: AppRole;
-  isSuperAdmin: boolean;
-  schoolId: string | null;
-  schoolStatus: 'active' | 'suspended';
-  approvalStatus: 'pending' | 'approved' | 'rejected';
-  subscriptionExpired: boolean;
-}
+import { AppRole, AppUser } from '@/types/auth';
 
 interface AuthContextType {
   user: AppUser | null;

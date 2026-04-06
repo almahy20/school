@@ -28,7 +28,9 @@ function playChime() {
 function vibrate() {
   try {
     if ('vibrate' in navigator) navigator.vibrate([80, 40, 80]);
-  } catch (_) {}
+  } catch (_) {
+    // Vibration not supported or failed
+  }
 }
 
 async function showDesktopNotification(senderName: string, content: string) {

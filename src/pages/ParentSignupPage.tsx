@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { useSchoolBySlug } from '@/hooks/queries';
 
 export default function ParentSignupPage() {
   const { school_slug } = useParams();
@@ -13,31 +13,19 @@ export default function ParentSignupPage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
-  const [schoolInfo, setSchoolInfo] = useState<{ id: string, name: string, logo: string } | null>(null);
+  const { data: school, isLoading: schoolLoading, error: schoolError } = useSchoolBySlug(school_slug);
   const { signup } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    async function loadSchool() {
-      if (!school_slug) {
-        setError('رابط المدرسة غير صالح');
-        return;
-      }
-      // @ts-ignore - type not yet generated
-      const { data, error } = await supabase.rpc('get_school_id_by_slug', { p_slug: school_slug });
-      if (error || !data) {
-        setError('المدرسة غير موجودة');
-        return;
-      }
-      const { data: dbSchool } = await supabase.from('schools').select('id, name, logo_url').eq('id', data as string).single();
-      if (dbSchool) setSchoolInfo({ id: dbSchool.id, name: dbSchool.name, logo: dbSchool.logo_url || '' });
+    if (schoolError) {
+      setError('المدرسة غير موجودة أو حدث خطأ في التحميل');
     }
-    loadSchool();
-  }, [school_slug]);
+  }, [schoolError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schoolInfo) return;
+    if (!school) return;
     if (!fullName.trim() || !phone.trim() || !password.trim()) {
       setError('يرجى ملء جميع الحقول المطلوبة');
       return;
@@ -47,7 +35,7 @@ export default function ParentSignupPage() {
       return;
     }
     setLoading(true);
-    const err = await signup(phone.trim(), password, fullName.trim(), 'parent', schoolInfo.id);
+    const err = await signup(phone.trim(), password, fullName.trim(), 'parent', school.id);
     setLoading(false);
     if (err) setError(err);
     else {
@@ -56,8 +44,13 @@ export default function ParentSignupPage() {
     }
   };
 
-  if (!schoolInfo && !error) {
-    return <div className="min-h-screen flex items-center justify-center">جاري تحميل بيانات المدرسة...</div>;
+  if (schoolLoading && !error) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir="rtl">
+         <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+         <p className="mt-4 text-slate-500 font-bold">جاري تحميل بيانات المدرسة...</p>
+      </div>
+    );
   }
 
   return (
@@ -65,20 +58,20 @@ export default function ParentSignupPage() {
       <div className="w-full max-w-[480px] relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group overflow-hidden">
-            {schoolInfo?.logo ? (
-              <img src={schoolInfo.logo} alt="School Logo" className="w-full h-full object-contain" />
+            {school?.logo_url ? (
+              <img src={school.logo_url} alt="School Logo" className="w-full h-full object-contain" />
             ) : (
               <BookOpen className="w-10 h-10 text-primary" />
             )}
           </div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">تسجيل كولي أمر جديد</h1>
           <p className="text-sm font-medium text-slate-400">
-            أبناء في مدرسة: <span className="font-bold text-slate-800">{schoolInfo?.name}</span>
+            أبناء في مدرسة: <span className="font-bold text-slate-800">{school?.name}</span>
           </p>
         </div>
 
         <div className="bg-white/70 backdrop-blur-2xl rounded-[40px] border border-white shadow-2xl shadow-slate-900/5 p-10">
-          {error && !schoolInfo ? (
+          {error && !school ? (
              <div className="bg-rose-50 border border-rose-100 text-rose-500 text-sm font-bold p-6 rounded-xl text-center">
                {error}
              </div>

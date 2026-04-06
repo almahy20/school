@@ -66,8 +66,8 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
   const { data: initialUnreadCount = 0, refetch } = useUnreadNotificationsCount();
   const [unreadCount, setUnreadCount] = useState(0);
-  const defaultLogo = "https://mecutwhreywjwstirpka.supabase.co/storage/v1/object/public/branding/logo.png";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo, themeColor: '#1A3C8F' });
+  const defaultLogo = "";
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
 
   useEffect(() => {
     const fetchBranding = async () => {
@@ -75,7 +75,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         if (user?.schoolId) {
           const { data, error } = await supabase
             .from('schools')
-            .select('name, logo_url, icon_url, theme_color')
+            .select('name, logo_url')
             .eq('id', user.schoolId)
             .maybeSingle();
 
@@ -86,14 +86,14 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
           if (data) {
             const timestamp = Date.now();
-            const logo = data.icon_url || data.logo_url || '';
+            const logo = data.logo_url || '';
             const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
             
-            setSchoolBranding({
+            setSchoolBranding(prev => ({
+              ...prev,
               name: data.name,
               logo: logoWithCacheBust,
-              themeColor: data.theme_color
-            });
+            }));
           }
         }
       } catch (err) {
@@ -113,19 +113,19 @@ export default function Sidebar({ onClose }: SidebarProps) {
           table: 'schools',
           filter: user?.schoolId ? `id=eq.${user.schoolId}` : undefined
         },
-        (payload) => {
-          const newSchool = payload.new as any;
-          
-          const timestamp = Date.now();
-          const logo = newSchool.icon_url || newSchool.logo_url || '';
-          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-          
-          setSchoolBranding({
-            name: newSchool.name,
-            logo: logoWithCacheBust,
-            themeColor: newSchool.theme_color
-          });
-        }
+          (payload) => {
+            const newSchool = payload.new as any;
+            
+            const timestamp = Date.now();
+            const logo = newSchool.logo_url || '';
+            const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+            
+            setSchoolBranding(prev => ({
+              ...prev,
+              name: newSchool.name,
+              logo: logoWithCacheBust,
+            }));
+          }
       )
       .subscribe();
 
@@ -202,7 +202,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
       {/* Brand Section */}
       <div className="p-10 pb-6 relative flex items-center gap-4">
-        <div className="w-12 h-12 rounded-[18px] flex items-center justify-center border border-white/10 shadow-2xl shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-all duration-500 shrink-0 group overflow-hidden" style={{ backgroundColor: schoolBranding.themeColor || '#1A3C8F' }}>
+        <div className="w-12 h-12 rounded-[18px] flex items-center justify-center border border-white/10 shadow-2xl shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-all duration-500 shrink-0 group overflow-hidden bg-indigo-600">
           {schoolBranding.logo ? (
             <img 
               src={schoolBranding.logo} 
@@ -234,7 +234,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-black text-white truncate leading-none mb-2">{user?.fullName}</p>
               <div className="flex items-center gap-2">
-                 <span className="inline-flex px-2.5 py-1 rounded-lg bg-white/10 text-[9px] font-black uppercase tracking-widest border border-white/10" style={{ color: schoolBranding.themeColor || '#1A3C8F' }}>
+                 <span className="inline-flex px-2.5 py-1 rounded-lg bg-white/10 text-[9px] font-black uppercase tracking-widest border border-white/10 text-indigo-400">
                    {roleLabel}
                  </span>
               </div>
@@ -254,17 +254,17 @@ export default function Sidebar({ onClose }: SidebarProps) {
             className={({ isActive }) => cn(
               "flex items-center justify-between px-6 h-14 rounded-[22px] transition-all duration-500 group text-right whitespace-nowrap relative overflow-hidden",
               isActive 
-                ? "bg-white text-slate-900 shadow-2xl" 
+                ? "bg-white text-slate-900 shadow-2xl shadow-indigo-500/10" 
                 : "text-white/30 hover:text-white hover:bg-white/[0.03]"
             )}
-            style={({ isActive }) => isActive ? { boxShadow: `0 20px 25px -5px ${schoolBranding.themeColor || '#1A3C8F'}20` } : {}}
           >
             <div className="flex items-center gap-4 relative z-10">
               <div className={cn(
                 "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-500",
                 "group-hover:scale-110",
-                "bg-white/5 text-white/40 group-[.active]:text-white"
-              )} style={{ backgroundColor: location.pathname === link.to || (link.to === '/' && location.pathname === '/') ? schoolBranding.themeColor || '#1A3C8F' : undefined }}>
+                "bg-white/5 text-white/40 group-[.active]:text-white",
+                (location.pathname === link.to || (link.to === '/' && location.pathname === '/')) && "bg-indigo-600"
+              )}>
                 <link.icon className="w-4.5 h-4.5" />
               </div>
               <span className="text-xs font-black tracking-tight">{link.label}</span>

@@ -1,14 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  ArrowRight, User, Users, GraduationCap, Phone, Calendar, 
-  School, Info, Mail, Shield, Edit2, Trash2,
-  Award, Activity, Briefcase, ChevronLeft, MoreHorizontal,
-  MailOpen, MapPin, CheckCircle, Clock
+  ArrowRight, User, Users, School, Info, Mail, Shield, 
+  Edit2, Trash2, Activity, Phone, MapPin, CheckCircle, 
+  BookOpen, ChevronLeft, Loader2
 } from 'lucide-react';
 import { EditTeacherModal } from './TeachersPage';
 import { cn } from '@/lib/utils';
@@ -16,249 +14,287 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
-
-interface Teacher {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  specialization?: string | null;
-  created_at: string;
-}
+import { 
+  useTeacher, 
+  useTeacherClasses, 
+  useTeacherDetailStats, 
+  useDeleteTeacher 
+} from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function TeacherDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: authUser } = useAuth();
-  const [teacher, setTeacher] = useState<Teacher | null>(null);
-  const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
-  const [stats, setStats] = useState({ studentCount: 0, curriculumProgress: 0 });
-  const [loading, setLoading] = useState(true);
+  
   const [showEdit, setShowEdit] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const { data: teacherData, error: tErr } = await supabase.from('profiles').select('*').eq('id', id).single();
-      if (tErr) throw tErr;
-      setTeacher(teacherData);
+  // ── Queries ──
+  const { data: teacher, isLoading: teacherLoading, error: teacherError, refetch: refetchTeacher } = useTeacher(id);
+  const { data: classes = [], isLoading: classesLoading } = useTeacherClasses(id);
+  const { data: stats = { studentCount: 0, curriculumProgress: 0 }, isLoading: statsLoading } = useTeacherDetailStats(id);
 
-      const { data: classesData } = await supabase.from('classes').select('id, name').eq('school_id', authUser?.schoolId).eq('teacher_id', id);
-      const enrichedClasses = classesData || [];
-      setClasses(enrichedClasses);
 
-      // Fetch Real Stats
-      if (enrichedClasses.length > 0) {
-        const classIds = enrichedClasses.map(c => c.id);
-        const [{ count: studentCount }, { data: curriculumData }] = await Promise.all([
-          supabase.from('students').select('*', { count: 'exact', head: true }).in('class_id', classIds),
-          supabase.rpc('get_class_curriculum_status', { p_class_id: classIds[0] }) // Get for first class as sample
-        ]);
-
-        const avgProgress = Array.isArray(curriculumData) 
-          ? Math.round(curriculumData.reduce((acc: number, s: any) => acc + (s.progress || 0), 0) / (curriculumData.length || 1))
-          : 0;
-
-        setStats({
-          studentCount: studentCount || 0,
-          curriculumProgress: avgProgress
-        });
-      }
-    } catch (error: any) {
-      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-      navigate('/teachers');
-    } finally {
-      setLoading(false);
-    }
-  }, [id, navigate, toast]);
-
-  useEffect(() => { loadData(); }, [loadData]);
+  // ── Mutations ──
+  const deleteTeacherMutation = useDeleteTeacher();
 
   const handleDelete = async () => {
-    if (!id || !confirm('هل أنت متأكد من حذف هذا المعلم؟')) return;
-    const { error } = await supabase.from('profiles').delete().eq('id', id);
-    if (error) { toast({ title: 'خطأ', description: error.message, variant: 'destructive' }); return; }
-    toast({ title: 'تم الحذ بنجاح' }); navigate('/teachers');
+    if (!id || !confirm('هل أنت متأكد من حذف هذا المعلم نهائياً من قاعدة البيانات؟')) return;
+    try {
+      await deleteTeacherMutation.mutateAsync(id);
+      toast({ title: 'تم الحذف بنجاح' });
+      navigate('/teachers');
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
   };
 
-  if (loading) {
-    return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-          <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">جاري تحميل الملف الشخصي للمعلم</p>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (!teacher) return null;
+  const isLoadingTotal = teacherLoading || classesLoading || statsLoading;
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {/* Premium Header - Scaled Down */}
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden">
-          <div className="flex items-center gap-6 relative z-10">
-            <button onClick={() => navigate('/teachers')}
-              className="w-11 h-11 rounded-[14px] bg-white border border-slate-100 text-slate-400 hover:text-slate-900 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
-               <ArrowRight className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-5">
-               <Avatar className="w-16 h-16 rounded-[22px] border-2 border-white shadow-2xl shrink-0">
-                  <AvatarFallback className="bg-indigo-600 text-white text-2xl font-black">{teacher.full_name[0]}</AvatarFallback>
-               </Avatar>
-               <div className="min-w-0">
-                  <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-1.5 truncate">{teacher.full_name}</h1>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-white border-slate-100 text-slate-400 font-black text-[9px] uppercase tracking-widest px-3 py-1 rounded-full">معلم ممارس</Badge>
-                    <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200 tracking-tight">عضو منذ {new Date(teacher.created_at).getFullYear()}</span>
+      <div className="flex flex-col gap-10 max-w-[1400px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+        
+        <QueryStateHandler
+          loading={teacherLoading}
+          error={teacherError}
+          data={teacher}
+          onRetry={refetchTeacher}
+          loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
+        >
+          {/* Premium Header */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            
+            <div className="flex items-center gap-6 relative z-10">
+              <button 
+                onClick={() => navigate('/teachers')}
+                className="w-14 h-14 rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+              >
+                 <ArrowRight className="w-6 h-6" />
+              </button>
+              
+              <div className="flex items-center gap-6">
+                 <Avatar className="w-20 h-20 rounded-[32px] border-4 border-white shadow-2xl shrink-0 group-hover:rotate-3 transition-transform duration-500">
+                    <AvatarFallback className="bg-slate-900 text-white text-3xl font-black">
+                       {teacher?.full_name?.[0]}
+                    </AvatarFallback>
+                 </Avatar>
+                 <div className="space-y-1">
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">{teacher?.full_name}</h1>
+                    <div className="flex items-center gap-3">
+                       <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">
+                          {teacher?.specialization || 'التخصص التعليمي'}
+                       </Badge>
+                       <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200 tracking-tight">عضو نشط منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}</span>
+                    </div>
+                 </div>
+              </div>
+            </div>
+            
+            {authUser?.role === 'admin' && (
+              <div className="flex items-center gap-4 relative z-10">
+                <Button 
+                  onClick={() => setShowEdit(true)}
+                  className="h-14 px-8 rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-3 text-xs"
+                >
+                  <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل السجل
+                </Button>
+                <Button 
+                  onClick={handleDelete}
+                  disabled={deleteTeacherMutation.isPending}
+                  className="h-14 w-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
+                >
+                  {deleteTeacherMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Trash2 className="w-6 h-6" />}
+                </Button>
+              </div>
+            )}
+          </header>
+
+          {/* Teacher Metrics Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+             <StatsCard title="النصاب التعليمي" value={classes.length} sub="فصول مسندة" icon={School} color="indigo" />
+             <StatsCard title="إجمالي الطلاب" value={stats.studentCount} sub="شخص تحت الإشراف" icon={Users} color="emerald" />
+             <StatsCard title="تغطية المنهج" value={`${stats.curriculumProgress}%`} sub="متوسط الإنجاز" icon={BookOpen} color="amber" />
+             <StatsCard title="حالة الكادر" value={teacher?.approval_status === 'approved' ? 'نشط' : 'قيد المراجعة'} sub="الحالة الوظيفية" icon={CheckCircle} color="slate" />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-8 space-y-10">
+                <section className="bg-white border border-slate-50 p-10 rounded-[56px] shadow-xl shadow-slate-100/50 space-y-10">
+                   <header className="flex items-center gap-4 border-b border-slate-50 pb-8">
+                      <div className="w-14 h-14 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
+                         <School className="w-7 h-7" />
+                      </div>
+                      <div>
+                         <h2 className="text-2xl font-black text-slate-900 mb-1">الفصول والمسؤوليات</h2>
+                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">إدارة الجداول والحصص الدراسية</p>
+                      </div>
+                   </header>
+
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      {classes.length === 0 ? (
+                        <div className="col-span-2 p-20 text-center bg-slate-50 rounded-[48px] border border-dashed border-slate-100">
+                           <div className="w-16 h-16 rounded-3xl bg-white flex items-center justify-center mx-auto mb-6 text-slate-200">
+                             <School className="w-8 h-8" />
+                           </div>
+                           <p className="text-sm font-black text-slate-400">لا توجد فصول دراسية مرتبطة بهذا المعلم حالياً.</p>
+                        </div>
+                      ) : classes.map(c => (
+                        <div 
+                          key={c.id} 
+                          onClick={() => navigate(`/classes/${c.id}`)} 
+                          className="p-8 rounded-[32px] bg-slate-50/50 border border-slate-100 hover:bg-white hover:border-indigo-100 hover:shadow-2xl hover:shadow-slate-200/50 hover:translate-y-[-4px] transition-all duration-500 group flex items-center justify-between cursor-pointer"
+                        >
+                           <div className="flex items-center gap-5">
+                              <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-sm group-hover:bg-slate-900 group-hover:text-white transition-all duration-500">
+                                 <CheckCircle className="w-6 h-6 border-none" />
+                              </div>
+                              <div className="space-y-1">
+                                 <span className="text-base font-black text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors">{c.name}</span>
+                                 <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none">مرحلة {c.grade_level || 'غير محددة'}</p>
+                              </div>
+                           </div>
+                           <ChevronLeft className="w-5 h-5 text-slate-200 group-hover:text-indigo-600 transition-all translate-x-2 group-hover:translate-x-0" />
+                        </div>
+                      ))}
+                   </div>
+                </section>
+
+                <section className="bg-white border border-slate-50 p-10 rounded-[56px] shadow-xl shadow-slate-100/50 space-y-10">
+                   <header className="flex items-center gap-4 border-b border-slate-50 pb-8">
+                      <div className="w-14 h-14 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
+                         <Activity className="w-7 h-7" />
+                      </div>
+                      <div>
+                         <h2 className="text-2xl font-black text-slate-900 mb-1">مؤشرات الأداء المهني</h2>
+                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">التحصيل العلمي وجودة التدريس</p>
+                      </div>
+                   </header>
+                   
+                   <div className="space-y-10">
+                      <LoadProgress label="تغطية المحتوى الأكاديمي" percentage={stats.curriculumProgress} color="indigo" />
+                      <LoadProgress label="معدل تفاعل الطلاب في الحصص" percentage={90} color="emerald" />
+                      <LoadProgress label="الالتزام بالجدول الزمني" percentage={95} color="amber" />
+                   </div>
+                </section>
+            </div>
+
+            {/* Sidebar Context */}
+            <div className="lg:col-span-4 space-y-10">
+               <section className="bg-slate-900 rounded-[56px] p-10 space-y-10 shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-20" />
+                  <div className="flex items-center gap-4 relative z-10">
+                     <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white shrink-0 shadow-inner">
+                        <Shield className="w-6 h-6 border-none" />
+                     </div>
+                     <h2 className="text-xl font-black text-white leading-none">بيانات الاتصال</h2>
+                  </div>
+
+                  <div className="space-y-6 relative z-10">
+                     <ContactItem icon={Phone} label="رقم الجوال الخاص" value={teacher?.phone || 'غير مسجل'} />
+                     <ContactItem icon={Mail} label="البريد المؤسسي" value={teacher?.email || '—'} />
+                     <ContactItem icon={MapPin} label="موقع العمل" value="الجناح الأكاديمي - قسم المعلمين" />
+                  </div>
+
+                  <div className="pt-6 border-t border-white/5 relative z-10">
+                     <Button className="w-full h-16 rounded-[24px] bg-indigo-600 text-white font-black hover:bg-slate-100 hover:text-slate-900 transition-all text-sm shadow-2xl shadow-indigo-900/40 gap-3">
+                        تنزيل الملف المهني (PDF)
+                     </Button>
+                  </div>
+               </section>
+
+               <div className="p-10 rounded-[48px] bg-slate-50 border border-slate-100 text-center relative overflow-hidden group">
+                  <div className="relative z-10 space-y-6">
+                     <div className="w-20 h-20 bg-white rounded-[32px] shadow-xl shadow-slate-200/50 flex items-center justify-center mx-auto text-slate-200 transition-transform duration-700 group-hover:scale-110">
+                         <User className="w-10 h-10 border-none" />
+                     </div>
+                     <div className="space-y-2">
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">ملخص الإشراف</p>
+                        <p className="text-xs font-bold text-slate-600 leading-relaxed">
+                           المعلم {teacher?.full_name?.split(' ')[1] || ''} يشرف حالياً على {stats.studentCount} طالباً عبر {classes.length} فصول بمستويات دراسية مختلفة.
+                        </p>
+                     </div>
                   </div>
                </div>
             </div>
           </div>
-          
-          {authUser?.role === 'admin' && (
-            <div className="flex items-center gap-3 relative z-10">
-              <Button onClick={() => setShowEdit(true)}
-                className="h-11 px-6 rounded-xl bg-white border border-slate-200 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-sm gap-2 text-xs">
-                <Edit2 className="w-4 h-4" /> تعديل السجل
-              </Button>
-              <Button onClick={handleDelete} variant="ghost"
-                className="h-11 w-11 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0">
-                <Trash2 className="w-4.5 h-4.5" />
-              </Button>
-            </div>
-          )}
-        </header>
-
-        {/* Status Metrics - Scaled Down */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-           <StatsCard title="الفصول الدراسية" value={classes.length} icon={School} color="indigo" />
-           <StatsCard title="إجمالي الطلاب" value={stats.studentCount} icon={Users} color="emerald" />
-           <StatsCard title="تغطية المنهج" value={`${stats.curriculumProgress}%`} icon={BookOpen} color="amber" />
-           <StatsCard title="الحالة" value="نشط" icon={CheckCircle} color="slate" />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           <div className="lg:col-span-2 space-y-8">
-              <section className="premium-card p-8 space-y-6">
-                 <div className="flex items-center gap-3 border-b border-slate-50 pb-6">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                       <School className="w-5 h-5" />
-                    </div>
-                    <h2 className="text-xl font-black text-slate-900">الفصول المسؤولة</h2>
-                 </div>
-
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {classes.length === 0 ? (
-                      <div className="col-span-2 p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                         <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">لا توجد فصول مسندة حالياً</p>
-                      </div>
-                    ) : classes.map(c => (
-                      <div key={c.id} onClick={() => navigate(`/classes/${c.id}`)} className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all cursor-pointer">
-                         <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
-                               <CheckCircle className="w-4.5 h-4.5" />
-                            </div>
-                            <span className="text-xs font-black text-slate-900 tracking-tight">{c.name}</span>
-                         </div>
-                         <ChevronLeft className="w-4 h-4 text-slate-300 group-hover:translate-x-[-4px] transition-transform" />
-                      </div>
-                    ))}
-                 </div>
-              </section>
-
-              <section className="premium-card p-8 space-y-6">
-                 <div className="flex items-center gap-3 border-b border-slate-50 pb-6">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                       <Activity className="w-5 h-5" />
-                    </div>
-                    <h2 className="text-xl font-black text-slate-900">مؤشرات الأداء (متوسط)</h2>
-                 </div>
-                 <div className="space-y-6">
-                    <LoadProgress label="متوسط تقدم المنهج" percentage={stats.curriculumProgress} />
-                    <LoadProgress label="تفاعل الفصول" percentage={90} />
-                 </div>
-              </section>
-           </div>
-
-           {/* Sidebar Info - Scaled Down */}
-           <div className="space-y-8">
-              <section className="bg-slate-900 rounded-[40px] p-8 space-y-8 shadow-2xl relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.05),transparent)] pointer-events-none" />
-                 <div className="flex items-center gap-3 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white">
-                       <Shield className="w-5 h-5" />
-                    </div>
-                    <h2 className="text-lg font-black text-white leading-none">معلومات الاتصال</h2>
-                 </div>
-
-                 <div className="space-y-4 relative z-10">
-                    <ContactItem icon={Phone} label="رقم الجوال" value={teacher.phone || 'غير مسجل'} />
-                    <ContactItem icon={Mail} label="البريد المؤسسي" value={teacher.email || '—'} />
-                    <ContactItem icon={MapPin} label="المكتب" value="الجناح الأكاديمي، مكتب 12" />
-                 </div>
-
-                 <Button className="w-full h-13 rounded-xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-xs relative z-10 shadow-xl shadow-indigo-900/40">تنزيل تقرير الأداء</Button>
-              </section>
-           </div>
-        </div>
+        </QueryStateHandler>
       </div>
 
-      {showEdit && (
+      {showEdit && teacher && (
         <EditTeacherModal 
           teacher={{ ...teacher, classes }}
-          onClose={() => { setShowEdit(false); loadData(); }} 
+          onClose={() => { setShowEdit(false); refetchTeacher(); }} 
         />
       )}
     </AppLayout>
   );
 }
 
-function StatsCard({ title, value, icon: Icon, color, smallValue }: any) {
+function StatsCard({ title, value, sub, icon: Icon, color, smallValue }: any) {
   const configs: any = {
-    indigo: "bg-slate-900 text-white border-slate-900 shadow-xl shadow-slate-200",
-    emerald: "bg-emerald-600 text-white border-emerald-600 shadow-xl shadow-emerald-200",
-    amber: "bg-amber-500 text-white border-amber-500 shadow-xl shadow-amber-200",
-    slate: "bg-white text-slate-900 border-slate-100",
+    indigo: "bg-slate-900 text-white border-slate-900 shadow-2xl shadow-slate-200",
+    emerald: "bg-white text-slate-900 border-slate-50 shadow-xl shadow-slate-100",
+    amber: "bg-amber-500 text-white border-amber-500 shadow-2xl shadow-amber-100",
+    slate: "bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100",
   };
+  
+  const iconConfigs: any = {
+    indigo: "bg-white/10 text-white",
+    emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-white/20 text-white",
+    slate: "bg-white/10 text-white",
+  };
+
   return (
-    <div className={cn("premium-card p-6 flex flex-col justify-between border h-40", configs[color])}>
-       <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shadow-inner", color === 'slate' ? "bg-slate-50 text-slate-400" : "bg-white/20 text-white")}>
-          <Icon className="w-5 h-5" />
+    <div className={cn("premium-card p-10 flex flex-col justify-between border-[0.5px] h-60 rounded-[48px] transition-all hover:scale-[1.03] duration-500", configs[color])}>
+       <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm", iconConfigs[color])}>
+          <Icon className="w-7 h-7" />
        </div>
-       <div className="mt-4">
-          <p className={cn("text-[8px] font-black uppercase tracking-widest mb-0.5", color === 'slate' ? "text-slate-400" : "opacity-60")}>{title}</p>
-          <h3 className={cn("font-black tracking-tight leading-none", smallValue ? "text-xl" : "text-3xl")}>{value}</h3>
+       <div className="mt-8 text-right">
+          <p className={cn("text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
+          <div className="flex flex-col">
+             <h3 className={cn("font-black tracking-tighter leading-none mb-2", smallValue ? "text-2xl" : "text-5xl")}>{value}</h3>
+             <span className={cn("text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
+          </div>
        </div>
     </div>
   );
 }
 
-function LoadProgress({ label, percentage }: { label: string; percentage: number }) {
+function LoadProgress({ label, percentage, color }: { label: string; percentage: number; color: string }) {
+  const colors: any = {
+    indigo: "bg-indigo-600 shadow-indigo-100",
+    emerald: "bg-emerald-500 shadow-emerald-100",
+    amber: "bg-amber-500 shadow-amber-100"
+  };
   return (
-    <div className="space-y-2">
-       <div className="flex justify-between items-end">
-          <span className="text-xs font-black text-slate-700">{label}</span>
-          <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{percentage}%</span>
+    <div className="space-y-4">
+       <div className="flex justify-between items-end px-1">
+          <span className="text-sm font-black text-slate-800">{label}</span>
+          <div className="flex items-center gap-2">
+             <div className={cn("w-2 h-2 rounded-full", colors[color])} />
+             <span className="text-[12px] font-black text-slate-900 tracking-tight">{percentage}%</span>
+          </div>
        </div>
-       <Progress value={percentage} className="h-1.5 bg-slate-100" />
+       <div className="h-2.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
+          <div className={cn("h-full transition-all duration-1000 rounded-full shadow-lg", colors[color])} style={{ width: `${percentage}%` }} />
+       </div>
     </div>
   );
 }
 
 function ContactItem({ icon: Icon, label, value }: any) {
   return (
-    <div className="flex items-center gap-4 group">
-       <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center text-white/40 group-hover:bg-white/10 group-hover:text-white transition-all shrink-0">
-          <Icon className="w-4 h-4" />
+    <div className="flex items-center gap-5 group cursor-pointer hover:translate-x-[-4px] transition-transform">
+       <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-white/30 group-hover:bg-white/10 group-hover:text-white transition-all shrink-0">
+          <Icon className="w-5 h-5 border-none" />
        </div>
        <div className="min-w-0 text-right">
-          <p className="text-[8px] font-black text-white/30 uppercase tracking-widest mb-0.5">{label}</p>
-          <p className="text-[10px] font-black text-white/80 truncate leading-none">{value}</p>
+          <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">{label}</p>
+          <p className="text-sm font-black text-white/80 truncate leading-none">{value}</p>
        </div>
     </div>
   );

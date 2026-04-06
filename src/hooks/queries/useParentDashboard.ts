@@ -146,6 +146,8 @@ export function useChildFullDetails(studentId: string | undefined) {
       return {
         ...student,
         className: student.classes?.name || '',
+        academic_year: '2025/2026', // Standard default or can be derived from metadata if available
+        address: student.notes?.includes('العنوان:') ? student.notes.split('العنوان:')[1].trim() : 'غير مسجل',
         grades: grades || [],
         attendance: attendance || [],
         attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0,

@@ -1,28 +1,21 @@
 // React Query hooks for data caching
 // Import from here instead of calling Supabase directly in components
 
-export { useStudents, useDeleteStudent, useAddStudent } from './useStudents';
-export type { Student } from './useStudents';
-
-export { useTeachers, useDeleteTeacher } from './useTeachers';
-export type { Teacher } from './useTeachers';
-
-export { useClasses, useTeacherClasses, useDeleteClass } from './useClasses';
-export type { Class } from './useClasses';
-
-export { useParents } from './useParents';
-export type { Parent } from './useParents';
-
-export { useAttendance, useAddAttendance } from './useAttendance';
-export type { AttendanceRecord } from './useAttendance';
-
-export { useGrades, useAddGrade, useDeleteGrade } from './useGrades';
-export type { Grade } from './useGrades';
-
-
-
-export { useParentChildOverview, useParentChildActivities, useParentChildren, useChildFullDetails } from './useParentDashboard';
-
-export { useUnreadNotificationsCount, useNotifications } from './useNotifications';
-
-export { useAdminStats, useTeacherStats } from './useStats';
+export * from './useStudents';
+export * from './useTeachers';
+export * from './useClasses';
+export * from './useParents';
+export * from './useAttendance';
+export * from './useGrades';
+export * from './useParentDashboard';
+export * from './useNotifications';
+export * from './useStats';
+export * from './useBranding';
+export * from './useFees';
+export * from './useCurriculum';
+export * from './useMessaging';
+export * from './useComplaints';
+export * from './useSuperAdmin';
+export * from './useUsersManagement';
+export * from './useDatabase';
+export * from './useProfile';

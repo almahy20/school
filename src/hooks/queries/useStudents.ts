@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth, AppUser } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { AppUser } from '@/types/auth';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface Student {
@@ -60,6 +61,40 @@ export function useStudents() {
   });
 }
 
+// ─── useStudent Hook ──────────────────────────────────────────────────────────
+export function useStudent(id: string | undefined) {
+  return useQuery({
+    queryKey: ['student', id],
+    queryFn: async () => {
+      if (!id) return null;
+      const { data, error } = await supabase
+        .from('students')
+        .select('*, classes:classes!students_class_id_fkey(*)')
+        .eq('id', id)
+        .single();
+      
+      if (error) throw error;
+      
+      // Fetch teacher name separately if teacher_id exists
+      if (data.classes?.teacher_id) {
+        const { data: teacherProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', data.classes.teacher_id)
+          .single();
+        
+        if (teacherProfile) {
+          (data.classes as any).teacher = { full_name: teacherProfile.full_name };
+        }
+      }
+      
+      return data as Student & { classes: any };
+    },
+    enabled: !!id,
+    staleTime: 60 * 1000,
+  });
+}
+
 // ─── useDeleteStudent Hook ────────────────────────────────────────────────────
 export function useDeleteStudent() {
   const queryClient = useQueryClient();
@@ -71,8 +106,9 @@ export function useDeleteStudent() {
       if (error) throw error;
     },
     onSuccess: () => {
-      // Invalidate and refetch students list
-      queryClient.invalidateQueries({ queryKey: ['students', user?.schoolId] });
+      // Invalidate all student-related queries
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['student'] });
     },
   });
 }
@@ -89,7 +125,74 @@ export function useAddStudent() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['students', user?.schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
     },
   });
 }
+
+// ─── useUpdateStudent Hook ───────────────────────────────────────────────────
+export function useUpdateStudent() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Partial<Student> & { id: string }) => {
+      const { error } = await supabase.from('students').update(data).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['student', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+    },
+  });
+}
+
+export function useStudentParent(studentId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['student-parent', studentId],
+    queryFn: async () => {
+      if (!studentId) return null;
+      const { data: parentLink } = await supabase
+        .from('student_parents')
+        .select('parent_id')
+        .eq('student_id', studentId)
+        .maybeSingle();
+
+      if (!parentLink?.parent_id) return null;
+
+      const { data: parentProfile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', parentLink.parent_id)
+        .single();
+      
+      if (error) throw error;
+      return parentProfile;
+    },
+    enabled: !!studentId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useClassStudents(classId: string | null | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['students', 'class', classId],
+    queryFn: async () => {
+      if (!classId) return [];
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('class_id', classId)
+        .order('name');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!classId,
+    staleTime: 60 * 1000,
+  });
+}
+
+

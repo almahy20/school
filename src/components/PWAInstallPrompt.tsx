@@ -12,10 +12,10 @@ export default function PWAInstallPrompt() {
   useEffect(() => {
     const fetchBranding = async () => {
       if (user?.schoolId) {
-        const { data } = await supabase.from('schools').select('name, logo_url, icon_url').eq('id', user.schoolId).single();
+        const { data } = await supabase.from('schools').select('name, logo_url').eq('id', user.schoolId).single();
         if (data) {
           const timestamp = Date.now();
-          const icon = data.icon_url || data.logo_url || '';
+          const icon = data.logo_url || '';
           const iconWithCacheBust = icon ? (icon.includes('?') ? `${icon}&v=${timestamp}` : `${icon}?v=${timestamp}`) : '';
           
           setBranding({
@@ -45,7 +45,7 @@ export default function PWAInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
     };
-  }, []);
+  }, [user?.schoolId]);
 
   const installApp = () => {
     if (!deferredPrompt) return;

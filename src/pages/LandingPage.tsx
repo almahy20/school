@@ -68,12 +68,8 @@ export default function LandingPage() {
       <nav className="fixed top-0 inset-x-0 z-50 bg-[#0a0f1e]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1.5">
-              <img 
-                src="https://mecutwhreywjwstirpka.supabase.co/storage/v1/object/public/branding/logo.png" 
-                alt="Logo" 
-                className="w-full h-full object-contain"
-              />
+            <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1.5 text-slate-400">
+              <BookOpen className="w-5 h-5" />
             </div>
             <span className="text-lg font-black text-white tracking-tight">النظام الذكي</span>
           </div>

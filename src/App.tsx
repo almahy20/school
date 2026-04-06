@@ -9,6 +9,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import PwaManager from "./components/PwaManager";
 import NotificationBanner from "./components/NotificationBanner";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
+import { supabase } from "@/integrations/supabase/client";
 import { HealthMonitor } from "./components/HealthMonitor";
 
 // Lazy Load Pages
@@ -49,41 +50,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const WaitingApprovalPage = lazy(() => import("./pages/WaitingApprovalPage"));
 import PwaOnboarding from "./components/PwaOnboarding";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: (failureCount, error: any) => {
-        // Log errors for debugging
-        if (error) console.error(`[Query Error] Attempt ${failureCount}:`, error);
-
-        // Always retry at least 2 times for transient errors
-        if (failureCount < 2) return true;
-
-        // For specific network errors, retry up to 5 times
-        if (failureCount < 5) {
-          const isNetworkError = typeof window !== 'undefined' && !window.navigator.onLine;
-          const errorMessage = error?.message?.toLowerCase() || '';
-          const isConnectionError = 
-            errorMessage.includes('fetch') || 
-            errorMessage.includes('network') ||
-            errorMessage.includes('postgresterror') ||
-            errorMessage.includes('failed to fetch');
-          
-          if (isNetworkError || isConnectionError) {
-            return true;
-          }
-        }
-        return false;
-      },
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: true,
-      refetchOnMount: true,
-      refetchOnReconnect: true,
-      staleTime: 10 * 1000, // 10 seconds - much more aggressive for a school management app
-      gcTime: 5 * 60 * 1000, // 5 minutes cache
-    },
-  },
-});
+import { queryClient } from "./lib/queryClient";
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -160,15 +127,33 @@ function AppRoutes() {
 export default function App() {
   useEffect(() => {
     // 1. Manually handle focus for PWA/Background scenarios
-    const onVisibilityChange = () => {
+    const onVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
-        console.log('🔄 App visible, triggering refetch of all active queries...');
+        console.log('🔄 App visible, validating session and triggering refetch...');
+        
+        // Ensure browser thinks we are focused
         focusManager.setFocused(true);
-        // Force refetch all active queries when returning to the app
-        queryClient.refetchQueries({ 
+
+        // a) Validate Supabase Session (Ensures we haven't been signed out while away)
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (error || !session) {
+            console.warn('⚠️ Session invalid on resumed focus, checking auth status...');
+            // The AuthProvider will handle the redirect if session is truly gone
+          }
+        } catch (e) {
+          console.error('❌ Error validating session on resume:', e);
+        }
+
+        // b) Force refetch all active and visible queries to ensure UI is fresh
+        // We use invalidateQueries to mark everything as stale and trigger a refetch of all active ones
+        queryClient.invalidateQueries({ 
           type: 'active',
-          stale: true 
+          refetchType: 'active'
         });
+        
+        // Also explicitly refetch branding as it might have changed
+        queryClient.refetchQueries({ queryKey: ['branding'] });
       }
     };
 
@@ -185,7 +170,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <AuthProvider>
-          <BrowserRouter>
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <GlobalErrorBoundary>
               <AppRoutes />
             </GlobalErrorBoundary>

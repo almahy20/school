@@ -1,119 +1,70 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { MessageSquare, Users, Plus, Send, User, ChevronRight, MessageCircle, Clock, CheckCircle, AlertCircle } from 'lucide-react';
+import { MessageSquare, Plus, Send, User, MessageCircle, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { 
+  useParentComplaints, 
+  useUpsertComplaint, 
+  useParentChildren 
+} from '@/hooks/queries';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function ParentComplaintsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [children, setChildren] = useState<any[]>([]);
-  const [complaints, setComplaints] = useState<any[]>([]);
+  
+  // UI State
   const [childId, setChildId] = useState<string>('');
   const [content, setContent] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const loadData = useCallback(async () => {
-    if (!user?.schoolId) return;
-    setLoading(true);
-    try {
-      const [{ data: links }, { data: cmps }] = await Promise.all([
-        (supabase as any).from('student_parents').select('students!student_parents_student_id_fkey(id, name)').eq('school_id', user.schoolId).eq('parent_id', user.id),
-        (supabase as any).from('complaints').select('*').eq('school_id', user.schoolId).eq('parent_id', user.id).order('created_at', { ascending: false }),
-      ]);
-      const kids = (links || []).map((l: any) => l.students).filter(Boolean);
-      setChildren(kids || []);
-      setComplaints(cmps || []);
-    } catch (err) {
-      console.error('Error loading complaints:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id, user?.schoolId]);
+  // ── Queries ──
+  const { 
+    data: complaints = [], 
+    isLoading: loading, 
+    error, 
+    refetch 
+  } = useParentComplaints();
+  
+  const { 
+    data: children = [], 
+    isLoading: childrenLoading 
+  } = useParentChildren();
 
-  useEffect(() => { 
-    loadData(); 
-  }, [loadData]);
-
-  // Real-time subscription
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const channel = supabase
-      .channel(`parent-complaints-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'complaints',
-          filter: `parent_id=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log('Real-time complaint update:', payload);
-          if (payload.eventType === 'INSERT') {
-            setComplaints(prev => [payload.new, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            setComplaints(prev => prev.map(c => c.id === payload.new.id ? payload.new : c));
-            toast({
-              title: 'تحديث في الشكوى',
-              description: 'تم تحديث حالة شكواك أو إضافة رد جديد',
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setComplaints(prev => prev.filter(c => c.id !== payload.old.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, toast]);
-
-  useEffect(() => {
-    if (user?.id) {
-       (supabase as any).from('notifications')
-         .update({ is_read: true })
-         .eq('user_id', user.id)
-         .eq('type', 'complaint_status')
-         .then();
-    }
-  }, [user?.id, complaints]); // Mark as read when complaints update or on mount
+  // ── Mutations ──
+  const upsertComplaintMutation = useUpsertComplaint();
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) { toast({ title: 'يرجى كتابة نص الشكوى' }); return; }
-    setSubmitting(true);
-    const { error } = await (supabase as any).from('complaints').insert({
-      parent_id: user?.id,
-      student_id: childId || null,
-      content: content.trim(),
-      school_id: user?.schoolId,
-    });
-    setSubmitting(false);
-    if (error) {
-      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'تم إرسال الشكوى' });
+    if (!content.trim()) { 
+      toast({ title: 'يرجى كتابة نص الشكوى', variant: 'destructive' }); 
+      return; 
+    }
+
+    try {
+      await upsertComplaintMutation.mutateAsync({
+        parent_id: user?.id,
+        student_id: childId || null,
+        content: content.trim(),
+      });
+      
+      toast({ title: 'تم إرسال الشكوى بنجاح' });
       setContent('');
       setChildId('');
-      // No need to call loadData() explicitly if realtime is working perfectly,
-      // but keeping it for safety or checking if insert payload reaches correctly
-      loadData();
+      setIsDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig: any = (status: string) => {
     switch(status) {
       case 'resolved':
         return { label: 'تم الحل', color: 'bg-emerald-500/10 text-emerald-600', icon: CheckCircle };
@@ -131,15 +82,15 @@ export default function ParentComplaintsPage() {
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/20">
           <div className="space-y-2">
             <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <span className="w-2 h-10 bg-primary rounded-full" />
-              مركز الشكاوي
+              <span className="w-2 h-10 bg-indigo-600 rounded-full" />
+              مركز التواصل والشكاوى
             </h1>
-            <p className="text-slate-500 font-medium text-lg pr-5">نحن هنا لنسمعك، ونطور خدماتنا من أجلك</p>
+            <p className="text-slate-500 font-medium text-lg pr-5">نسمع لمقترحاتك ونعمل على حل مشكلاتك لضمان جودة التعليم.</p>
           </div>
           
-          <Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-16 px-8 rounded-3xl bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-2xl shadow-primary/30 transition-all hover:scale-[1.02] active:scale-95 gap-3">
+              <Button className="h-16 px-8 rounded-3xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg shadow-2xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-95 gap-3">
                 <Plus className="w-6 h-6" />
                 إرسال شكوى جديدة
               </Button>
@@ -160,11 +111,11 @@ export default function ParentComplaintsPage() {
                         className={cn(
                           "px-6 py-3 rounded-2xl border-2 transition-all font-bold text-sm",
                           childId === '' 
-                            ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/10" 
+                            ? "border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100" 
                             : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
                         )}
                       >
-                        بدون تحديد
+                        بحث عام
                       </button>
                       {children.map(c => (
                         <button
@@ -174,12 +125,12 @@ export default function ParentComplaintsPage() {
                           className={cn(
                             "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm",
                             childId === c.id 
-                              ? "border-primary bg-primary/5 text-primary shadow-lg shadow-primary/10" 
+                              ? "border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100" 
                               : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
                           )}
                         >
                           <Avatar className="w-6 h-6 border-2 border-white">
-                            <AvatarFallback className="bg-primary/10 text-primary text-[10px]">{c.name[0]}</AvatarFallback>
+                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-[10px]">{c.name[0]}</AvatarFallback>
                           </Avatar>
                           {c.name}
                         </button>
@@ -194,7 +145,8 @@ export default function ParentComplaintsPage() {
                          value={content} 
                          onChange={e => setContent(e.target.value)} 
                          placeholder="اشرح لنا بالتفصيل لنتمكن من مساعدتك..."
-                         className="min-h-[180px] rounded-3xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 text-lg font-medium p-6 transition-all"
+                         className="min-h-[180px] rounded-3xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-600/5 text-lg font-medium p-6 transition-all shadow-inner resize-none"
+                         required
                        />
                     </div>
                   </div>
@@ -202,10 +154,10 @@ export default function ParentComplaintsPage() {
                   <div className="flex gap-4 pt-4">
                     <Button 
                       type="submit" 
-                      disabled={submitting} 
-                      className="flex-1 h-16 rounded-3xl bg-primary text-white font-black text-lg shadow-xl shadow-primary/20"
+                      disabled={upsertComplaintMutation.isPending} 
+                      className="flex-1 h-16 rounded-3xl bg-slate-900 text-white font-black text-lg shadow-xl shadow-slate-200"
                     >
-                      {submitting ? 'جاري الإرسال...' : 'إرسال الآن'}
+                      {upsertComplaintMutation.isPending ? 'جاري الإرسال...' : 'إرسال الشكوى الآن'}
                     </Button>
                   </div>
                 </form>
@@ -217,30 +169,20 @@ export default function ParentComplaintsPage() {
         <section className="space-y-6">
           <div className="flex items-center justify-between px-4">
             <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
-              <MessageCircle className="w-7 h-7 text-primary" />
+              <MessageCircle className="w-7 h-7 text-indigo-600" />
               تاريخ التواصل
             </h2>
-            <Badge variant="outline" className="rounded-full px-4 py-1.5 font-bold border-slate-200 text-slate-500 bg-white">
-              {complaints.length} شكاوى
-            </Badge>
           </div>
 
-          {loading && complaints.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-40 gap-4">
-              <div className="w-12 h-12 border-4 border-slate-100 border-t-primary rounded-full animate-spin" />
-              <p className="text-slate-400 font-bold tracking-widest text-sm uppercase">جاري مزامنة بياناتك</p>
-            </div>
-          ) : complaints.length === 0 ? (
-            <div className="bg-white/40 backdrop-blur-md border-2 border-dashed border-slate-200 p-24 text-center rounded-[40px] shadow-sm">
-              <div className="w-24 h-24 rounded-[36px] bg-slate-50 flex items-center justify-center mx-auto mb-8 text-slate-200">
-                <MessageSquare className="w-12 h-12" />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 mb-3">لا يوجد سجل تواصل بعد</h3>
-              <p className="text-slate-400 font-medium text-lg max-w-sm mx-auto">
-                عند إرسال شكوى جديدة، ستتمكن من متابعة الردود هنا مباشرةً
-              </p>
-            </div>
-          ) : (
+          <QueryStateHandler
+            loading={loading}
+            error={error}
+            data={complaints}
+            onRetry={refetch}
+            isEmpty={complaints.length === 0}
+            loadingMessage="جاري مزامنة بياناتك..."
+            emptyMessage="لا يوجد سجل تواصل بعد. نسمع لك دائماً."
+          >
             <div className="grid grid-cols-1 gap-6">
               {complaints.map(c => {
                 const child = children.find(k => k.id === c.student_id);
@@ -254,7 +196,7 @@ export default function ParentComplaintsPage() {
                       <div className="flex items-center justify-between border-b border-slate-50 pb-6 mb-2">
                         <div className="flex items-center gap-4">
                           <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500",
+                            "w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500",
                             hasResponse ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
                           )}>
                             <User className="w-6 h-6" />
@@ -287,7 +229,7 @@ export default function ParentComplaintsPage() {
                             <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
                               <Send className="w-4 h-4 text-white -rotate-45" />
                             </div>
-                            <span className="text-emerald-600 font-black text-xs uppercase tracking-widest">رد الإدارة المباشر</span>
+                            <span className="text-emerald-600 font-black text-xs uppercase tracking-widest leading-none">رد الإدارة المباشر</span>
                           </div>
                           <div className="bg-emerald-50/50 p-8 rounded-[32px] border-2 border-emerald-100/50 relative overflow-hidden group/reply">
                             <p className="text-emerald-900 font-black text-lg leading-relaxed italic pr-4">{c.admin_response}</p>
@@ -299,7 +241,7 @@ export default function ParentComplaintsPage() {
                 );
               })}
             </div>
-          )}
+          </QueryStateHandler>
         </section>
       </div>
     </AppLayout>

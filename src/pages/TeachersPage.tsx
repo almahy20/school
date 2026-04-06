@@ -1,16 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTeachers, useDeleteTeacher, useTeacherAction, useBranding, useClasses, useUpdateTeacher, type Teacher } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Phone, User, GraduationCap, Eye, Edit2, Save, X, Search, Users,
   Activity, Award, Star, BookOpen, ChevronRight, Filter, MoreHorizontal,
   Mail, Settings, Briefcase, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy,
-  Trash2, Calendar, Shield
+  Trash2, Calendar, Shield, School
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -18,79 +17,47 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import DataDetailModal from '@/components/DataDetailModal';
+import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 const PAGE_SIZE = 15;
 
-interface TeacherProfile {
+// Interface for component usage
+interface TeacherWithClasses {
   id: string;
   full_name: string;
   phone: string | null;
+  approval_status: string;
+  user_role_id?: string;
   classes: { id: string; name: string }[];
-}
-
-async function fetchTeachersData(schoolId: string | null, isSuperAdmin: boolean) {
-  const profileQuery = supabase.from('profiles').select('id, full_name, phone');
-  const roleQuery = (supabase as any).from('user_roles').select('*').eq('role', 'teacher');
-  const classQuery = supabase.from('classes').select('id, name, teacher_id');
-
-  if (!isSuperAdmin && schoolId) {
-    profileQuery.eq('school_id', schoolId);
-    roleQuery.eq('school_id', schoolId);
-    classQuery.eq('school_id', schoolId);
-  }
-
-  const [{ data: profiles }, { data: roles }, { data: classes }] = await Promise.all([
-    profileQuery, roleQuery, classQuery
-  ]);
-
-  const active: TeacherProfile[] = (profiles || [])
-    .filter(p => (roles || []).some((r: any) => r.user_id === p.id && r.approval_status === 'approved'))
-    .map(p => ({
-      ...p,
-      classes: (classes || []).filter(c => c.teacher_id === p.id).map(c => ({ id: c.id, name: c.name }))
-    }));
-
-  const pending = (roles || [])
-    .filter((r: any) => r.approval_status === 'pending')
-    .map((r: any) => {
-      const p = (profiles || []).find(prof => prof.id === r.user_id);
-      return { ...r, full_name: p?.full_name, phone: p?.phone };
-    });
-
-  return { active, pending };
 }
 
 export default function TeachersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [schoolSlug, setSchoolSlug] = useState('');
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const { data: allTeachers = [], isLoading: loading, error, refetch, isRefetching } = useTeachers();
+  const { data: allClasses = [] } = useClasses();
+  const { data: branding } = useBranding();
+  
+  const deleteMutation = useDeleteTeacher();
+  const actionMutation = useTeacherAction();
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-
-  // Detail Modal State
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
 
-  // ── React Query (cached 5 min) ──
-  const { data, isLoading: loading } = useQuery({
-    queryKey: ['teachers-page', user?.schoolId, user?.isSuperAdmin],
-    queryFn: () => fetchTeachersData(user?.schoolId || null, !!user?.isSuperAdmin),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const teachers: TeacherProfile[] = data?.active || [];
-  const pendingTeachers: any[] = data?.pending || [];
-
-  // Load school slug for invite link
-  useState(() => {
-    if (!user?.schoolId) return;
-    (supabase as any).from('schools').select('slug').eq('id', user.schoolId).single()
-      .then(({ data: s }: any) => { if (s) setSchoolSlug(s.slug); });
-  });
+  // Split and enrich data
+  const { active: teachers, pending: pendingTeachers } = useMemo(() => {
+    const active = allTeachers
+      .filter(t => t.approval_status === 'approved')
+      .map(t => ({
+        ...t,
+        classes: allClasses.filter(c => c.teacher_id === t.id).map(c => ({ id: c.id, name: c.name }))
+      }));
+    const pending = allTeachers.filter(t => t.approval_status === 'pending');
+    return { active, pending };
+  }, [allTeachers, allClasses]);
 
   const filtered = useMemo(() =>
     teachers.filter(t => (t.full_name || '').includes(search)),
@@ -112,31 +79,30 @@ export default function TeachersPage() {
 
   const handleDeleteTeacher = async (id: string) => {
     if (!confirm('هل أنت متأكد من حذف حساب هذا المعلم؟ سيؤدي ذلك لإلغاء صلاحياته.')) return;
-    const { error } = await (supabase as any).from('user_roles').delete().eq('user_id', id);
-    if (error) {
-      toast({ title: 'خطأ', description: 'فشل في إلغاء صلاحيات المعلم', variant: 'destructive' });
-    } else {
+    try {
+      await deleteMutation.mutateAsync(id);
       toast({ title: 'تم التنفيذ', description: 'تم إلغاء صلاحيات المعلم بنجاح' });
       setShowDetail(false);
-      queryClient.invalidateQueries({ queryKey: ['teachers-page', user?.schoolId, !!user?.isSuperAdmin] });
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: 'فشل في إلغاء صلاحيات المعلم', variant: 'destructive' });
     }
   };
 
-  const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
-    setActionLoading(userId);
+  const handleAction = async (userRoleId: string, status: 'approved' | 'rejected') => {
     try {
-      const { error } = await (supabase as any).from('user_roles').update({ approval_status: status }).eq('id', userId);
-      if (error) throw error;
+      await actionMutation.mutateAsync({ userRoleId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
-      queryClient.invalidateQueries({ queryKey: ['teachers-page', user?.schoolId, !!user?.isSuperAdmin] });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
-    setActionLoading(null);
   };
 
   const copyLink = () => {
-    const link = `${window.location.origin}/register/teachers/${schoolSlug}`;
+    if (!branding?.slug) {
+      toast({ title: 'تنبيه', description: 'جاري تحميل بيانات المدرسة...', variant: 'default' });
+      return;
+    }
+    const link = `${window.location.origin}/register/teachers/${branding.slug}`;
     navigator.clipboard.writeText(link);
     toast({ title: 'تم النسخ', description: 'تم نسخ رابط تسجيل المعلمين للحافظة' });
   };
@@ -182,6 +148,7 @@ export default function TeachersPage() {
         </div>
 
         {/* Pending Approvals */}
+               {/* Pending Approvals */}
         {pendingTeachers.length > 0 && (
           <div className="premium-card border-amber-100 bg-amber-50/10 p-6 overflow-hidden relative">
             <h2 className="text-lg font-black text-amber-900 flex items-center gap-2 mb-6"><Clock className="w-5 h-5 text-amber-600" /> طلبات انضمام في انتظار المراجعة</h2>
@@ -191,10 +158,18 @@ export default function TeachersPage() {
                     <h3 className="font-bold text-slate-900 text-sm mb-1">{u.full_name}</h3>
                     <p className="text-xs text-slate-500 mb-4" dir="ltr">{u.phone}</p>
                     <div className="flex gap-2">
-                      <Button onClick={() => handleAction(u.id, 'approved')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                      <Button 
+                        onClick={() => handleAction(u.user_role_id!, 'approved')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0"
+                      >
                         <ShieldCheck className="w-3.5 h-3.5" /> قبول
                       </Button>
-                      <Button onClick={() => handleAction(u.id, 'rejected')} disabled={actionLoading === u.id} className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0">
+                      <Button 
+                        onClick={() => handleAction(u.user_role_id!, 'rejected')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0"
+                      >
                         <XCircle className="w-3.5 h-3.5" /> رفض
                       </Button>
                     </div>
@@ -215,21 +190,18 @@ export default function TeachersPage() {
           />
         </div>
 
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 gap-4">
-            <div className="w-10 h-10 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-            <p className="text-slate-300 font-black tracking-widest text-[10px] uppercase">جاري فرز الكادر التعليمي</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="bg-white border-2 border-dashed border-slate-200 p-24 text-center rounded-[48px] shadow-sm">
-            <div className="w-20 h-20 rounded-[32px] bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-              <User className="w-10 h-10" />
-            </div>
-            <h2 className="text-xl font-black text-slate-900 mb-2">لا يوجد معلمون</h2>
-            <p className="text-slate-400 font-medium text-sm">لم يتم العثور على أي نتائج تطابق بحثك.</p>
-          </div>
-        ) : (
-          <>
+        <QueryStateHandler
+          loading={loading}
+          error={error}
+          data={allTeachers}
+          onRetry={refetch}
+          isRefetching={isRefetching}
+          loadingMessage="جاري مزامنة بيانات المعلمين..."
+          errorMessage="فشل تحميل قائمة المعلمين."
+          emptyMessage="لا يوجد معلمون مسجلون حالياً."
+          isEmpty={filtered.length === 0}
+        >
+          <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
                 {totalItems} معلم — الصفحة {page}
@@ -237,7 +209,7 @@ export default function TeachersPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {paginated.map(t => (
-                <TeacherCard key={t.id} teacher={t} onClick={() => handleShowDetail(t)} />
+                <TeacherCard key={t.id} teacher={t as any} onClick={() => handleShowDetail(t)} />
               ))}
             </div>
             <DataPagination
@@ -246,8 +218,8 @@ export default function TeachersPage() {
               pageSize={PAGE_SIZE}
               onPageChange={setPage}
             />
-          </>
-        )}
+          </div>
+        </QueryStateHandler>
       </div>
 
       {selectedTeacher && (
@@ -296,7 +268,7 @@ function KPIStat({ label, value, icon: Icon, color }: any) {
   );
 }
 
-function TeacherCard({ teacher, onClick }: { teacher: TeacherProfile; onClick: () => void }) {
+function TeacherCard({ teacher, onClick }: { teacher: Teacher & { classes: {id: string, name: string}[] }; onClick: () => void }) {
   return (
     <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
       <div className="p-6 space-y-6">
@@ -341,10 +313,11 @@ function TeacherCard({ teacher, onClick }: { teacher: TeacherProfile; onClick: (
 }
 
 // ─── Edit Teacher Modal ───────────────────────────────────────────────────────
-export function EditTeacherModal({ teacher, onClose }: { teacher: TeacherProfile; onClose: () => void }) {
+export function EditTeacherModal({ teacher, onClose }: { teacher: Teacher; onClose: () => void }) {
   const { toast } = useToast();
   const [fullName, setFullName] = useState(teacher.full_name);
   const [phone, setPhone] = useState(teacher.phone || '');
+  const updateMutation = useUpdateTeacher();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -354,19 +327,20 @@ export function EditTeacherModal({ teacher, onClose }: { teacher: TeacherProfile
     setLoading(true);
     setError('');
     
-    const { error } = await supabase.from('profiles').update({
-      full_name: fullName.trim(),
-      phone: phone.trim().replace(/\D/g, '') || null,
-    }).eq('id', teacher.id);
-    
-    if (error) {
-      setError(error.message);
-      toast({ title: 'خطأ', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await updateMutation.mutateAsync({
+        id: teacher.id,
+        full_name: fullName.trim(),
+        phone: phone.trim().replace(/\D/g, '') || '',
+      });
       toast({ title: 'تم الحفظ بنجاح' });
       onClose();
+    } catch (err: any) {
+      setError(err.message);
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

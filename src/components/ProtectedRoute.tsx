@@ -1,5 +1,6 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth, AppRole } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { AppRole } from '@/types/auth';
 import { ReactNode } from 'react';
 
 interface Props {
