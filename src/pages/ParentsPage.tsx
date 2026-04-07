@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useParents, useParentAction, useBranding } from '@/hooks/queries';
+import { useParents, useParentAction, useBranding, type Parent } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { Phone, User, Eye, X, Search, Users, ArrowLeft, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -177,7 +177,7 @@ export default function ParentsPage() {
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
-function ParentCard({ parent, onClick }: { parent: ParentProfile; onClick: () => void }) {
+function ParentCard({ parent, onClick }: { parent: Parent; onClick: () => void }) {
   return (
     <button onClick={onClick} className="flex flex-col text-right group h-full transition-all">
       <div className="bg-white border border-slate-100 rounded-3xl p-6 flex flex-col flex-1 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 hover:translate-y-[-4px] transition-all w-full relative overflow-hidden">

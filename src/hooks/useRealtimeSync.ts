@@ -24,10 +24,12 @@ export function useRealtimeSync(
     }
 
     const queryKeyStr = JSON.stringify(queryKey);
-    console.log(`📡 Setting up Realtime sync for [${table}]... Key: ${queryKeyStr}`);
+    // Add a timestamp to ensure the channel name is unique across reconnects/remounts
+    const channelName = `${table}-rt-${queryKeyStr.substring(0, 20)}-${Date.now()}`;
+    console.log(`📡 Setting up Realtime sync for [${table}]... Channel: ${channelName}`);
 
     const channel = supabase
-      .channel(`${table}-rt-${queryKeyStr.substring(0, 32)}`) // Shorter name
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
