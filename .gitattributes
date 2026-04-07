@@ -1,0 +1,20 @@
+# Standardize line endings to LF
+* text=auto eol=lf
+
+# Explicitly set binary for common image formats
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Keep scripts and config files as text
+*.js text
+*.ts text
+*.tsx text
+*.json text
+*.css text
+*.html text
+*.md text
+*.sql text
