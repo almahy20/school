@@ -3,6 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { useClasses, useTeachers, useStudents, useAddClass, useUpdateClass, useDeleteClass } from '@/hooks/queries';
+import { useQueryClient } from '@tanstack/react-query';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Users, School, User, Search, Filter, 
@@ -29,6 +30,7 @@ interface ClassItem {
 export default function ClassesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: rawClasses = [], isLoading: classesLoading, error, refetch, isRefetching } = useClasses();
   const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
@@ -258,9 +260,9 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]
             </select>
           </div>
           <div className="flex gap-4 pt-6">
-            <Button type="submit" disabled={loading}
+            <Button type="submit" disabled={addMutation.isPending}
               className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-              {loading ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
+              {addMutation.isPending ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
               className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
@@ -321,9 +323,9 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
               </select>
             </div>
             <div className="flex gap-4 pt-6">
-              <Button type="submit" disabled={loading}
+              <Button type="submit" disabled={updateMutation.isPending}
                 className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-                {loading ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+                {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
               </Button>
               <Button type="button" onClick={onClose} variant="ghost"
                 className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
