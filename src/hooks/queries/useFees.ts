@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface FeeRecord {
   id: string;
@@ -10,15 +11,17 @@ export interface FeeRecord {
   status: string | null;
   term: string;
   school_id: string | null;
-  notes?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
 
 export function useFees(term?: string) {
   const { user } = useAuth();
+  const queryKey = ['fees', user?.schoolId, term];
+  useRealtimeSync('fees', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
+
   return useQuery({
-    queryKey: ['fees', user?.schoolId, term],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId) return [];
       let query = supabase
@@ -35,7 +38,8 @@ export function useFees(term?: string) {
       return data as FeeRecord[];
     },
     enabled: !!user?.schoolId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -45,16 +49,47 @@ export function useUpsertFee() {
 
   return useMutation({
     mutationFn: async (record: Partial<FeeRecord> & { student_id: string; term: string }) => {
-      const { data, error } = await supabase
+      // 1. Try to find existing record for this student and term
+      const { data: existing } = await supabase
         .from('fees')
-        .upsert({
-          ...record,
-          school_id: record.school_id || user?.schoolId
-        }, { onConflict: 'student_id,term' })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
+        .select('id')
+        .eq('student_id', record.student_id)
+        .eq('term', record.term)
+        .maybeSingle();
+
+      if (existing) {
+        // 2. Update existing
+        const { data, error } = await supabase
+          .from('fees')
+          .update({
+            amount_due: record.amount_due,
+            amount_paid: record.amount_paid,
+            status: record.status,
+            term: record.term,
+            school_id: record.school_id || user?.schoolId
+          })
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      } else {
+        // 3. Insert new
+        const { data, error } = await supabase
+          .from('fees')
+          .insert({
+            student_id: record.student_id,
+            term: record.term,
+            amount_due: record.amount_due || 0,
+            amount_paid: record.amount_paid || 0,
+            status: record.status || 'unpaid',
+            school_id: record.school_id || user?.schoolId
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, data.term] });
@@ -73,16 +108,30 @@ export function useGenerateFees() {
     mutationFn: async ({ students, term, amount }: { students: any[], term: string, amount: number }) => {
       if (!user?.schoolId) throw new Error('No school ID');
       
-      const records = students.map(s => ({
-        student_id: s.id,
-        school_id: user.schoolId,
-        term,
-        amount_due: amount,
-        amount_paid: 0,
-        status: 'unpaid'
-      }));
+      // 1. Fetch existing records for this term to avoid duplicates
+      const { data: existingRecords } = await supabase
+        .from('fees')
+        .select('student_id')
+        .eq('term', term)
+        .eq('school_id', user.schoolId);
 
-      const { error } = await supabase.from('fees').upsert(records, { onConflict: 'student_id,term' });
+      const existingStudentIds = new Set(existingRecords?.map(r => r.student_id) || []);
+      
+      // 2. Only create records for students who don't have one
+      const recordsToInsert = students
+        .filter(s => !existingStudentIds.has(s.id))
+        .map(s => ({
+          student_id: s.id,
+          school_id: user.schoolId,
+          term,
+          amount_due: amount,
+          amount_paid: 0,
+          status: 'unpaid'
+        }));
+
+      if (recordsToInsert.length === 0) return;
+
+      const { error } = await supabase.from('fees').insert(recordsToInsert);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {

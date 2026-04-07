@@ -8,9 +8,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { 
   useParent, 
-  useAdminParentChildren 
+  useAdminParentChildren,
+  useDeleteParent
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 export default function ParentDetailPage() {
@@ -21,6 +23,18 @@ export default function ParentDetailPage() {
   // ── Queries ──
   const { data: parent, isLoading: parentLoading, error: parentError, refetch: refetchParent } = useParent(id);
   const { data: children = [], isLoading: childrenLoading } = useAdminParentChildren(id);
+  const deleteParentMutation = useDeleteParent();
+
+  const handleDelete = async () => {
+    if (!id || !window.confirm('هل أنت متأكد من حذف حساب ولي الأمر هذا؟ سيؤدي ذلك لإزالة صلاحياته بالكامل.')) return;
+    try {
+      await deleteParentMutation.mutateAsync(id);
+      toast({ title: 'تم الحذف بنجاح', description: 'تمت إزالة ولي الأمر من النظام.' });
+      navigate('/parents');
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    }
+  };
 
   const isLoadingTotal = parentLoading || childrenLoading;
 
@@ -36,23 +50,23 @@ export default function ParentDetailPage() {
           loadingMessage="جاري مزامنة بيانات حساب ولي الأمر..."
         >
           {/* Premium Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-10 bg-white/40 backdrop-blur-md p-10 rounded-[56px] border border-white/50 shadow-xl shadow-slate-100/50 relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 md:gap-10 bg-white/40 backdrop-blur-md p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-white/50 shadow-xl shadow-slate-100/50 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             
-            <div className="flex items-center gap-8 relative z-10">
+            <div className="flex items-center gap-4 md:gap-8 relative z-10">
               <button 
                 onClick={() => navigate('/parents')}
-                className="w-16 h-16 rounded-[28px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[28px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
               >
-                 <ArrowRight className="w-7 h-7" />
+                 <ArrowRight className="w-6 h-6 md:w-7 md:h-7" />
               </button>
               
-              <div className="flex items-center gap-8">
-                 <div className="w-24 h-24 rounded-[36px] bg-slate-900 text-indigo-400 flex items-center justify-center shadow-2xl relative group-hover:rotate-6 transition-transform duration-700 shrink-0 border-4 border-white">
-                    <User className="w-12 h-12" />
+              <div className="flex items-center gap-4 md:gap-8">
+                 <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[36px] bg-slate-900 text-indigo-400 flex items-center justify-center shadow-2xl relative group-hover:rotate-6 transition-transform duration-700 shrink-0 border-4 border-white">
+                    <User className="w-8 h-8 md:w-12 md:h-12" />
                  </div>
-                 <div className="space-y-2">
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-2">{parent?.full_name}</h1>
+                 <div className="space-y-1 md:space-y-2">
+                    <h1 className="text-xl md:text-4xl font-black text-slate-900 tracking-tight leading-none mb-1 md:mb-2">{parent?.full_name}</h1>
                     <div className="flex items-center gap-4">
                        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100/50">
                           <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -65,8 +79,8 @@ export default function ParentDetailPage() {
             </div>
 
             <div className="flex items-center gap-4 relative z-10">
-               <Button className="h-16 px-10 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all shadow-2xl shadow-slate-200 gap-3 text-sm">
-                  <Mail className="w-5 h-5 text-indigo-400" /> إرسال رسالة تنبيه
+               <Button className="h-14 md:h-16 px-6 md:px-10 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all shadow-2xl shadow-slate-200 gap-3 text-[10px] md:text-sm">
+                  <Mail className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" /> إرسال رسالة تنبيه
                </Button>
             </div>
           </header>
@@ -74,14 +88,14 @@ export default function ParentDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
             {/* Main Information Section */}
             <div className="lg:col-span-8 space-y-12">
-                <section className="bg-white border border-slate-50 p-12 rounded-[64px] shadow-xl shadow-slate-100/50 space-y-12">
-                   <header className="flex items-center gap-5 border-b border-slate-50 pb-8">
-                      <div className="w-16 h-16 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
-                         <Info className="w-8 h-8" />
+                <section className="bg-white border border-slate-50 p-6 md:p-12 rounded-[40px] md:rounded-[64px] shadow-xl shadow-slate-100/50 space-y-8 md:space-y-12">
+                   <header className="flex items-center gap-5 border-b border-slate-50 pb-6 md:pb-8">
+                      <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
+                         <Info className="w-6 h-6 md:w-8 md:h-8" />
                       </div>
                       <div>
-                         <h2 className="text-2xl font-black text-slate-900 mb-1">بيانات التواصل المؤسسية</h2>
-                         <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest leading-none">إدارة قنوات التواصل الرسمي</p>
+                         <h2 className="text-lg md:text-2xl font-black text-slate-900 mb-1">بيانات التواصل المؤسسية</h2>
+                         <p className="text-[9px] md:text-[11px] font-black text-slate-300 uppercase tracking-widest leading-none">إدارة قنوات التواصل الرسمي</p>
                       </div>
                    </header>
 
@@ -103,15 +117,15 @@ export default function ParentDetailPage() {
                    </div>
                 </section>
 
-                <section className="bg-white border border-slate-50 p-12 rounded-[64px] shadow-xl shadow-slate-100/50 space-y-12">
-                   <header className="flex items-center justify-between border-b border-slate-50 pb-8">
+                <section className="bg-white border border-slate-50 p-6 md:p-12 rounded-[40px] md:rounded-[64px] shadow-xl shadow-slate-100/50 space-y-8 md:space-y-12">
+                   <header className="flex items-center justify-between border-b border-slate-50 pb-6 md:pb-8">
                       <div className="flex items-center gap-5">
-                         <div className="w-16 h-16 rounded-32 bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-inner shrink-0">
-                            <Users className="w-8 h-8" />
+                         <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-32 bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-inner shrink-0">
+                            <Users className="w-6 h-6 md:w-8 md:h-8" />
                          </div>
                          <div>
-                            <h2 className="text-2xl font-black text-slate-900 mb-1">سجل الأبناء والمنهج</h2>
-                            <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest leading-none">إجمالي التابعين: {children.length} طلاب</p>
+                            <h2 className="text-lg md:text-2xl font-black text-slate-900 mb-1">سجل الأبناء والمنهج</h2>
+                            <p className="text-[9px] md:text-[11px] font-black text-slate-300 uppercase tracking-widest leading-none">إجمالي التابعين: {children.length} طلاب</p>
                          </div>
                       </div>
                    </header>
@@ -209,8 +223,15 @@ export default function ParentDetailPage() {
                   </div>
 
                   <div className="pt-8 border-t border-white/5 relative z-10 space-y-4">
-                     <Button className="w-full h-16 rounded-[28px] bg-indigo-600 text-white font-black hover:bg-slate-100 hover:text-slate-900 transition-all text-sm shadow-3xl shadow-indigo-900/60">تحميل ملف الأسرة (Dossier)</Button>
-                     <Button variant="ghost" className="w-full h-16 rounded-[28px] text-rose-400 font-bold hover:bg-rose-500/10 text-xs">تعليق صلاحيات الحساب</Button>
+                     <Button className="w-full h-14 md:h-16 rounded-[24px] md:rounded-[28px] bg-indigo-600 text-white font-black hover:bg-slate-100 hover:text-slate-900 transition-all text-xs shadow-3xl shadow-indigo-900/60">تحميل ملف الأسرة (Dossier)</Button>
+                     <Button 
+                       variant="ghost" 
+                       onClick={handleDelete}
+                       disabled={deleteParentMutation.isPending}
+                       className="w-full h-14 md:h-16 rounded-[24px] md:rounded-[28px] text-rose-400 font-bold hover:bg-rose-500/10 text-xs gap-3"
+                     >
+                       {deleteParentMutation.isPending ? 'جاري الحذف...' : 'حذف حساب ولي الأمر نهائياً'}
+                     </Button>
                   </div>
                </section>
 

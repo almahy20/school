@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface Student {
@@ -11,7 +12,9 @@ export interface Student {
   parent_phone: string | null;
   school_id: string | null;
   created_at: string;
-  classes?: { name: string; grade_level: string | null };
+  birth_date?: string | null;
+  notes?: string | null;
+  classes?: { name: string; grade_level: string | null; teacher_id?: string };
 }
 
 // ─── Fetch function ───────────────────────────────────────────────────────────
@@ -49,13 +52,18 @@ async function fetchStudents(user: AppUser | null): Promise<Student[]> {
 // ─── useStudents Hook ─────────────────────────────────────────────────────────
 export function useStudents() {
   const { user } = useAuth();
+  const queryKey = ['students', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
+  
+  // Enable Realtime Sync
+  useRealtimeSync('students', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
+
   return useQuery({
-    queryKey: ['students', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id],
+    queryKey,
     queryFn: () => fetchStudents(user),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000, // 30 seconds - much more responsive
-    gcTime: 10 * 60 * 1000, // 10 minutes cache
-    refetchInterval: 5 * 60 * 1000, // Auto-refresh every 5 minutes
+    staleTime: 0, // Ensure we check for updates frequently
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 1000, // 15s fallback polling as requested
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });
@@ -63,8 +71,13 @@ export function useStudents() {
 
 // ─── useStudent Hook ──────────────────────────────────────────────────────────
 export function useStudent(id: string | undefined) {
+  const queryKey = ['student', id];
+
+  // Enable Realtime Sync for single student
+  useRealtimeSync('students', queryKey, id ? `id=eq.${id}` : undefined);
+
   return useQuery({
-    queryKey: ['student', id],
+    queryKey,
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -91,7 +104,8 @@ export function useStudent(id: string | undefined) {
       return data as Student & { classes: any };
     },
     enabled: !!id,
-    staleTime: 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

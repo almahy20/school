@@ -64,12 +64,15 @@
 @layer base {
   * {
     @apply border-border;
+    box-sizing: border-box;
   }
 
   html {
     direction: rtl;
     scroll-behavior: smooth;
     font-size: 85%; /* Slightly more than 80% to maintain readability on small screens */
+    overflow-x: hidden;
+    width: 100%;
   }
   
   @media (min-width: 1280px) {
@@ -79,8 +82,17 @@
   }
 
   body {
-    @apply bg-background text-foreground font-cairo antialiased selection:bg-primary/10 selection:text-primary overflow-x-hidden;
+    @apply bg-background text-foreground font-cairo antialiased selection:bg-primary/10 selection:text-primary overflow-x-hidden w-full min-h-screen;
     font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-overflow-scrolling: touch;
+    margin: 0;
+    padding: 0;
+  }
+
+  #root {
+    width: 100%;
+    min-h-screen: 100vh;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {

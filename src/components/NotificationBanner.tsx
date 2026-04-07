@@ -9,11 +9,18 @@ export default function NotificationBanner() {
 
   useEffect(() => {
     // Show banner if not subscribed and permission is not denied
-    if (!isSubscribed && permission !== 'denied') {
+    // Also check if user hasn't explicitly dismissed it
+    const isDismissed = localStorage.getItem('hide_notification_banner') === 'true';
+    if (!isSubscribed && permission !== 'denied' && !isDismissed) {
       const timer = setTimeout(() => setIsVisible(true), 2000);
       return () => clearTimeout(timer);
     }
   }, [isSubscribed, permission]);
+
+  const handleDismiss = () => {
+    localStorage.setItem('hide_notification_banner', 'true');
+    setIsVisible(false);
+  };
 
   if (!isVisible || isSubscribed) return null;
 
@@ -25,7 +32,7 @@ export default function NotificationBanner() {
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -ml-12 -mb-12 group-hover:scale-150 transition-transform duration-1000" />
         
         <button 
-          onClick={() => setIsVisible(false)}
+          onClick={handleDismiss}
           className="absolute top-6 left-6 text-white/20 hover:text-white transition-colors"
         >
           <X className="w-5 h-5" />

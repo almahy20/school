@@ -1,9 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export function useTableData(tableName: string) {
+  const queryKey = ['database-table', tableName];
+  useRealtimeSync(tableName, queryKey);
+
   return useQuery({
-    queryKey: ['database-table', tableName],
+    queryKey,
     queryFn: async () => {
       const { data, error } = await supabase
         .from(tableName as any)
@@ -13,6 +17,8 @@ export function useTableData(tableName: string) {
       if (error) throw error;
       return data;
     },
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

@@ -61,7 +61,7 @@ export default function WaitingApprovalPage() {
         </div>
       </div>
       
-      <p className="mt-8 text-[10px] font-black text-slate-300 uppercase tracking-widest">إدارة عربية • نظام الإدارة المدرسية الذكي</p>
+      <p className="mt-8 text-[10px] font-black text-slate-300 uppercase tracking-widest text-center">نظام الإدارة المدرسية الذكي • منصتك التعليمية</p>
     </div>
   );
 }

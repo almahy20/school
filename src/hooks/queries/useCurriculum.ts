@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface Curriculum {
   id: string;
@@ -19,8 +20,11 @@ export interface CurriculumSubject {
 
 export function useCurriculums() {
   const { user } = useAuth();
+  const queryKey = ['curriculums', user?.schoolId];
+  useRealtimeSync('curriculums', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
+
   return useQuery({
-    queryKey: ['curriculums', user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId) return [];
       const { data, error } = await supabase
@@ -32,12 +36,17 @@ export function useCurriculums() {
       return data as Curriculum[];
     },
     enabled: !!user?.schoolId,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useCurriculumSubjects(curriculumId: string | null) {
+  const queryKey = ['curriculum-subjects', curriculumId];
+  useRealtimeSync('curriculum_subjects', queryKey, curriculumId ? `curriculum_id=eq.${curriculumId}` : undefined);
+
   return useQuery({
-    queryKey: ['curriculum-subjects', curriculumId],
+    queryKey,
     queryFn: async () => {
       if (!curriculumId) return [];
       const { data, error } = await supabase
@@ -49,6 +58,8 @@ export function useCurriculumSubjects(curriculumId: string | null) {
       return data as CurriculumSubject[];
     },
     enabled: !!curriculumId,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

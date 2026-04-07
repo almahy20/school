@@ -7,7 +7,6 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import PwaManager from "./components/PwaManager";
-import NotificationBanner from "./components/NotificationBanner";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 import { HealthMonitor } from "./components/HealthMonitor";
@@ -49,6 +48,7 @@ const SubscriptionExpiredPage = lazy(() => import("./pages/SubscriptionExpiredPa
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const WaitingApprovalPage = lazy(() => import("./pages/WaitingApprovalPage"));
 import PwaOnboarding from "./components/PwaOnboarding";
+import RealtimeNotificationsManager from "./components/RealtimeNotificationsManager";
 
 import { queryClient } from "./lib/queryClient";
 
@@ -57,12 +57,10 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#060b16] flex flex-col items-center justify-center p-6" dir="rtl">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mb-6 animate-pulse">
-          <div className="w-8 h-8 rounded-lg bg-indigo-500 animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
         </div>
-        <h2 className="text-xl font-black text-white mb-2">إدارة عربية</h2>
-        <p className="text-white/40 text-sm font-bold uppercase tracking-widest animate-pulse">جاري التحقق من الهوية...</p>
       </div>
     );
   }
@@ -72,7 +70,7 @@ function AppRoutes() {
       <PwaManager />
       <HealthMonitor />
       <PwaOnboarding />
-      <NotificationBanner />
+      <RealtimeNotificationsManager />
       <Suspense fallback={
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir="rtl">
            <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -125,47 +123,6 @@ function AppRoutes() {
 }
 
 export default function App() {
-  useEffect(() => {
-    // 1. Manually handle focus for PWA/Background scenarios
-    const onVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('🔄 App visible, validating session and triggering refetch...');
-        
-        // Ensure browser thinks we are focused
-        focusManager.setFocused(true);
-
-        // a) Validate Supabase Session (Ensures we haven't been signed out while away)
-        try {
-          const { data: { session }, error } = await supabase.auth.getSession();
-          if (error || !session) {
-            console.warn('⚠️ Session invalid on resumed focus, checking auth status...');
-            // The AuthProvider will handle the redirect if session is truly gone
-          }
-        } catch (e) {
-          console.error('❌ Error validating session on resume:', e);
-        }
-
-        // b) Force refetch all active and visible queries to ensure UI is fresh
-        // We use invalidateQueries to mark everything as stale and trigger a refetch of all active ones
-        queryClient.invalidateQueries({ 
-          type: 'active',
-          refetchType: 'active'
-        });
-        
-        // Also explicitly refetch branding as it might have changed
-        queryClient.refetchQueries({ queryKey: ['branding'] });
-      }
-    };
-
-    window.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('focus', onVisibilityChange);
-
-    return () => {
-      window.removeEventListener('visibilitychange', onVisibilityChange);
-      window.removeEventListener('focus', onVisibilityChange);
-    };
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

@@ -69,8 +69,7 @@ export default function AttendancePage() {
         class_id: selectedClassId,
         date,
         status: a.status,
-        school_id: user.schoolId,
-        teacher_id: user.id
+        school_id: user.schoolId
       }));
 
     if (recordsToPush.length === 0) {

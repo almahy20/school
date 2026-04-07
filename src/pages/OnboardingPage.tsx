@@ -31,7 +31,7 @@ export default function OnboardingPage() {
 
           <div className="space-y-6 mb-10 max-w-sm mx-auto">
             <p className="text-base font-medium text-slate-500 leading-relaxed">
-              تم إعداد حسابك بنجاح في منصة إدارة عربية. يمكنك الآن البدء في استكشاف النظام ومتابعة المهام التعليمية.
+              تم إعداد حسابك بنجاح في منصتك المدرسية الذكية. يمكنك الآن البدء في استكشاف النظام ومتابعة المهام التعليمية.
             </p>
             {user?.role === 'parent' && (
               <p className="text-sm font-medium text-amber-600 bg-amber-50 rounded-2xl p-4 border border-amber-100">

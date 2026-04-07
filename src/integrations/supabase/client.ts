@@ -14,5 +14,20 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     persistSession: true,
     autoRefreshToken: true,
     lock: (name: string, _timeout: number, acquire: () => Promise<any>) => acquire(),
-  }
+  },
+  global: {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    }
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    heartbeatIntervalMs: 15000,       // Send heartbeat every 15s to keep WS alive
+    reconnectAfterMs: (tries: number) => Math.min(1000 + tries * 2000, 10000), // Exponential backoff up to 10s
+    timeout: 20000,                   // Consider timed out after 20s of no response
+  },
 });

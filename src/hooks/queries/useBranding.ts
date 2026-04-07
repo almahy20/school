@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface SchoolBranding {
   id: string;
@@ -28,13 +29,16 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 
 export function useBranding() {
   const { user } = useAuth();
+  const queryKey = ['school-branding', user?.schoolId];
+  useRealtimeSync('schools', queryKey, user?.schoolId ? `id=eq.${user?.schoolId}` : undefined);
   
   return useQuery({
-    queryKey: ['school-branding', user?.schoolId],
+    queryKey,
     queryFn: () => fetchBranding(user?.schoolId || null),
     enabled: !!user?.schoolId,
-    staleTime: 24 * 60 * 60 * 1000, // Branding rarely changes, cache for 24 hours
-    gcTime: 48 * 60 * 60 * 1000,
+    staleTime: 60 * 60 * 1000, // Check branding once an hour, realtime will handle updates
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {

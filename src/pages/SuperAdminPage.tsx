@@ -79,18 +79,18 @@ export default function SuperAdminPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-slate-900 text-white p-12 sm:p-14 rounded-[56px] shadow-2xl relative overflow-hidden group">
+      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-16">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-slate-900 text-white p-8 md:p-10 lg:p-12 rounded-[32px] md:rounded-[48px] shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
-          <div className="space-y-4 relative z-10">
+          <div className="space-y-3 relative z-10">
             <div className="flex items-center gap-4">
-               <div className="w-16 h-16 rounded-[24px] bg-rose-500 flex items-center justify-center text-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                  <ShieldAlert className="w-8 h-8" />
+               <div className="w-14 h-14 rounded-[20px] bg-rose-500 flex items-center justify-center text-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
+                  <ShieldAlert className="w-7 h-7" />
                </div>
-               <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-none">إدارة المنصة المركزية</h1>
+               <h1 className="text-2xl md:text-4xl font-black tracking-tight leading-none">إدارة المنصة المركزية</h1>
             </div>
-            <p className="text-slate-400 font-medium text-lg pr-2 max-w-2xl">التحكم الشامل في استمرارية الخدمات التعليمية وإدارة دورة حياة اشتراكات المدارس.</p>
+            <p className="text-slate-400 font-medium text-base pr-1 max-w-2xl">التحكم الشامل في استمرارية الخدمات التعليمية وإدارة دورة حياة اشتراكات المدارس.</p>
           </div>
           
           <div className="flex items-center gap-6 relative z-10">

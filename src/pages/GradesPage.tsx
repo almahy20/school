@@ -110,7 +110,7 @@ export default function GradesPage() {
           teacher_id: user.id,
           school_id: user.schoolId,
           subject: selectedTemplate.subject,
-          score: Number(sg.score),
+          score: isNaN(Number(sg.score)) ? 0 : Number(sg.score),
           max_score: selectedTemplate.max_score,
           term: selectedTemplate.term,
           exam_template_id: selectedTemplate.id,

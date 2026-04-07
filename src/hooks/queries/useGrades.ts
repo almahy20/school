@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface ExamTemplate {
   id: string;
@@ -27,8 +28,11 @@ export interface StudentGrade {
 
 export function useExamTemplates(classId: string | null, subject: string | null) {
   const { user } = useAuth();
+  const queryKey = ['exam-templates', user?.schoolId, classId, subject];
+  useRealtimeSync('exam_templates', queryKey, classId ? `class_id=eq.${classId}` : undefined);
+
   return useQuery({
-    queryKey: ['exam-templates', user?.schoolId, classId, subject],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId || !classId) return [];
       let query = supabase
@@ -46,13 +50,18 @@ export function useExamTemplates(classId: string | null, subject: string | null)
       return (data as ExamTemplate[]) || [];
     },
     enabled: !!(user?.schoolId && classId),
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useStudentGrades(templateId: string | null, classId: string | null) {
   const { user } = useAuth();
+  const queryKey = ['student-grades', templateId, classId];
+  useRealtimeSync('grades', queryKey, templateId ? `exam_template_id=eq.${templateId}` : undefined);
+
   return useQuery({
-    queryKey: ['student-grades', templateId, classId],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId || !classId || !templateId) return [];
       
@@ -84,6 +93,8 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
       }) as StudentGrade[];
     },
     enabled: !!(user?.schoolId && classId && templateId),
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -133,7 +144,20 @@ export function useUpsertGrades() {
 
   return useMutation({
     mutationFn: async (grades: any[]) => {
-      const { error } = await supabase.from('grades').upsert(grades);
+      if (!grades.length) return;
+      const templateId = grades[0].exam_template_id;
+      const studentIds = grades.map(g => g.student_id);
+      
+      // 1. Delete existing
+      await supabase
+        .from('grades')
+        .delete()
+        .eq('exam_template_id', templateId)
+        .in('student_id', studentIds);
+        
+      // 2. Clean id and insert fresh
+      const cleanedGrades = grades.map(({ id, ...rest }) => rest);
+      const { error } = await supabase.from('grades').insert(cleanedGrades);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {

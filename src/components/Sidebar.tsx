@@ -2,7 +2,6 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { playNotificationSound, sendLocalNotification } from '@/utils/notifications';
 import { useUnreadNotificationsCount } from '@/hooks/queries';
 import { 
   LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
@@ -64,7 +63,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: initialUnreadCount = 0, refetch } = useUnreadNotificationsCount();
+  const { data: initialUnreadCount = 0 } = useUnreadNotificationsCount();
   const [unreadCount, setUnreadCount] = useState(0);
   const defaultLogo = "";
   const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
@@ -102,7 +101,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
     };
     fetchBranding();
 
-    // Listen for school branding updates
     const channel = supabase
       .channel('school-branding-updates')
       .on(
@@ -113,60 +111,29 @@ export default function Sidebar({ onClose }: SidebarProps) {
           table: 'schools',
           filter: user?.schoolId ? `id=eq.${user.schoolId}` : undefined
         },
-          (payload) => {
-            const newSchool = payload.new as any;
-            
-            const timestamp = Date.now();
-            const logo = newSchool.logo_url || '';
-            const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-            
-            setSchoolBranding(prev => ({
-              ...prev,
-              name: newSchool.name,
-              logo: logoWithCacheBust,
-            }));
-          }
+        (payload) => {
+          const newSchool = payload.new as any;
+          const timestamp = Date.now();
+          const logo = newSchool.logo_url || '';
+          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+          
+          setSchoolBranding(prev => ({
+            ...prev,
+            name: newSchool.name,
+            logo: logoWithCacheBust,
+          }));
+        }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+       supabase.removeChannel(channel);
     };
   }, [user?.schoolId]);
 
   useEffect(() => {
     setUnreadCount(initialUnreadCount);
   }, [initialUnreadCount]);
-
-  useEffect(() => {
-    if (!user?.id) return;
-
-    let isMounted = true;
-
-    const channel = supabase
-      .channel(`sidebar-notifications-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, 
-      (payload) => {
-        if (isMounted) {
-          setUnreadCount(prev => prev + 1);
-          
-          // Show local browser notification with school branding
-          sendLocalNotification(
-            schoolBranding.name, 
-            payload.new.content || 'لديك إشعار جديد',
-            schoolBranding.logo
-          );
-          
-          refetch(); // Keep React Query in sync
-        }
-      })
-      .subscribe();
-
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, refetch, schoolBranding]);
 
   const getLinks = () => {
     if (user?.isSuperAdmin) return superAdminLinks;

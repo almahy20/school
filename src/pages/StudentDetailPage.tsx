@@ -19,7 +19,6 @@ import {
   useStudentParent, 
   useCurriculumSubjects,
   useClasses,
-  useUsers,
   useBranding,
   useDeleteStudent
 } from '@/hooks/queries';
@@ -43,13 +42,10 @@ export default function StudentDetailPage() {
   
   // For Edit Modal
   const { data: classes = [] } = useClasses();
-  const { data: allUsers = [] } = useUsers();
   const { data: branding } = useBranding();
 
   // ── Mutations ──
   const deleteStudentMutation = useDeleteStudent();
-
-  const parents = useMemo(() => allUsers.filter(u => u.role === 'parent'), [allUsers]);
 
   const handleDelete = async () => {
     if (!id || !confirm('هل أنت متأكد من حذف سجل الطالب نهائياً من قاعدة البيانات؟')) return;
@@ -76,41 +72,41 @@ export default function StudentDetailPage() {
           loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
         >
           {/* Header Section */}
-          <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-14 rounded-[40px] md:rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             
-            <div className="flex items-center gap-6 relative z-10">
+            <div className="flex items-center gap-4 md:gap-6 relative z-10 text-right">
               <button 
                 onClick={() => navigate(currentUser?.role === 'parent' ? '/' : '/students')}
-                className="w-14 h-14 rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm"
+                className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
               >
-                 <ArrowRight className="w-6 h-6" />
+                 <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               
-              <div className="w-20 h-20 rounded-[32px] bg-slate-900 flex items-center justify-center text-white shadow-2xl relative group-hover:rotate-3 transition-transform duration-500 font-black text-3xl">
+              <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-[32px] bg-slate-900 flex items-center justify-center text-white shadow-2xl relative group-hover:rotate-3 transition-transform duration-500 font-black text-xl md:text-3xl shrink-0">
                  {student?.name?.trim()[0]}
               </div>
               
-              <div className="space-y-1">
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">{student?.name}</h1>
-                <div className="flex flex-wrap items-center gap-3">
-                   <Badge className="bg-indigo-600 text-white border-none font-black text-[10px] uppercase px-4 py-1 rounded-full shadow-lg shadow-indigo-100">
+              <div className="space-y-1 min-w-0">
+                <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 truncate">{student?.name}</h1>
+                <div className="flex flex-wrap items-center gap-2">
+                   <Badge className="bg-indigo-600 text-white border-none font-black text-[8px] md:text-[10px] uppercase px-3 py-1 rounded-full shadow-lg shadow-indigo-100">
                       {student?.classes?.name || 'غير مسجل بفصل'}
                    </Badge>
-                   <div className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full">
-                      <Clock className="w-4 h-4 text-slate-200" />
-                      انضم في {new Date(student?.created_at || '').toLocaleDateString('ar-EG')}
+                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
+                      <Clock className="w-3 h-3 text-slate-200" />
+                      انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
                    </div>
                 </div>
               </div>
             </div>
             
             {currentUser?.role === 'admin' && (
-              <div className="flex items-center gap-4 relative z-10">
+              <div className="flex items-center gap-3 relative z-10">
                 <Button 
                   onClick={() => setShowEdit(true)} 
                   variant="outline" 
-                  className="h-14 px-8 rounded-2xl border-slate-100 text-slate-900 font-black text-xs hover:bg-slate-50 transition-all gap-3 shadow-xl shadow-slate-100"
+                  className="h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-2xl border-slate-100 text-slate-900 font-black text-[10px] md:text-xs hover:bg-slate-50 transition-all gap-2 md:gap-3 shadow-xl shadow-slate-100 flex-1 lg:flex-none"
                 >
                   <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل البيانات
                 </Button>
@@ -118,16 +114,16 @@ export default function StudentDetailPage() {
                   onClick={handleDelete} 
                   variant="ghost" 
                   disabled={deleteStudentMutation.isPending}
-                  className="h-14 w-14 text-rose-500 hover:bg-rose-50 rounded-2xl flex items-center justify-center transition-all"
+                  className="h-12 w-12 md:h-14 md:w-14 text-rose-500 hover:bg-rose-50 rounded-xl md:rounded-2xl flex items-center justify-center transition-all shrink-0"
                 >
-                  {deleteStudentMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Trash2 className="w-6 h-6" />}
+                  {deleteStudentMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
                 </Button>
               </div>
             )}
           </header>
 
           {/* Navigation Tabs */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-4 px-2 pb-2">
+          <div className="flex overflow-x-auto hide-scrollbar gap-3 md:gap-4 px-2 pb-2 -mx-2">
             {[
               { id: 'curriculum', label: 'المنهج الدراسي', icon: BookOpen },
               { id: 'grades', label: 'النتائج والدرجات', icon: Award },
@@ -138,13 +134,13 @@ export default function StudentDetailPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
                   className={cn(
-                    "px-8 py-4 rounded-[22px] text-xs font-black transition-all flex items-center gap-3 whitespace-nowrap border-2",
+                    "px-6 md:px-8 py-3.5 md:py-4 rounded-[20px] md:rounded-[22px] text-[10px] md:text-xs font-black transition-all flex items-center gap-2.5 md:gap-3 whitespace-nowrap border-2 shrink-0",
                     activeTab === tab.id 
-                      ? "bg-slate-900 text-white border-slate-900 shadow-2xl shadow-slate-200 scale-105" 
+                      ? "bg-slate-900 text-white border-slate-900 shadow-xl shadow-slate-200 scale-[1.02]" 
                       : "bg-white text-slate-400 border-transparent hover:bg-slate-50 hover:text-slate-600"
                   )}
                >
-                  <tab.icon className={cn("w-4 h-4", activeTab === tab.id ? "text-indigo-400" : "text-slate-200")} />
+                  <tab.icon className={cn("w-3.5 h-3.5 md:w-4 md:h-4 shrink-0", activeTab === tab.id ? "text-indigo-400" : "text-slate-200")} />
                   {tab.label}
                </button>
             ))}
@@ -295,13 +291,13 @@ function InfoCard({ title, value, icon: Icon, color }: any) {
     slate: "bg-slate-50 text-slate-600"
   };
   return (
-    <div className="p-8 bg-white rounded-[32px] border border-slate-50 shadow-xl shadow-slate-200/20 flex items-center gap-5 group hover:bg-slate-50/50 transition-all">
-       <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:rotate-6", colors[color])}>
-          <Icon className="w-7 h-7" />
+    <div className="p-6 md:p-8 bg-white rounded-[28px] md:rounded-[32px] border border-slate-50 shadow-xl shadow-slate-200/20 flex items-center gap-4 md:gap-5 group hover:bg-slate-50/50 transition-all text-right translate-x-0">
+       <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:rotate-6", colors[color])}>
+          <Icon className="w-6 h-6 md:w-7 md:h-7" />
        </div>
-       <div>
-          <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{title}</p>
-          <p className="text-base font-black text-slate-900 leading-none mt-1">{value || 'غير محدد'}</p>
+       <div className="min-w-0">
+          <p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest truncate">{title}</p>
+          <p className="text-sm md:text-base font-black text-slate-900 leading-none mt-1 truncate">{value || 'غير محدد'}</p>
        </div>
     </div>
   );

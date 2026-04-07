@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface Parent {
   id: string; // user_id
@@ -54,19 +55,29 @@ async function fetchParents(schoolId: string | null): Promise<Parent[]> {
 
 export function useParents() {
   const { user } = useAuth();
+  const queryKey = ['parents', user?.schoolId];
+  
+  useRealtimeSync('profiles', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
+  useRealtimeSync('user_roles', queryKey);
+
   return useQuery({
-    queryKey: ['parents', user?.schoolId],
+    queryKey,
     queryFn: () => fetchParents(user?.schoolId || null),
     enabled: !!user?.schoolId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
 export function useParent(id: string | undefined | null) {
+  const queryKey = ['parent', id];
+  useRealtimeSync('profiles', queryKey, id ? `id=eq.${id}` : undefined);
+
   return useQuery({
-    queryKey: ['parent', id],
+    queryKey,
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -78,7 +89,8 @@ export function useParent(id: string | undefined | null) {
       return data as Parent;
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

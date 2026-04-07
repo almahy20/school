@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface Teacher {
   id: string; // This is the user_id (profiles.id)
@@ -45,19 +46,31 @@ async function fetchTeachers(schoolId: string | null, isSuperAdmin: boolean): Pr
 
 export function useTeachers() {
   const { user } = useAuth();
+  const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin];
+
+  // Subscribe to profile changes for real-time updates
+  useRealtimeSync('profiles', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
+  // Also subscribe to role changes (approvals)
+  useRealtimeSync('user_roles', queryKey);
+
   return useQuery({
-    queryKey: ['teachers', user?.schoolId, user?.isSuperAdmin],
+    queryKey,
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
 export function useTeacher(id: string | undefined | null) {
+  const queryKey = ['teacher', id];
+  useRealtimeSync('profiles', queryKey, id ? `id=eq.${id}` : undefined);
+
   return useQuery({
-    queryKey: ['teacher', id],
+    queryKey,
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -69,7 +82,8 @@ export function useTeacher(id: string | undefined | null) {
       return (data as unknown) as Teacher;
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

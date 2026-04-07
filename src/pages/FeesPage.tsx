@@ -18,8 +18,12 @@ export default function FeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Selection state
-  const [selectedTerm, setSelectedTerm] = useState(`الفصل الدراسي الأول ${new Date().getFullYear()}`);
+  // Monthly system
+  const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const currentMonthIdx = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+  
+  const [selectedTerm, setSelectedTerm] = useState(`شهر ${MONTHS_AR[currentMonthIdx]} ${currentYear}`);
   const [selectedClassId, setSelectedClassId] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
@@ -58,24 +62,27 @@ export default function FeesPage() {
   }, [feesData]);
 
   const filtered = enrichedStudents.filter(s => {
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = s.name.toLocaleLowerCase('ar-EG').includes(search.toLocaleLowerCase('ar-EG'));
     const matchClass = selectedClassId === 'all' || s.class_id === selectedClassId;
     
     const status = !s.fee ? 'متأخر' : s.fee.status === 'paid' ? 'مدفوع' : s.fee.status === 'partial' ? 'جزئي' : 'متأخر';
     const matchStatus = filterStatus === 'الكل' || status === filterStatus;
     
-    if (search.trim()) return matchSearch && matchStatus;
-    return matchClass && matchStatus;
+    return matchSearch && matchClass && matchStatus;
   });
 
   const loading = studentsLoading || (feesLoading && !isRefetching);
 
-  const TERMS = [
-    `الفصل الدراسي الأول ${new Date().getFullYear()}`,
-    `الفصل الدراسي الثاني ${new Date().getFullYear()}`,
-    `الفصل الدراسي الأول ${new Date().getFullYear() - 1}`,
-    `الفصل الدراسي الثاني ${new Date().getFullYear() - 1}`,
-  ];
+  const TERMS = useMemo(() => {
+    const list = [];
+    // Last 6 months and next 6 months
+    for (let i = -6; i <= 6; i++) {
+      const d = new Date();
+      d.setMonth(d.getMonth() + i);
+      list.push(`شهر ${MONTHS_AR[d.getMonth()]} ${d.getFullYear()}`);
+    }
+    return list;
+  }, []);
 
   const onUpdateSuccess = () => {
     toast({ title: 'تم التحديث بنجاح', description: 'تم تحديث سجل الرسوم المالية.' });
@@ -85,7 +92,7 @@ export default function FeesPage() {
     <AppLayout>
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 text-right">
             <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
                {branding?.logo_url ? (
                  <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
@@ -93,25 +100,17 @@ export default function FeesPage() {
                  <CreditCard className="w-8 h-8 text-indigo-600" />
                )}
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'إدارة الرسوم المالية'}</h1>
-                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">منصة المحاسبة</Badge>
+                 <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight truncate">{branding?.name || 'إدارة الرسوم المالية'}</h1>
+                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[8px] md:text-[9px] uppercase px-2 md:px-3 whitespace-nowrap">منصة المحاسبة</Badge>
               </div>
-              <p className="text-slate-500 font-medium text-sm">متابعة الأقساط المدرسية والإيرادات للفترات الدراسية</p>
+              <p className="text-slate-500 font-medium text-xs md:text-sm truncate">متابعة الأقساط المدرسية والإيرادات للفترات الدراسية</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
-             <div className="relative group min-w-[160px]">
-               <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-               <select value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}
-                 className="w-full pr-10 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer">
-                 {TERMS.map(t => <option key={t} value={t}>{t}</option>)}
-               </select>
-             </div>
-
-             <div className="relative group min-w-[160px]">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4 flex-1 justify-end">
+             <div className="relative group flex-1 md:flex-none md:min-w-[160px]">
                <Users className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                <select value={selectedClassId} onChange={e => setSelectedClassId(e.target.value)}
                  className="w-full pr-10 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer">
@@ -120,7 +119,7 @@ export default function FeesPage() {
                </select>
              </div>
              
-             <Button onClick={() => setShowGenerateModal(true)} className="h-12 px-6 rounded-2xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
+             <Button onClick={() => setShowGenerateModal(true)} className="h-12 px-6 rounded-2xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3 w-full md:w-auto">
                <TrendingUp className="w-4.5 h-4.5" /> توليد رسوم جماعية
              </Button>
           </div>
@@ -129,12 +128,12 @@ export default function FeesPage() {
         <QueryStateHandler
           loading={loading}
           error={error}
-          data={feesData}
+          data={studentsData}
           onRetry={refetch}
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة الحسابات المالية..."
-          emptyMessage="لم يتم العثور على سجلات مالية لهذه الفترة."
-          isEmpty={false}
+          emptyMessage="لم يتم العثور على طلاب مسجلين لتحصيل رسوم منهم."
+          isEmpty={studentsData.length === 0}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
              <FinanceCard title={`إجمالي مستحقات ${selectedTerm}`} value={stats.total_due.toLocaleString()} symbol="ج.م" icon={Wallet} color="indigo" />
@@ -344,7 +343,6 @@ function PaymentModal({ fee, studentName, onClose, onSuccess }: any) {
 function AddFeeModal({ studentId, studentName, user, selectedTerm, onClose, onSuccess }: any) {
   const { toast } = useToast();
   const [due, setDue] = useState('3000');
-  const [description, setDescription] = useState('مصروفات دراسية');
   const upsertMutation = useUpsertFee();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -357,7 +355,6 @@ function AddFeeModal({ studentId, studentName, user, selectedTerm, onClose, onSu
         term: selectedTerm,
         status: 'unpaid',
         school_id: user?.schoolId,
-        notes: description
       });
       toast({ title: 'تم إنشاء المطالبة المالية' });
       onSuccess();
@@ -379,11 +376,6 @@ function AddFeeModal({ studentId, studentName, user, selectedTerm, onClose, onSu
           <div className="space-y-1.5">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">إجمالي المبلغ المطلوب</label>
             <Input type="number" value={due} onChange={e => setDue(e.target.value)} required
-              className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold" />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">البند / الوصف</label>
-            <Input value={description} onChange={e => setDescription(e.target.value)} required
               className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold" />
           </div>
           <div className="flex gap-3 pt-4">

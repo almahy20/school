@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface SchoolOrder {
   id: string;
@@ -17,8 +19,11 @@ export interface SchoolOrder {
 }
 
 export function useOrder(id: string | undefined) {
+  const queryKey = ['order', id];
+  useRealtimeSync('school_orders', queryKey, id ? `id=eq.${id}` : undefined);
+
   return useQuery({
-    queryKey: ['order', id],
+    queryKey,
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -30,15 +35,20 @@ export function useOrder(id: string | undefined) {
       return data as SchoolOrder;
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useSchoolOrders() {
   const { user } = useAuth();
+  const queryKey = ['school-orders'];
+  useRealtimeSync('school_orders', queryKey);
+
   return useQuery({
-    queryKey: ['school-orders'],
+    queryKey,
     queryFn: async () => {
+      if (!user?.isSuperAdmin) return [];
       const { data, error } = await supabase
         .from('school_orders')
         .select('*')
@@ -47,6 +57,8 @@ export function useSchoolOrders() {
       return data as SchoolOrder[];
     },
     enabled: !!user?.isSuperAdmin,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

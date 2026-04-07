@@ -64,49 +64,49 @@ export default function TeacherDetailPage() {
           loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
         >
           {/* Premium Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-10 rounded-[40px] md:rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             
-            <div className="flex items-center gap-6 relative z-10">
+            <div className="flex items-center gap-4 md:gap-6 relative z-10 text-right">
               <button 
                 onClick={() => navigate('/teachers')}
-                className="w-14 h-14 rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+                className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
               >
-                 <ArrowRight className="w-6 h-6" />
+                 <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               
-              <div className="flex items-center gap-6">
-                 <Avatar className="w-20 h-20 rounded-[32px] border-4 border-white shadow-2xl shrink-0 group-hover:rotate-3 transition-transform duration-500">
-                    <AvatarFallback className="bg-slate-900 text-white text-3xl font-black">
+              <div className="flex items-center gap-4 md:gap-6">
+                 <Avatar className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[32px] border-4 border-white shadow-2xl shrink-0 group-hover:rotate-3 transition-transform duration-500">
+                    <AvatarFallback className="bg-slate-900 text-white text-xl md:text-3xl font-black">
                        {teacher?.full_name?.[0]}
                     </AvatarFallback>
                  </Avatar>
-                 <div className="space-y-1">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">{teacher?.full_name}</h1>
-                    <div className="flex items-center gap-3">
-                       <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">
+                 <div className="space-y-1 min-w-0">
+                    <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 md:mb-2 truncate">{teacher?.full_name}</h1>
+                    <div className="flex items-center gap-2 md:gap-3">
+                       <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[8px] md:text-[10px] uppercase tracking-widest px-3 md:px-4 py-1 md:py-1.5 rounded-full shadow-sm">
                           {teacher?.specialization || 'التخصص التعليمي'}
                        </Badge>
-                       <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200 tracking-tight">عضو نشط منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}</span>
+                       <span className="text-slate-400 text-[8px] md:text-[10px] font-bold border-r pr-2 md:pr-3 border-slate-200 tracking-tight">عضو نشط منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}</span>
                     </div>
                  </div>
               </div>
             </div>
             
             {authUser?.role === 'admin' && (
-              <div className="flex items-center gap-4 relative z-10">
+              <div className="flex items-center gap-3 md:gap-4 relative z-10">
                 <Button 
                   onClick={() => setShowEdit(true)}
-                  className="h-14 px-8 rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-3 text-xs"
+                  className="h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-2 md:gap-3 text-[10px] md:text-xs flex-1 lg:flex-none"
                 >
                   <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل السجل
                 </Button>
                 <Button 
                   onClick={handleDelete}
                   disabled={deleteTeacherMutation.isPending}
-                  className="h-14 w-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
+                  className="h-12 w-12 md:h-14 md:w-14 rounded-xl md:rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
                 >
-                  {deleteTeacherMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Trash2 className="w-6 h-6" />}
+                  {deleteTeacherMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
                 </Button>
               </div>
             )}
@@ -249,15 +249,15 @@ function StatsCard({ title, value, sub, icon: Icon, color, smallValue }: any) {
   };
 
   return (
-    <div className={cn("premium-card p-10 flex flex-col justify-between border-[0.5px] h-60 rounded-[48px] transition-all hover:scale-[1.03] duration-500", configs[color])}>
-       <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm", iconConfigs[color])}>
-          <Icon className="w-7 h-7" />
+    <div className={cn("premium-card p-8 md:p-10 flex flex-col justify-between border-[0.5px] h-52 md:h-60 rounded-[40px] md:rounded-[48px] transition-all hover:scale-[1.03] duration-500", configs[color])}>
+       <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center shadow-sm", iconConfigs[color])}>
+          <Icon className="w-6 h-6 md:w-7 md:h-7" />
        </div>
-       <div className="mt-8 text-right">
-          <p className={cn("text-[10px] font-black uppercase tracking-[0.3em] mb-2 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
+       <div className="mt-6 md:mt-8 text-right">
+          <p className={cn("text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
           <div className="flex flex-col">
-             <h3 className={cn("font-black tracking-tighter leading-none mb-2", smallValue ? "text-2xl" : "text-5xl")}>{value}</h3>
-             <span className={cn("text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
+             <h3 className={cn("font-black tracking-tighter leading-none mb-1 md:mb-2", smallValue ? "text-xl md:text-2xl" : "text-3xl md:text-5xl")}>{value}</h3>
+             <span className={cn("text-[9px] md:text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
           </div>
        </div>
     </div>

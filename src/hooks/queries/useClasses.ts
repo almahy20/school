@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface Class {
   id: string;
@@ -31,20 +32,28 @@ async function fetchClasses(user: AppUser | null): Promise<Class[]> {
 
 export function useClasses() {
   const { user } = useAuth();
+  const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
+  
+  useRealtimeSync('classes', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
+
   return useQuery({
-    queryKey: ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id],
+    queryKey,
     queryFn: () => fetchClasses(user),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000,
+    staleTime: 0,
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
 export function useClass(id: string | undefined | null) {
+  const queryKey = ['class', id];
+  useRealtimeSync('classes', queryKey, id ? `id=eq.${id}` : undefined);
+
   return useQuery({
-    queryKey: ['class', id],
+    queryKey,
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -56,7 +65,8 @@ export function useClass(id: string | undefined | null) {
       return data as Class;
     },
     enabled: !!id,
-    staleTime: 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

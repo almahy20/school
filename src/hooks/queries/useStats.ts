@@ -1,12 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export function useAdminStats() {
   const { user } = useAuth();
+  const queryKey = ['admin-stats', user?.schoolId, user?.isSuperAdmin];
+
+  // Subscribe to core tables to update stats in real-time
+  useRealtimeSync('students', queryKey);
+  useRealtimeSync('user_roles', queryKey);
+  useRealtimeSync('classes', queryKey);
+  useRealtimeSync('fees', queryKey);
+  useRealtimeSync('attendance', queryKey);
 
   return useQuery({
-    queryKey: ['admin-stats', user?.schoolId, user?.isSuperAdmin],
+    queryKey,
     queryFn: async () => {
       const emptyStats = { 
         students: 0, teachers: 0, parents: 0, classes: 0, 
@@ -56,15 +65,20 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useTeacherStats() {
   const { user } = useAuth();
+  const queryKey = ['teacher-stats', user?.id, user?.schoolId];
+
+  useRealtimeSync('classes', queryKey, user?.id ? `teacher_id=eq.${user?.id}` : undefined);
+  useRealtimeSync('students', queryKey);
 
   return useQuery({
-    queryKey: ['teacher-stats', user?.id, user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!user?.id || !user?.schoolId) return { classes: 0, students: 0 };
 
@@ -90,7 +104,8 @@ export function useTeacherStats() {
       };
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

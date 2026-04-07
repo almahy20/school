@@ -4,7 +4,6 @@ import Sidebar from './Sidebar';
 import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
-import PWAInstallPrompt from './PWAInstallPrompt';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,250 +16,6 @@ interface Props {
   children: ReactNode;
 }
 
-function MandatoryNotifications() {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const { isSubscribed, subscribeToNotifications, permission } = usePushNotifications();
-  const [show, setShow] = useState(false);
-  const [canInstall, setCanInstall] = useState(false);
-  const [backgroundAllowed, setBackgroundAllowed] = useState(false);
-  
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-
-  useEffect(() => {
-    // Check if Periodic Sync is available/allowed (a proxy for background work)
-    if ('periodicSync' in navigator) {
-      (navigator as any).permissions.query({ name: 'periodic-background-sync' }).then((status: any) => {
-        setBackgroundAllowed(status.state === 'granted');
-      });
-    } else {
-      // If not supported, we assume true if PWA is installed to not block
-      setBackgroundAllowed(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Frequently check for the global prompt
-    const checkPrompt = setInterval(() => {
-      if ((window as any).deferredPrompt) {
-        setCanInstall(true);
-        clearInterval(checkPrompt);
-      }
-    }, 500);
-
-    // Also listen for the event in case it fires while component is mounted
-    const handler = (e: any) => {
-      console.log('✅ PWA Install Prompt Captured in Component');
-      e.preventDefault();
-      (window as any).deferredPrompt = e;
-      setCanInstall(true);
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    window.addEventListener('appinstalled', () => {
-      console.log('🎉 App installed successfully');
-      (window as any).deferredPrompt = null;
-      setCanInstall(false);
-      window.location.reload();
-    });
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handler);
-      clearInterval(checkPrompt);
-    };
-  }, [isPWA]);
-
-  useEffect(() => {
-    if (user && (!isSubscribed || !isPWA || (isPWA && !backgroundAllowed))) {
-      const timer = setTimeout(() => setShow(true), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [user, isSubscribed, isPWA, backgroundAllowed]);
-
-  const handleInstall = async () => {
-    const promptEvent = (window as any).deferredPrompt;
-    if (promptEvent) {
-      try {
-        promptEvent.prompt();
-        const { outcome } = await promptEvent.userChoice;
-        console.log(`User response to install: ${outcome}`);
-        if (outcome === 'accepted') {
-          (window as any).deferredPrompt = null;
-          setCanInstall(false);
-        }
-      } catch (err) {
-        console.error('Error during installation:', err);
-      }
-    } else {
-      // Fallback: If no prompt is available, show manual instructions
-      toast({ 
-        title: "التثبيت اليدوي مطلوب", 
-        description: "يرجى الضغط على النقاط الثلاث في المتصفح واختيار 'تثبيت التطبيق' أو 'إضافة للشاشة الرئيسية'.",
-        duration: 6000
-      });
-    }
-  };
-
-  const handleBackgroundEnable = async () => {
-    if ('periodicSync' in navigator) {
-      try {
-        const status = await (navigator as any).permissions.query({ name: 'periodic-background-sync' });
-        if (status.state === 'granted') {
-          setBackgroundAllowed(true);
-        } else {
-          toast({ title: "مطلوب", description: "يرجى السماح بالعمل في الخلفية من إعدادات المتصفح" });
-        }
-      } catch (e) {
-        setBackgroundAllowed(true);
-      }
-    } else {
-      setBackgroundAllowed(true);
-    }
-  };
-
-  // Disabling this modal as per user request (it was found annoying)
-  return null;
-  
-  if (!show || (isSubscribed && isPWA && backgroundAllowed)) return null;
-
-  return (
-    <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[9999] flex items-center justify-center p-4 overflow-y-auto" dir="rtl">
-      <div className="max-w-md w-full bg-white rounded-[40px] p-6 md:p-8 shadow-2xl animate-in zoom-in-95 duration-500 relative my-auto border border-slate-100">
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500" />
-        
-        <div className="text-center mb-6 pt-2">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-inner">
-            <ShieldAlert className="w-8 h-8 animate-pulse" />
-          </div>
-          <h2 className="text-xl font-black text-slate-900 mb-2 tracking-tight">تفعيل قوى النظام الذكي</h2>
-          <p className="text-slate-500 font-medium text-[10px] leading-relaxed max-w-[260px] mx-auto">
-            لضمان وصول الإشعارات الفورية حتى والتطبيق مغلق، يرجى استكمال الخطوات التالية:
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {/* Step 1: PWA Installation */}
-          <div className={cn(
-            "p-4 rounded-3xl border-2 transition-all duration-500",
-            isPWA ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100"
-          )}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-colors duration-500",
-                  isPWA ? "bg-emerald-500 text-white" : "bg-white text-slate-400"
-                )}>
-                  {isPWA ? <CheckCircle2 className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
-                </div>
-                <div className="text-right">
-                  <p className={cn("text-xs font-black mb-0.5", isPWA ? "text-emerald-700" : "text-slate-900")}>تثبيت النظام</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">الخطوة الأولى والأساسية</p>
-                </div>
-              </div>
-              {!isPWA && (
-                <Button 
-                  onClick={isIOS ? undefined : handleInstall}
-                  className="h-9 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] shadow-lg shadow-indigo-100"
-                >
-                  {canInstall ? 'تثبيت الآن' : 'بدء التثبيت'}
-                </Button>
-              )}
-            </div>
-            {!isPWA && !canInstall && !isIOS && (
-              <p className="mt-2 text-[8px] font-bold text-amber-600 bg-amber-50 p-2 rounded-lg border border-amber-100">
-                إذا لم يظهر طلب التثبيت، يرجى استخدام متصفح Chrome والضغط على "تثبيت التطبيق" من القائمة.
-              </p>
-            )}
-            {isIOS && !isPWA && (
-              <div className="mt-3 pt-3 border-t border-slate-200/50 space-y-1.5">
-                <p className="text-[9px] font-bold text-slate-500 uppercase">تعليمات آيفون:</p>
-                <div className="flex items-center gap-2 text-[8px] font-bold text-slate-400 bg-white/50 p-1.5 rounded-lg">
-                  <span className="w-3.5 h-3.5 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">1</span>
-                  اضغط "مشاركة" (Share) ثم "إضافة للشاشة الرئيسية"
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Step 2: Push Notifications */}
-          <div className={cn(
-            "p-4 rounded-3xl border-2 transition-all duration-500",
-            isSubscribed ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100"
-          )}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-colors duration-500",
-                  isSubscribed ? "bg-emerald-500 text-white" : "bg-white text-slate-400"
-                )}>
-                  {isSubscribed ? <CheckCircle2 className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
-                </div>
-                <div className="text-right">
-                  <p className={cn("text-xs font-black mb-0.5", isSubscribed ? "text-emerald-700" : "text-slate-900")}>تفعيل التنبيهات</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">لاستلام الرسائل والدرجات</p>
-                </div>
-              </div>
-              {!isSubscribed && (
-                <Button 
-                  onClick={subscribeToNotifications}
-                  disabled={!isPWA}
-                  className={cn(
-                    "h-9 px-5 rounded-xl font-black text-[10px] shadow-lg transition-all",
-                    isPWA ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100" : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                  )}
-                >
-                  تفعيل
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Step 3: Background Sync */}
-          <div className={cn(
-            "p-4 rounded-3xl border-2 transition-all duration-500",
-            backgroundAllowed ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100"
-          )}>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center shadow-sm transition-colors duration-500",
-                  backgroundAllowed ? "bg-emerald-500 text-white" : "bg-white text-slate-400"
-                )}>
-                  {backgroundAllowed ? <CheckCircle2 className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
-                </div>
-                <div className="text-right">
-                  <p className={cn("text-xs font-black mb-0.5", backgroundAllowed ? "text-emerald-700" : "text-slate-900")}>التشغيل في الخلفية</p>
-                  <p className="text-[9px] font-bold text-slate-400 uppercase">لضمان عمل النظام دائماً</p>
-                </div>
-              </div>
-              {!backgroundAllowed && (
-                <Button 
-                  onClick={handleBackgroundEnable}
-                  disabled={!isSubscribed}
-                  className={cn(
-                    "h-9 px-5 rounded-xl font-black text-[10px] shadow-lg transition-all",
-                    isSubscribed ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100" : "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                  )}
-                >
-                  تفعيل
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 text-center">
-          <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-3 h-3" /> تم التحقق من جودة النظام
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AppLayout({ children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -268,7 +23,7 @@ export default function AppLayout({ children }: Props) {
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
   const defaultLogo = "";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
+  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo, themeColor: '#1A3C8F' });
 
   useEffect(() => {
     const fetchBranding = async () => {
@@ -344,7 +99,7 @@ export default function AppLayout({ children }: Props) {
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
       
       <GlobalAnnouncement />
-      <MandatoryNotifications />
+
 
       {/* Mobile Glass Header */}
       <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
@@ -393,17 +148,14 @@ export default function AppLayout({ children }: Props) {
         <Sidebar onClose={() => setSidebarOpen(false)} />
       </aside>
 
-      {/* PWA Install Prompt */}
-      <PWAInstallPrompt />
-
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-h-0 relative lg:mr-72 bg-[#F8FAFC] overflow-hidden pb-24 md:pb-0 transition-all duration-700">
+      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden pb-24 lg:pb-0 transition-all duration-700">
         {/* Abstract Background Gradients */}
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
         
         {/* Desktop Header Navigation */}
-        <div className="hidden lg:flex items-center justify-between px-12 py-8 relative z-50">
+        <div className="hidden lg:flex items-center justify-between px-8 py-6 relative z-50">
            <div className="flex items-center gap-4">
               <div className="p-1 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-600 border-slate-200">
                  نظام الإدارة الذكي — {schoolBranding.name}
@@ -465,12 +217,12 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Scaled Padding for Main Content */}
-        <div className="flex-1 w-full px-6 sm:px-10 lg:px-16 py-4 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
+        <div className="flex-1 w-full px-4 sm:px-6 lg:px-10 py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10 overflow-x-hidden">
           {children}
         </div>
         
         {/* Scaled Footer */}
-        <footer className="py-12 px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-20 pb-24 md:pb-12">
+        <footer className="py-8 px-6 sm:px-10 lg:px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-20 pb-24 lg:pb-12">
           <div className="flex flex-col md:flex-row items-center justify-between gap-8 max-w-[1400px] mx-auto">
              <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">

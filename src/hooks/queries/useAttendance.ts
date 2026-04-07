@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface AttendanceRecord {
   studentId: string;
@@ -12,8 +13,12 @@ export interface AttendanceRecord {
 
 export function useClassAttendance(classId: string | null, date: string) {
   const { user } = useAuth();
+  const queryKey = ['attendance', user?.schoolId, classId, date];
+  
+  useRealtimeSync('attendance', queryKey, classId ? `class_id=eq.${classId}` : undefined);
+
   return useQuery({
-    queryKey: ['attendance', user?.schoolId, classId, date],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId || !classId) return [];
 
@@ -46,7 +51,8 @@ export function useClassAttendance(classId: string | null, date: string) {
       }) as AttendanceRecord[];
     },
     enabled: !!(user?.schoolId && classId),
-    staleTime: 1 * 60 * 1000, 
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -82,8 +88,11 @@ export function useUpsertAttendance() {
 }
 
 export function useStudentAttendance(studentId: string | null) {
+  const queryKey = ['attendance', studentId];
+  useRealtimeSync('attendance', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+
   return useQuery({
-    queryKey: ['attendance', studentId],
+    queryKey,
     queryFn: async () => {
       if (!studentId) return [];
       const { data, error } = await supabase
@@ -96,6 +105,8 @@ export function useStudentAttendance(studentId: string | null) {
       return data || [];
     },
     enabled: !!studentId,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

@@ -62,33 +62,38 @@ export default function ParentChildDetailPage() {
           onRetry={refetch}
           loadingMessage="جاري مزامنة بيانات الطالب بالكامل..."
         >
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-10 border-b border-slate-100">
-            <div className="flex items-center gap-6">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 md:pb-10 border-b border-slate-100">
+            <div className="flex items-center gap-4 md:gap-6 text-right translate-x-0">
               <button
                 onClick={() => navigate('/')}
-                className="w-12 h-12 rounded-2xl bg-white text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
               >
-                <ArrowRight className="w-6 h-6" />
+                <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
               </button>
-              <div className="flex items-center gap-4">
-                 <div className="w-16 h-16 rounded-[24px] bg-slate-900 flex items-center justify-center text-white text-2xl font-black shadow-xl shadow-slate-200">
+              <div className="flex items-center gap-3 md:gap-4">
+                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl md:rounded-[24px] bg-slate-900 flex items-center justify-center text-white text-xl md:text-2xl font-black shadow-xl shadow-slate-200 shrink-0">
                     {child?.name?.[0]}
                  </div>
-                 <div>
-                   <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">{child?.name}</h1>
+                 <div className="min-w-0">
+                   <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 md:mb-2 truncate">{child?.name}</h1>
                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{child?.academic_year || '2025/2026'}</span>
+                      <Badge variant="outline" className="bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] md:text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
+                      <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{child?.academic_year || '2025/2026'}</span>
                    </div>
                  </div>
               </div>
             </div>
             
-            <div className="flex items-center gap-3">
-               <div className="text-left md:text-right">
-                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">المعلم المسؤول</p>
-                  <p className="text-sm font-bold text-slate-700">{child?.classes?.teacher_id ? 'أ. أحمد علي (مثال)' : 'غير محدد'}</p>
-               </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+              <div className="px-5 md:px-8 py-3.5 md:py-5 rounded-[20px] md:rounded-[32px] bg-white border border-slate-100 shadow-sm relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
+                 <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
+                   <Calendar className="w-5 h-5 md:w-7 md:h-7" />
+                 </div>
+                 <div className="min-w-0">
+                   <p className="text-[8px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1 md:mb-2 text-right">اليوم</p>
+                   <p className="text-sm md:text-xl font-black text-slate-900 leading-none text-right truncate">{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                 </div>
+              </div>
             </div>
           </header>
 
@@ -135,8 +140,8 @@ export default function ParentChildDetailPage() {
                  </div>
               </div>
 
-              <section className="bg-white border border-slate-100 rounded-[40px] p-2 space-y-6 shadow-sm overflow-hidden">
-                <div className="flex flex-wrap gap-1 p-2 bg-slate-50/50 rounded-[32px]">
+              <section className="bg-white border border-slate-100 rounded-[32px] md:rounded-[40px] p-1 md:p-2 space-y-6 shadow-sm overflow-hidden">
+                <div className="flex overflow-x-auto hide-scrollbar gap-1 p-1.5 md:p-2 bg-slate-50/50 rounded-[28px] md:rounded-[32px] -mx-0.5">
                   {[
                     { id: 'grades', label: 'الدرجات', icon: BookOpen },
                     { id: 'attendance', label: 'الحضور', icon: Calendar },
@@ -148,13 +153,13 @@ export default function ParentChildDetailPage() {
                       key={t.id}
                       onClick={() => setTab(t.id as any)}
                       className={cn(
-                        "flex-1 min-w-[100px] py-4 rounded-[24px] text-xs font-black flex items-center justify-center gap-2 transition-all duration-300",
+                        "flex-1 min-w-[80px] md:min-w-[100px] py-3 md:py-4 rounded-[20px] md:rounded-[24px] text-[10px] md:text-xs font-black flex items-center justify-center gap-2 transition-all duration-300 shrink-0",
                         tab === t.id 
                           ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20' 
                           : 'text-slate-400 hover:bg-white hover:text-slate-600'
                       )}
                     >
-                      <t.icon className="w-4 h-4" />
+                      <t.icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       {t.label}
                     </button>
                   ))}

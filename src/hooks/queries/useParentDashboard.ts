@@ -1,12 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export function useParentChildren() {
   const { user } = useAuth();
+  const queryKey = ['parent-children', user?.id, user?.schoolId];
+
+  // Subscribe to all relevant tables for parent dashboard
+  useRealtimeSync('student_parents', queryKey, user?.id ? `parent_id=eq.${user?.id}` : undefined);
+  useRealtimeSync('students', queryKey);
+  useRealtimeSync('grades', queryKey);
+  useRealtimeSync('attendance', queryKey);
+  useRealtimeSync('fees', queryKey);
 
   return useQuery({
-    queryKey: ['parent-children', user?.id, user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!user?.id || !user?.schoolId) return [];
       
@@ -54,8 +63,8 @@ export function useParentChildren() {
       return enrichedKids;
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    staleTime: 10 * 1000, // Reduced to 10 seconds for better responsiveness
-    refetchInterval: 60 * 1000, // Auto-refresh every minute to ensure data is always fresh
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     retry: 3,
@@ -63,8 +72,12 @@ export function useParentChildren() {
 }
 
 export function useParentChildOverview(studentId: string | undefined) {
+  const queryKey = ['parent-child-overview', studentId];
+  useRealtimeSync('grades', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+  useRealtimeSync('attendance', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+
   return useQuery({
-    queryKey: ['parent-child-overview', studentId],
+    queryKey,
     queryFn: async () => {
       if (!studentId) return null;
       const { data, error } = await (supabase as any).rpc('get_child_overview', { p_student_id: studentId });
@@ -72,14 +85,19 @@ export function useParentChildOverview(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 30 * 1000,
-    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useParentChildActivities(studentId: string | undefined) {
+  const queryKey = ['parent-child-activities', studentId];
+  useRealtimeSync('grades', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+  useRealtimeSync('attendance', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+  useRealtimeSync('fees', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
+
   return useQuery({
-    queryKey: ['parent-child-activities', studentId],
+    queryKey,
     queryFn: async () => {
       if (!studentId) return null;
       const { data, error } = await (supabase as any).rpc('get_child_activities', { p_student_id: studentId });
@@ -87,7 +105,8 @@ export function useParentChildActivities(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 30 * 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

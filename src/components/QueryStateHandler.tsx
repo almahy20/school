@@ -9,7 +9,6 @@ interface QueryStateHandlerProps {
   data: any;
   onRetry: () => void;
   isRefetching?: boolean;
-  loadingMessage?: string;
   errorMessage?: string;
   emptyMessage?: string;
   children: React.ReactNode;
@@ -22,7 +21,6 @@ export function QueryStateHandler({
   data,
   onRetry,
   isRefetching = false,
-  loadingMessage = 'جاري تحميل البيانات...',
   errorMessage = 'عذراً، حدث خطأ أثناء جلب البيانات. يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى.',
   emptyMessage = 'لم يتم العثور على بيانات.',
   children,
@@ -32,17 +30,8 @@ export function QueryStateHandler({
   // 1. Loading State
   if (loading && !isRefetching) {
     return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 animate-in fade-in duration-500">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-8 h-8 bg-indigo-600/10 rounded-full animate-pulse" />
-          </div>
-        </div>
-        <div className="space-y-2 text-center">
-          <p className="text-slate-900 font-black text-lg">{loadingMessage}</p>
-          <p className="text-slate-400 font-medium text-sm">يرجى الانتظار قليلاً...</p>
-        </div>
+      <div className="min-h-[400px] flex items-center justify-center p-6 animate-in fade-in duration-500">
+        <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
       </div>
     );
   }
@@ -99,9 +88,8 @@ export function QueryStateHandler({
     <div className={cn("relative transition-opacity duration-300", isRefetching && "opacity-60 pointer-events-none")}>
       {children}
       {isRefetching && (
-        <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-md px-4 py-2 rounded-full border border-slate-200 shadow-sm flex items-center gap-2 animate-in slide-in-from-top-2 duration-300 z-50">
+        <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-md p-2 rounded-full border border-slate-200 shadow-sm flex items-center justify-center animate-in slide-in-from-top-2 duration-300 z-50">
           <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
-          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">جاري التحديث...</span>
         </div>
       )}
     </div>

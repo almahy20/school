@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface Complaint {
   id: string;
@@ -17,8 +18,11 @@ export interface Complaint {
 
 export function useComplaints() {
   const { user } = useAuth();
+  const queryKey = ['complaints', user?.schoolId, user?.isSuperAdmin];
+  useRealtimeSync('complaints', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
+
   return useQuery({
-    queryKey: ['complaints', user?.schoolId, user?.isSuperAdmin],
+    queryKey,
     queryFn: async () => {
       if (!user?.schoolId && !user?.isSuperAdmin) return [];
       
@@ -54,13 +58,18 @@ export function useComplaints() {
       })) as Complaint[];
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useParentComplaints() {
   const { user } = useAuth();
+  const queryKey = ['parent-complaints', user?.id, user?.schoolId];
+  useRealtimeSync('complaints', queryKey, user?.id ? `parent_id=eq.${user?.id}` : undefined);
+
   return useQuery({
-    queryKey: ['parent-complaints', user?.id, user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!user?.id || !user?.schoolId) return [];
       const { data, error } = await supabase
@@ -73,6 +82,8 @@ export function useParentComplaints() {
       return data as Complaint[];
     },
     enabled: !!(user?.id && user?.schoolId),
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 

@@ -37,10 +37,11 @@ export default function ParentSignupPage() {
     setLoading(true);
     const err = await signup(phone.trim(), password, fullName.trim(), 'parent', school.id);
     setLoading(false);
-    if (err) setError(err);
-    else {
-      setSuccessMsg('تم إنشاء الحساب بنجاح، يرجى انتظار موافقة الإدارة لتتمكن من الدخول');
-      setTimeout(() => navigate('/login'), 5000);
+    if (err) {
+      setError(err);
+    } else {
+      setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة الانتظار لحين موافقة الإدارة...');
+      setTimeout(() => navigate('/'), 3000);
     }
   };
 
