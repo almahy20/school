@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface ExamTemplate {
   id: string;
@@ -28,9 +28,8 @@ export interface StudentGrade {
 
 export function useExamTemplates(classId: string | null, subject: string | null) {
   const { user } = useAuth();
-  const queryKey = ['exam-templates', user?.schoolId, classId, subject];
-  useRealtimeSync('exam_templates', queryKey, classId ? `class_id=eq.${classId}` : undefined);
-
+  const queryKey = useMemo(() => ['exam-templates', user?.schoolId, classId, subject], [user?.schoolId, classId, subject]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -57,9 +56,8 @@ export function useExamTemplates(classId: string | null, subject: string | null)
 
 export function useStudentGrades(templateId: string | null, classId: string | null) {
   const { user } = useAuth();
-  const queryKey = ['student-grades', templateId, classId];
-  useRealtimeSync('grades', queryKey, templateId ? `exam_template_id=eq.${templateId}` : undefined);
-
+  const queryKey = useMemo(() => ['student-grades', templateId, classId], [templateId, classId]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -171,8 +169,10 @@ export function useUpsertGrades() {
 }
 
 export function useGrades(studentId: string | null) {
+  const queryKey = useMemo(() => ['grades', studentId], [studentId]);
+  
   return useQuery({
-    queryKey: ['grades', studentId],
+    queryKey,
     queryFn: async () => {
       if (!studentId) return [];
       const { data, error } = await supabase

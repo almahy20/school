@@ -1,11 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export function useTableData(tableName: string) {
-  const queryKey = ['database-table', tableName];
-  useRealtimeSync(tableName, queryKey);
-
+  const queryKey = useMemo(() => ['database-table', tableName], [tableName]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {

@@ -39,11 +39,12 @@ export default function AttendancePage() {
   const [localAttendance, setLocalAttendance] = useState<AttendanceRecord[]>([]);
 
   // Sync local state with DB data
+  const dbAttendanceStr = JSON.stringify(dbAttendance);
   useEffect(() => {
     if (dbAttendance) {
       setLocalAttendance(dbAttendance);
     }
-  }, [JSON.stringify(dbAttendance)]);
+  }, [dbAttendanceStr]);
 
   // Handle first class selection
   useEffect(() => {

@@ -69,11 +69,12 @@ export default function GradesPage() {
   const [localGrades, setLocalGrades] = useState<StudentGrade[]>([]);
 
   // Sync local grades with DB data - use stringify to prevent infinite loop from unstable references
+  const dbGradesStr = JSON.stringify(dbGrades);
   useEffect(() => {
     if (dbGrades && dbGrades.length > 0) {
       setLocalGrades(dbGrades);
     }
-  }, [JSON.stringify(dbGrades)]);
+  }, [dbGradesStr, dbGrades]);
 
   // Handle first class selection
   useEffect(() => {

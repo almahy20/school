@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ShieldAlert, WifiOff, RefreshCw } from 'lucide-react';
 import { queryClient } from '@/lib/queryClient';
-import { focusManager } from '@tanstack/react-query';
 
 type ConnectionStatus = 'online' | 'offline' | 'error';
 
@@ -14,11 +13,10 @@ export function HealthMonitor() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refetchAll = useCallback(() => {
-    console.log('🔄 HealthMonitor: Ensuring React Query is aware of focus...');
-    // React Query's focusManager automatically triggers refetch for all queries 
-    // that have refetchOnWindowFocus: true (which is our default).
-    // We just need to ensure it knows the window is focused.
-    focusManager.setFocused(true);
+    // React Query's focusManager handles this automatically in web browsers
+    // but we can manually invalidate active queries if we want to be extra sure
+    // during health recovery.
+    queryClient.invalidateQueries({ type: 'active' });
   }, []);
 
   const validateSession = useCallback(async () => {
@@ -72,13 +70,9 @@ export function HealthMonitor() {
       }
     };
 
-    window.addEventListener('online', handleFocusOrVisible);
+    window.addEventListener('online', () => setStatus('online'));
     window.addEventListener('offline', () => setStatus('offline'));
-    // We don't need manual focus/visibility listeners for refetching 
-    // because React Query handles refetchOnWindowFocus automatically.
-    // We only listen to visibilitychange to update our internal connection status and session.
-    document.addEventListener('visibilitychange', handleFocusOrVisible);
-
+    
     // Periodic health check every 60s
     const interval = setInterval(async () => {
       if (window.navigator.onLine) {
@@ -89,10 +83,10 @@ export function HealthMonitor() {
 
     return () => {
       clearInterval(interval);
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      window.removeEventListener('online', handleFocusOrVisible);
+      const currentTimer = retryTimerRef.current;
+      if (currentTimer) clearTimeout(currentTimer);
+      window.removeEventListener('online', () => setStatus('online'));
       window.removeEventListener('offline', () => setStatus('offline'));
-      document.removeEventListener('visibilitychange', handleFocusOrVisible);
     };
   }, [checkConnection, validateSession, status]);
 

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Profile {
   id: string;
@@ -16,9 +16,8 @@ export interface Profile {
 
 export function useProfile() {
   const { user } = useAuth();
-  const queryKey = ['profile', user?.id];
-  useRealtimeSync('profiles', queryKey, user?.id ? `id=eq.${user?.id}` : undefined);
-
+  const queryKey = useMemo(() => ['profile', user?.id], [user?.id]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {

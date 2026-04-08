@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Teacher {
   id: string; // This is the user_id (profiles.id)
@@ -46,13 +46,9 @@ async function fetchTeachers(schoolId: string | null, isSuperAdmin: boolean): Pr
 
 export function useTeachers() {
   const { user } = useAuth();
-  const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin];
+  const queryKey = useMemo(() => ['teachers', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
 
-  // Subscribe to profile changes for real-time updates
-  useRealtimeSync('profiles', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
-  // Also subscribe to role changes (approvals)
-  useRealtimeSync('user_roles', queryKey);
-
+        
   return useQuery({
     queryKey,
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin),
@@ -66,9 +62,8 @@ export function useTeachers() {
 }
 
 export function useTeacher(id: string | undefined | null) {
-  const queryKey = ['teacher', id];
-  useRealtimeSync('profiles', queryKey, id ? `id=eq.${id}` : undefined);
-
+  const queryKey = useMemo(() => ['teacher', id], [id]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -160,15 +155,21 @@ export function useUpdateTeacher() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, full_name, phone }: { id: string; full_name: string; phone: string }) => {
+      // Optimistic update for better cross-browser UX
+      queryClient.setQueriesData({ queryKey: ['teachers'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(t => t.id === id ? { ...t, full_name, phone, updated_at: new Date().toISOString() } : t);
+      });
+
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name, phone })
+        .update({ full_name, phone, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['teachers'] });
-      queryClient.invalidateQueries({ queryKey: ['teacher', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['teacher', variables.id], refetchType: 'active' });
     },
   });
 }

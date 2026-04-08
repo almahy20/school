@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
 
 export interface SchoolOrder {
   id: string;
@@ -20,8 +19,7 @@ export interface SchoolOrder {
 
 export function useOrder(id: string | undefined) {
   const queryKey = ['order', id];
-  useRealtimeSync('school_orders', queryKey, id ? `id=eq.${id}` : undefined);
-
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -43,8 +41,7 @@ export function useOrder(id: string | undefined) {
 export function useSchoolOrders() {
   const { user } = useAuth();
   const queryKey = ['school-orders'];
-  useRealtimeSync('school_orders', queryKey);
-
+  
   return useQuery({
     queryKey,
     queryFn: async () => {

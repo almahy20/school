@@ -14,6 +14,7 @@ import {
   useUpsertComplaint, 
   useParentChildren 
 } from '@/hooks/queries';
+import { formatDisplayDate } from '@/lib/date-utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function ParentComplaintsPage() {
@@ -130,9 +131,9 @@ export default function ParentComplaintsPage() {
                           )}
                         >
                           <Avatar className="w-6 h-6 border-2 border-white">
-                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-[10px]">{c.name[0]}</AvatarFallback>
+                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-[10px]">{c.name?.[0] || '?'}</AvatarFallback>
                           </Avatar>
-                          {c.name}
+                          {c.name || 'طالب'}
                         </button>
                       ))}
                     </div>
@@ -212,9 +213,9 @@ export default function ParentComplaintsPage() {
                                 {statusConfig.label}
                               </Badge>
                             </div>
-                            <p className="text-slate-300 font-bold text-[11px] uppercase tracking-widest leading-none">
-                              {new Date(c.created_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
+                            <span className="text-[10px] text-slate-400 font-bold">
+                              {formatDisplayDate(c.created_at, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </span>
                           </div>
                         </div>
                       </div>

@@ -53,7 +53,7 @@ export default function BottomNav() {
       )}
 
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white border-t border-slate-100 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-[90] pb-safe" dir="rtl">
-        <div className="flex items-center justify-around px-2 py-3">
+        <div className="flex items-center justify-around px-2 py-3 pb-safe">
           {links.map((link) => (
             <NavLink
               key={link.to}

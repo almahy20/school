@@ -1,5 +1,19 @@
-import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query";
+import { QueryClient, QueryCache, MutationCache, focusManager, dehydrate, hydrate } from "@tanstack/react-query";
 import { toast } from "sonner";
+
+// إعداد مستمعات أحداث النافذة (Visibility & Focus) لدعم التحديث الفوري على الأجهزة المحمولة والويب
+if (typeof window !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      focusManager.setFocused(true);
+    } else {
+      focusManager.setFocused(false);
+    }
+  });
+
+  window.addEventListener('focus', () => focusManager.setFocused(true));
+  window.addEventListener('blur', () => focusManager.setFocused(false));
+}
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -47,10 +61,47 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: true,
       refetchOnMount: true,
       refetchOnReconnect: true,
-      staleTime: 5 * 1000, // 5 seconds of grace to prevent constant refetching loops
+      staleTime: 0, // Ensure data is immediately considered stale for re-validation
       gcTime: 5 * 60 * 1000,
-      refetchInterval: 20 * 1000, // 20-second polling fallback (slightly more relaxed)
-      refetchIntervalInBackground: false, // Don't poll when tab is inactive to save resources
+      refetchIntervalInBackground: false,
     },
   },
 });
+
+// التخزين المحلي لضمان احتفاظ التطبيق (PWA) بالبيانات حتى لو أُغلق تماماً
+if (typeof window !== 'undefined') {
+  const PWA_CACHE_KEY = 'react-query-pwa-cache-v1';
+  
+  // استعادة البيانات فور تشغيل التطبيق (قبل أي طلبات شبكة)
+  try {
+    const saved = localStorage.getItem(PWA_CACHE_KEY);
+    if (saved) {
+      hydrate(queryClient, JSON.parse(saved));
+      console.log('✅ PWA Offline Cache Restored');
+    }
+  } catch (e) {
+    console.error('Failed to restore offline cache', e);
+  }
+
+  // دالة الحفظ الذكي للصالة
+  const saveCache = () => {
+    try {
+      // نحفظ فقط البيانات الناجحة لتقليل الحجم
+      const state = dehydrate(queryClient, { 
+        shouldDehydrateQuery: (query) => query.state.status === 'success'
+      });
+      localStorage.setItem(PWA_CACHE_KEY, JSON.stringify(state));
+    } catch (e) {
+       // تجنب تحطم التطبيق إذا امتزأ localStorage
+    }
+  };
+
+  // حفظ قبل الإغلاق أو عند خروج التطبيق للخلفية
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveCache();
+  });
+  window.addEventListener('beforeunload', saveCache);
+  
+  // حفظ احتياطي كل 10 ثواني كأقصى حد
+  setInterval(saveCache, 10000);
+}

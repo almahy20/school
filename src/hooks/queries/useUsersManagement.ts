@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface ManagedUser {
   id: string;
@@ -32,11 +32,9 @@ async function callAdminApi(action: string, userId?: string, data?: Record<strin
 
 export function useUsers() {
   const { user } = useAuth();
-  const queryKey = ['managed-users', user?.schoolId, user?.isSuperAdmin];
+  const queryKey = useMemo(() => ['managed-users', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
   
-  useRealtimeSync('profiles', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
-  useRealtimeSync('user_roles', queryKey);
-
+    
   return useQuery({
     queryKey,
     queryFn: async () => {

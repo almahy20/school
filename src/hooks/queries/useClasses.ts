@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Class {
   id: string;
@@ -32,10 +32,9 @@ async function fetchClasses(user: AppUser | null): Promise<Class[]> {
 
 export function useClasses() {
   const { user } = useAuth();
-  const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
+  const queryKey = useMemo(() => ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id], [user?.schoolId, user?.isSuperAdmin, user?.role, user?.id]);
   
-  useRealtimeSync('classes', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
-
+  
   return useQuery({
     queryKey,
     queryFn: () => fetchClasses(user),
@@ -49,9 +48,8 @@ export function useClasses() {
 }
 
 export function useClass(id: string | undefined | null) {
-  const queryKey = ['class', id];
-  useRealtimeSync('classes', queryKey, id ? `id=eq.${id}` : undefined);
-
+  const queryKey = useMemo(() => ['class', id], [id]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -72,8 +70,10 @@ export function useClass(id: string | undefined | null) {
 
 export function useTeacherClasses(teacherId: string | undefined) {
   const { user } = useAuth();
+  const queryKey = useMemo(() => ['classes', 'teacher', teacherId, user?.schoolId], [teacherId, user?.schoolId]);
+  
   return useQuery({
-    queryKey: ['classes', 'teacher', teacherId, user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!teacherId || !user?.schoolId) return [];
       const { data, error } = await supabase
@@ -127,7 +127,13 @@ export function useUpdateClass() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Class> & { id: string }) => {
-      const { error } = await supabase.from('classes').update(data).eq('id', id);
+      // Optimistic update
+      queryClient.setQueriesData({ queryKey: ['classes'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(c => c.id === id ? { ...c, ...data, updated_at: new Date().toISOString() } : c);
+      });
+
+      const { error } = await supabase.from('classes').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

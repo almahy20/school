@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Megaphone, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 interface AnnouncementMessage {
   id: string;
@@ -30,6 +31,24 @@ export function GlobalAnnouncement() {
     });
     setIsOpen(true);
   }, []);
+
+  const handleNewMessage = useCallback(async (payload: any) => {
+    const newMsg = payload.new as any;
+    if (markedAsReadRef.current.has(newMsg.id)) return;
+
+    // Fetch sender name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', newMsg.sender_id)
+      .single();
+
+    addToQueue({
+      id: newMsg.id,
+      content: newMsg.content,
+      sender_name: profile?.full_name || 'الإدارة',
+    });
+  }, [addToQueue]);
 
   useEffect(() => {
     if (!user) return;
@@ -59,35 +78,16 @@ export function GlobalAnnouncement() {
     fetchUnread();
 
     // 2. Real-time for NEW messages while user is online
-    const channel = supabase
-      .channel(`global-announcements-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `receiver_id=eq.${user.id}` },
-        async (payload) => {
-          const newMsg = payload.new as any;
-          if (markedAsReadRef.current.has(newMsg.id)) return;
-
-          // Fetch sender name
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', newMsg.sender_id)
-            .single();
-
-          addToQueue({
-            id: newMsg.id,
-            content: newMsg.content,
-            sender_name: profile?.full_name || 'الإدارة',
-          });
-        }
-      )
-      .subscribe();
+    const unsubscribe = realtimeEngine.subscribe(
+      'messages',
+      handleNewMessage,
+      { event: 'INSERT', filter: `receiver_id=eq.${user.id}` }
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [user, addToQueue]);
+  }, [user, handleNewMessage]);
 
   const markCurrentAsRead = async (id: string) => {
     if (markedAsReadRef.current.has(id)) return;

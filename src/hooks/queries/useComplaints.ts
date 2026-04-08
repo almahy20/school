@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Complaint {
   id: string;
@@ -18,9 +18,8 @@ export interface Complaint {
 
 export function useComplaints() {
   const { user } = useAuth();
-  const queryKey = ['complaints', user?.schoolId, user?.isSuperAdmin];
-  useRealtimeSync('complaints', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
-
+  const queryKey = useMemo(() => ['complaints', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -65,9 +64,8 @@ export function useComplaints() {
 
 export function useParentComplaints() {
   const { user } = useAuth();
-  const queryKey = ['parent-complaints', user?.id, user?.schoolId];
-  useRealtimeSync('complaints', queryKey, user?.id ? `parent_id=eq.${user?.id}` : undefined);
-
+  const queryKey = useMemo(() => ['parent-complaints', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -114,7 +112,7 @@ export function useUpsertComplaint() {
 
       let query;
       if (dbPayload.id) {
-         query = supabase.from('complaints').update(dbPayload).eq('id', dbPayload.id);
+         query = supabase.from('complaints').update({ ...dbPayload }).eq('id', dbPayload.id);
       } else {
          query = supabase.from('complaints').insert(dbPayload);
       }

@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useUnreadNotificationsCount } from '@/hooks/queries';
+import { useUnreadNotificationsCount, useBranding } from '@/hooks/queries';
 import { 
   LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
   School, LogOut, BookOpen, ClipboardList, CalendarCheck, 
@@ -10,6 +10,7 @@ import {
   Bell, Layers, CreditCard, Send, Home
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useMemo } from 'react';
 
 interface SidebarLink {
   to: string;
@@ -64,72 +65,24 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: initialUnreadCount = 0 } = useUnreadNotificationsCount();
+  const { data: branding } = useBranding();
   const [unreadCount, setUnreadCount] = useState(0);
-  const defaultLogo = "";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
+  const [logoError, setLogoError] = useState(false);
+
+  const schoolBranding = useMemo(() => {
+    const timestamp = Date.now();
+    const logo = branding?.logo_url || '';
+    const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+    
+    return {
+      name: branding?.name || 'المدرسة الذكية',
+      logo: logoWithCacheBust,
+    };
+  }, [branding]);
 
   useEffect(() => {
-    const fetchBranding = async () => {
-      try {
-        if (user?.schoolId) {
-          const { data, error } = await supabase
-            .from('schools')
-            .select('name, logo_url')
-            .eq('id', user.schoolId)
-            .maybeSingle();
-
-          if (error) {
-            console.error('Error fetching branding:', error);
-            return;
-          }
-
-          if (data) {
-            const timestamp = Date.now();
-            const logo = data.logo_url || '';
-            const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-            
-            setSchoolBranding(prev => ({
-              ...prev,
-              name: data.name,
-              logo: logoWithCacheBust,
-            }));
-          }
-        }
-      } catch (err) {
-        console.error('Fatal error in fetchBranding:', err);
-      }
-    };
-    fetchBranding();
-
-    const channel = supabase
-      .channel('school-branding-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'schools',
-          filter: user?.schoolId ? `id=eq.${user.schoolId}` : undefined
-        },
-        (payload) => {
-          const newSchool = payload.new as any;
-          const timestamp = Date.now();
-          const logo = newSchool.logo_url || '';
-          const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-          
-          setSchoolBranding(prev => ({
-            ...prev,
-            name: newSchool.name,
-            logo: logoWithCacheBust,
-          }));
-        }
-      )
-      .subscribe();
-
-    return () => {
-       supabase.removeChannel(channel);
-    };
-  }, [user?.schoolId]);
+    setLogoError(false); // Reset error when branding changes
+  }, [branding]);
 
   useEffect(() => {
     setUnreadCount(initialUnreadCount);
@@ -170,15 +123,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {/* Brand Section */}
       <div className="p-10 pb-6 relative flex items-center gap-4">
         <div className="w-12 h-12 rounded-[18px] flex items-center justify-center border border-white/10 shadow-2xl shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-all duration-500 shrink-0 group overflow-hidden bg-indigo-600">
-          {schoolBranding.logo ? (
+          {schoolBranding.logo && !logoError ? (
             <img 
               src={schoolBranding.logo} 
               alt="School Logo" 
               className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-                setSchoolBranding(prev => ({ ...prev, logo: '' }));
-              }}
+              onError={() => setLogoError(true)}
             />
           ) : (
             <BookOpen className="w-6 h-6 text-white group-hover:scale-110 transition-transform" />

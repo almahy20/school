@@ -82,7 +82,7 @@ export default function FeesPage() {
       list.push(`شهر ${MONTHS_AR[d.getMonth()]} ${d.getFullYear()}`);
     }
     return list;
-  }, []);
+  }, [MONTHS_AR]);
 
   const onUpdateSuccess = () => {
     toast({ title: 'تم التحديث بنجاح', description: 'تم تحديث سجل الرسوم المالية.' });

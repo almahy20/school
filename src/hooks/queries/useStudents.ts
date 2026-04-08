@@ -1,9 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
-import { useRealtimeSync } from '../useRealtimeSync';
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface Student {
   id: string;
@@ -52,20 +50,24 @@ async function fetchStudents(user: AppUser | null): Promise<Student[]> {
 // ─── useStudents Hook ─────────────────────────────────────────────────────────
 export function useStudents() {
   const { user } = useAuth();
-  const queryKey = ['students', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
   
-  // Enable Realtime Sync
-  useRealtimeSync('students', queryKey, user?.isSuperAdmin ? undefined : `school_id=eq.${user?.schoolId}`);
-
+  // توحيد queryKey ليكون ثابتًا (['students']) لتجنب الفقدان المتكرر للكاش عند إعادة تحميل الصفحة أو تأخر تحميل الـ user.
+  // الدالة queryFn لن تتأثر لأن الـ query Client سيتم مسحه عند تسجيل الخروج.
+  const queryKey = ['students'];
+  
   return useQuery({
     queryKey,
     queryFn: () => fetchStudents(user),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0, // Ensure we check for updates frequently
+    // تأخير طلب البيانات من الشبكة حتى يتم تحميل الـ user.
+    // وبما أن المفتاح ثابت، سيقوم React Query بعرض البيانات المخزنة محلياً فوراً أثناء الانتظار!
+    enabled: !!user?.id, 
+    staleTime: 0, 
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000, // 15s fallback polling as requested
+    refetchInterval: 15 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    // الحفاظ على بيانات الكاش السابقة لضمان عدم وميض الشاشة عند التحديث
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -74,8 +76,7 @@ export function useStudent(id: string | undefined) {
   const queryKey = ['student', id];
 
   // Enable Realtime Sync for single student
-  useRealtimeSync('students', queryKey, id ? `id=eq.${id}` : undefined);
-
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -106,6 +107,7 @@ export function useStudent(id: string | undefined) {
     enabled: !!id,
     staleTime: 0,
     refetchInterval: 15 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -115,12 +117,30 @@ export function useDeleteStudent() {
   const { user } = useAuth();
 
   return useMutation({
+    // التنفيذ المتفائل: الحذف من الشاشة فوراً
+    onMutate: async (studentId: string) => {
+      await queryClient.cancelQueries({ queryKey: ['students'] });
+      const previousStudents = queryClient.getQueryData(['students']);
+      
+      queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((s: Student) => s.id !== studentId);
+      });
+
+      return { previousStudents };
+    },
+    onError: (err, newTodo, context) => {
+      // في حالة الفشل نعود للبيانات القديمة
+      if (context?.previousStudents) {
+        queryClient.setQueriesData({ queryKey: ['students'] }, context.previousStudents);
+      }
+    },
     mutationFn: async (studentId: string) => {
       const { error } = await supabase.from('students').delete().eq('id', studentId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      // Invalidate all student-related queries
+    onSettled: () => {
+      // تحديث هادئ في الخلفية لتأكيد العملية
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['student'] });
     },
@@ -133,12 +153,38 @@ export function useAddStudent() {
   const { user } = useAuth();
 
   return useMutation({
+    // التنفيذ المتفائل: الإضافة للشاشة فوراً قبل رد السيرفر
+    onMutate: async (studentData) => {
+      await queryClient.cancelQueries({ queryKey: ['students'] });
+      const previousStudents = queryClient.getQueryData(['students']);
+      
+      const tempStudent = {
+        id: `temp-${Date.now()}`,
+        ...studentData,
+        created_at: new Date().toISOString(),
+        classes: null,
+      };
+
+      queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
+        if (!Array.isArray(old)) return [tempStudent];
+         // وضع الطالب الجديد في أعلى القائمة
+        return [tempStudent, ...old];
+      });
+
+      return { previousStudents };
+    },
+    onError: (err, newTodo, context) => {
+      if (context?.previousStudents) {
+        queryClient.setQueriesData({ queryKey: ['students'] }, context.previousStudents);
+      }
+    },
     mutationFn: async (studentData: Omit<Student, 'id' | 'created_at' | 'classes'>) => {
       const { data, error } = await supabase.from('students').insert(studentData).select().single();
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSettled: () => {
+      // استبدال المعرف المؤقت بالحقيفي بصمت
       queryClient.invalidateQueries({ queryKey: ['students'] });
     },
   });
@@ -147,24 +193,44 @@ export function useAddStudent() {
 // ─── useUpdateStudent Hook ───────────────────────────────────────────────────
 export function useUpdateStudent() {
   const queryClient = useQueryClient();
-  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Student> & { id: string }) => {
-      const { error } = await supabase.from('students').update(data).eq('id', id);
-      if (error) throw error;
+      // 1. Snapshot previous value for rollback if needed
+      const previousStudents = queryClient.getQueryData(['students']);
+      
+      // 2. Optimistically update the UI
+      queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(s => s.id === id ? { ...s, ...data, updated_at: new Date().toISOString() } : s);
+      });
+
+      // 3. Perform the actual update with updated_at timestamp
+      const { error } = await supabase
+        .from('students')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', id);
+        
+      if (error) {
+        // Rollback on error
+        queryClient.setQueriesData({ queryKey: ['students'] }, previousStudents);
+        throw error;
+      }
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['students'] });
-      queryClient.invalidateQueries({ queryKey: ['student', variables.id] });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+      // Background refetch to ensure consistency
+      queryClient.invalidateQueries({ queryKey: ['students'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['student', variables.id], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], refetchType: 'active' });
     },
   });
 }
 
 export function useStudentParent(studentId: string | null | undefined) {
+  const queryKey = ['student-parent', studentId];
+  
   return useQuery({
-    queryKey: ['student-parent', studentId],
+    queryKey,
     queryFn: async () => {
       if (!studentId) return null;
       const { data: parentLink } = await supabase
@@ -186,13 +252,15 @@ export function useStudentParent(studentId: string | null | undefined) {
     },
     enabled: !!studentId,
     staleTime: 5 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useClassStudents(classId: string | null | undefined) {
-  const { user } = useAuth();
+  const queryKey = ['students', 'class', classId];
+  
   return useQuery({
-    queryKey: ['students', 'class', classId],
+    queryKey,
     queryFn: async () => {
       if (!classId) return [];
       const { data, error } = await supabase
@@ -206,7 +274,7 @@ export function useClassStudents(classId: string | null | undefined) {
     },
     enabled: !!classId,
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
-
 

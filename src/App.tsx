@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -48,8 +48,7 @@ const SubscriptionExpiredPage = lazy(() => import("./pages/SubscriptionExpiredPa
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const WaitingApprovalPage = lazy(() => import("./pages/WaitingApprovalPage"));
 import PwaOnboarding from "./components/PwaOnboarding";
-import RealtimeNotificationsManager from "./components/RealtimeNotificationsManager";
-
+import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
 import { queryClient } from "./lib/queryClient";
 
 function AppRoutes() {
@@ -70,7 +69,6 @@ function AppRoutes() {
       <PwaManager />
       <HealthMonitor />
       <PwaOnboarding />
-      <RealtimeNotificationsManager />
       <Suspense fallback={
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir="rtl">
            <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
@@ -132,6 +130,7 @@ export default function App() {
               <AppRoutes />
             </GlobalErrorBoundary>
             <Toaster />
+            <RealtimeNotificationsManager />
             <Sonner position="top-center" dir="rtl" expand={true} richColors />
           </BrowserRouter>
         </AuthProvider>

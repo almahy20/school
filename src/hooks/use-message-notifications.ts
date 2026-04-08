@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 function playChime() {
   try {
@@ -56,44 +57,43 @@ export function useMessageNotifications() {
     locationRef.current = location.pathname;
   }, [location.pathname]);
 
+  const handleNewMessage = useCallback(async (payload: any) => {
+    const msg = payload.new as {
+      id: string;
+      sender_id: string;
+      receiver_id: string;
+      content: string;
+    };
+
+    // Only notify if we are the receiver and NOT on the messages page
+    if (msg.receiver_id !== user?.id) return;
+    if (locationRef.current === '/messages') return;
+
+    // Fetch sender name
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', msg.sender_id)
+      .single();
+
+    const senderName = profile?.full_name || 'مستخدم';
+
+    // playChime(); // Disabled sound by request
+    vibrate();
+    showDesktopNotification(senderName, msg.content);
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel('global-msg-notify')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        async (payload) => {
-          const msg = payload.new as {
-            id: string;
-            sender_id: string;
-            receiver_id: string;
-            content: string;
-          };
-
-          // Only notify if we are the receiver and NOT on the messages page
-          if (msg.receiver_id !== user.id) return;
-          if (locationRef.current === '/messages') return;
-
-          // Fetch sender name
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', msg.sender_id)
-            .single();
-
-          const senderName = profile?.full_name || 'مستخدم';
-
-          // playChime(); // Disabled sound by request
-          vibrate();
-          showDesktopNotification(senderName, msg.content);
-        }
-      )
-      .subscribe();
+    const unsubscribe = realtimeEngine.subscribe(
+      'messages',
+      handleNewMessage,
+      { event: 'INSERT' }
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribe();
     };
-  }, [user]);
+  }, [user, handleNewMessage]);
 }

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Curriculum {
   id: string;
@@ -20,9 +20,8 @@ export interface CurriculumSubject {
 
 export function useCurriculums() {
   const { user } = useAuth();
-  const queryKey = ['curriculums', user?.schoolId];
-  useRealtimeSync('curriculums', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
-
+  const queryKey = useMemo(() => ['curriculums', user?.schoolId], [user?.schoolId]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -42,9 +41,8 @@ export function useCurriculums() {
 }
 
 export function useCurriculumSubjects(curriculumId: string | null) {
-  const queryKey = ['curriculum-subjects', curriculumId];
-  useRealtimeSync('curriculum_subjects', queryKey, curriculumId ? `curriculum_id=eq.${curriculumId}` : undefined);
-
+  const queryKey = useMemo(() => ['curriculum-subjects', curriculumId], [curriculumId]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {

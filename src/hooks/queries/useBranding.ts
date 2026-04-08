@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface SchoolBranding {
   id: string;
@@ -29,9 +29,8 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 
 export function useBranding() {
   const { user } = useAuth();
-  const queryKey = ['school-branding', user?.schoolId];
-  useRealtimeSync('schools', queryKey, user?.schoolId ? `id=eq.${user?.schoolId}` : undefined);
-  
+  const queryKey = useMemo(() => ['school-branding', user?.schoolId], [user?.schoolId]);
+    
   return useQuery({
     queryKey,
     queryFn: () => fetchBranding(user?.schoolId || null),

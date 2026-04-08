@@ -12,18 +12,27 @@ export default function PwaOnboarding() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isVisible, setIsVisible] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isSafari, setIsSafari] = useState(false);
 
   useEffect(() => {
+    // Check for iOS
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
+    setIsIOS(isIOSDevice);
+    setIsSafari(isSafariBrowser);
+
     // Check if dismissed
     if (localStorage.getItem('hide_pwa_onboarding') === 'true') {
       setIsVisible(false);
     }
 
     // Check if already in PWA mode
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(isPWA);
 
-    // Initial check for existing prompt
+    // Initial check for existing prompt (Chrome/Edge only)
     if ((window as any).deferredPrompt) {
       setDeferredPrompt((window as any).deferredPrompt);
     }
@@ -31,7 +40,7 @@ export default function PwaOnboarding() {
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      (window as any).deferredPrompt = e; // Store globally for other components
+      (window as any).deferredPrompt = e; 
       console.log('✅ PWA Install Prompt Available');
     };
 
@@ -51,7 +60,7 @@ export default function PwaOnboarding() {
 
   const handleInstall = async () => {
     if (!deferredPrompt) {
-       console.log('⚠️ No deferred prompt available. Might already be installed or browser unsupported.');
+       // On Safari, this button shouldn't even be the primary action if not supported
        return;
     }
     try {
@@ -71,7 +80,6 @@ export default function PwaOnboarding() {
     try {
       const success = await subscribeToNotifications();
       if (success) {
-        // Refresh to apply changes if needed, but the hook manages state
         setTimeout(() => setIsVisible(false), 2000);
       }
     } finally {
@@ -84,14 +92,12 @@ export default function PwaOnboarding() {
     setIsVisible(false);
   };
 
-  // Logic to determine if we should show the overlay
-  // Hidden if:
-  // 1. Not a parent or teacher
-  // 2. Already standalone AND has notification permission
-  // 3. Explicitly dismissed
   if (!isVisible) return null;
   if (user?.role !== 'parent' && user?.role !== 'teacher') return null;
-  if (isStandalone && permission === 'granted') return null;
+  
+  // Extra logic: On iOS Safari, we can't request notifications UNLESS it's standalone.
+  // So we MUST install first.
+  if (isStandalone && (permission === 'granted' || (isIOS && permission === 'denied'))) return null;
 
   return (
     <div className="fixed inset-0 z-[10000] bg-slate-950/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-6 text-right overflow-y-auto" dir="rtl">
@@ -146,15 +152,26 @@ export default function PwaOnboarding() {
                        {isStandalone ? 'تم التثبيت بنجاح على جهازك' : 'احصل على تجربة أسرع بنسبة 40% ووصول فوري من الشاشة الرئيسية.'}
                     </p>
                  </div>
-                 {!isStandalone && (
-                    <Button 
-                      onClick={handleInstall} 
-                      disabled={!deferredPrompt}
-                      className="h-11 px-6 rounded-xl bg-white text-slate-950 hover:bg-slate-200 font-black text-xs shadow-xl active:scale-95 transition-all disabled:opacity-30"
-                    >
-                       تثبيت
-                    </Button>
-                 )}
+                  {!isStandalone && (
+                    <div className="flex flex-col gap-2">
+                       {deferredPrompt ? (
+                          <Button 
+                            onClick={handleInstall} 
+                            className="h-11 px-6 rounded-xl bg-white text-slate-950 hover:bg-slate-200 font-black text-xs shadow-xl active:scale-95 transition-all"
+                          >
+                             تثبيت
+                          </Button>
+                       ) : isIOS ? (
+                          <div className="flex flex-col items-end text-right gap-1 bg-white/5 p-2 rounded-xl">
+                            <p className="text-[10px] font-black text-amber-400">لنظام iOS:</p>
+                            <p className="text-[9px] font-bold text-slate-400">1. اضغط على أيقونة "المشاركة" <span className="inline-block px-1 bg-white/10 rounded">↥</span></p>
+                            <p className="text-[9px] font-bold text-slate-400">2. اختر "إضافة إلى الشاشة الرئيسية"</p>
+                          </div>
+                       ) : (
+                          <p className="text-[9px] font-bold text-slate-500 max-w-[120px]">يرجى استخدام قائمة المتصفح للتثبيت.</p>
+                       )}
+                    </div>
+                  )}
               </div>
 
               {/* Step 2: Push Notifications */}

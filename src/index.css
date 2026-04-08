@@ -91,7 +91,8 @@
 
   #root {
     width: 100%;
-    min-h-screen: 100vh;
+    min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: hidden;
   }
 
@@ -142,6 +143,10 @@
   .status-badge-resolved { @apply bg-emerald-50 text-emerald-600 border-emerald-100; }
   .status-badge-replied { @apply bg-indigo-50 text-indigo-600 border-indigo-100; }
 
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #e2e8f0 transparent;
+  }
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -151,6 +156,23 @@
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
     @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+  }
+}
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .min-h-screen-safe {
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 }
 

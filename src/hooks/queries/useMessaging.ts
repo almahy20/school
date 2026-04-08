@@ -1,13 +1,12 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export function useProfiles() {
   const { user } = useAuth();
-  const queryKey = ['profiles', user?.schoolId];
-  useRealtimeSync('profiles', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
-
+  const queryKey = useMemo(() => ['profiles', user?.schoolId], [user?.schoolId]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -29,7 +28,38 @@ export function useProfiles() {
 
 export function useSendMessage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  
   return useMutation({
+    // التنفيذ المتفائل: إظهار الرسالة في القائمة فوراً
+    onMutate: async ({ targets, content }: { targets: string[], content: string }) => {
+      await queryClient.cancelQueries({ queryKey: ['messages', user?.id] });
+      const previousMessages = queryClient.getQueryData(['messages', user?.id]);
+      
+      const optimisticMessages = targets.map((targetId, index) => ({
+        id: `temp-msg-${Date.now()}-${index}`,
+        sender_id: user?.id,
+        receiver_id: targetId,
+        content: content.trim(),
+        is_read: false,
+        created_at: new Date().toISOString(),
+        school_id: user?.schoolId,
+        sender: { full_name: user?.full_name || 'أنا' },
+        receiver: { full_name: 'جاري الإرسال...' } // Placeholder
+      }));
+
+      queryClient.setQueriesData({ queryKey: ['messages', user?.id] }, (old: any) => {
+        if (!Array.isArray(old)) return [...optimisticMessages];
+        return [...optimisticMessages, ...old]; // Prepend new messages
+      });
+
+      return { previousMessages };
+    },
+    onError: (err, newMsg, context) => {
+      if (context?.previousMessages) {
+        queryClient.setQueriesData({ queryKey: ['messages', user?.id] }, context.previousMessages);
+      }
+    },
     mutationFn: async ({ targets, content }: { targets: string[], content: string }) => {
       // 1. Send to messages table
       const messages = targets.map(targetId => ({
@@ -43,7 +73,6 @@ export function useSendMessage() {
       const { error: msgError } = await supabase.from('messages').insert(messages);
       if (msgError) throw msgError;
 
-      // 2. Also send to notifications table for real-time alerts and PWA tracking
       const notifications = targets.map(targetId => ({
         user_id: targetId,
         school_id: user?.schoolId,
@@ -59,14 +88,19 @@ export function useSendMessage() {
 
       return { targets, content };
     },
+    onSettled: () => {
+      // إجبار التحديث بصمت للاستعاضة عن الرسائل المؤقتة بحقيقية
+      queryClient.invalidateQueries({ queryKey: ['messages', user?.id] });
+    }
   });
 }
 
 export function useMessages() {
   const { user } = useAuth();
+  
+  // نعيد بناء queryKey ليكون بسيطاً لكن مع ربطه بـ user?.id لتأمين البيانات
   const queryKey = ['messages', user?.id];
-  useRealtimeSync('messages', queryKey); // Filter by sender/receiver handled by query but realtime will update
-
+      
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -85,6 +119,7 @@ export function useMessages() {
     },
     enabled: !!user?.id,
     staleTime: 0,
+    gcTime: 10 * 60 * 1000,
     refetchInterval: 15 * 1000,
   });
 }

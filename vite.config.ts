@@ -8,8 +8,10 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: true,
     port: 8080,
-    strictPort: false,
+    strictPort: true,
     hmr: {
+      protocol: 'ws',
+      host: 'localhost',
       port: 8080,
     },
   },
@@ -37,16 +39,17 @@ export default defineConfig(({ mode }) => ({
         ]
       },
       workbox: {
-        // Disable caching for Supabase API endpoints
+        importScripts: ['/push-sw.js'],
+        // Force all API and data requests to be Network-Only for cross-browser reliability
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkOnly', // Ensure we always get data from the network
+            handler: 'NetworkOnly',
             options: {
               backgroundSync: {
                 name: 'supabase-queue',
                 options: {
-                  maxRetentionTime: 24 * 60 // Retry for up to 24 hours
+                  maxRetentionTime: 24 * 60
                 }
               }
             }
@@ -56,10 +59,16 @@ export default defineConfig(({ mode }) => ({
             handler: 'NetworkOnly'
           },
           {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
-            handler: 'StaleWhileRevalidate',
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/.*/i,
+            handler: 'NetworkOnly'
+          },
+          {
+            // Use NetworkFirst for assets to ensure cross-browser consistency and always try to get latest
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|css|js|woff2?)$/,
+            handler: 'NetworkFirst',
             options: {
-              cacheName: 'images'
+              cacheName: 'assets',
+              networkTimeoutSeconds: 3 // Fallback to cache quickly if network is slow
             }
           }
         ]

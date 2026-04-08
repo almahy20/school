@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 // Cast supabase to 'any' for the notifications table since it's not in the auto-generated types
 // but exists in the actual database. This is safe because we control the schema.
@@ -21,10 +21,9 @@ export interface Notification {
 
 export function useNotifications() {
   const { user } = useAuth();
-  const queryKey = ['notifications', user?.id];
+  const queryKey = useMemo(() => ['notifications', user?.id], [user?.id]);
   // useRealtimeSync is disabled here because RealtimeNotificationsManager handles the logic globally
-  // useRealtimeSync('notifications', queryKey, user?.id ? `user_id=eq.${user?.id}` : undefined);
-
+  // 
   return useQuery<Notification[]>({
     queryKey,
     queryFn: async () => {
@@ -88,10 +87,9 @@ export function useDeleteNotification() {
 
 export function useUnreadNotificationsCount() {
   const { user } = useAuth();
-  const queryKey = ['notifications-unread-count', user?.id];
+  const queryKey = useMemo(() => ['notifications-unread-count', user?.id], [user?.id]);
   // useRealtimeSync is disabled here because RealtimeNotificationsManager handles the logic globally
-  // useRealtimeSync('notifications', queryKey, user?.id ? `user_id=eq.${user?.id}` : undefined);
-
+  // 
   return useQuery<number>({
     queryKey,
     queryFn: async () => {

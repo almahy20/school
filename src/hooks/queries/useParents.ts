@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface Parent {
   id: string; // user_id
@@ -55,11 +55,9 @@ async function fetchParents(schoolId: string | null): Promise<Parent[]> {
 
 export function useParents() {
   const { user } = useAuth();
-  const queryKey = ['parents', user?.schoolId];
+  const queryKey = useMemo(() => ['parents', user?.schoolId], [user?.schoolId]);
   
-  useRealtimeSync('profiles', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
-  useRealtimeSync('user_roles', queryKey);
-
+    
   return useQuery({
     queryKey,
     queryFn: () => fetchParents(user?.schoolId || null),
@@ -73,9 +71,8 @@ export function useParents() {
 }
 
 export function useParent(id: string | undefined | null) {
-  const queryKey = ['parent', id];
-  useRealtimeSync('profiles', queryKey, id ? `id=eq.${id}` : undefined);
-
+  const queryKey = useMemo(() => ['parent', id], [id]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -149,7 +146,9 @@ export function useParentAction() {
 
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
-      const { error } = await (supabase.from('user_roles') as any).update({ approval_status: status }).eq('id', userRoleId);
+      const { error } = await (supabase.from('user_roles') as any)
+        .update({ approval_status: status, updated_at: new Date().toISOString() })
+        .eq('id', userRoleId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -164,7 +163,13 @@ export function useUpdateParent() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Parent> & { id: string }) => {
-      const { error } = await supabase.from('profiles').update(data).eq('id', id);
+      // Optimistic update
+      queryClient.setQueriesData({ queryKey: ['parents'] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map(p => p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p);
+      });
+
+      const { error } = await supabase.from('profiles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

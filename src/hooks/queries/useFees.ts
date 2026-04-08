@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export interface FeeRecord {
   id: string;
@@ -17,9 +17,8 @@ export interface FeeRecord {
 
 export function useFees(term?: string) {
   const { user } = useAuth();
-  const queryKey = ['fees', user?.schoolId, term];
-  useRealtimeSync('fees', queryKey, user?.schoolId ? `school_id=eq.${user?.schoolId}` : undefined);
-
+  const queryKey = useMemo(() => ['fees', user?.schoolId, term], [user?.schoolId, term]);
+  
   return useQuery({
     queryKey,
     queryFn: async () => {

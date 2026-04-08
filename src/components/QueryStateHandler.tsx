@@ -11,6 +11,7 @@ interface QueryStateHandlerProps {
   isRefetching?: boolean;
   errorMessage?: string;
   emptyMessage?: string;
+  loadingMessage?: string;
   children: React.ReactNode;
   isEmpty?: boolean;
 }
@@ -23,6 +24,7 @@ export function QueryStateHandler({
   isRefetching = false,
   errorMessage = 'عذراً، حدث خطأ أثناء جلب البيانات. يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى.',
   emptyMessage = 'لم يتم العثور على بيانات.',
+  loadingMessage = 'جاري التحميل...',
   children,
   isEmpty = false,
 }: QueryStateHandlerProps) {
@@ -30,8 +32,9 @@ export function QueryStateHandler({
   // 1. Loading State
   if (loading && !isRefetching) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center p-6 animate-in fade-in duration-500">
+      <div className="min-h-[400px] flex flex-col items-center justify-center gap-4 p-6 animate-in fade-in duration-500">
         <div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" />
+        <p className="text-slate-400 font-medium text-sm">{loadingMessage}</p>
       </div>
     );
   }
@@ -83,15 +86,10 @@ export function QueryStateHandler({
     );
   }
 
-  // 4. Success State (with optional refetching overlay if needed)
+  // 4. Success State (Clean children render)
   return (
-    <div className={cn("relative transition-opacity duration-300", isRefetching && "opacity-60 pointer-events-none")}>
+    <div className="relative">
       {children}
-      {isRefetching && (
-        <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-md p-2 rounded-full border border-slate-200 shadow-sm flex items-center justify-center animate-in slide-in-from-top-2 duration-300 z-50">
-          <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin" />
-        </div>
-      )}
     </div>
   );
 }

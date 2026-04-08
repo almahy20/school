@@ -62,7 +62,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0f1e] text-white font-cairo overflow-x-hidden" dir="rtl">
+    <div className="min-h-screen-safe bg-[#0a0f1e] text-white font-cairo overflow-x-hidden" dir="rtl">
 
       {/* ── Navbar ── */}
       <nav className="fixed top-0 inset-x-0 z-50 bg-[#0a0f1e]/80 backdrop-blur-xl border-b border-white/5">

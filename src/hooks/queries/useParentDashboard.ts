@@ -1,19 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export function useParentChildren() {
   const { user } = useAuth();
-  const queryKey = ['parent-children', user?.id, user?.schoolId];
+  const queryKey = useMemo(() => ['parent-children', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
-  // Subscribe to all relevant tables for parent dashboard
-  useRealtimeSync('student_parents', queryKey, user?.id ? `parent_id=eq.${user?.id}` : undefined);
-  useRealtimeSync('students', queryKey);
-  useRealtimeSync('grades', queryKey);
-  useRealtimeSync('attendance', queryKey);
-  useRealtimeSync('fees', queryKey);
-
+            
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -26,10 +20,19 @@ export function useParentChildren() {
       
       if (error) throw error;
       
-      const kids = data?.map((d: any) => ({
-        ...d.students,
-        className: d.students?.classes?.name || 'غير محدد'
-      })).filter(Boolean) || [];
+      const kids = data?.map((d: any) => {
+        const student = Array.isArray(d.students) ? d.students[0] : d.students;
+        if (!student) return null;
+        
+        const className = Array.isArray(student.classes) 
+          ? student.classes[0]?.name 
+          : student.classes?.name || 'غير محدد';
+
+        return {
+          ...student,
+          className
+        };
+      }).filter(Boolean) || [];
 
       // Enrich with summary data
       const enrichedKids = await Promise.all(kids.map(async (kid: any) => {
@@ -72,10 +75,8 @@ export function useParentChildren() {
 }
 
 export function useParentChildOverview(studentId: string | undefined) {
-  const queryKey = ['parent-child-overview', studentId];
-  useRealtimeSync('grades', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
-  useRealtimeSync('attendance', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
-
+  const queryKey = useMemo(() => ['parent-child-overview', studentId], [studentId]);
+    
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -91,11 +92,8 @@ export function useParentChildOverview(studentId: string | undefined) {
 }
 
 export function useParentChildActivities(studentId: string | undefined) {
-  const queryKey = ['parent-child-activities', studentId];
-  useRealtimeSync('grades', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
-  useRealtimeSync('attendance', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
-  useRealtimeSync('fees', queryKey, studentId ? `student_id=eq.${studentId}` : undefined);
-
+  const queryKey = useMemo(() => ['parent-child-activities', studentId], [studentId]);
+      
   return useQuery({
     queryKey,
     queryFn: async () => {

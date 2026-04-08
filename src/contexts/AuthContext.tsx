@@ -222,36 +222,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    let timeoutId: any;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      // Session timeout after 30 minutes of inactivity
-      timeoutId = setTimeout(() => {
-        if (user) {
-          console.log('Session timeout due to inactivity');
-          logout();
-        }
-      }, 30 * 60 * 1000);
-    };
-
-    if (user) {
-      window.addEventListener('mousemove', resetTimer);
-      window.addEventListener('keypress', resetTimer);
-      window.addEventListener('scroll', resetTimer);
-      window.addEventListener('click', resetTimer);
-      resetTimer();
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', resetTimer);
-      window.removeEventListener('keypress', resetTimer);
-      window.removeEventListener('scroll', resetTimer);
-      window.removeEventListener('click', resetTimer);
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [user]);
+  // تم إزالة مؤقت تسجيل الخروج التلقائي بناءً على طلب المستخدم لمنع تسجيل الخروج المفاجئ.
 
   // Handle connection monitoring and session refresh
   useEffect(() => {

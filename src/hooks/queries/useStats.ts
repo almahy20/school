@@ -1,19 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRealtimeSync } from '../useRealtimeSync';
+import { useMemo } from 'react';
 
 export function useAdminStats() {
   const { user } = useAuth();
-  const queryKey = ['admin-stats', user?.schoolId, user?.isSuperAdmin];
+  const queryKey = useMemo(() => ['admin-stats', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
 
-  // Subscribe to core tables to update stats in real-time
-  useRealtimeSync('students', queryKey);
-  useRealtimeSync('user_roles', queryKey);
-  useRealtimeSync('classes', queryKey);
-  useRealtimeSync('fees', queryKey);
-  useRealtimeSync('attendance', queryKey);
-
+            
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -72,11 +66,9 @@ export function useAdminStats() {
 
 export function useTeacherStats() {
   const { user } = useAuth();
-  const queryKey = ['teacher-stats', user?.id, user?.schoolId];
+  const queryKey = useMemo(() => ['teacher-stats', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
-  useRealtimeSync('classes', queryKey, user?.id ? `teacher_id=eq.${user?.id}` : undefined);
-  useRealtimeSync('students', queryKey);
-
+    
   return useQuery({
     queryKey,
     queryFn: async () => {
@@ -157,11 +149,14 @@ export function useAdminActivities() {
       });
 
       (payments.data || []).forEach((p: any) => {
+        const fee = Array.isArray(p.fees) ? p.fees[0] : p.fees;
+        const studentName = fee?.students?.name || 'غير معروف';
+        
         activities.push({
           id: p.id,
           type: 'payment',
           title: 'تم دفع رسوم',
-          description: `المبلغ: ${p.amount} ج.م للطالب ${(p.fees as any)?.students?.name || 'غير معروف'}`,
+          description: `المبلغ: ${p.amount} ج.م للطالب ${studentName}`,
           date: p.payment_date,
           status: 'success'
         });

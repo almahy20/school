@@ -1,14 +1,12 @@
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { Users, LayoutGrid, ChevronLeft, GraduationCap, Award, CalendarCheck, Wallet, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
+import { formatDisplayDate } from '@/lib/date-utils';
+import { LayoutGrid, ChevronLeft, GraduationCap, Award, CalendarCheck, Wallet, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
-
 import { useParentChildren } from '@/hooks/queries';
 
-export default function ParentDashboard() {
+export function ParentDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { 
@@ -18,8 +16,6 @@ export default function ParentDashboard() {
     refetch,
     isRefetching
   } = useParentChildren();
-
-
 
   return (
     <div className="flex flex-col gap-12 max-w-[1200px] mx-auto text-right py-4 sm:py-8 animate-in fade-in slide-in-from-bottom-4 duration-1000" dir="rtl">
@@ -64,7 +60,9 @@ export default function ParentDashboard() {
                </div>
                <div>
                  <p className="text-[8px] md:text-[10px] font-black text-white/30 uppercase tracking-widest leading-none mb-1 md:mb-2 text-right">اليوم</p>
-                 <p className="text-sm md:text-xl font-black text-white leading-none text-right truncate">{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                 <p className="text-sm md:text-xl font-black text-white leading-none text-right truncate">
+                   {formatDisplayDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}
+                 </p>
                </div>
             </div>
           </div>
@@ -72,7 +70,7 @@ export default function ParentDashboard() {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-        {children.map((child: any, idx) => (
+        {children.map((child: any) => (
           <div 
             key={child.id}
             onClick={() => navigate(`/parent/children/${child.id}`)}

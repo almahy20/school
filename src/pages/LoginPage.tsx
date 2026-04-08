@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Eye, EyeOff, Lock, Phone, ArrowLeft } from 'lucide-react';
+import { useSchoolBySlug } from '@/hooks/queries';
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -14,45 +15,25 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const defaultLogo = "";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo });
 
-  useEffect(() => {
-    // Check if there is a school slug in the URL query
-    const params = new URLSearchParams(location.search);
-    const slug = params.get('school');
+  // Check if there is a school slug in the URL query
+  const params = new URLSearchParams(location.search);
+  const slug = params.get('school');
+  const { data: schoolData } = useSchoolBySlug(slug);
+
+  const schoolBranding = useMemo(() => {
+    if (!schoolData) return { name: 'المدرسة الذكية', logo: '' };
     
-    if (slug) {
-      const fetchBranding = async () => {
-        try {
-          const { data, error } = await supabase
-            .from('schools')
-            .select('name, logo_url')
-            .eq('slug', slug)
-            .maybeSingle();
-            
-          if (error) {
-            console.error('Error fetching branding:', error);
-            return;
-          }
+    const timestamp = Date.now();
+    const logo = schoolData.logo_url || '';
+    const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+    
+    return {
+      name: schoolData.name,
+      logo: logoWithCacheBust
+    };
+  }, [schoolData]);
 
-          if (data) {
-            const timestamp = Date.now();
-            const logo = data.logo_url || '';
-            const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-            
-            setSchoolBranding({
-              name: data.name,
-              logo: logoWithCacheBust
-            });
-          }
-        } catch (err) {
-          console.error('Fatal error in fetchBranding:', err);
-        }
-      };
-      fetchBranding();
-    }
-  }, [location.search]);
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
 
@@ -80,7 +61,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden text-right">
+    <div className="min-h-screen-safe bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden text-right" dir="rtl">
       {/* Soft Background Elements */}
       <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-primary/5 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-20%] left-[-10%] w-[60%] h-[60%] bg-slate-200/20 rounded-full blur-[120px]" />

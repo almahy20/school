@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
+import { GlobalSyncIndicator } from './GlobalSyncIndicator';
 import BottomNav from './layout/BottomNav';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from './ui/button';
 import { useToast } from "@/hooks/use-toast";
-import { useUnreadNotificationsCount } from '@/hooks/queries/useNotifications';
+import { useUnreadNotificationsCount, useBranding } from '@/hooks/queries';
 
 interface Props {
   children: ReactNode;
@@ -22,42 +23,24 @@ export default function AppLayout({ children }: Props) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
-  const defaultLogo = "";
-  const [schoolBranding, setSchoolBranding] = useState({ name: 'المدرسة الذكية', logo: defaultLogo, themeColor: '#1A3C8F' });
+  const { data: branding } = useBranding();
+  const [logoError, setLogoError] = useState(false);
+
+  const schoolBranding = useMemo(() => {
+    const timestamp = Date.now();
+    const logo = branding?.logo_url || '';
+    const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
+    
+    return {
+      name: branding?.name || 'المدرسة الذكية',
+      logo: logoWithCacheBust,
+      themeColor: '#1A3C8F'
+    };
+  }, [branding]);
 
   useEffect(() => {
-    const fetchBranding = async () => {
-      try {
-        if (user?.schoolId) {
-          const { data, error } = await supabase
-            .from('schools')
-            .select('name, logo_url')
-            .eq('id', user.schoolId)
-            .maybeSingle();
-            
-          if (error) {
-            console.error('Error fetching branding:', error);
-            return;
-          }
-
-          if (data) {
-            const timestamp = Date.now();
-            const logo = data.logo_url || '';
-            const logoWithCacheBust = logo ? (logo.includes('?') ? `${logo}&v=${timestamp}` : `${logo}?v=${timestamp}`) : '';
-
-            setSchoolBranding(prev => ({
-              ...prev,
-              name: data.name,
-              logo: logoWithCacheBust,
-            }));
-          }
-        }
-      } catch (err) {
-        console.error('Fatal error in fetchBranding:', err);
-      }
-    };
-    fetchBranding();
-  }, [user?.schoolId]);
+    setLogoError(false);
+  }, [branding]);
 
   // Handle mandatory setup for ALL roles (PWA, Notifications)
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
@@ -66,11 +49,7 @@ export default function AppLayout({ children }: Props) {
   // Show a non-blocking toast reminder if user is in browser but already logged in
   useEffect(() => {
     if (user && !isPWA) {
-      // toast({
-      //   title: "💡 هل ترغب في تجربة أفضل؟",
-      //   description: "يمكنك تثبيت التطبيق على جهازك للوصول السريع واستلام الإشعارات.",
-      //   duration: 10000,
-      // });
+      // Logic for PWA reminder could go here if needed in future
     }
   }, [user, isPWA]);
 
@@ -94,26 +73,24 @@ export default function AppLayout({ children }: Props) {
   }, [searchQuery]);
 
   return (
-    <div className="min-h-screen bg-[#FDFEFF] flex flex-col lg:flex-row font-cairo selection:bg-primary/20 overflow-x-hidden relative" dir="rtl">
+    <div className="min-h-screen-safe bg-[#FDFEFF] flex flex-col lg:flex-row font-cairo selection:bg-primary/20 overflow-x-hidden relative" dir="rtl">
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
       
       <GlobalAnnouncement />
+      <GlobalSyncIndicator />
 
 
       {/* Mobile Glass Header */}
       <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900">
-            {schoolBranding.logo ? (
+            {schoolBranding.logo && !logoError ? (
               <img 
                 src={schoolBranding.logo} 
                 alt="School Logo" 
                 className="w-full h-full object-contain"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                  setSchoolBranding(prev => ({ ...prev, logo: '' }));
-                }}
+                onError={() => setLogoError(true)}
               />
             ) : (
               <BookOpen className="w-5 h-5" />
@@ -149,7 +126,7 @@ export default function AppLayout({ children }: Props) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden pb-24 lg:pb-0 transition-all duration-700">
+      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden pb-24 lg:pb-0 pb-safe transition-all duration-700">
         {/* Abstract Background Gradients */}
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
