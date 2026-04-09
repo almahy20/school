@@ -32,7 +32,8 @@ export default function AttendancePage() {
 
   // ── Queries ──
   const { data: branding } = useBranding();
-  const { data: classes = [], isLoading: classesLoading } = useClasses();
+  const { data: classesData, isLoading: classesLoading } = useClasses();
+  const classes: Array<{id: string; name: string}> = classesData?.data || [];
   const { data: dbAttendance = [], isLoading: attendanceLoading, error, refetch, isRefetching } = useClassAttendance(selectedClassId, date);
 
   // Local state for pending attendance changes

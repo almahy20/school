@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
@@ -28,23 +28,38 @@ import {
   DialogTrigger 
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import DataPagination from '@/components/ui/DataPagination';
+
+const PAGE_SIZE = 12;
 
 export default function UsersManagementPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ fullName: '', phone: '' });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ fullName: '', phone: '', password: '', role: 'parent' as AppRole });
+  const [page, setPage] = useState(1);
+  const [roleFilter, setRoleFilter] = useState('الكل');
+
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // ── Queries ──
   const { 
-    data: users = [], 
+    data, 
     isLoading: loading, 
     error, 
     refetch 
-  } = useUsers();
+  } = useUsers(page, PAGE_SIZE, debouncedSearch, roleFilter);
+
+  const users = data?.data || [];
+  const totalItems = data?.count || 0;
 
   // ── Mutations ──
   const createUserMutation = useCreateUser();
@@ -53,12 +68,8 @@ export default function UsersManagementPage() {
   const updateStatusMutation = useUpdateUserStatus();
   const updateProfileMutation = useUpdateUserProfile();
 
-  const filteredUsers = useMemo(() => {
-    return users.filter(u => 
-      u.fullName.toLowerCase().includes(search.toLowerCase()) || 
-      u.phone.includes(search)
-    );
-  }, [users, search]);
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleRoleFilter = (val: string) => { setRoleFilter(val); setPage(1); };
 
   const handleDelete = async (userId: string) => {
     if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً من قاعدة البيانات والخدمات السحابية؟')) return;
@@ -176,14 +187,28 @@ export default function UsersManagementPage() {
           </div>
         </header>
 
-        <div className="relative group w-full lg:max-w-2xl self-start">
-           <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-           <Input 
-             placeholder="البحث بالاسم أو رقم الهاتف..." 
-             value={search}
-             onChange={e => setSearch(e.target.value)}
-             className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white text-base font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5 transition-all text-right" 
-           />
+        <div className="flex flex-col lg:flex-row gap-6 items-center">
+          <div className="relative group w-full lg:max-w-2xl text-right">
+             <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+             <Input 
+               placeholder="البحث بالاسم أو رقم الهاتف..." 
+               value={search}
+               onChange={e => handleSearch(e.target.value)}
+               className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white text-base font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5 transition-all text-right" 
+             />
+          </div>
+          
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+             {['الكل', 'admin', 'teacher', 'parent'].map(role => (
+               <button key={role} onClick={() => handleRoleFilter(role)}
+                 className={cn(
+                   "px-6 py-2.5 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
+                   roleFilter === role ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-white text-slate-400 font-bold"
+                 )}>
+                 {role === 'admin' ? 'مدراء' : role === 'teacher' ? 'معلمون' : role === 'parent' ? 'أولياء أمور' : 'الكل'}
+               </button>
+             ))}
+          </div>
         </div>
 
         <QueryStateHandler
@@ -191,23 +216,40 @@ export default function UsersManagementPage() {
           error={error}
           data={users}
           onRetry={refetch}
-          isEmpty={filteredUsers.length === 0}
+          isEmpty={users.length === 0}
           loadingMessage="جاري مزامنة بيانات الكوادر..."
           emptyMessage="لم يتم العثور على مستخدمين يطابقون بحثك."
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-             {filteredUsers.map(u => (
-               <ManagedUserCard 
-                 key={u.id} 
-                 user={u} 
-                 currentAdminId={currentUser?.id}
-                 onDelete={handleDelete}
-                 onRoleChange={handleRoleChange}
-                 onStatusChange={handleStatusChange}
-                 onEditProfile={(u) => { setEditingId(u.id); setEditForm({ fullName: u.fullName, phone: u.phone }); }}
-                 isUpdating={deleteUserMutation.isPending || updateRoleMutation.isPending || updateStatusMutation.isPending}
-               />
-             ))}
+          <div className="space-y-10">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} مستخدم متاح — الصفحة {page}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+               {users.map(u => (
+                 <ManagedUserCard 
+                   key={u.id} 
+                   user={u} 
+                   currentAdminId={currentUser?.id}
+                   onDelete={handleDelete}
+                   onRoleChange={handleRoleChange}
+                   onStatusChange={handleStatusChange}
+                   onEditProfile={(u: any) => { setEditingId(u.id); setEditForm({ fullName: u.fullName, phone: u.phone }); }}
+                   isUpdating={deleteUserMutation.isPending || updateRoleMutation.isPending || updateStatusMutation.isPending}
+                 />
+               ))}
+            </div>
+
+            <div className="pt-4">
+              <DataPagination
+                currentPage={page}
+                totalItems={totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
           </div>
         </QueryStateHandler>
       </div>

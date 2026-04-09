@@ -16,8 +16,14 @@ export interface Student {
 }
 
 // ─── Fetch function ───────────────────────────────────────────────────────────
-async function fetchStudents(user: AppUser | null): Promise<Student[]> {
-  if (!user?.isSuperAdmin && !user?.schoolId) return [];
+async function fetchStudents(
+  user: AppUser | null,
+  page = 1,
+  pageSize = 15,
+  search = '',
+  className = 'الكل'
+): Promise<{ data: Student[]; count: number }> {
+  if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
 
   let teacherClassIds: string[] = [];
   if (user.role === 'teacher') {
@@ -29,44 +35,60 @@ async function fetchStudents(user: AppUser | null): Promise<Student[]> {
     if (teacherClasses && teacherClasses.length > 0) {
       teacherClassIds = teacherClasses.map(c => c.id);
     } else {
-      return []; // Teacher has no classes, so no students
+      return { data: [], count: 0 };
     }
   }
 
-  const q = supabase.from('students').select('*, classes(*)');
+  // نحسن الاستعلام باختيار الأعمدة المطلوبة فقط واستخدام التجزئة في قاعدة البيانات
+  let q = supabase
+    .from('students')
+    .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+
   if (!user.isSuperAdmin && user.schoolId) {
-    q.eq('school_id', user.schoolId);
+    q = q.eq('school_id', user.schoolId);
   }
   
   if (user.role === 'teacher' && teacherClassIds.length > 0) {
-    q.in('class_id', teacherClassIds);
+    q = q.in('class_id', teacherClassIds);
   }
 
-  const { data, error } = await q.order('name');
+  // إضافة البحث من جهة الخادم
+  if (search) {
+    q = q.ilike('name', `%${search}%`);
+  }
+
+  // إضافة فلترة الفصل من جهة الخادم
+  if (className !== 'الكل') {
+    q = q.filter('classes.name', 'eq', className);
+  }
+
+  // إضافة التجزئة (Pagination)
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  
+  const { data, error, count } = await q
+    .order('name')
+    .range(from, to);
+
   if (error) throw error;
-  return data || [];
+  return { data: (data || []) as Student[], count: count || 0 };
 }
 
 // ─── useStudents Hook ─────────────────────────────────────────────────────────
-export function useStudents() {
+export function useStudents(page = 1, pageSize = 15, search = '', className = 'الكل') {
   const { user } = useAuth();
   
-  // توحيد queryKey ليكون ثابتًا (['students']) لتجنب الفقدان المتكرر للكاش عند إعادة تحميل الصفحة أو تأخر تحميل الـ user.
-  // الدالة queryFn لن تتأثر لأن الـ query Client سيتم مسحه عند تسجيل الخروج.
-  const queryKey = ['students'];
+  // تضمين البارامترات في الـ queryKey لضمان التحديث عند تغيير الصفحة أو البحث
+  const queryKey = ['students', user?.schoolId, page, pageSize, search, className];
   
   return useQuery({
     queryKey,
-    queryFn: () => fetchStudents(user),
-    // تأخير طلب البيانات من الشبكة حتى يتم تحميل الـ user.
-    // وبما أن المفتاح ثابت، سيقوم React Query بعرض البيانات المخزنة محلياً فوراً أثناء الانتظار!
+    queryFn: () => fetchStudents(user, page, pageSize, search, className),
     enabled: !!user?.id, 
-    staleTime: 0, 
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000, // زيادة staleTime لتقليل الطلبات المتكررة
+    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    // الحفاظ على بيانات الكاش السابقة لضمان عدم وميض الشاشة عند التحديث
     placeholderData: keepPreviousData,
   });
 }

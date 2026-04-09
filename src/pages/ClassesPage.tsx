@@ -32,47 +32,56 @@ export default function ClassesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { data: rawClasses = [], isLoading: classesLoading, error, refetch, isRefetching } = useClasses();
-  const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
-  const { data: students = [], isLoading: studentsLoading } = useStudents();
-
-  const addMutation = useAddClass();
-  const deleteMutation = useDeleteClass();
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── React Query Hooks ──
+  const { 
+    data: classesData, 
+    isLoading: classesLoading, 
+    error, 
+    refetch, 
+    isRefetching 
+  } = useClasses(page, PAGE_SIZE, debouncedSearch, filterLevel);
+
+  // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي فقط)
+  // يفضل مستقبلاً استخدام joins من الخادم مباشرة لكل ما هو ممكن
+  const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
+  const teachers = teachersData?.data || [];
+  const { data: studentsData, isLoading: studentsLoading } = useStudents(1, 1000, '', 'الكل');
+  const students = studentsData?.data || [];
+
+  const addMutation = useAddClass();
+  const deleteMutation = useDeleteClass();
+
   // Enrich classes with teacher name and student count
-  const enrichedClasses = useMemo(() => {
-    return rawClasses.map(c => ({
+  const classes = useMemo(() => {
+    return (classesData?.data || []).map(c => ({
       ...c,
-      teacher_name: teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
+      teacher_name: (c as any).profiles?.full_name || teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
       student_count: students.filter(s => s.class_id === c.id).length
     }));
-  }, [rawClasses, teachers, students]);
+  }, [classesData, teachers, students]);
 
-  const loading = classesLoading || teachersLoading || studentsLoading;
+  const totalItems = classesData?.count || 0;
+  const loading = classesLoading || (teachersLoading && !classesData) || (studentsLoading && !classesData);
 
-  const gradeLevels = useMemo(() => ['الكل', ...new Set(enrichedClasses.map(c => c.grade_level).filter(Boolean) as string[])], [enrichedClasses]);
-  const filtered = useMemo(() => enrichedClasses.filter(c => {
-    const matchSearch = !search || c.name.includes(search) || (c.teacher_name || '').includes(search);
-    const matchLevel = filterLevel === 'الكل' || c.grade_level === filterLevel;
-    return matchSearch && matchLevel;
-  }), [enrichedClasses, search, filterLevel]);
+  // نستخدم قائمة المراحل من الخادم أو ثابتة بدلاً من استنتاجها من البيانات المجزأة
+  const gradeLevels = useMemo(() => ['الكل', 'الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس'], []);
 
-  const totalItems = filtered.length;
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-
-  // Reset page when search or filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, filterLevel]);  return (
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleFilterChange = (val: string) => { setFilterLevel(val); setPage(1); };  return (
     <AppLayout>
       <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
         {/* Premium Header - Scaled Down */}
@@ -109,7 +118,7 @@ export default function ClassesPage() {
             {gradeLevels.map(level => (
               <button 
                 key={level} 
-                onClick={() => setFilterLevel(level)}
+                onClick={() => handleFilterChange(level)}
                 className={cn(
                   "px-6 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border shadow-sm shrink-0",
                   filterLevel === level
@@ -125,12 +134,12 @@ export default function ClassesPage() {
         <QueryStateHandler
           loading={loading}
           error={error}
-          data={rawClasses}
+          data={classesData?.data || []}
           onRetry={refetch}
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات الفصول..."
           errorMessage="فشل تحميل قائمة الفصول."
-          isEmpty={filtered.length === 0}
+          isEmpty={classes.length === 0}
         >
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
@@ -139,7 +148,7 @@ export default function ClassesPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.map(c => (
+              {classes.map(c => (
                 <ClassCard key={c.id} classItem={c as any} onClick={() => navigate(`/classes/${c.id}`)} />
               ))}
             </div>

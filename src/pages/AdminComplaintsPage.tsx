@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -13,19 +13,33 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useComplaints, useUpsertComplaint } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import DataPagination from '@/components/ui/DataPagination';
+
+const PAGE_SIZE = 10;
 
 export default function AdminComplaintsPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
+  const [page, setPage] = useState(1);
+
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // ── Queries ──
   const { 
-    data: complaints = [], 
+    data, 
     isLoading: loading, 
     error, 
     refetch 
-  } = useComplaints();
+  } = useComplaints(page, PAGE_SIZE, debouncedSearch, filterStatus);
+
+  const complaints = data?.data || [];
+  const totalItems = data?.count || 0;
 
   // ── Mutations ──
   const upsertComplaintMutation = useUpsertComplaint();
@@ -43,14 +57,8 @@ export default function AdminComplaintsPage() {
     }
   };
 
-  const filtered = useMemo(() => {
-    return complaints.filter(c => {
-      const matchSearch = c.content.toLowerCase().includes(search.toLowerCase()) || 
-                        c.parent_name?.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = filterStatus === 'الكل' || c.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [complaints, search, filterStatus]);
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleFilterChange = (val: string) => { setFilterStatus(val); setPage(1); };
 
   return (
     <AppLayout>
@@ -71,14 +79,14 @@ export default function AdminComplaintsPage() {
               <Input 
                 placeholder="بحث بالمحتوى أو اسم ولي الأمر..." 
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => handleSearch(e.target.value)}
                 className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
               />
            </div>
            
            <div className="lg:col-span-2 flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide justify-end">
               {['الكل', 'pending', 'in_progress', 'resolved'].map(status => (
-                <button key={status} onClick={() => setFilterStatus(status)}
+                <button key={status} onClick={() => handleFilterChange(status)}
                   className={cn(
                     "px-5 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
                     filterStatus === status ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-white text-slate-400"
@@ -94,14 +102,31 @@ export default function AdminComplaintsPage() {
           error={error}
           data={complaints}
           onRetry={refetch}
-          isEmpty={filtered.length === 0}
+          isEmpty={complaints.length === 0}
           loadingMessage="جاري مزامنة البلاغات..."
           emptyMessage={search ? 'لم نجد نتائج مطابقة لطلبك' : 'لا توجد شكاوى معلقة حالياً'}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filtered.map(c => (
-              <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} isUpdating={upsertComplaintMutation.isPending} />
-            ))}
+          <div className="space-y-10">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} بلاغ متاح — الصفحة {page}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {complaints.map(c => (
+                <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} isUpdating={upsertComplaintMutation.isPending} />
+              ))}
+            </div>
+
+            <div className="pt-4">
+              <DataPagination
+                currentPage={page}
+                totalItems={totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
           </div>
         </QueryStateHandler>
       </div>

@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMemo } from 'react';
 
 export interface ExamTemplate {
   id: string;
@@ -24,46 +24,52 @@ export interface StudentGrade {
   gradeId?: string;
 }
 
-
-
-export function useExamTemplates(classId: string | null, subject: string | null) {
+export function useExamTemplates(classId: string | null, subject: string | null, page = 1, pageSize = 10) {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['exam-templates', user?.schoolId, classId, subject], [user?.schoolId, classId, subject]);
+  const queryKey = ['exam-templates', user?.schoolId, classId, subject, page, pageSize];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.schoolId || !classId) return [];
-      let query = supabase
+      if (!user?.schoolId || !classId) return { data: [], count: 0 };
+      
+      let q = supabase
         .from('exam_templates')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('school_id', user.schoolId)
         .eq('class_id', classId);
       
       if (subject) {
-        query = query.eq('subject', subject);
+        q = q.eq('subject', subject);
       }
       
-      const { data, error } = await query.order('created_at', { ascending: false });
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await q
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
       if (error) throw error;
-      return (data as ExamTemplate[]) || [];
+      return { data: (data as ExamTemplate[]) || [], count: count || 0 };
     },
     enabled: !!(user?.schoolId && classId),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
 export function useStudentGrades(templateId: string | null, classId: string | null) {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['student-grades', templateId, classId], [templateId, classId]);
+  const queryKey = ['student-grades', templateId, classId];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!user?.schoolId || !classId || !templateId) return [];
       
-      // Fetch students in class
+      // Fetch students in class (usually small enough for a class, but we could paginate if needed)
       const { data: students, error: sError } = await supabase
         .from('students')
         .select('id, name')
@@ -91,8 +97,9 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
       }) as StudentGrade[];
     },
     enabled: !!(user?.schoolId && classId && templateId),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

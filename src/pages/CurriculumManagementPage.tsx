@@ -48,7 +48,8 @@ export default function CurriculumManagementPage() {
 
   // ── Queries ──
   const { data: curriculums = [], isLoading: curriculumsLoading, error: curriculumsError, refetch: refetchCurriculums } = useCurriculums();
-  const { data: classes = [], isLoading: classesLoading } = useClasses();
+    const { data: classesData, isLoading: classesLoading } = useClasses();
+    const classes = (classesData?.data || []) as Array<{id: string; name: string}>;
   const { data: curriculumSubjects = [], isLoading: subjectsLoading, error: subjectsError, refetch: refetchSubjects } = useCurriculumSubjects(selectedCurriculum?.id || null);
 
   // ── Mutations ──

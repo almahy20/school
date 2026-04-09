@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { sendPushToUser } from '@/utils/pushNotifications';
+import DataPagination from '@/components/ui/DataPagination';
 
 interface ExamTemplate {
   id: string;
@@ -51,10 +52,13 @@ export default function GradesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
+  const [templatesPage, setTemplatesPage] = useState(1);
+  const TEMPLATES_PAGE_SIZE = 8;
 
   // ── Queries ──
   const { data: branding } = useBranding();
-  const { data: classes = [], isLoading: classesLoading, error: classesError, refetch: refetchClasses } = useClasses();
+  const { data: classesData, isLoading: classesLoading, error: classesError, refetch: refetchClasses } = useClasses();
+  const classes: Array<{id: string; name: string; curriculum_id?: string | null}> = classesData?.data || [];
   
   const selectedClass = useMemo(() => 
     classes.find(c => c.id === selectedClassId), 
@@ -62,8 +66,23 @@ export default function GradesPage() {
   );
 
   const { data: subjects = [], isLoading: subjectsLoading, error: subjectsError } = useCurriculumSubjects(selectedClass?.curriculum_id || null);
-  const { data: templates = [], isLoading: templatesLoading, error: templatesError } = useExamTemplates(selectedClassId, selectedSubject);
-  const { data: dbGrades = [], isLoading: gradesLoading, error: gradesError, refetch: refetchGrades, isRefetching } = useStudentGrades(selectedTemplate?.id || null, selectedClassId);
+  
+  const { 
+    data: templatesData, 
+    isLoading: templatesLoading, 
+    error: templatesError 
+  } = useExamTemplates(selectedClassId, selectedSubject, templatesPage, TEMPLATES_PAGE_SIZE);
+  
+  const templates = templatesData?.data || [];
+  const totalTemplates = templatesData?.count || 0;
+
+  const { 
+    data: dbGrades = [], 
+    isLoading: gradesLoading, 
+    error: gradesError, 
+    refetch: refetchGrades, 
+    isRefetching 
+  } = useStudentGrades(selectedTemplate?.id || null, selectedClassId);
 
   // Local state for pending grade changes
   const [localGrades, setLocalGrades] = useState<StudentGrade[]>([]);
@@ -226,45 +245,58 @@ export default function GradesPage() {
                     <div className="bg-white/40 backdrop-blur-sm border border-dashed border-slate-200 p-12 text-center rounded-[32px]">
                        <p className="text-slate-400 font-black text-[9px] uppercase tracking-widest opacity-60">لا توجد اختبارات لهذه المادة</p>
                     </div>
-                  ) : templates.map(t => {
-                    const isSelected = selectedTemplate?.id === t.id;
-                    return (
-                      <div key={t.id}
-                        onClick={() => setSelectedTemplate(t)}
-                        className={cn(
-                          "premium-card p-5 cursor-pointer transition-all duration-500 overflow-hidden relative group",
-                          isSelected 
-                            ? "bg-slate-900 text-white shadow-xl shadow-slate-200 border-none translate-x-2 scale-[1.03]" 
-                            : "hover:translate-x-2 shadow-sm"
-                        )}>
-                        <div className="flex items-start justify-between gap-4 mb-3 relative z-10">
-                           <div className="flex-1">
-                              <h3 className={cn("text-base font-black tracking-tight", isSelected ? "text-white" : "text-slate-900")}>{t.title}</h3>
-                              <p className={cn("text-[8px] uppercase font-black tracking-widest mt-1", isSelected ? "text-indigo-300" : "text-slate-400")}>{t.subject} • {t.term}</p>
-                           </div>
-                           <button onClick={e => { e.stopPropagation(); handleDeleteTemplate(t.id); }}
-                             className={cn(
-                               "w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0",
-                               isSelected ? "bg-white/10 text-white/40 hover:bg-rose-500/20 hover:text-rose-400" : "bg-slate-50 text-slate-300 hover:text-rose-500"
-                             )}>
-                             <Trash2 className="w-4 h-4" />
-                           </button>
-                        </div>
-                        <div className="flex items-center gap-2 relative z-10 border-t pt-3 mt-1 border-white/5 disabled:border-slate-50">
-                            <span className={cn(
-                                "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest",
-                                isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500"
+                  ) : (
+                    <>
+                      {templates.map(t => {
+                        const isSelected = selectedTemplate?.id === t.id;
+                        return (
+                          <div key={t.id}
+                            onClick={() => setSelectedTemplate(t)}
+                            className={cn(
+                              "premium-card p-5 cursor-pointer transition-all duration-500 overflow-hidden relative group",
+                              isSelected 
+                                ? "bg-slate-900 text-white shadow-xl shadow-slate-200 border-none translate-x-2 scale-[1.03]" 
+                                : "hover:translate-x-2 shadow-sm"
                             )}>
-                              {t.exam_type === 'daily' ? 'يومي' : t.exam_type === 'monthly' ? 'شهري' : 'نهائي'}
-                            </span>
-                            <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>الدرجة: {t.max_score}</span>
-                        </div>
-                        {isSelected && (
-                          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/20 rounded-bl-[80px] pointer-events-none" />
-                        )}
+                            <div className="flex items-start justify-between gap-4 mb-3 relative z-10">
+                               <div className="flex-1">
+                                  <h3 className={cn("text-base font-black tracking-tight", isSelected ? "text-white" : "text-slate-900")}>{t.title}</h3>
+                                  <p className={cn("text-[8px] uppercase font-black tracking-widest mt-1", isSelected ? "text-indigo-300" : "text-slate-400")}>{t.subject} • {t.term}</p>
+                               </div>
+                               <button onClick={e => { e.stopPropagation(); handleDeleteTemplate(t.id); }}
+                                 className={cn(
+                                   "w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0",
+                                   isSelected ? "bg-white/10 text-white/40 hover:bg-rose-500/20 hover:text-rose-400" : "bg-slate-50 text-slate-300 hover:text-rose-500"
+                                 )}>
+                                 <Trash2 className="w-4 h-4" />
+                               </button>
+                            </div>
+                            <div className="flex items-center gap-2 relative z-10 border-t pt-3 mt-1 border-white/5 disabled:border-slate-50">
+                                <span className={cn(
+                                    "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest",
+                                    isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500"
+                                )}>
+                                  {t.exam_type === 'daily' ? 'يومي' : t.exam_type === 'monthly' ? 'شهري' : 'نهائي'}
+                                </span>
+                                <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>الدرجة: {t.max_score}</span>
+                            </div>
+                            {isSelected && (
+                              <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/20 rounded-bl-[80px] pointer-events-none" />
+                            )}
+                          </div>
+                        );
+                      })}
+                      
+                      <div className="mt-4 pt-4 border-t border-slate-50">
+                        <DataPagination
+                          currentPage={templatesPage}
+                          totalItems={totalTemplates}
+                          pageSize={TEMPLATES_PAGE_SIZE}
+                          onPageChange={setTemplatesPage}
+                        />
                       </div>
-                    );
-                  })}
+                    </>
+                  )}
                </div>
             </div>
 

@@ -1,8 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
-import { useMemo } from 'react';
 
 export interface ManagedUser {
   id: string;
@@ -30,32 +29,39 @@ async function callAdminApi(action: string, userId?: string, data?: Record<strin
   }
 }
 
-export function useUsers() {
+export function useUsers(page = 1, pageSize = 15, search = '', roleFilter = 'الكل') {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['managed-users', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
+  const queryKey = ['managed-users', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, roleFilter];
   
-    
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.isSuperAdmin && !user?.schoolId) return [];
+      if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
       
-      const profileQuery = supabase.from('profiles').select('*');
-      const roleQuery = supabase.from('user_roles').select('*');
+      let profileQ = supabase.from('profiles').select('*', { count: 'exact' });
+      let roleQ = supabase.from('user_roles').select('*');
       
       if (!user?.isSuperAdmin && user?.schoolId) {
-        profileQuery.eq('school_id', user.schoolId);
-        roleQuery.eq('school_id', user.schoolId);
+        profileQ = profileQ.eq('school_id', user.schoolId);
+        roleQ = roleQ.eq('school_id', user.schoolId);
       }
 
-      const [{ data: profiles }, { data: roles }, authData] = await Promise.all([
-        profileQuery,
-        roleQuery,
+      if (search) {
+        profileQ = profileQ.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
+      }
+
+      // تطبيق التجزئة على البروفايلات
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      
+      const [{ data: profiles, count }, { data: roles }, authData] = await Promise.all([
+        profileQ.order('created_at', { ascending: false }).range(from, to),
+        roleQ,
         callAdminApi('list').catch(err => ({ error: err.message, users: [] }))
       ]);
 
       const authUsers = authData?.users || [];
-      const merged: ManagedUser[] = (profiles || []).map((p) => {
+      const data: ManagedUser[] = (profiles || []).map((p) => {
         const userRole = (roles || []).find((r) => r.user_id === p.id);
         const authUser = authUsers.find((u: any) => u.id === p.id);
         return {
@@ -68,11 +74,21 @@ export function useUsers() {
           createdAt: p.created_at,
         };
       });
-      return merged;
+
+      // إذا كان هناك فلترة حسب الدور، قد نحتاج لفلترة الخادم للحصول على count دقيق، 
+      // ولكن حالياً سنقوم بفلترة النتيجة إذا كانت "الكل" غير مختارة.
+      // ملاحظة: فلترة الدور من جهة الخادم تتطلب join مع user_roles.
+      let filteredData = data;
+      if (roleFilter !== 'الكل') {
+        filteredData = data.filter(u => u.role === roleFilter);
+      }
+
+      return { data: filteredData, count: count || 0 };
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

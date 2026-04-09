@@ -14,10 +14,17 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import DataPagination from '@/components/ui/DataPagination';
+
+const PAGE_SIZE = 15;
 
 export default function NotificationsPage() {
-  const { data: notifications = [], isLoading, error, refetch } = useNotifications();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error, refetch } = useNotifications(page, PAGE_SIZE);
   
+  const notifications = data?.data || [];
+  const totalItems = data?.count || 0;
+
   // ── Mutations ──
   const markAllAsReadMutation = useMarkAllAsRead();
   const deleteNotificationMutation = useDeleteNotification();
@@ -25,6 +32,7 @@ export default function NotificationsPage() {
   const handleMarkAllAsRead = async () => {
     try {
       await markAllAsReadMutation.mutateAsync();
+      refetch();
     } catch (err) {
       console.error('Error marking all as read:', err);
     }
@@ -33,6 +41,7 @@ export default function NotificationsPage() {
   const handleDeleteNotification = async (id: string) => {
     try {
       await deleteNotificationMutation.mutateAsync(id);
+      refetch();
     } catch (err) {
       console.error('Error deleting notification:', err);
     }
@@ -88,67 +97,84 @@ export default function NotificationsPage() {
           loadingMessage="جاري مزامنة التنبيهات الجديدة..."
           emptyMessage="سجلك خالٍ من التنبيهات حالياً. أهلاً بك!"
         >
-          <div className="space-y-4">
-            {notifications.map((n) => {
-              const config = getTypeConfig(n.type);
-              return (
-                <div 
-                  key={n.id}
-                  className={cn(
-                    "bg-white border p-6 rounded-[32px] shadow-sm flex items-start gap-6 group transition-all hover:shadow-md relative overflow-hidden",
-                    !n.is_read ? "border-indigo-100 bg-indigo-50/10" : "border-slate-50"
-                  )}
-                >
-                  {!n.is_read && <div className="absolute top-0 right-0 w-1.5 h-full bg-indigo-600" />}
-                  
-                  <div className={cn(
-                    "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:rotate-6",
-                    config.bg, config.color
-                  )}>
-                    <config.icon className="w-7 h-7" />
-                  </div>
-                  
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between gap-4">
-                      <h3 className={cn("text-base font-black", !n.is_read ? "text-slate-900" : "text-slate-600")}>
-                        {n.title}
-                      </h3>
-                      <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-slate-200" />
-                        {new Date(n.created_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className="text-sm font-medium text-slate-500 leading-relaxed text-right">
-                      {n.message}
-                    </p>
-                    
-                    {!n.is_read && (
-                       <div className="pt-2">
-                          <Badge className="bg-indigo-600 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg shadow-sm shadow-indigo-100">جديد</Badge>
-                       </div>
-                    )}
-                  </div>
+          <div className="space-y-10">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} تنبيه — الصفحة {page}
+              </span>
+            </div>
 
-                  <div className="flex flex-col gap-2">
-                     <button 
-                       onClick={() => handleDeleteNotification(n.id)}
-                       disabled={deleteNotificationMutation.isPending}
-                       className="w-10 h-10 rounded-xl bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-sm"
-                     >
-                       <Trash2 className="w-4.5 h-4.5" />
-                     </button>
-                     {n.metadata?.url && (
-                       <a 
-                         href={n.metadata.url}
-                         className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center transition-all hover:scale-110 shadow-sm"
+            <div className="space-y-4">
+              {notifications.map((n) => {
+                const config = getTypeConfig(n.type);
+                return (
+                  <div 
+                    key={n.id}
+                    className={cn(
+                      "bg-white border p-6 rounded-[32px] shadow-sm flex items-start gap-6 group transition-all hover:shadow-md relative overflow-hidden",
+                      !n.is_read ? "border-indigo-100 bg-indigo-50/10" : "border-slate-50"
+                    )}
+                  >
+                    {!n.is_read && <div className="absolute top-0 right-0 w-1.5 h-full bg-indigo-600" />}
+                    
+                    <div className={cn(
+                      "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:rotate-6",
+                      config.bg, config.color
+                    )}>
+                      <config.icon className="w-7 h-7" />
+                    </div>
+                    
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center justify-between gap-4">
+                        <h3 className={cn("text-base font-black", !n.is_read ? "text-slate-900" : "text-slate-600")}>
+                          {n.title}
+                        </h3>
+                        <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-slate-200" />
+                          {new Date(n.created_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-500 leading-relaxed text-right">
+                        {n.message}
+                      </p>
+                      
+                      {!n.is_read && (
+                         <div className="pt-2">
+                            <Badge className="bg-indigo-600 text-white border-none text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg shadow-sm shadow-indigo-100">جديد</Badge>
+                         </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                       <button 
+                         onClick={() => handleDeleteNotification(n.id)}
+                         disabled={deleteNotificationMutation.isPending}
+                         className="w-10 h-10 rounded-xl bg-slate-50 text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-sm"
                        >
-                          <ChevronLeft className="w-5 h-5" />
-                       </a>
-                     )}
+                         <Trash2 className="w-4.5 h-4.5" />
+                       </button>
+                       {n.metadata?.url && (
+                         <a 
+                           href={n.metadata.url}
+                           className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center transition-all hover:scale-110 shadow-sm"
+                         >
+                            <ChevronLeft className="w-5 h-5" />
+                         </a>
+                       )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            <div className="pt-4">
+              <DataPagination
+                currentPage={page}
+                totalItems={totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
           </div>
         </QueryStateHandler>
         

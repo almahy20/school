@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { ShieldAlert, WifiOff, RefreshCw } from 'lucide-react';
 import { queryClient } from '@/lib/queryClient';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 type ConnectionStatus = 'online' | 'offline' | 'error';
 
@@ -60,18 +61,41 @@ export function HealthMonitor() {
 
     const handleFocusOrVisible = async () => {
       if (document.visibilityState === 'visible') {
-        // Just check connection, React Query handles the focus refetching automatically
+        console.log('👀 Tab visible/focused, validating health...');
+        
+        // Step 1: Check connection status
         const newStatus = await checkConnection();
         setStatus(newStatus);
         
         if (newStatus === 'online') {
+          // Step 2: Validate session
           await validateSession();
+          
+          // Step 3: Resync realtime channels (wait for them to be healthy)
+          await realtimeEngine.resyncAll();
+          
+          // Step 4: Small delay to ensure channels are ready before refetching
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Step 5: Resume any paused mutations (writes that failed while offline)
+          await queryClient.resumePausedMutations();
+          
+          // Step 6: Invalidate active queries to trigger refetch
+          refetchAll();
+          
+          // Track that we recovered from offline
+          if (status === 'offline' || status === 'error') {
+            setWasOffline(true);
+            setTimeout(() => setWasOffline(false), 3000);
+          }
         }
       }
     };
 
     window.addEventListener('online', () => setStatus('online'));
     window.addEventListener('offline', () => setStatus('offline'));
+    window.addEventListener('visibilitychange', handleFocusOrVisible);
+    window.addEventListener('focus', handleFocusOrVisible);
     
     // Periodic health check every 60s
     const interval = setInterval(async () => {
@@ -87,6 +111,8 @@ export function HealthMonitor() {
       if (currentTimer) clearTimeout(currentTimer);
       window.removeEventListener('online', () => setStatus('online'));
       window.removeEventListener('offline', () => setStatus('offline'));
+      window.removeEventListener('visibilitychange', handleFocusOrVisible);
+      window.removeEventListener('focus', handleFocusOrVisible);
     };
   }, [checkConnection, validateSession, status]);
 

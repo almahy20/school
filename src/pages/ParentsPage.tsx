@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -18,22 +18,46 @@ export default function ParentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { data: allParents = [], isLoading: loading, error, refetch, isRefetching } = useParents();
+
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── React Query Hooks ──
+  // جلب أولياء الأمور المعتمدين مع التجزئة والبحث
+  const { 
+    data: parentsData, 
+    isLoading: loading, 
+    error, 
+    refetch, 
+    isRefetching 
+  } = useParents(page, PAGE_SIZE, debouncedSearch, 'معتمد');
+
+  // جلب طلبات الانتظار (قائمة منفصلة عادة ما تكون صغيرة)
+  const { 
+    data: pendingData, 
+    refetch: refetchPending 
+  } = useParents(1, 100, '', 'معلق');
+
   const { data: branding } = useBranding();
   const actionMutation = useParentAction();
   
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-
-  const { parents, pendingParents } = useMemo(() => ({
-    parents: allParents.filter(p => p.approval_status === 'approved'),
-    pendingParents: allParents.filter(p => p.approval_status === 'pending')
-  }), [allParents]);
+  const parents = parentsData?.data || [];
+  const pendingParents = pendingData?.data || [];
+  const totalItems = parentsData?.count || 0;
 
   const handleAction = async (userRoleId: string, status: 'approved' | 'rejected') => {
     try {
       await actionMutation.mutateAsync({ userRoleId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على ولي الأمر' : 'تم رفض الطلب' });
+      refetch();
+      refetchPending();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -48,16 +72,6 @@ export default function ParentsPage() {
     navigator.clipboard.writeText(link);
     toast({ title: 'تم النسخ', description: 'تم نسخ رابط التسجيل للحافظة' });
   };
-
-  const filtered = useMemo(() => parents.filter(p =>
-    (p.full_name || '').includes(search) || (p.phone || '').includes(search)
-  ), [parents, search]);
-
-  const totalItems = filtered.length;
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
@@ -145,12 +159,12 @@ export default function ParentsPage() {
         <QueryStateHandler
           loading={loading}
           error={error}
-          data={allParents}
+          data={parentsData?.data || []}
           onRetry={refetch}
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات أولياء الأمور..."
           errorMessage="فشل تحميل قائمة أولياء الأمور."
-          isEmpty={filtered.length === 0}
+          isEmpty={parents.length === 0}
         >
           <div className="space-y-10">
             <div className="flex items-center justify-between px-1">
@@ -159,7 +173,7 @@ export default function ParentsPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.map(p => (
+              {parents.map(p => (
                 <ParentCard key={p.id} parent={p as any} onClick={() => navigate(`/parents/${p.id}`)} />
               ))}
             </div>

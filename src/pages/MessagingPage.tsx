@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -26,24 +27,28 @@ export default function MessagingPage() {
   const [targetType, setTargetType] = useState<'all' | 'specific'>('all');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // ── Queries ──
   const { data: branding } = useBranding();
+  
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   const { 
-    data: profiles = [], 
+    data: profilesData, 
     isLoading: profilesLoading, 
     error: profilesError, 
     refetch: refetchProfiles 
-  } = useProfiles();
+  } = useProfiles(debouncedSearch, 1, 50); // جلب أول 50 مستخدم مطابق للبحث
+
+  const profiles = profilesData?.data || [];
 
   // ── Mutations ──
   const sendMessageMutation = useSendMessage();
-
-  const filteredProfiles = useMemo(() => {
-    return profiles.filter(p => 
-      p.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [profiles, searchQuery]);
 
   const handleSend = async () => {
     if (!content.trim()) {
@@ -57,9 +62,25 @@ export default function MessagingPage() {
     }
 
     try {
-      const targets = targetType === 'all' 
-        ? profiles.map(p => p.id)
-        : [selectedProfileId];
+      let targets: string[];
+      
+      if (targetType === 'all') {
+        // جلب جميع البروفايلات للبث الجماعي
+        const { data: allProfiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('school_id', user?.schoolId)
+          .neq('id', user?.id);
+        
+        targets = (allProfiles || []).map(p => p.id);
+        
+        if (targets.length === 0) {
+          toast({ title: 'تنبيه', description: 'لا يوجد مستخدمين آخرين لإرسال الرسالة لهم', variant: 'destructive' });
+          return;
+        }
+      } else {
+        targets = [selectedProfileId];
+      }
 
       await sendMessageMutation.mutateAsync({
         targets,
@@ -68,7 +89,7 @@ export default function MessagingPage() {
 
       toast({ 
         title: 'تم الإرسال بنجاح', 
-        description: targetType === 'all' ? 'تم بث الرسالة للجميع بنجاح' : 'تم إرسال الرسالة للمستخدم المختار' 
+        description: targetType === 'all' ? `تم إرسال الرسالة لـ ${targets.length} مستخدم` : 'تم إرسال الرسالة للمستخدم المختار' 
       });
       setContent('');
       setSelectedProfileId('');
@@ -136,12 +157,12 @@ export default function MessagingPage() {
                        error={profilesError}
                        data={profiles}
                        onRetry={refetchProfiles}
-                       isEmpty={filteredProfiles.length === 0}
+                       isEmpty={profiles.length === 0}
                        loadingMessage="جاري جلب القائمة..."
                        emptyMessage="لم يتم العثور على مستخدمين."
                      >
                        <div className="flex flex-wrap gap-3 mt-4 max-h-48 overflow-y-auto p-4 bg-white/50 rounded-3xl border border-slate-50 scrollbar-hide">
-                          {filteredProfiles.map(p => (
+                          {profiles.map(p => (
                             <button key={p.id} onClick={() => setSelectedProfileId(p.id)}
                               className={cn(
                                 "flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-bold border-2 transition-all",

@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
-import { useMemo } from 'react';
 
 export interface Class {
   id: string;
@@ -14,36 +14,79 @@ export interface Class {
   created_at: string;
 }
 
-async function fetchClasses(user: AppUser | null): Promise<Class[]> {
-  if (!user?.isSuperAdmin && !user?.schoolId) return [];
+async function fetchClasses(
+  user: AppUser | null,
+  page = 1,
+  pageSize = 15,
+  search = '',
+  gradeLevel = 'الكل'
+): Promise<{ data: Class[]; count: number }> {
+  if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
 
-  const q = supabase.from('classes').select('*');
+  let q = supabase
+    .from('classes')
+    .select('*', { count: 'exact' });
+
   if (!user.isSuperAdmin && user.schoolId) {
-    q.eq('school_id', user.schoolId);
+    q = q.eq('school_id', user.schoolId);
   }
   if (user.role === 'teacher') {
-    q.eq('teacher_id', user.id);
+    q = q.eq('teacher_id', user.id);
   }
 
-  const { data, error } = await q.order('name');
+  if (search) {
+    q = q.ilike('name', `%${search}%`);
+  }
+
+  if (gradeLevel !== 'الكل') {
+    q = q.eq('grade_level', gradeLevel);
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data, error, count } = await q
+    .order('name')
+    .range(from, to);
+
   if (error) throw error;
-  return data || [];
+  return { data: (data || []) as Class[], count: count || 0 };
 }
 
-export function useClasses() {
+export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id], [user?.schoolId, user?.isSuperAdmin, user?.role, user?.id]);
-  
+  const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id, page, pageSize, search, gradeLevel];
   
   return useQuery({
     queryKey,
-    queryFn: () => fetchClasses(user),
+    queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
+  });
+}
+
+// دالة لجلب كافة الفصول (بدون تجزئة) لاستخدامها في القوائم المنسدلة
+export function useAllClasses() {
+  const { user } = useAuth();
+  const queryKey = ['classes', 'all', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
+  
+  return useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!user?.isSuperAdmin && !user?.schoolId) return [];
+      let q = supabase.from('classes').select('*');
+      if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
+      if (user.role === 'teacher') q = q.eq('teacher_id', user.id);
+      const { data, error } = await q.order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 5 * 60 * 1000,
   });
 }
 

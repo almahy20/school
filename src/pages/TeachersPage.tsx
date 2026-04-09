@@ -35,40 +35,52 @@ export default function TeachersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { data: allTeachers = [], isLoading: loading, error, refetch, isRefetching } = useTeachers();
-  const { data: allClasses = [] } = useClasses();
+
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
+
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── React Query Hooks ──
+  // جلب المعلمين المعتمدين مع التجزئة والبحث
+  const { 
+    data: activeData, 
+    isLoading: loadingActive, 
+    error: errorActive, 
+    refetch: refetchActive, 
+    isRefetching: isRefetchingActive 
+  } = useTeachers(page, PAGE_SIZE, debouncedSearch, 'معتمد');
+
+  // جلب المعلمين المنتظرين (قائمة صغيرة عادةً، نكتفي بالصفحة الأولى)
+  const { 
+    data: pendingData, 
+    isLoading: loadingPending,
+    refetch: refetchPending 
+  } = useTeachers(1, 100, '', 'معلق');
+
+  const { data: allClassesData } = useClasses();
+  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = allClassesData?.data || [];
   const { data: branding } = useBranding();
   
   const deleteMutation = useDeleteTeacher();
   const actionMutation = useTeacherAction();
 
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
-  const [showDetail, setShowDetail] = useState(false);
+  const teachers = useMemo(() => {
+    return (activeData?.data || []).map(t => ({
+      ...t,
+      classes: allClasses.filter(c => c.teacher_id === t.id).map(c => ({ id: c.id, name: c.name }))
+    }));
+  }, [activeData, allClasses]);
 
-  // Split and enrich data
-  const { active: teachers, pending: pendingTeachers } = useMemo(() => {
-    const active = allTeachers
-      .filter(t => t.approval_status === 'approved')
-      .map(t => ({
-        ...t,
-        classes: allClasses.filter(c => c.teacher_id === t.id).map(c => ({ id: c.id, name: c.name }))
-      }));
-    const pending = allTeachers.filter(t => t.approval_status === 'pending');
-    return { active, pending };
-  }, [allTeachers, allClasses]);
-
-  const filtered = useMemo(() =>
-    teachers.filter(t => (t.full_name || '').includes(search)),
-    [teachers, search]
-  );
-
-  const totalItems = filtered.length;
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+  const pendingTeachers = pendingData?.data || [];
+  const totalItems = activeData?.count || 0;
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
@@ -92,6 +104,9 @@ export default function TeachersPage() {
     try {
       await actionMutation.mutateAsync({ userRoleId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
+      // إعادة جلب البيانات بعد الموافقة/الرفض
+      refetchActive();
+      refetchPending();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -191,15 +206,15 @@ export default function TeachersPage() {
         </div>
 
         <QueryStateHandler
-          loading={loading}
-          error={error}
-          data={allTeachers}
-          onRetry={refetch}
-          isRefetching={isRefetching}
+          loading={loadingActive}
+          error={errorActive}
+          data={activeData?.data || []}
+          onRetry={refetchActive}
+          isRefetching={isRefetchingActive}
           loadingMessage="جاري مزامنة بيانات المعلمين..."
           errorMessage="فشل تحميل قائمة المعلمين."
           emptyMessage="لا يوجد معلمون مسجلون حالياً."
-          isEmpty={filtered.length === 0}
+          isEmpty={teachers.length === 0}
         >
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
@@ -208,7 +223,7 @@ export default function TeachersPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.map(t => (
+              {teachers.map(t => (
                 <TeacherCard key={t.id} teacher={t as any} onClick={() => handleShowDetail(t)} />
               ))}
             </div>

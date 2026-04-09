@@ -26,45 +26,61 @@ export default function StudentsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  // ── React Query Hooks ──
-  const { data: students = [], isLoading: loading, error, refetch, isRefetching } = useStudents();
-  const { data: branding } = useBranding();
-  const { data: classes = [] } = useClasses();
-  const deleteMutation = useDeleteStudent();
 
   // ── Local UI state ──
   const [search, setSearch] = useState('');
   const [filterClass, setFilterClass] = useState('الكل');
-  const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
   
   // Detail Modal State
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
-  // Derive classes list for filter dropdown
-  const availableClasses = useMemo(() => [
-    'الكل',
-    ...new Set(students.map(s => (s as any).classes?.name).filter(Boolean) as string[])
-  ], [students]);
+  // ── React Query Hooks ──
+  // نمرر البارامترات للـ hook ليقوم بالفلترة والتجزئة من جهة الخادم
+  const { 
+    data, 
+    isLoading: loading, 
+    error, 
+    refetch, 
+    isRefetching 
+  } = useStudents(page, PAGE_SIZE, debouncedSearch, filterClass);
+  
+  const students = data?.data || [];
+  const totalItems = data?.count || 0;
 
-  // Filter
-  const filtered = useMemo(() => students.filter(s => {
-    const matchSearch = !search || (s.name || '').includes(search);
-    const matchClass = filterClass === 'الكل' || (s as any).classes?.name === filterClass;
-    return matchSearch && matchClass;
-  }), [students, search, filterClass]);
+  const { data: branding } = useBranding();
+  const { data: classesData } = useClasses();
+  const classes: Array<{id: string; name: string; grade_level: string | null}> = classesData?.data || [];
+  const deleteMutation = useDeleteStudent();
 
-  // Paginate (reset to page 1 when filters change)
-  const totalItems = filtered.length;
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const handleFilterChange = (val: string) => { setFilterClass(val); setPage(1); };
-  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  // Derive classes list for filter dropdown (نستخدم قائمة الفصول الفعلية بدلاً من استنتاجها من الطلاب)
+  const availableClasses = useMemo(() => {
+    if (!classes || !Array.isArray(classes)) return ['الكل'];
+    return [
+      'الكل',
+      ...classes.map(c => c.name)
+    ];
+  }, [classes]);
+
+  const handleFilterChange = (val: string) => { 
+    setFilterClass(val); 
+    setPage(1); 
+  };
+
+  const handleSearch = (val: string) => { 
+    setSearch(val); 
+    setPage(1); 
+  };
 
   const handleShowDetail = (student: any) => {
     navigate(`/students/${student.id}`);
@@ -80,11 +96,6 @@ export default function StudentsPage() {
       toast({ title: 'خطأ', description: err.message || 'فشل في حذف الطالب', variant: 'destructive' });
     }
   };
-
-  // Reset page when search/filter changed
-  useEffect(() => {
-    setPage(1);
-  }, [search, filterClass]);
 
   return (
     <AppLayout>
@@ -156,7 +167,7 @@ export default function StudentsPage() {
           loadingMessage="جاري مزامنة بيانات الطلاب..."
           errorMessage="فشل تحميل قائمة الطلاب. يرجى التحقق من اتصالك بالإنترنت."
           emptyMessage="لا يوجد طلاب مسجلين حالياً في المدرسة."
-          isEmpty={filtered.length === 0}
+          isEmpty={students.length === 0}
         >
           <div className="space-y-10">
             <div className="flex items-center justify-between px-6">
@@ -170,7 +181,7 @@ export default function StudentsPage() {
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {paginated.map(s => (
+              {students.map(s => (
                 <StudentCard key={s.id} student={s as any} onClick={() => handleShowDetail(s)} />
               ))}
             </div>

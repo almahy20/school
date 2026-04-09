@@ -59,14 +59,14 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 60 * 1000, // إحصائيات لوحة التحكم لا تحتاج للتحديث كل ثانية
+    gcTime: 15 * 60 * 1000,
   });
 }
 
 export function useTeacherStats() {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['teacher-stats', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
+  const queryKey = ['teacher-stats', user?.id, user?.schoolId];
 
     
   return useQuery({
@@ -96,8 +96,7 @@ export function useTeacherStats() {
       };
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

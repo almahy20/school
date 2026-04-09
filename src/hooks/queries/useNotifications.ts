@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMemo } from 'react';
 
 // Cast supabase to 'any' for the notifications table since it's not in the auto-generated types
 // but exists in the actual database. This is safe because we control the schema.
@@ -19,31 +19,34 @@ export interface Notification {
   created_at: string;
 }
 
-export function useNotifications() {
+export function useNotifications(page = 1, pageSize = 15) {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['notifications', user?.id], [user?.id]);
-  // useRealtimeSync is disabled here because RealtimeNotificationsManager handles the logic globally
-  // 
-  return useQuery<Notification[]>({
+  const queryKey = ['notifications', user?.id, page, pageSize];
+  
+  return useQuery<{ data: Notification[]; count: number }>({
     queryKey,
     queryFn: async () => {
-      if (!user?.id) return [];
-      const { data, error } = await db
+      if (!user?.id) return { data: [], count: 0 };
+      
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await db
         .from('notifications')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .range(from, to);
       
       if (error) throw error;
-      return data || [];
+      return { data: data || [], count: count || 0 };
     },
     enabled: !!user?.id,
-    staleTime: 0,
-    refetchInterval: 15 * 1000, // Polling fallback every 15s in case WS misses events
+    staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    gcTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -16,6 +16,9 @@ import {
 } from '@/hooks/queries';
 import { formatDisplayDate } from '@/lib/date-utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import DataPagination from '@/components/ui/DataPagination';
+
+const PAGE_SIZE = 5;
 
 export default function ParentComplaintsPage() {
   const { user } = useAuth();
@@ -25,14 +28,18 @@ export default function ParentComplaintsPage() {
   const [childId, setChildId] = useState<string>('');
   const [content, setContent] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   // ── Queries ──
   const { 
-    data: complaints = [], 
+    data, 
     isLoading: loading, 
     error, 
     refetch 
-  } = useParentComplaints();
+  } = useParentComplaints(page, PAGE_SIZE);
+
+  const complaints = data?.data || [];
+  const totalItems = data?.count || 0;
   
   const { 
     data: children = [], 
@@ -60,6 +67,7 @@ export default function ParentComplaintsPage() {
       setContent('');
       setChildId('');
       setIsDialogOpen(false);
+      refetch();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -184,63 +192,74 @@ export default function ParentComplaintsPage() {
             loadingMessage="جاري مزامنة بياناتك..."
             emptyMessage="لا يوجد سجل تواصل بعد. نسمع لك دائماً."
           >
-            <div className="grid grid-cols-1 gap-6">
-              {complaints.map(c => {
-                const child = children.find(k => k.id === c.student_id);
-                const hasResponse = !!c.admin_response;
-                const statusConfig = getStatusConfig(c.status);
-                const StatusIcon = statusConfig.icon;
+            <div className="space-y-10">
+              <div className="grid grid-cols-1 gap-6">
+                {complaints.map(c => {
+                  const child = children.find(k => k.id === c.student_id);
+                  const hasResponse = !!c.admin_response;
+                  const statusConfig = getStatusConfig(c.status);
+                  const StatusIcon = statusConfig.icon;
 
-                return (
-                  <div key={c.id} className="group premium-card p-0 overflow-hidden shadow-premium hover:translate-y-[-4px] transition-all duration-500">
-                    <div className="p-8 space-y-6">
-                      <div className="flex items-center justify-between border-b border-slate-50 pb-6 mb-2">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500",
-                            hasResponse ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
-                          )}>
-                            <User className="w-6 h-6" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-3 mb-1">
-                              <span className="font-black text-slate-900 text-lg leading-none">شكوى تابعة لـ {child?.name || 'عامة'}</span>
-                              <Badge className={cn(
-                                "rounded-full px-3 py-1 font-black text-[10px] uppercase tracking-tighter flex items-center gap-1.5 border-none",
-                                statusConfig.color
-                              )}>
-                                <StatusIcon className="w-3 h-3" />
-                                {statusConfig.label}
-                              </Badge>
+                  return (
+                    <div key={c.id} className="group premium-card p-0 overflow-hidden shadow-premium hover:translate-y-[-4px] transition-all duration-500">
+                      <div className="p-8 space-y-6">
+                        <div className="flex items-center justify-between border-b border-slate-50 pb-6 mb-2">
+                          <div className="flex items-center gap-4">
+                            <div className={cn(
+                              "w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500",
+                              hasResponse ? "bg-emerald-50 text-emerald-600" : "bg-indigo-50 text-indigo-600"
+                            )}>
+                              <User className="w-6 h-6" />
                             </div>
-                            <span className="text-[10px] text-slate-400 font-bold">
-                              {formatDisplayDate(c.created_at, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                            </span>
+                            <div>
+                              <div className="flex items-center gap-3 mb-1">
+                                <span className="font-black text-slate-900 text-lg leading-none">شكوى تابعة لـ {child?.name || 'عامة'}</span>
+                                <Badge className={cn(
+                                  "rounded-full px-3 py-1 font-black text-[10px] uppercase tracking-tighter flex items-center gap-1.5 border-none",
+                                  statusConfig.color
+                                )}>
+                                  <StatusIcon className="w-3 h-3" />
+                                  {statusConfig.label}
+                                </Badge>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-bold">
+                                {formatDisplayDate(c.created_at, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
-                        <p className="text-slate-700 font-bold text-lg leading-relaxed text-right whitespace-pre-wrap">{c.content}</p>
-                      </div>
-
-                      {hasResponse && (
-                        <div className="mt-4 animate-in slide-in-from-top-4 duration-500">
-                          <div className="flex items-center gap-3 mb-4 pr-2">
-                            <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                              <Send className="w-4 h-4 text-white -rotate-45" />
-                            </div>
-                            <span className="text-emerald-600 font-black text-xs uppercase tracking-widest leading-none">رد الإدارة المباشر</span>
-                          </div>
-                          <div className="bg-emerald-50/50 p-8 rounded-[32px] border-2 border-emerald-100/50 relative overflow-hidden group/reply">
-                            <p className="text-emerald-900 font-black text-lg leading-relaxed italic pr-4">{c.admin_response}</p>
-                          </div>
+                        <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+                          <p className="text-slate-700 font-bold text-lg leading-relaxed text-right whitespace-pre-wrap">{c.content}</p>
                         </div>
-                      )}
+
+                        {hasResponse && (
+                          <div className="mt-4 animate-in slide-in-from-top-4 duration-500">
+                            <div className="flex items-center gap-3 mb-4 pr-2">
+                              <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                <Send className="w-4 h-4 text-white -rotate-45" />
+                              </div>
+                              <span className="text-emerald-600 font-black text-xs uppercase tracking-widest leading-none">رد الإدارة المباشر</span>
+                            </div>
+                            <div className="bg-emerald-50/50 p-8 rounded-[32px] border-2 border-emerald-100/50 relative overflow-hidden group/reply">
+                              <p className="text-emerald-900 font-black text-lg leading-relaxed italic pr-4">{c.admin_response}</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+
+              <div className="pt-4">
+                <DataPagination
+                  currentPage={page}
+                  totalItems={totalItems}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </div>
             </div>
           </QueryStateHandler>
         </section>

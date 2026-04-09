@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -14,59 +14,97 @@ export interface Parent {
   children?: { id: string; name: string; class_name?: string }[];
 }
 
-async function fetchParents(schoolId: string | null): Promise<Parent[]> {
-  if (!schoolId) return [];
+async function fetchParents(
+  schoolId: string | null,
+  page = 1,
+  pageSize = 15,
+  search = '',
+  status = 'الكل'
+): Promise<{ data: Parent[]; count: number }> {
+  if (!schoolId) return { data: [], count: 0 };
 
-  // Parallel fetch for better performance
-  const [rolesRes, profilesRes, linksRes, classesRes] = await Promise.all([
-    (supabase.from('user_roles') as any).select('id, user_id, approval_status').eq('role', 'parent').eq('school_id', schoolId),
-    supabase.from('profiles').select('*').eq('school_id', schoolId).order('full_name'),
-    supabase.from('student_parents').select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)').eq('school_id', schoolId),
-    supabase.from('classes').select('id, name').eq('school_id', schoolId)
-  ]);
+  // Step 1: Get user_roles for parents first
+  let rolesQuery = (supabase
+    .from('user_roles') as any)
+    .select('user_id, id, approval_status, role, school_id', { count: 'exact' })
+    .eq('role', 'parent')
+    .eq('school_id', schoolId);
 
-  const roles = rolesRes.data || [];
-  const profiles = profilesRes.data || [];
-  const links = linksRes.data || [];
-  const classes = classesRes.data || [];
+  if (status !== 'الكل') {
+    rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
+  }
 
-  if (!roles.length) return [];
+  const { data: userRoles, error: rolesError, count } = await rolesQuery;
 
-  const parentUserIds = new Set(roles.map(r => r.user_id));
+  if (rolesError) throw rolesError;
+  if (!userRoles || userRoles.length === 0) return { data: [], count: 0 };
 
-  return profiles
-    .filter(p => parentUserIds.has(p.id))
-    .map(profile => {
-      const roleRecord = roles.find(r => r.user_id === profile.id);
-      const parentLinks = (links as any[]).filter(l => l.parent_id === profile.id);
-      
-      return {
-        ...profile,
-        approval_status: roleRecord?.approval_status || 'approved',
-        user_role_id: roleRecord?.id,
-        children: parentLinks.map(l => ({
-          id: l.students?.id,
-          name: l.students?.name,
-          class_name: classes.find(c => c.id === l.students?.class_id)?.name
-        })).filter(c => c.id)
-      };
-    }) as Parent[];
+  // Step 2: Get profiles for these parents
+  const userIds = (userRoles as any[]).map(ur => ur.user_id);
+  
+  let profilesQuery = supabase
+    .from('profiles')
+    .select('*')
+    .in('id', userIds);
+
+  if (search) {
+    profilesQuery = profilesQuery.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data: profiles, error: profileError } = await profilesQuery
+    .order('full_name')
+    .range(from, to);
+
+  if (profileError) throw profileError;
+
+  // Step 3: Get children links for these parents
+  const parentIds = (profiles || []).map(p => p.id);
+  const { data: links } = await supabase
+    .from('student_parents')
+    .select('parent_id, students!student_parents_student_id_fkey(id, name, class_id)')
+    .in('parent_id', parentIds);
+
+  const { data: classes } = await supabase
+    .from('classes')
+    .select('id, name')
+    .eq('school_id', schoolId);
+
+  // Step 4: Merge profiles with user_roles and children
+  const data = (profiles || []).map((profile: any) => {
+    const roleRecord = (userRoles as any[]).find((ur: any) => ur.user_id === profile.id);
+    const parentLinks = (links || []).filter(l => l.parent_id === profile.id);
+    
+    return {
+      ...profile,
+      approval_status: roleRecord?.approval_status || 'approved',
+      user_role_id: roleRecord?.id,
+      children: parentLinks.map((l: any) => ({
+        id: l.students?.id,
+        name: l.students?.name,
+        class_name: classes?.find(c => c.id === l.students?.class_id)?.name
+      })).filter(c => c.id)
+    };
+  }) as Parent[];
+
+  return { data, count: count || 0 };
 }
 
-export function useParents() {
+export function useParents(page = 1, pageSize = 15, search = '', status = 'الكل') {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['parents', user?.schoolId], [user?.schoolId]);
-  
+  const queryKey = ['parents', user?.schoolId, page, pageSize, search, status];
     
   return useQuery({
     queryKey,
-    queryFn: () => fetchParents(user?.schoolId || null),
+    queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!user?.schoolId,
-    staleTime: 0,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 

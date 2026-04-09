@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -16,48 +16,80 @@ export interface Teacher {
 }
 
 
-async function fetchTeachers(schoolId: string | null, isSuperAdmin: boolean): Promise<Teacher[]> {
-  // We use "as any" because approval_status might be missing from generated types
-  const { data: teacherRoles, error: rolesError } = await (supabase.from('user_roles') as any)
-    .select('id, user_id, approval_status')
+async function fetchTeachers(
+  schoolId: string | null, 
+  isSuperAdmin: boolean,
+  page = 1,
+  pageSize = 15,
+  search = '',
+  status = 'الكل'
+): Promise<{ data: Teacher[]; count: number }> {
+  // Step 1: Get user_roles for teachers first
+  let rolesQuery = (supabase
+    .from('user_roles') as any)
+    .select('user_id, id, approval_status, role, school_id', { count: 'exact' })
     .eq('role', 'teacher');
 
-  if (rolesError || !teacherRoles?.length) return [];
-
-  const teacherIds = teacherRoles.map((r: any) => r.user_id);
-  const q = supabase.from('profiles').select('*').in('id', teacherIds).order('full_name');
-
   if (!isSuperAdmin && schoolId) {
-    q.eq('school_id', schoolId);
+    rolesQuery = rolesQuery.eq('school_id', schoolId);
   }
 
-  const { data: profiles, error: profileError } = await q;
+  if (status !== 'الكل') {
+    rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
+  }
+
+  const { data: userRoles, error: rolesError, count } = await rolesQuery;
+
+  if (rolesError) throw rolesError;
+  if (!userRoles || userRoles.length === 0) return { data: [], count: 0 };
+
+  // Step 2: Get profiles for these teachers
+  const userIds = userRoles.map(ur => ur.user_id);
+  
+  let profilesQuery = supabase
+    .from('profiles')
+    .select('*')
+    .in('id', userIds);
+
+  if (search) {
+    profilesQuery = profilesQuery.ilike('full_name', `%${search}%`);
+  }
+
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  const { data: profiles, error: profileError } = await profilesQuery
+    .order('full_name')
+    .range(from, to);
+
   if (profileError) throw profileError;
 
-  return (profiles || []).map(profile => {
-    const roleRecord = teacherRoles.find((r: any) => r.user_id === profile.id);
+  // Step 3: Merge profiles with user_roles
+  const data = (profiles || []).map((profile: any) => {
+    const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
     return {
       ...profile,
       approval_status: roleRecord?.approval_status || 'approved',
       user_role_id: roleRecord?.id
     };
   }) as Teacher[];
+
+  return { data, count: count || 0 };
 }
 
-export function useTeachers() {
+export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل') {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['teachers', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
-
+  const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
         
   return useQuery({
     queryKey,
-    queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin),
+    queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    placeholderData: keepPreviousData,
   });
 }
 
