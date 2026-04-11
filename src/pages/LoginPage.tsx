@@ -76,38 +76,38 @@ export default function LoginPage() {
               <BookOpen className="w-10 h-10 text-primary group-hover:rotate-6 transition-transform" />
             )}
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">{schoolBranding.name}</h1>
-          <p className="text-sm font-medium text-slate-400">نظام الإدارة المدرسية الذكي</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight mb-2">{schoolBranding.name}</h1>
+          <p className="text-sm font-medium text-slate-500">نظام الإدارة المدرسية الذكي</p>
         </div>
 
         {/* Login Card */}
-        <div className="bg-white/70 backdrop-blur-2xl rounded-[40px] border border-white shadow-2xl shadow-slate-900/5 p-10 lg:p-12">
+        <div className="bg-white/70 backdrop-blur-2xl rounded-3xl border border-white shadow-2xl shadow-slate-900/5 p-8 sm:p-10 lg:p-12">
           <div className="mb-10 text-center sm:text-right">
              {isDeveloperLogin ? (
                 <>
-                  <h2 className="text-2xl font-bold text-orange-600 mb-2">بوابة المطورين (Super Admin)</h2>
-                  <p className="text-sm font-medium text-slate-400">يرجى تسجيل الدخول للوصول للوحة التحكم المركزية</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-orange-600 mb-2">بوابة المطورين (Super Admin)</h2>
+                  <p className="text-sm font-medium text-slate-500">يرجى تسجيل الدخول للوصول للوحة التحكم المركزية</p>
                 </>
              ) : (
                 <>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-2">تسجيل الدخول</h2>
-                  <p className="text-sm font-medium text-slate-400">أهلاً بك مجدداً، يرجى إدخال بياناتك</p>
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">تسجيل الدخول</h2>
+                  <p className="text-sm font-medium text-slate-500">أهلاً بك مجدداً، يرجى إدخال بياناتك</p>
                 </>
              )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mr-1">رقم الهاتف</label>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mr-1">رقم الهاتف</label>
               <div className="relative group">
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors">
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors">
                   <Phone className="w-full h-full" />
                 </div>
                 <input
                   type="tel"
                   value={phone}
                   onChange={e => { setPhone(e.target.value); setError(''); }}
-                  className="w-full h-14 px-6 pr-14 rounded-2xl border border-slate-100 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all placeholder:text-slate-200 font-bold"
+                  className="w-full h-12 px-5 pr-13 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all placeholder:text-slate-300 font-bold"
                   placeholder="05xxxxxxxx"
                   dir="ltr"
                 />
@@ -115,16 +115,16 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mr-1">كلمة المرور</label>
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mr-1">كلمة المرور</label>
               <div className="relative group">
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-primary transition-colors">
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors">
                   <Lock className="w-full h-full" />
                 </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError(''); }}
-                  className="w-full h-14 px-6 pr-14 rounded-2xl border border-slate-100 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all placeholder:text-slate-200 font-bold"
+                  className="w-full h-12 px-5 pr-13 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-900 focus:outline-none focus:ring-4 focus:ring-primary/5 focus:bg-white focus:border-primary/20 transition-all placeholder:text-slate-300 font-bold"
                   placeholder="••••••••"
                 />
                 <button
@@ -138,11 +138,11 @@ export default function LoginPage() {
             </div>
 
             <div className="flex items-center justify-between gap-4">
-              <button type="button" className="text-xs font-bold text-slate-400 hover:text-primary transition-colors">
+              <button type="button" className="text-xs font-bold text-slate-500 hover:text-primary transition-colors">
                 هل نسيت كلمة المرور؟
               </button>
               <label className="flex items-center gap-2 cursor-pointer group">
-                <span className="text-xs font-bold text-slate-400 group-hover:text-slate-900 transition-colors">تذكرني</span>
+                <span className="text-xs font-bold text-slate-500 group-hover:text-slate-900 transition-colors">تذكرني</span>
                 <div className="relative">
                   <input
                     type="checkbox"
@@ -165,7 +165,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-16 rounded-2xl bg-primary text-white font-bold text-base shadow-xl shadow-primary/20 hover:shadow-2xl hover:translate-y-[-2px] transition-all disabled:opacity-50 active:scale-95 mt-2"
+              className="w-full h-14 rounded-xl bg-primary text-white font-bold text-base shadow-xl shadow-primary/20 hover:shadow-2xl hover:translate-y-[-2px] transition-all disabled:opacity-50 active:scale-95 mt-2"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-3">
@@ -179,14 +179,14 @@ export default function LoginPage() {
 
         {/* Support Section */}
         <div className="mt-10 text-center space-y-6">
-          <p className="text-sm font-medium text-slate-400">
+          <p className="text-sm font-medium text-slate-500">
             ليس لديك حساب حالياً؟{' '}
             <Link to="/signup" className="text-school-primary font-bold hover:underline underline-offset-4 decoration-2">تواصل مع الإدارة</Link>
           </p>
           
           <div className="h-[1px] w-20 bg-slate-200 mx-auto" />
           
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.3em]">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">
             E D A R A · A R A B I Y A · 2 0 2 5
           </p>
         </div>

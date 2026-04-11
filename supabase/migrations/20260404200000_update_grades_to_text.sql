@@ -15,16 +15,25 @@ BEGIN
 END $$;
 
 -- 2. Ensure RLS allows admins to manage everything in their school
+-- FIX: Use direct query instead of get_auth_school_id() which may not exist
 DROP POLICY IF EXISTS "Admins can manage all grades in their school" ON public.grades;
 CREATE POLICY "Admins can manage all grades in their school" ON public.grades
     FOR ALL TO authenticated
     USING (
         public.is_super_admin()
-        OR school_id = public.get_auth_school_id()
+        OR school_id = (
+            SELECT school_id FROM public.profiles 
+            WHERE id = auth.uid() 
+            LIMIT 1
+        )
     )
     WITH CHECK (
         public.is_super_admin()
-        OR school_id = public.get_auth_school_id()
+        OR school_id = (
+            SELECT school_id FROM public.profiles 
+            WHERE id = auth.uid() 
+            LIMIT 1
+        )
     );
 
 DROP POLICY IF EXISTS "Admins can manage all exam templates" ON public.exam_templates;
@@ -32,11 +41,19 @@ CREATE POLICY "Admins can manage all exam templates" ON public.exam_templates
     FOR ALL TO authenticated
     USING (
         public.is_super_admin()
-        OR school_id = public.get_auth_school_id()
+        OR school_id = (
+            SELECT school_id FROM public.profiles 
+            WHERE id = auth.uid() 
+            LIMIT 1
+        )
     )
     WITH CHECK (
         public.is_super_admin()
-        OR school_id = public.get_auth_school_id()
+        OR school_id = (
+            SELECT school_id FROM public.profiles 
+            WHERE id = auth.uid() 
+            LIMIT 1
+        )
     );
 
 NOTIFY pgrst, 'reload schema';

@@ -75,9 +75,14 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       };
     },
     enabled: !!user?.schoolId,
-    staleTime: 30 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 15 * 1000, // ⚡ 15 seconds (was 30s)
+    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
     placeholderData: keepPreviousData,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 

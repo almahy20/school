@@ -8,8 +8,15 @@ export default function WaitingApprovalPage() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+      // Navigation is handled by ProtectedRoute after user state changes
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Force navigation even if logout fails
+      navigate('/login', { replace: true });
+    }
   };
 
   if (user?.approvalStatus === 'approved') {

@@ -9,6 +9,7 @@ import {
   useDeleteRow 
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { cn } from '@/lib/utils';
 
 type TableName = 'students' | 'classes' | 'grades' | 'attendance' | 'student_parents' | 'exam_templates';
 

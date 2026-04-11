@@ -26,13 +26,24 @@ export function useProfile() {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
-      if (error) throw error;
+        .maybeSingle(); // Use maybeSingle() to handle missing profiles gracefully
+      
+      // If error is PGRST116 (no rows), return null instead of throwing
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
       return (data as unknown) as Profile;
     },
     enabled: !!user?.id,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 5 * 1000, // ⚡ 5 seconds
+    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
+    refetchInterval: 10 * 1000, // ⚡ 10 seconds (was 15s)
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 

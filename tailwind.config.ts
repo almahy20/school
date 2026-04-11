@@ -17,6 +17,21 @@ export default {
       fontFamily: {
         cairo: ["Cairo", "sans-serif"],
       },
+      spacing: {
+        'card-padding': '1.5rem',
+        'section-gap': '2rem',
+      },
+      borderRadius: {
+        'card': '1rem',
+        'modal': '1.5rem',
+        'button': '0.75rem',
+      },
+      fontSize: {
+        'page-title': ['1.875rem', { lineHeight: '1.2', fontWeight: '700' }],
+        'card-title': ['1.25rem', { lineHeight: '1.3', fontWeight: '700' }],
+        'body': ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
+        'small': ['0.875rem', { lineHeight: '1.5', fontWeight: '400' }],
+      },
       colors: {
         border: "#e2e8f0",
         input: "#e2e8f0",
@@ -67,6 +82,8 @@ export default {
       boxShadow: {
         premium: "0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05)",
         soft: "0 4px 6px -1px rgb(0 0 0 / 0.02), 0 2px 4px -2px rgb(0 0 0 / 0.02)",
+        'glow-indigo': "0 0 20px rgb(99 102 241 / 0.3)",
+        'glow-emerald': "0 0 20px rgb(16 185 129 / 0.3)",
       },
       keyframes: {
         "accordion-down": {

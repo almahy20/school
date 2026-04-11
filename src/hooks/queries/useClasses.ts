@@ -61,11 +61,14 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = '�
     queryKey,
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 5 * 1000, // ⚡ 5 seconds
+    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    refetchOnMount: true,
     placeholderData: keepPreviousData,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 

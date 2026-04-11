@@ -13,6 +13,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
     lock: (name: string, _timeout: number, acquire: () => Promise<any>) => acquire(),
   },
   global: {
@@ -26,8 +28,12 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     params: {
       eventsPerSecond: 10,
     },
-    heartbeatIntervalMs: 15000,       // Send heartbeat every 15s to keep WS alive
-    reconnectAfterMs: (tries: number) => Math.min(1000 + tries * 2000, 10000), // Exponential backoff up to 10s
-    timeout: 20000,                   // Consider timed out after 20s of no response
+    heartbeatIntervalMs: 10000,       // Send heartbeat every 10s (more frequent)
+    reconnectAfterMs: (tries: number) => {
+      // Aggressive reconnection: 100ms, 200ms, 500ms, 1s, 2s, 5s, 10s
+      const delays = [100, 200, 500, 1000, 2000, 5000, 10000];
+      return delays[Math.min(tries, delays.length - 1)];
+    },
+    timeout: 10000,                   // Timeout after 10s (faster detection)
   },
 });

@@ -14,10 +14,9 @@ export function HealthMonitor() {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refetchAll = useCallback(() => {
-    // React Query's focusManager handles this automatically in web browsers
-    // but we can manually invalidate active queries if we want to be extra sure
-    // during health recovery.
-    queryClient.invalidateQueries({ type: 'active' });
+    // Invalidate ALL queries (not just active) to ensure fresh data on tab return
+    // This forces React Query to refetch everything from the server
+    queryClient.invalidateQueries();
   }, []);
 
   const validateSession = useCallback(async () => {
@@ -59,9 +58,13 @@ export function HealthMonitor() {
   useEffect(() => {
     checkConnection().then(setStatus);
 
+    // Define handlers outside to ensure proper cleanup
+    const handleOnline = () => setStatus('online');
+    const handleOffline = () => setStatus('offline');
+    
     const handleFocusOrVisible = async () => {
       if (document.visibilityState === 'visible') {
-        console.log('👀 Tab visible/focused, validating health...');
+        console.log('👁️ Tab visible/focused, validating health...');
         
         // Step 1: Check connection status
         const newStatus = await checkConnection();
@@ -71,16 +74,32 @@ export function HealthMonitor() {
           // Step 2: Validate session
           await validateSession();
           
-          // Step 3: Resync realtime channels (wait for them to be healthy)
+          // Step 3: Resync realtime channels (RealtimeEngine handles this robustly now)
+          console.log('🔄 Triggering RealtimeEngine resync...');
           await realtimeEngine.resyncAll();
           
           // Step 4: Small delay to ensure channels are ready before refetching
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
-          // Step 5: Resume any paused mutations (writes that failed while offline)
+          // Step 5: Check if resync was successful
+          const resyncStatus = realtimeEngine.getSubscriptionStatus();
+          const healthyChannels = Object.values(resyncStatus).filter((s: any) => s.isHealthy).length;
+          const totalChannels = Object.keys(resyncStatus).length;
+          
+          console.log(`📊 Resync status: ${healthyChannels}/${totalChannels} channels healthy`);
+          
+          // If less than 50% of channels are healthy, log warning but DON'T reload page
+          // React Query's refetchOnWindowFocus will handle data refresh automatically
+          if (totalChannels > 0 && healthyChannels < totalChannels * 0.5) {
+            console.warn(`⚠️ Low healthy channels: ${healthyChannels}/${totalChannels}. RealtimeEngine will auto-recover.`);
+            // Don't force reload - let RealtimeEngine handle reconnection
+            // The user will see a warning banner but data will still load via React Query
+          }
+          
+          // Step 6: Resume any paused mutations (writes that failed while offline)
           await queryClient.resumePausedMutations();
           
-          // Step 6: Invalidate active queries to trigger refetch
+          // Step 7: Invalidate active queries to trigger refetch
           refetchAll();
           
           // Track that we recovered from offline
@@ -88,12 +107,15 @@ export function HealthMonitor() {
             setWasOffline(true);
             setTimeout(() => setWasOffline(false), 3000);
           }
+          
+          console.log('✅ Health check and resync complete');
         }
       }
     };
 
-    window.addEventListener('online', () => setStatus('online'));
-    window.addEventListener('offline', () => setStatus('offline'));
+    // Register listeners with proper references
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
     window.addEventListener('visibilitychange', handleFocusOrVisible);
     window.addEventListener('focus', handleFocusOrVisible);
     
@@ -101,20 +123,36 @@ export function HealthMonitor() {
     const interval = setInterval(async () => {
       if (window.navigator.onLine) {
         const newStatus = await checkConnection();
-        if (newStatus !== status) setStatus(newStatus);
+        if (newStatus !== status) {
+          console.log(`🔄 Connection status changed: ${status} → ${newStatus}`);
+          setStatus(newStatus);
+        }
+        
+        // If we're online but status shows error, try to recover
+        if (newStatus === 'online' && status === 'error') {
+          console.log('🔧 Attempting automatic recovery...');
+          await realtimeEngine.resyncAll();
+          refetchAll();
+        }
       }
     }, 60000);
 
+    // Proper cleanup
     return () => {
       clearInterval(interval);
       const currentTimer = retryTimerRef.current;
       if (currentTimer) clearTimeout(currentTimer);
-      window.removeEventListener('online', () => setStatus('online'));
-      window.removeEventListener('offline', () => setStatus('offline'));
+      
+      // Remove listeners with correct references
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
       window.removeEventListener('visibilitychange', handleFocusOrVisible);
       window.removeEventListener('focus', handleFocusOrVisible);
+      
+      // Note: We don't destroy RealtimeEngine here as it's a singleton
+      // that should persist for the app lifecycle
     };
-  }, [checkConnection, validateSession, status]);
+  }, [checkConnection, validateSession, status, refetchAll]);
 
   // Show "reconnected" green banner briefly
   if (wasOffline && status === 'online') {
@@ -148,6 +186,14 @@ export function HealthMonitor() {
           title="إعادة المحاولة"
         >
           <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+        </button>
+        
+        <button 
+          onClick={() => window.location.reload()} 
+          className="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors"
+          title="إعادة تحميل الصفحة"
+        >
+          <RefreshCw className="w-4 h-4" />
         </button>
       </div>
     </div>

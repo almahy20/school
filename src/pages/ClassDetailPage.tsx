@@ -218,7 +218,7 @@ export default function ClassDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1400px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+      <div className="flex flex-col gap-6 md:gap-8 lg:gap-10 max-w-[1400px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700 px-3 md:px-0" dir="rtl">
         
         <QueryStateHandler
           loading={classLoading}
@@ -228,75 +228,75 @@ export default function ClassDetailPage() {
           loadingMessage="جاري مزامنة سجل الفصل الدراسي..."
         >
           {/* Premium Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 md:gap-8 bg-white/40 backdrop-blur-md p-6 md:p-10 rounded-[32px] md:rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-48 h-48 md:w-64 md:h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             
-            <div className="flex items-center gap-6 relative z-10">
+            <div className="flex items-center gap-4 md:gap-6 relative z-10">
               <button 
                 onClick={() => navigate('/classes')}
-                className="w-14 h-14 rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+                className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
               >
-                 <ArrowRight className="w-6 h-6" />
+                 <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               
-              <div className="flex items-center gap-6">
-                 <div className="w-20 h-20 rounded-[32px] bg-slate-900 text-white flex items-center justify-center shadow-2xl relative group-hover:rotate-3 transition-transform duration-500 shrink-0">
-                    <School className="w-10 h-10" />
+              <div className="flex items-center gap-4 md:gap-6">
+                 <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-[32px] bg-slate-900 text-white flex items-center justify-center shadow-2xl relative group-hover:rotate-3 transition-transform duration-500 shrink-0">
+                    <School className="w-7 h-7 md:w-10 md:h-10" />
                  </div>
-                 <div className="space-y-1">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">فصل {classItem?.name}</h1>
-                    <div className="flex items-center gap-3">
-                      <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[10px] uppercase tracking-widest px-4 py-1.5 rounded-full shadow-sm">
+                 <div className="space-y-1 min-w-0">
+                    <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-none mb-1 md:mb-2 truncate">فصل {classItem?.name}</h1>
+                    <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+                      <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[8px] md:text-[10px] uppercase tracking-widest px-2.5 py-1 md:px-4 md:py-1.5 rounded-full shadow-sm">
                          {classItem?.grade_level || 'المرحلة الأكاديمية'}
                       </Badge>
-                      <span className="text-slate-400 text-[10px] font-bold border-r pr-3 border-slate-200 tracking-tight">معرف الفصل: #{classItem?.id?.slice(0, 8)}</span>
+                      <span className="text-slate-400 text-[8px] md:text-[10px] font-bold border-r pr-2 md:pr-3 border-slate-200 tracking-tight hidden sm:inline">معرف الفصل: #{classItem?.id?.slice(0, 8)}</span>
                     </div>
                  </div>
               </div>
             </div>
             
             {currentUser?.role === 'admin' && (
-              <div className="flex items-center gap-4 relative z-10">
+              <div className="flex items-center gap-3 md:gap-4 relative z-10">
                 <Button 
                   onClick={() => setShowEdit(true)}
-                  className="h-14 px-8 rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-3 text-xs"
+                  className="h-11 md:h-14 px-5 md:px-8 rounded-xl md:rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-2 md:gap-3 text-[10px] md:text-xs"
                 >
-                  <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل الفصل
+                  <Edit2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600" /> <span className="hidden sm:inline">تعديل الفصل</span><span className="sm:hidden">تعديل</span>
                 </Button>
                 <Button 
                   onClick={handleDelete}
                   disabled={deleteClassMutation.isPending}
-                  className="h-14 w-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
+                  className="h-11 md:h-14 w-11 md:w-14 rounded-xl md:rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
                 >
-                  {deleteClassMutation.isPending ? <Loader2 className="w-6 h-6 animate-spin" /> : <Trash2 className="w-6 h-6" />}
+                  {deleteClassMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
                 </Button>
               </div>
             )}
           </header>
 
           {/* Key Indicators Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
              <StatsCard title="إحصائيات الطلاب" value={students.length} sub="طالب نشط" icon={Users} color="indigo" />
              <StatsCard title="القيادة التعليمية" value={teacher?.full_name || 'لم يحدد'} sub="المعلم المسؤول" icon={User} color="emerald" smallValue />
              <StatsCard title="الأداء التنظيمي" value="94%" sub="نسبة الحضور" icon={Activity} color="amber" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <div className="lg:col-span-8 space-y-10">
-                <section className="bg-white border border-slate-50 p-10 rounded-[56px] shadow-xl shadow-slate-100/50 space-y-10">
-                   <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-slate-50 pb-8">
-                      <div className="flex items-center gap-4">
-                         <div className="w-14 h-14 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
-                            <Users className="w-7 h-7" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-10">
+            <div className="lg:col-span-8 space-y-6 md:space-y-8 lg:space-y-10">
+                <section className="bg-white border border-slate-50 p-6 md:p-10 rounded-[32px] md:rounded-[48px] lg:rounded-[56px] shadow-xl shadow-slate-100/50 space-y-6 md:space-y-8 lg:space-y-10">
+                   <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 md:gap-6 border-b border-slate-50 pb-6 md:pb-8">
+                      <div className="flex items-center gap-3 md:gap-4">
+                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl md:rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
+                            <Users className="w-6 h-6 md:w-7 md:h-7" />
                          </div>
                          <div>
-                            <h2 className="text-2xl font-black text-slate-900 mb-1">قائمة طلاب الفصل</h2>
-                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">إجمالي المقيدين: {students.length} شخص</p>
+                            <h2 className="text-lg md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1">قائمة طلاب الفصل</h2>
+                            <p className="text-[8px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">إجمالي المقيدين: {students.length} شخص</p>
                          </div>
                       </div>
                       
                       <div className="relative group w-full sm:w-80">
-                        <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+                        <Search className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
                         <input 
                           type="text" 
                           placeholder="ابحث عن طالب بالاسم..." 

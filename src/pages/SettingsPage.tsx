@@ -55,8 +55,15 @@ export default function SettingsPage() {
   };
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await logout();
+      // Navigation is handled by ProtectedRoute after user state changes
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Force navigation even if logout fails
+      navigate('/login', { replace: true });
+    }
   };
 
   const roleLabel = profile?.role === 'admin' ? 'مدير النظام' : profile?.role === 'teacher' ? 'معلم' : 'ولي أمر';
@@ -64,7 +71,7 @@ export default function SettingsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1200px] mx-auto text-right pb-20">
+      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1200px] mx-auto text-right pb-20 px-2 md:px-0">
         <header className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
              <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xl shadow-slate-200">

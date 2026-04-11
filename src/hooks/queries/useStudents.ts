@@ -85,11 +85,17 @@ export function useStudents(page = 1, pageSize = 15, search = '', className = '�
     queryKey,
     queryFn: () => fetchStudents(user, page, pageSize, search, className),
     enabled: !!user?.id, 
-    staleTime: 30 * 1000, // زيادة staleTime لتقليل الطلبات المتكررة
-    gcTime: 15 * 60 * 1000,
+    // ⚡ SPEED: Reduce from 0 to 5s - prevents excessive refetching
+    staleTime: 5 * 1000, // 5 seconds - fast but not excessive
+    gcTime: 5 * 60 * 1000, // Reduce from 15min to 5min
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
+    refetchOnMount: true,
     placeholderData: keepPreviousData,
+    // ⚡ SPEED: Reduce retry from 3 to 2 for faster failure
+    retry: 2,
+    // ⚡ SPEED: Faster retry delays (0.5s, 1s instead of 1s, 2s)
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 
@@ -267,9 +273,13 @@ export function useStudentParent(studentId: string | null | undefined) {
         .from('profiles')
         .select('*')
         .eq('id', parentLink.parent_id)
-        .single();
+        .maybeSingle();
       
-      if (error) throw error;
+      // Handle missing profile gracefully
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
       return parentProfile;
     },
     enabled: !!studentId,

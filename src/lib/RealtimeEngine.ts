@@ -2,125 +2,713 @@ import { supabase } from '@/integrations/supabase/client';
 import { queryClient } from './queryClient';
 
 /**
- * World-Class Silent Realtime Engine
+ * World-Class Persistent Realtime Engine
  * 
- * هذا المحرك يستمع لقنوات Supabase Realtime بتخفّي، ويقوم عند استلام
- * تحديث جديد أو إضافة لجدول معين، بتعديل نسخة الـ Cache المحلية (React Query)
- * بشكل صامت، دون إجبار التطبيق على عمل Loading Spinners.
+ * محرك Realtime متين وموثوق يحافظ على الاتصالات بشكل دائم
+ * ويعيد الاتصال تلقائيًا عند أي انقطاع مع exponential backoff
+ * ومراقبة صحية مستمرة للقنوات
  */
 class RealtimeEngine {
-  private activeSubscriptions = new Map<string, { channel: any, table: string, callback?: (payload: any) => void, options: any }>();
+  private activeSubscriptions = new Map<string, {
+    channel: any,
+    table: string,
+    callback?: (payload: any) => void,
+    options: any,
+    retryCount: number,
+    lastError: Date | null,
+    isHealthy: boolean,
+    isReconnecting: boolean
+  }>();
+  
+  private maxRetries = 10;
+  private baseDelay = 1000; // 1 second
+  private maxDelay = 30000; // 30 seconds
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private isResyncing = false;
 
   constructor() {
-    // Listen for auth changes to update realtime auth
+    // Listen for auth changes
     if (typeof window !== 'undefined') {
       supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-          console.log('[RealtimeEngine] Auth changed, updating realtime auth...');
-          // Supabase v2 handles this automatically, but we can nudge it
+        console.log(`[RealtimeEngine] Auth event: ${event}`);
+        
+        // Only reconnect on SIGNED_IN - TOKEN_REFRESHED doesn't require reconnection
+        // as the existing WebSocket connection remains valid
+        if (event === 'SIGNED_IN') {
+          console.log('[RealtimeEngine] User signed in, reconnecting all channels...');
+          this.reconnectAll();
+        }
+        if (event === 'SIGNED_OUT') {
+          console.log('[RealtimeEngine] User signed out, cleaning up all channels...');
+          this.unsubscribeAll();
         }
       });
+
+      // Start health monitoring
+      this.startHealthMonitoring();
+      
+      // Handle visibility changes
+      this.setupVisibilityHandler();
+      
+      // Handle online/offline events
+      this.setupNetworkHandlers();
     }
   }
 
   public subscribe(table: string, callback?: (payload: any) => void, options: { event?: string, filter?: string } = {}) {
-    // Generate unique channel identifier based on specific filter/table
     const channelName = `realtime-engine:${table}:${options.event || '*'}:${options.filter || 'all'}`;
     
-    // Cleanup existing to avoid memory leaks if re-subscribed
+    // Cleanup existing subscription if exists
     if (this.activeSubscriptions.has(channelName)) {
-       const existing = this.activeSubscriptions.get(channelName);
-       supabase.removeChannel(existing.channel);
+      console.log(`[RealtimeEngine] Replacing existing subscription: ${channelName}`);
+      this.unsubscribe(channelName);
     }
 
-    const createChannel = () => {
-      const channel = supabase.channel(channelName)
-        .on(
-          'postgres_changes' as any,
-          {
-            event: options.event || '*',
-            schema: 'public',
-            table: table,
-            filter: options.filter,
-          },
-          (payload: any) => {
-            // 1. Silent Cache Auto-Sync
-            this.syncToCache(table, payload);
-            
-            // 2. Trigger individual UI callbacks
-            if (callback) {
-              callback(payload);
-            }
-          }
-        )
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR') {
-             console.warn(`[RealtimeEngine] Channel error for ${table}, attempting restart...`);
-             setTimeout(() => this.reconnectChannel(channelName), 2000);
-          }
-          if (status === 'CLOSED') {
-             console.log(`[RealtimeEngine] Channel closed for ${table}`);
-          }
-        });
-      
-      return channel;
-    };
+    console.log(`[RealtimeEngine] Creating subscription: ${channelName}`);
+    
+    const channel = this.createChannel(channelName, table, callback, options);
+    
+    this.activeSubscriptions.set(channelName, {
+      channel,
+      table,
+      callback,
+      options,
+      retryCount: 0,
+      lastError: null,
+      isHealthy: true,
+      isReconnecting: false
+    });
 
-    const channel = createChannel();
-    this.activeSubscriptions.set(channelName, { channel, table, callback, options });
-
+    // Return unsubscribe function
     return () => {
-      const sub = this.activeSubscriptions.get(channelName);
-      if (sub) {
-        supabase.removeChannel(sub.channel);
-        this.activeSubscriptions.delete(channelName);
-      }
+      this.unsubscribe(channelName);
     };
+  }
+
+  private createChannel(channelName: string, table: string, callback?: (payload: any) => void, options: { event?: string, filter?: string } = {}) {
+    console.log(`[RealtimeEngine] Creating channel: ${channelName} for table: ${table}`);
+    
+    // CRITICAL: Check if we already have this channel - prevent duplicate creation
+    const existingSub = this.activeSubscriptions.get(channelName);
+    if (existingSub && existingSub.channel) {
+      const state = existingSub.channel.state;
+      
+      // If channel exists and is already subscribed/joined, DON'T recreate it
+      // This prevents "cannot add postgres_changes after subscribe()" error
+      if ((state === 'subscribed' || state === 'joined') && !existingSub.channel._isBeingRemoved) {
+        console.warn(`[RealtimeEngine] Channel ${channelName} already active (state: ${state}), reusing`);
+        return existingSub.channel;
+      }
+      
+      // Only remove if channel is truly dead or being removed
+      if (existingSub.channel._isBeingRemoved) {
+        console.log(`[RealtimeEngine] Channel ${channelName} is being removed, waiting...`);
+        return existingSub.channel;
+      }
+      
+      // Channel is in bad state - mark and remove
+      console.log(`[RealtimeEngine] Removing dead channel: ${channelName} (state: ${state})`);
+      existingSub.channel._isBeingRemoved = true;
+      supabase.removeChannel(existingSub.channel);
+    }
+    
+    const channel: any = supabase.channel(channelName, {
+      config: {
+        presence: {
+          key: channelName
+        },
+        broadcast: {
+          ack: true
+        },
+        private: false
+      }
+    });
+    
+    channel
+      .on(
+        'postgres_changes' as any,
+        {
+          event: options.event || '*',
+          schema: 'public',
+          table: table,
+          filter: options.filter,
+        },
+        (payload: any) => {
+          // Skip if channel is being removed
+          if (channel._isBeingRemoved) {
+            console.log(`[RealtimeEngine] Skipping event for channel being removed: ${channelName}`);
+            return;
+          }
+          
+          console.log(`[RealtimeEngine] Received event for ${table}:`, payload.eventType);
+          
+          // Update health status
+          const sub = this.activeSubscriptions.get(channelName);
+          if (sub) {
+            sub.isHealthy = true;
+            sub.lastError = null;
+            sub.retryCount = 0;
+          }
+          
+          // Silent Cache Auto-Sync
+          this.syncToCache(table, payload);
+          
+          // Trigger individual UI callbacks
+          if (callback) {
+            callback(payload);
+          }
+        }
+      )
+      .subscribe((status: string, error?: any) => {
+        // Skip if channel is being removed
+        if (channel._isBeingRemoved) {
+          console.log(`[RealtimeEngine] Skipping status update for channel being removed: ${channelName}`);
+          return;
+        }
+        
+        console.log(`[RealtimeEngine] Channel ${channelName} status: ${status}`, error);
+        
+        const sub = this.activeSubscriptions.get(channelName);
+        if (!sub) {
+          console.warn(`[RealtimeEngine] Subscription not found for: ${channelName}`);
+          return;
+        }
+
+        switch (status) {
+          case 'SUBSCRIBED':
+            sub.isHealthy = true;
+            sub.retryCount = 0;
+            sub.lastError = null;
+            sub.isReconnecting = false;
+            console.log(`✅ [RealtimeEngine] Channel healthy: ${channelName}`);
+            break;
+            
+          case 'CHANNEL_ERROR':
+            sub.isHealthy = false;
+            sub.lastError = new Date();
+            console.error(`❌ [RealtimeEngine] Channel error: ${channelName}`, error);
+            
+            // IMMEDIATE force reconnect - reset everything
+            if (!sub.isReconnecting) {
+              sub.isReconnecting = true;
+              
+              // Remove the broken channel completely
+              if (sub.channel) {
+                console.log(`[RealtimeEngine] Force removing broken channel: ${channelName}`);
+                supabase.removeChannel(sub.channel);
+              }
+              
+              // Wait and create fresh channel - with safety check
+              setTimeout(() => {
+                // Verify subscription still exists
+                const currentSub = this.activeSubscriptions.get(channelName);
+                if (!currentSub) {
+                  console.log(`[RealtimeEngine] Subscription removed, skipping reconnect: ${channelName}`);
+                  return;
+                }
+                
+                currentSub.isReconnecting = false;
+                this.createFreshChannel(channelName, currentSub);
+              }, 500);
+            }
+            break;
+            
+          case 'TIMED_OUT':
+            sub.isHealthy = false;
+            sub.lastError = new Date();
+            console.warn(`⏱️ [RealtimeEngine] Channel timeout: ${channelName} - RECONNECTING`);
+            // Quick reconnect for timeout
+            if (!sub.isReconnecting) {
+              setTimeout(() => {
+                this.reconnectChannel(channelName);
+              }, 500);
+            }
+            break;
+            
+          case 'CLOSED':
+            sub.isHealthy = false;
+            sub.lastError = new Date();
+            console.warn(`🔌 [RealtimeEngine] Channel closed: ${channelName} - FORCE RECONNECT`);
+            
+            // IMMEDIATE force reconnect
+            if (!sub.isReconnecting) {
+              sub.isReconnecting = true;
+              sub.retryCount = 0; // Reset counter
+              
+              // Remove old channel
+              if (sub.channel) {
+                console.log(`[RealtimeEngine] Removing closed channel: ${channelName}`);
+                supabase.removeChannel(sub.channel);
+              }
+              
+              // Create fresh channel after short delay - with safety check
+              setTimeout(() => {
+                // Verify subscription still exists
+                const currentSub = this.activeSubscriptions.get(channelName);
+                if (!currentSub) {
+                  console.log(`[RealtimeEngine] Subscription removed, skipping reconnect: ${channelName}`);
+                  return;
+                }
+                
+                currentSub.isReconnecting = false;
+                this.createFreshChannel(channelName, currentSub);
+              }, 300);
+            }
+            break;
+            
+          case 'UNSUBSCRIBED':
+            console.log(`👋 [RealtimeEngine] Channel unsubscribed: ${channelName}`);
+            sub.isHealthy = false;
+            sub.isReconnecting = false;
+            // Don't auto-reconnect if explicitly unsubscribed
+            break;
+            
+          case 'CLOSING':
+            console.log(`🔴 [RealtimeEngine] Channel closing: ${channelName}`);
+            sub.isHealthy = false;
+            break;
+            
+          case 'ERRORED':
+            console.error(`💥 [RealtimeEngine] Channel errored: ${channelName}`, error);
+            sub.isHealthy = false;
+            sub.lastError = new Date();
+            if (!sub.isReconnecting) {
+              setTimeout(() => {
+                this.reconnectChannel(channelName);
+              }, 200);
+            }
+            break;
+        }
+      });
+    
+    return channel;
+  }
+
+  private handleChannelError(channelName: string, error: any) {
+    const sub = this.activeSubscriptions.get(channelName);
+    if (!sub) return;
+
+    // Don't retry if we've exceeded max retries
+    if (sub.retryCount >= this.maxRetries) {
+      console.error(`[RealtimeEngine] Max retries reached for ${channelName}, will retry once more in 30s`);
+      // Reset and try one more time after 30s
+      sub.retryCount = 0;
+      setTimeout(() => {
+        console.log(`🔄 [RealtimeEngine] Final retry attempt for: ${channelName}`);
+        this.reconnectChannel(channelName);
+      }, 30000);
+      return;
+    }
+
+    // IMMEDIATE reconnection for first few attempts, then backoff
+    let delay = 0;
+    if (sub.retryCount >= 3) {
+      // After 3 failed attempts, use exponential backoff
+      delay = this.calculateBackoff(sub.retryCount - 3);
+    }
+    
+    sub.retryCount++;
+
+    console.log(`[RealtimeEngine] Scheduling reconnect for ${channelName} in ${delay}ms (attempt ${sub.retryCount}/${this.maxRetries})`);
+
+    // Schedule reconnection (immediate or delayed)
+    setTimeout(() => {
+      const currentSub = this.activeSubscriptions.get(channelName);
+      if (currentSub && !currentSub.isHealthy) {
+        console.log(`🔄 [RealtimeEngine] Reconnecting: ${channelName}`);
+        this.reconnectChannel(channelName);
+      }
+    }, delay);
+  }
+
+  private calculateBackoff(retryCount: number): number {
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (max)
+    const exponentialDelay = Math.min(
+      this.baseDelay * Math.pow(2, retryCount),
+      this.maxDelay
+    );
+    
+    // Add jitter (random ±25%)
+    const jitter = exponentialDelay * 0.25 * (Math.random() - 0.5);
+    
+    return exponentialDelay + jitter;
   }
 
   private reconnectChannel(channelName: string) {
     const sub = this.activeSubscriptions.get(channelName);
+    if (!sub) {
+      console.warn(`[RealtimeEngine] Cannot reconnect, subscription not found: ${channelName}`);
+      return;
+    }
+
+    // Prevent multiple simultaneous reconnection attempts
+    if (sub.isReconnecting) {
+      console.log(`⏳ [RealtimeEngine] Already reconnecting: ${channelName}, skipping`);
+      return;
+    }
+
+    console.log(`🔄 [RealtimeEngine] Reconnecting channel: ${channelName}`);
+    sub.isReconnecting = true;
+
+    try {
+      // Mark old channel as being removed
+      if (sub.channel) {
+        console.log(`[RealtimeEngine] Marking old channel for removal: ${channelName}`);
+        sub.channel._isBeingRemoved = true; // Flag to prevent re-subscribe attempts
+        
+        // Remove old channel
+        supabase.removeChannel(sub.channel);
+        
+        // Wait longer for complete removal (500ms instead of 300ms)
+        setTimeout(() => {
+          this.createFreshChannel(channelName, sub);
+        }, 500);
+      } else {
+        this.createFreshChannel(channelName, sub);
+      }
+    } catch (error) {
+      console.error(`❌ [RealtimeEngine] Failed to reconnect ${channelName}:`, error);
+      sub.isReconnecting = false;
+      sub.isHealthy = false;
+      sub.lastError = new Date();
+      
+      // Retry with backoff
+      this.handleChannelError(channelName, error);
+    }
+  }
+
+  private createFreshChannel(channelName: string, sub: any) {
+    try {
+      console.log(`[RealtimeEngine] Creating fresh channel: ${channelName}`);
+      
+      // Create new channel with same configuration
+      const newChannel = this.createChannel(
+        channelName,
+        sub.table,
+        sub.callback,
+        sub.options
+      );
+
+      // Update subscription
+      sub.channel = newChannel;
+      sub.isHealthy = false; // Will be set to true when subscribed
+      sub.isReconnecting = false;
+      
+      console.log(`✅ [RealtimeEngine] Fresh channel created: ${channelName}`);
+    } catch (error) {
+      console.error(`❌ [RealtimeEngine] Failed to create fresh channel ${channelName}:`, error);
+      sub.isReconnecting = false;
+      sub.isHealthy = false;
+      sub.lastError = new Date();
+      
+      this.handleChannelError(channelName, error);
+    }
+  }
+
+  private async reconnectAll() {
+    console.log('🔄 [RealtimeEngine] Reconnecting all channels...');
+    const channelNames = Array.from(this.activeSubscriptions.keys());
+    
+    for (const channelName of channelNames) {
+      try {
+        await this.reconnectChannel(channelName);
+        // Small delay between reconnections to avoid overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (error) {
+        console.error(`[RealtimeEngine] Failed to reconnect ${channelName}:`, error);
+      }
+    }
+    
+    console.log(`✅ [RealtimeEngine] Reconnected ${channelNames.length} channels`);
+  }
+
+  private unsubscribe(channelName: string) {
+    const sub = this.activeSubscriptions.get(channelName);
     if (sub) {
-      console.log(`[RealtimeEngine] Re-subscribing to ${channelName}...`);
-      supabase.removeChannel(sub.channel);
-      this.subscribe(sub.table, sub.callback, sub.options);
+      console.log(`[RealtimeEngine] Unsubscribing: ${channelName}`);
+      try {
+        supabase.removeChannel(sub.channel);
+      } catch (error) {
+        console.warn(`[RealtimeEngine] Error removing channel:`, error);
+      }
+      this.activeSubscriptions.delete(channelName);
+    }
+  }
+
+  private async unsubscribeAll() {
+    console.log('[RealtimeEngine] Unsubscribing from all channels...');
+    const channelNames = Array.from(this.activeSubscriptions.keys());
+    
+    for (const channelName of channelNames) {
+      this.unsubscribe(channelName);
+    }
+    
+    console.log(`✅ [RealtimeEngine] Unsubscribed from ${channelNames.length} channels`);
+  }
+
+  /**
+   * Comprehensive resync after tab becomes visible again
+   */
+  public async resyncAll() {
+    if (this.isResyncing) {
+      console.log('[RealtimeEngine] Resync already in progress, skipping...');
+      return;
+    }
+
+    this.isResyncing = true;
+    console.log('🔄 [RealtimeEngine] Starting comprehensive resync...');
+    
+    // First, check if Supabase realtime connection is alive
+    const connectionState = await this.checkRealtimeConnection();
+    
+    if (!connectionState) {
+      console.warn('[RealtimeEngine] Realtime connection is dead, force refresh needed');
+      // Force a complete reconnection of the Supabase realtime client
+      await this.forceRealtimeReconnect();
+      // Wait for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    const subs = Array.from(this.activeSubscriptions.entries());
+    let resyncedCount = 0;
+    let failedCount = 0;
+    
+    for (const [channelName, sub] of subs) {
+      try {
+        const channelState = sub.channel.state;
+        console.log(`[RealtimeEngine] Channel ${channelName} state: ${channelState}`);
+        
+        // Force reconnect for unhealthy or closed channels
+        if (!sub.isHealthy || 
+            channelState === 'closed' || 
+            channelState === 'errored' || 
+            channelState === 'unsubscribed' ||
+            channelState === 'closing') {
+          
+          console.log(`🔧 [RealtimeEngine] Recreating unhealthy channel: ${channelName} (was ${channelState})`);
+          
+          try {
+            // Check if already being reconnected
+            if (sub.isReconnecting) {
+              console.log(`⏳ [RealtimeEngine] Channel ${channelName} already being reconnected, skipping`);
+              continue;
+            }
+            
+            // Mark as reconnecting
+            sub.isReconnecting = true;
+            
+            if (sub.channel) {
+              console.log(`[RealtimeEngine] Removing channel: ${channelName}`);
+              sub.channel._isBeingRemoved = true; // Mark for safety
+              await supabase.removeChannel(sub.channel);
+              // Wait for removal
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            
+            // Use createFreshChannel instead of createChannel to avoid duplicate issues
+            this.createFreshChannel(channelName, sub);
+            resyncedCount++;
+            
+            // Wait a bit for the channel to establish
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error(`[RealtimeEngine] Failed to recreate ${channelName}:`, error);
+            sub.isReconnecting = false;
+            failedCount++;
+          }
+        } else if (channelState === 'joined' || channelState === 'subscribed') {
+          console.log(`✅ [RealtimeEngine] Channel healthy: ${channelName}`);
+          resyncedCount++;
+        } else {
+          // For transitional states, wait and check again
+          console.log(`⏳ [RealtimeEngine] Channel in transition: ${channelName} (${channelState})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          const currentState = sub.channel.state;
+          if (currentState !== 'joined' && currentState !== 'subscribed') {
+            console.log(`🔧 [RealtimeEngine] Still unhealthy, reconnecting: ${channelName}`);
+            this.reconnectChannel(channelName);
+          }
+        }
+      } catch (error) {
+        console.error(`[RealtimeEngine] Error processing ${channelName}:`, error);
+        failedCount++;
+      }
+    }
+    
+    this.isResyncing = false;
+    console.log(`✅ [RealtimeEngine] Resync complete: ${resyncedCount} ok, ${failedCount} failed`);
+    
+    // If any failed, schedule another resync
+    if (failedCount > 0) {
+      setTimeout(() => {
+        console.log('[RealtimeEngine] Scheduling follow-up resync...');
+        this.resyncAll();
+      }, 5000);
     }
   }
 
   /**
-   * Re-sync all active subscriptions after tab becomes visible again.
-   * Properly handles closed/errored channels by recreating them.
+   * Check if Supabase realtime connection is alive
    */
-  public async resyncAll() {
-    console.log('[RealtimeEngine] Resyncing all subscriptions...');
+  private async checkRealtimeConnection(): Promise<boolean> {
+    try {
+      // Try to get the channel state from any active subscription
+      const firstSub = this.activeSubscriptions.values().next().value;
+      if (!firstSub) {
+        console.log('[RealtimeEngine] No active subscriptions to check');
+        return true;
+      }
+      
+      const state = firstSub.channel.state;
+      console.log(`[RealtimeEngine] Connection state check: ${state}`);
+      
+      return state === 'joined' || state === 'subscribed';
+    } catch (error) {
+      console.error('[RealtimeEngine] Failed to check connection:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Force a complete reconnection of Supabase realtime
+   */
+  private async forceRealtimeReconnect() {
+    console.log('🔧 [RealtimeEngine] Forcing complete realtime reconnection...');
+    
+    try {
+      // Remove all channels first
+      const channelNames = Array.from(this.activeSubscriptions.keys());
+      
+      for (const channelName of channelNames) {
+        const sub = this.activeSubscriptions.get(channelName);
+        if (sub && sub.channel) {
+          console.log(`[RealtimeEngine] Removing channel: ${channelName}`);
+          await supabase.removeChannel(sub.channel);
+          sub.isHealthy = false;
+        }
+      }
+      
+      // Wait for all channels to be removed
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log('[RealtimeEngine] All channels removed, will recreate on next resync');
+    } catch (error) {
+      console.error('[RealtimeEngine] Error during force reconnect:', error);
+    }
+  }
+
+  /**
+   * Start periodic health monitoring
+   */
+  private startHealthMonitoring() {
+    // Check health every 30 seconds
+    this.healthCheckInterval = setInterval(() => {
+      this.performHealthCheck();
+    }, 30000);
+    
+    console.log('[RealtimeEngine] Health monitoring started (30s interval)');
+  }
+
+  private async performHealthCheck() {
     const subs = Array.from(this.activeSubscriptions.entries());
     
-    for (const [name, sub] of subs) {
-      const channelState = sub.channel.state;
-      console.log(`[RealtimeEngine] Channel ${name} state: ${channelState}`);
+    for (const [channelName, sub] of subs) {
+      const state = sub.channel.state;
       
-      // If channel is not in a healthy state, recreate it completely
-      if (channelState === 'closed' || channelState === 'errored' || channelState === 'unsubscribed') {
-        console.log(`[RealtimeEngine] Recreating channel ${name} (was ${channelState})`);
-        supabase.removeChannel(sub.channel);
-        this.subscribe(sub.table, sub.callback, sub.options);
-      } 
-      // If channel is joining or joined, do a health check
-      else if (channelState === 'joined') {
-        // Channel looks healthy, no action needed
-        console.log(`[RealtimeEngine] Channel ${name} is healthy (joined)`);
+      // If channel has been unhealthy for more than 2 minutes, force reconnect
+      if (!sub.isHealthy && sub.lastError) {
+        const timeSinceError = Date.now() - sub.lastError.getTime();
+        if (timeSinceError > 120000) { // 2 minutes
+          console.log(`[RealtimeEngine] Force reconnecting stale channel: ${channelName}`);
+          sub.retryCount = 0; // Reset retry count for fresh start
+          this.reconnectChannel(channelName);
+        }
       }
-      // For other states (closing, joining), wait a bit then check again
-      else {
-        console.log(`[RealtimeEngine] Channel ${name} in transitional state (${channelState}), will retry...`);
-        setTimeout(() => {
-          const currentSub = this.activeSubscriptions.get(name);
-          if (currentSub && currentSub.channel.state !== 'joined') {
-            this.reconnectChannel(name);
-          }
-        }, 2000);
+      
+      // Log warning for channels in bad states
+      if (state === 'closed' || state === 'errored' || state === 'unsubscribed') {
+        console.warn(`[RealtimeEngine] Unhealthy channel detected: ${channelName} (${state})`);
+        this.reconnectChannel(channelName);
       }
     }
+  }
+
+  /**
+   * Setup visibility change handler
+   */
+  private setupVisibilityHandler() {
+    if (typeof document === 'undefined') return;
+    
+    document.addEventListener('visibilitychange', async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ [RealtimeEngine] Tab became visible, checking connections...');
+        
+        // Small delay to ensure network is ready
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Resync all channels
+        await this.resyncAll();
+      }
+    });
+    
+    console.log('[RealtimeEngine] Visibility handler setup complete');
+  }
+
+  /**
+   * Setup network online/offline handlers
+   */
+  private setupNetworkHandlers() {
+    if (typeof window === 'undefined') return;
+    
+    window.addEventListener('online', async () => {
+      console.log('🌐 [RealtimeEngine] Network came online, reconnecting...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await this.reconnectAll();
+    });
+    
+    window.addEventListener('offline', () => {
+      console.log('🔌 [RealtimeEngine] Network went offline, marking channels as unhealthy');
+      
+      // Mark all channels as unhealthy but don't remove them
+      for (const [channelName, sub] of this.activeSubscriptions.entries()) {
+        sub.isHealthy = false;
+        sub.lastError = new Date();
+      }
+    });
+  }
+
+  /**
+   * Get subscription status for debugging
+   */
+  public getSubscriptionStatus() {
+    const status: any = {};
+    
+    for (const [channelName, sub] of this.activeSubscriptions.entries()) {
+      status[channelName] = {
+        table: sub.table,
+        isHealthy: sub.isHealthy,
+        state: sub.channel.state,
+        retryCount: sub.retryCount,
+        lastError: sub.lastError
+      };
+    }
+    
+    return status;
+  }
+
+  /**
+   * Cleanup on app shutdown
+   */
+  public destroy() {
+    console.log('[RealtimeEngine] Destroying engine, cleaning up all channels...');
+    
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+    
+    this.unsubscribeAll();
   }
 
   // المحرك السحري: يقوم بالتحديث الذكي للكاش محلياً لكي تختفي الـ Loading 완전히

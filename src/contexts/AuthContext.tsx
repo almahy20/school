@@ -28,6 +28,7 @@ function phoneToEmail(phone: string): string {
 const activeFetchPromises = new Map<string, Promise<AppUser | null>>();
 let lastEventUserId: string | null = null;
 let lastEventTime = 0;
+let isLoggingOut = false; // Track logout state
 
 async function fetchAppUser(supaUser: SupabaseUser, retryCount = 0): Promise<AppUser | null> {
   // If there's already an active fetch for this user, return it
@@ -149,8 +150,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log('🔑 [AuthContext] Initializing session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('❌ [AuthContext] Session init error:', error);
+        }
+        
         if (session?.user && isMounted) {
+          console.log('✅ [AuthContext] Session found for user:', session.user.id);
           const appUser = await fetchAppUser(session.user);
           if (isMounted) {
             setUser(prev => {
@@ -158,11 +166,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               return appUser;
             });
           }
+        } else {
+          console.warn('⚠️ [AuthContext] No active session found');
         }
       } catch (err) {
-        console.error('Session init error:', err);
+        console.error('❌ [AuthContext] Session init error:', err);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          console.log('✅ [AuthContext] Auth initialization complete');
+          setLoading(false);
+        }
       }
     };
     initSession();
@@ -179,7 +192,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (event === 'SIGNED_OUT') {
         console.warn('🚪 User signed out or session expired');
-        setUser(null);
+        // Only set to null if not already handled by logout function
+        if (!isLoggingOut) {
+          setUser(null);
+        }
         return;
       }
 
@@ -227,15 +243,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Handle connection monitoring and session refresh
   useEffect(() => {
     const handleOnline = async () => {
-      console.log('🌐 Device back online. Refreshing session...');
+      console.log('🌐 [AuthContext] Device back online. Refreshing session...');
       const { data: { session }, error } = await supabase.auth.getSession();
       if (!error && session) {
         await refreshUser();
       }
     };
-
+  
+    // CRITICAL: Refresh session when tab becomes visible
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible') {
+        console.log('⚡ [AuthContext] Tab visible, fast session refresh...');
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+              
+          if (error) {
+            console.error('❌ [AuthContext] Session refresh error:', error);
+            setUser(null);
+            return;
+          }
+              
+          if (session?.user) {
+            console.log('✅ [AuthContext] Session valid, fast user refresh...');
+            await refreshUser();
+          } else {
+            console.warn('⚠️ [AuthContext] No session on visibility change');
+            setUser(null);
+          }
+        } catch (err) {
+          console.error('❌ [AuthContext] Visibility change session error:', err);
+        }
+      }
+    };
+  
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const login = async (phone: string, password: string): Promise<string | null> => {
@@ -293,8 +340,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
+    try {
+      console.log('🚪 Initiating logout...');
+      isLoggingOut = true;
+      
+      // Set loading to prevent race conditions during logout
+      setLoading(true);
+      
+      // Clear all React Query cache to prevent stale data
+      try {
+        window.dispatchEvent(new Event('logout-clear-cache'));
+      } catch (e) {
+        console.warn('Failed to dispatch cache clear event');
+      }
+      
+      // Clear all active fetch promises
+      activeFetchPromises.clear();
+      
+      // Clear local storage/session storage to remove any cached data
+      try {
+        // Remove React Query persisted cache
+        localStorage.removeItem('rq-persist-v1');
+      } catch (e) {
+        console.warn('Failed to clear localStorage');
+      }
+      
+      // Sign out from Supabase with local scope (only this tab)
+      // Using 'local' prevents race conditions with onAuthStateChange
+      const { error } = await supabase.auth.signOut({ 
+        scope: 'local'
+      });
+      
+      if (error) {
+        console.error('❌ Logout error:', error);
+        // Continue anyway - clear local state
+      }
+      
+      console.log('✅ Logout successful, clearing state...');
+      
+      // Clear local state IMMEDIATELY
+      setUser(null);
+      setLoading(false);
+      
+      // Additional safety: clear session again
+      await supabase.auth.signOut({ scope: 'local' });
+      
+    } catch (err) {
+      console.error('❌ Logout critical error:', err);
+      // Force clear state even on error
+      setUser(null);
+      setLoading(false);
+    } finally {
+      // Reset logout flag after a delay to prevent race conditions
+      setTimeout(() => {
+        isLoggingOut = false;
+      }, 1000);
+    }
   };
 
   const isRole = (role: AppRole) => user?.role === role;

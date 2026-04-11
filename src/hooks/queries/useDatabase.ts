@@ -1,76 +1,91 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useMemo } from 'react';
 
-export function useTableData(tableName: string) {
-  const queryKey = useMemo(() => ['database-table', tableName], [tableName]);
-  
+type TableName = 'students' | 'classes' | 'grades' | 'attendance' | 'student_parents' | 'exam_templates';
+
+/**
+ * Hook to fetch all rows from a table
+ */
+export function useTableData(tableName: TableName) {
   return useQuery({
-    queryKey,
+    queryKey: ['database', tableName],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from(tableName as any)
+        .from(tableName)
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
+        .order('created_at', { ascending: false });
+      
       if (error) throw error;
-      return data;
+      return data || [];
     },
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
   });
 }
 
-export function useInsertRow(tableName: string) {
+/**
+ * Hook to insert a new row into a table
+ */
+export function useInsertRow(tableName: TableName) {
   const queryClient = useQueryClient();
+  
   return useMutation({
-    mutationFn: async (row: any) => {
+    mutationFn: async (record: Record<string, any>) => {
       const { data, error } = await supabase
-        .from(tableName as any)
-        .insert(row)
+        .from(tableName)
+        .insert(record as any)
         .select()
         .single();
+      
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database-table', tableName] });
+      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
     },
   });
 }
 
-export function useUpdateRow(tableName: string) {
+/**
+ * Hook to update a row in a table
+ */
+export function useUpdateRow(tableName: TableName) {
   const queryClient = useQueryClient();
+  
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; [key: string]: any }) => {
+    mutationFn: async ({ id, ...updates }: Record<string, any>) => {
       const { data, error } = await supabase
-        .from(tableName as any)
-        .update(updates)
+        .from(tableName)
+        .update(updates as any)
         .eq('id', id)
         .select()
         .single();
+      
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database-table', tableName] });
+      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
     },
   });
 }
 
-export function useDeleteRow(tableName: string) {
+/**
+ * Hook to delete a row from a table
+ */
+export function useDeleteRow(tableName: TableName) {
   const queryClient = useQueryClient();
+  
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from(tableName as any)
+        .from(tableName)
         .delete()
         .eq('id', id);
+      
       if (error) throw error;
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database-table', tableName] });
+      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
     },
   });
 }

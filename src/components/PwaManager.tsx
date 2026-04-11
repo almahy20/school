@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 export default function PwaManager() {
   const { user } = useAuth();
@@ -141,21 +140,11 @@ export default function PwaManager() {
   useEffect(() => {
     updateManifest();
 
-    // 2. Real-time update listener for school branding using the robust engine
-    const unsubscribe = realtimeEngine.subscribe(
-      'schools',
-      () => {
-        // Re-run the manifest update when school data changes
-        updateManifest();
-      },
-      {
-        event: 'UPDATE',
-        filter: user?.schoolId ? `id=eq.${user.schoolId}` : undefined
-      }
-    );
-
+    // No realtime subscription needed - manifest updates on auth change only
+    // Realtime engine was causing "cannot add postgres_changes after subscribe()" error
+    
     return () => {
-      unsubscribe();
+      // Cleanup if needed
     };
   }, [user?.schoolId, updateManifest]);
 

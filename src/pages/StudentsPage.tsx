@@ -99,28 +99,28 @@ export default function StudentsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1500px] mx-auto text-right pb-14">
+      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
         {/* Premium Header - Dynamic & Modern */}
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 sm:p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
           <div className="space-y-4 relative z-10">
             <div className="flex items-center gap-4">
-               <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                  <GraduationCap className="w-7 h-7" />
+               <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
+                  <GraduationCap className="w-6 h-6" />
                </div>
-               <h1 className="text-4xl font-black text-slate-900 tracking-tight">إدارة شؤون الطلاب</h1>
+               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">إدارة شؤون الطلاب</h1>
             </div>
-            <p className="text-slate-500 font-medium text-lg pr-1">قاعدة البيانات المركزية، السجلات الأكاديمية، ونتائج المتابعة الشاملة.</p>
+            <p className="text-slate-500 font-medium text-base pr-1">قاعدة البيانات المركزية، السجلات الأكاديمية، ونتائج المتابعة الشاملة.</p>
           </div>
           
           <div className="flex flex-wrap items-center gap-4 relative z-10">
              {user?.role === 'admin' && (
                <Button 
                  onClick={() => setShowAdd(true)} 
-                 className="h-16 px-10 rounded-[24px] bg-indigo-600 text-white font-black hover:scale-105 active:scale-95 transition-all shadow-2xl shadow-indigo-200 gap-3 text-lg"
+                 className="h-12 px-8 rounded-xl bg-indigo-600 text-white font-bold hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-200 gap-2"
                >
-                 <Plus className="w-6 h-6" /> إضافة طالب جديد
+                 <Plus className="w-5 h-5" /> إضافة طالب جديد
                </Button>
              )}
           </div>
@@ -129,14 +129,14 @@ export default function StudentsPage() {
         {/* Filters and Search - Premium Scaling */}
         <div className="flex flex-col lg:flex-row gap-6 items-center">
           <div className="relative group flex-1 w-full">
-            <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-[28px] blur opacity-0 group-focus-within:opacity-100 transition duration-1000" />
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
             <div className="relative">
-              <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
               <Input 
                 placeholder="ابحث عن اسم الطالب..." 
                 value={search}
                 onChange={e => handleSearch(e.target.value)}
-                className="h-16 pr-14 pl-8 rounded-[24px] border-none bg-white text-lg font-bold shadow-xl shadow-slate-200/50 transition-all focus:ring-0 placeholder:text-slate-300" 
+                className="h-12 pr-12 pl-6 rounded-xl border-none bg-white text-sm font-bold shadow-md shadow-slate-200/50 transition-all focus:ring-0 placeholder:text-slate-300"
               />
             </div>
           </div>
@@ -147,10 +147,10 @@ export default function StudentsPage() {
                 key={cls} 
                 onClick={() => handleFilterChange(cls)}
                 className={cn(
-                  "px-8 py-4 rounded-[20px] text-xs font-black whitespace-nowrap transition-all border-2 shadow-sm shrink-0",
+                  "px-6 py-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all border-2 shadow-sm shrink-0",
                   filterClass === cls
-                    ? "bg-slate-900 border-slate-900 text-white shadow-2xl scale-105"
-                    : "bg-white border-transparent text-slate-400 hover:border-slate-100 hover:text-indigo-600"
+                    ? "bg-slate-900 border-slate-900 text-white shadow-lg scale-105"
+                    : "bg-white border-transparent text-slate-500 hover:border-slate-100 hover:text-indigo-600"
                 )}>
                 {cls === 'الكل' ? 'جميع الفصول' : `فصل ${cls}`}
               </button>

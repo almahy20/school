@@ -98,12 +98,12 @@ export default function LandingPage() {
             <span className="text-indigo-300 text-sm font-bold">منصة إدارة المدارس المتكاملة</span>
           </div>
 
-          <h1 className="text-5xl md:text-7xl font-black text-white mb-8 tracking-tight leading-[1.1]">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-8 tracking-tight leading-[1.1]">
             أدر مدرستك بذكاء <br /> 
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">في مكان واحد</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-slate-400 font-medium mb-12 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-slate-400 font-medium mb-12 max-w-2xl mx-auto leading-relaxed">
             نظام سحابي متكامل لإدارة الطلاب، المعلمين، الحضور، والدرجات مع نظام إشعارات فورية وتواصل مباشر مع أولياء الأمور.
           </p>
 
@@ -125,35 +125,35 @@ export default function LandingPage() {
           </div>
 
           {/* Stats bar */}
-          <div className="mt-20 grid grid-cols-3 gap-8 max-w-lg mx-auto">
+          <div className="mt-16 grid grid-cols-3 gap-6 max-w-lg mx-auto">
             {[
               { n: '١٠٠٠+', l: 'طالب مسجل' },
               { n: '٥٠+', l: 'مدرسة نشطة' },
               { n: '٩٩.٩٪', l: 'وقت التشغيل' },
             ].map((s) => (
               <div key={s.l} className="text-center">
-                <div className="text-3xl font-black text-white mb-1">{s.n}</div>
-                <div className="text-white/40 text-xs font-bold">{s.l}</div>
+                <div className="text-2xl font-bold text-white mb-1">{s.n}</div>
+                <div className="text-white/50 text-xs font-medium">{s.l}</div>
               </div>
             ))}
           </div>
 
           {/* Demo Video Section */}
-          <div className="mt-24 relative max-w-5xl mx-auto group">
+          <div className="mt-20 relative max-w-5xl mx-auto group">
             <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-violet-600 rounded-[40px] blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-            <div className="relative bg-slate-900 rounded-[32px] border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group cursor-pointer">
+            <div className="relative bg-slate-900 rounded-3xl border border-white/10 overflow-hidden shadow-2xl aspect-video flex items-center justify-center group cursor-pointer">
                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80')] bg-cover bg-center opacity-40 group-hover:scale-105 transition-transform duration-700"></div>
-               <div className="relative z-10 w-24 h-24 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-2xl">
-                  <div className="w-16 h-16 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/40">
-                    <Zap className="w-8 h-8 text-white fill-current" />
+               <div className="relative z-10 w-20 h-20 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                  <div className="w-14 h-14 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/40">
+                    <Zap className="w-6 h-6 text-white fill-current" />
                   </div>
                </div>
-               <div className="absolute bottom-8 right-8 left-8 flex justify-between items-end z-10">
+               <div className="absolute bottom-6 right-6 left-6 flex justify-between items-end z-10">
                   <div className="text-right">
-                     <p className="text-white font-black text-2xl mb-1">شاهد كيف يعمل النظام</p>
+                     <p className="text-white font-bold text-xl mb-1">شاهد كيف يعمل النظام</p>
                      <p className="text-white/60 text-sm font-medium">فيديو توضيحي للمميزات الرئيسية (دقيقتين)</p>
                   </div>
-                  <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-[10px] font-black uppercase tracking-widest">
+                  <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-[10px] font-bold uppercase tracking-wider">
                      Demo Video
                   </div>
                </div>
@@ -166,14 +166,14 @@ export default function LandingPage() {
       <section className="py-24 px-6 bg-white/[0.02]">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-white mb-4">واجهة عصرية تليق بمدرستك</h2>
-            <p className="text-white/40 text-lg font-medium">تصميم يركز على تجربة المستخدم وسهولة الوصول للمعلومة</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">واجهة عصرية تليق بمدرستك</h2>
+            <p className="text-white/50 text-base font-medium">تصميم يركز على تجربة المستخدم وسهولة الوصول للمعلومة</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div className="space-y-8">
-               <div className="p-8 rounded-[32px] bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20">
-                  <h3 className="text-2xl font-black text-white mb-4">لوحة تحكم ولي الأمر</h3>
-                  <p className="text-white/50 leading-relaxed font-medium mb-6">متابعة دقيقة لمسيرة الطالب التعليمية، الجدول الأسبوعي، والأنشطة اليومية في صفحة واحدة مبسطة.</p>
+               <div className="p-6 rounded-3xl bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20">
+                  <h3 className="text-xl font-bold text-white mb-3">لوحة تحكم ولي الأمر</h3>
+                  <p className="text-white/60 leading-relaxed font-medium mb-4">متابعة دقيقة لمسيرة الطالب التعليمية، الجدول الأسبوعي، والأنشطة اليومية في صفحة واحدة مبسطة.</p>
                   <ul className="space-y-3">
                      {['شريط تقدم المنهج لكل مادة', 'الجدول الأسبوعي التفاعلي', 'تتبع الحضور والغياب اللحظي'].map(f => (
                         <li key={f} className="flex items-center gap-3 text-sm font-bold text-indigo-300">
@@ -182,9 +182,9 @@ export default function LandingPage() {
                      ))}
                   </ul>
                </div>
-               <div className="p-8 rounded-[32px] bg-white/[0.03] border border-white/10">
-                  <h3 className="text-2xl font-black text-white mb-4">إدارة المنهج الدراسي</h3>
-                  <p className="text-white/50 leading-relaxed font-medium mb-6">بناء هيكل تعليمي متكامل يبدأ من الصفوف وصولاً إلى الدروس والوحدات الزمنية.</p>
+               <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/10">
+                  <h3 className="text-xl font-bold text-white mb-3">إدارة المنهج الدراسي</h3>
+                  <p className="text-white/60 leading-relaxed font-medium mb-4">بناء هيكل تعليمي متكامل يبدأ من الصفوف وصولاً إلى الدروس والوحدات الزمنية.</p>
                </div>
             </div>
             <div className="relative group">
@@ -192,7 +192,8 @@ export default function LandingPage() {
                <img 
                  src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
                  alt="System Screenshot" 
-                 className="relative rounded-[40px] border border-white/10 shadow-2xl group-hover:translate-y-[-8px] transition-transform duration-700"
+                 loading="lazy"
+                 className="relative rounded-3xl border border-white/10 shadow-2xl group-hover:translate-y-[-8px] transition-transform duration-700"
                />
             </div>
           </div>
@@ -203,11 +204,11 @@ export default function LandingPage() {
       <section className="py-24 px-6 border-t border-white/5">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-white mb-4">لماذا "إدارة عربية"؟</h2>
-            <p className="text-white/40 text-lg font-medium">مقارنة سريعة توضح الفارق في الجودة والسهولة</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">لماذا "إدارة عربية"؟</h2>
+            <p className="text-white/50 text-base font-medium">مقارنة سريعة توضح الفارق في الجودة والسهولة</p>
           </div>
           
-          <div className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.02] backdrop-blur-md">
+          <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] backdrop-blur-md">
              <table className="w-full text-right">
                 <thead>
                    <tr className="border-b border-white/10 bg-white/5">
@@ -240,8 +241,8 @@ export default function LandingPage() {
       <section className="py-24 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
            <div className="text-center mb-16">
-              <h2 className="text-4xl font-black text-white mb-4">قالوا عن المنصة</h2>
-              <p className="text-white/40 text-lg font-medium">ثقة شركائنا هي سر نجاحنا</p>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">قالوا عن المنصة</h2>
+              <p className="text-white/50 text-base font-medium">ثقة شركائنا هي سر نجاحنا</p>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
@@ -249,11 +250,11 @@ export default function LandingPage() {
                 { name: 'أ. مريم علي', school: 'مدرسة براعم الغد', text: 'أولياء الأمور سعداء جداً بمتابعة أبنائهم عبر الجوال. النظام سريع وموثوق.' },
                 { name: 'م. خالد حسن', school: 'أكاديمية المستقبل', text: 'الدعم الفني متميز، والنظام يتطور باستمرار بميزات ذكية فعلاً.' }
               ].map((t, idx) => (
-                <div key={idx} className="p-8 rounded-[32px] bg-white/[0.03] border border-white/10 hover:border-indigo-500/30 transition-all">
+                <div key={idx} className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 hover:border-indigo-500/30 transition-all">
                    <div className="flex gap-1 mb-4">
                       {[1,2,3,4,5].map(i => <Star key={i} className="w-4 h-4 text-amber-500 fill-current" />)}
                    </div>
-                   <p className="text-white/60 font-medium leading-relaxed mb-6 italic">"{t.text}"</p>
+                   <p className="text-white/60 font-medium leading-relaxed mb-4 italic">"{t.text}"</p>
                    <div className="flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 flex items-center justify-center text-indigo-400 font-black">
                          {t.name[0]}
@@ -274,11 +275,11 @@ export default function LandingPage() {
          <div className="max-w-4xl mx-auto p-12 sm:p-20 rounded-[64px] bg-gradient-to-br from-indigo-600 to-violet-700 text-center relative overflow-hidden shadow-2xl shadow-indigo-600/20">
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             <div className="relative z-10">
-               <h2 className="text-4xl sm:text-5xl font-black text-white mb-6 tracking-tight">ابدأ رحلة التميز اليوم</h2>
-               <p className="text-white/70 text-lg font-medium mb-12 max-w-xl mx-auto">انضم إلى أكثر من ٥٠ مدرسة تستخدم النظام حالياً لتطوير العملية التعليمية.</p>
+               <h2 className="text-3xl sm:text-4xl font-bold text-white mb-6 tracking-tight">ابدأ رحلة التميز اليوم</h2>
+               <p className="text-white/70 text-base font-medium mb-10 max-w-xl mx-auto">انضم إلى أكثر من ٥٠ مدرسة تستخدم النظام حالياً لتطوير العملية التعليمية.</p>
                <button 
                  onClick={() => handlePlanSelect(PLANS[1])}
-                 className="h-16 px-12 rounded-2xl bg-white text-indigo-600 font-black text-lg shadow-xl hover:scale-105 active:scale-95 transition-all"
+                 className="h-14 px-10 rounded-2xl bg-white text-indigo-600 font-bold text-base shadow-xl hover:scale-105 active:scale-95 transition-all"
                >
                   جرب مجاناً لمدة ١٤ يوم
                </button>
@@ -290,8 +291,8 @@ export default function LandingPage() {
       <section id="features" className="py-24 px-6 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
-            <p className="text-white/40 text-lg font-medium">أدوات متكاملة لإدارة مدرستك بكفاءة عالية</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">كل ما تحتاجه في مكان واحد</h2>
+            <p className="text-white/50 text-base font-medium">أدوات متكاملة لإدارة مدرستك بكفاءة عالية</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {FEATURES.map((f) => (
@@ -302,8 +303,8 @@ export default function LandingPage() {
                 <div className="w-12 h-12 rounded-2xl bg-indigo-600/10 border border-indigo-500/20 flex items-center justify-center mb-5 group-hover:bg-indigo-600/20 transition-all">
                   <f.icon className="w-6 h-6 text-indigo-400" />
                 </div>
-                <h3 className="text-white font-black text-base mb-2">{f.title}</h3>
-                <p className="text-white/40 text-sm leading-relaxed font-medium">{f.desc}</p>
+                <h3 className="text-white font-bold text-base mb-2">{f.title}</h3>
+                <p className="text-white/50 text-sm leading-relaxed font-medium">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -314,15 +315,15 @@ export default function LandingPage() {
       <section id="pricing" className="py-24 px-6 border-t border-white/5">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-black text-white mb-4">اختر الباقة المناسبة</h2>
-            <p className="text-white/40 text-lg font-medium">باقات مرنة تناسب كل احتياجات مدرستك</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">اختر الباقة المناسبة</h2>
+            <p className="text-white/50 text-base font-medium">باقات مرنة تناسب كل احتياجات مدرستك</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {PLANS.map((plan) => (
               <div
                 key={plan.id}
-                className={`relative rounded-3xl overflow-hidden border transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl ${
+                className={`relative rounded-3xl overflow-hidden border transition-all duration-500 hover:shadow-2xl ${
                   plan.id === 'half_yearly'
                     ? 'border-indigo-500/50 shadow-xl shadow-indigo-600/20'
                     : 'border-white/10'
@@ -336,16 +337,16 @@ export default function LandingPage() {
                   </div>
                 )}
 
-                <div className={`bg-gradient-to-br ${plan.color} p-8`}>
-                  <h3 className="text-xl font-black text-white mb-1">{plan.name}</h3>
+                <div className={`bg-gradient-to-br ${plan.color} p-6`}>
+                  <h3 className="text-lg font-bold text-white mb-1">{plan.name}</h3>
                   <div className="flex items-end gap-1">
-                    <span className="text-5xl font-black text-white">{plan.price.toLocaleString('ar-EG')}</span>
-                    <span className="text-white/60 font-bold mb-2">ج.م{plan.period}</span>
+                    <span className="text-4xl font-bold text-white">{plan.price.toLocaleString('ar-EG')}</span>
+                    <span className="text-white/60 font-medium mb-1">ج.م{plan.period}</span>
                   </div>
                   <p className="text-white/50 text-sm mt-1">{plan.days} يوم اشتراك</p>
                 </div>
 
-                <div className="bg-[#0d1526] p-8 flex flex-col gap-6">
+                <div className="bg-[#0d1526] p-6 flex flex-col gap-4">
                   <ul className="space-y-3">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-center gap-3 text-white/70 text-sm font-medium">
@@ -357,7 +358,7 @@ export default function LandingPage() {
 
                   <button
                     onClick={() => handlePlanSelect(plan)}
-                    className={`w-full h-14 rounded-2xl font-black text-sm transition-all hover:scale-[1.02] active:scale-95 ${
+                    className={`w-full h-12 rounded-xl font-bold text-sm transition-all active:scale-95 ${
                       plan.id === 'half_yearly'
                         ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/30 hover:bg-indigo-500'
                         : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
@@ -535,7 +536,7 @@ function SchoolOrderModal({
         {/* Header */}
         <div className={`bg-gradient-to-r ${plan.color} p-6 rounded-t-3xl flex items-center justify-between`}>
           <div>
-            <h2 className="text-xl font-black text-white">بيانات مدرستك</h2>
+            <h2 className="text-lg font-bold text-white">بيانات مدرستك</h2>
             <p className="text-white/70 text-sm mt-1">باقة {plan.name} — {plan.price.toLocaleString('ar-EG')} ج.م</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-colors">
@@ -547,18 +548,18 @@ function SchoolOrderModal({
           {/* Logo Upload */}
           <div className="flex items-center gap-4">
             <label className="cursor-pointer group">
-              <div className="w-16 h-16 rounded-2xl bg-white/5 border-2 border-dashed border-white/20 group-hover:border-indigo-500/50 flex items-center justify-center overflow-hidden transition-all">
+              <div className="w-14 h-14 rounded-xl bg-white/5 border-2 border-dashed border-white/20 group-hover:border-indigo-500/50 flex items-center justify-center overflow-hidden transition-all">
                 {logoPreview ? (
-                  <img src={logoPreview} alt="logo" className="w-full h-full object-cover" />
+                  <img src={logoPreview} alt="logo" loading="lazy" className="w-full h-full object-cover" />
                 ) : (
-                  <Upload className="w-6 h-6 text-white/30" />
+                  <Upload className="w-5 h-5 text-white/40" />
                 )}
               </div>
               <input type="file" accept="image/*" onChange={handleLogoChange} className="hidden" />
             </label>
             <div>
               <p className="text-white font-bold text-sm">أيقونة المدرسة</p>
-              <p className="text-white/40 text-xs mt-0.5">اختياري — PNG أو JPG حتى 2MB</p>
+              <p className="text-white/50 text-xs mt-0.5">اختياري — PNG أو JPG حتى 2MB</p>
             </div>
           </div>
 
@@ -648,7 +649,7 @@ function SchoolOrderModal({
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm shadow-xl shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {loading ? (
               <><Loader2 className="w-5 h-5 animate-spin" /> جاري المعالجة...</>

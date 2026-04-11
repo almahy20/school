@@ -51,13 +51,20 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 4. Update Isolation Policy for notifications
+-- FIX: Drop existing policy first and use direct query instead of get_my_school_id()
 DROP POLICY IF EXISTS "Isolation policy" ON public.notifications;
 DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
+DROP POLICY IF EXISTS "notifications_isolation" ON public.notifications;
+
 CREATE POLICY "notifications_isolation" ON public.notifications
     FOR ALL TO authenticated
     USING (
         public.is_super_admin() 
-        OR school_id = public.get_my_school_id()
+        OR school_id = (
+            SELECT school_id FROM public.profiles 
+            WHERE id = auth.uid() 
+            LIMIT 1
+        )
         OR user_id = auth.uid()
     );
 

@@ -17,9 +17,9 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
     .from('schools')
     .select('id, name, logo_url, slug')
     .eq('id', schoolId)
-    .single();
+    .maybeSingle();
     
-  if (error) {
+  if (error && error.code !== 'PGRST116') {
     console.error('Error fetching school branding:', error);
     return null;
   }
@@ -38,6 +38,8 @@ export function useBranding() {
     staleTime: 60 * 60 * 1000, // Check branding once an hour, realtime will handle updates
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    refetchOnMount: true,
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {
@@ -53,9 +55,9 @@ export function useSchoolBySlug(slug: string | undefined | null) {
         .from('schools')
         .select('id, name, logo_url')
         .eq('id', schoolId as string)
-        .single();
+        .maybeSingle();
       
-      if (schoolError) throw schoolError;
+      if (schoolError && schoolError.code !== 'PGRST116') throw schoolError;
       return school;
     },
     enabled: !!slug,

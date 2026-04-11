@@ -61,8 +61,6 @@ export default function AppLayout({ children }: Props) {
       { to: '/teachers', label: 'المعلمون' },
       { to: '/parents', label: 'أولياء الأمور' },
       { to: '/classes', label: 'الفصول الدراسية' },
-      { to: '/curriculum-management', label: 'إدارة المناهج' },
-      { to: '/grades', label: 'الدرجات والتقييم' },
       { to: '/attendance', label: 'سجل الحضور' },
       { to: '/fees', label: 'المصروفات' },
       { to: '/messages', label: 'الرسائل' },
@@ -82,9 +80,9 @@ export default function AppLayout({ children }: Props) {
 
 
       {/* Mobile Glass Header */}
-      <div className="lg:hidden flex items-center justify-between px-6 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
+      <div className="lg:hidden flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900">
             {schoolBranding.logo && !logoError ? (
               <img 
                 src={schoolBranding.logo} 
@@ -93,20 +91,20 @@ export default function AppLayout({ children }: Props) {
                 onError={() => setLogoError(true)}
               />
             ) : (
-              <BookOpen className="w-5 h-5" />
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
           </div>
-          <span className="text-xl font-black tracking-tight text-slate-900 truncate max-w-[200px]">{schoolBranding.name}</span>
+          <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.name}</span>
         </div>
-        <button 
-          onClick={() => setSidebarOpen(true)}
-          className={cn(
-            "p-3 rounded-2xl bg-white text-slate-900 hover:bg-slate-50 transition-all active:scale-95 border border-slate-100 shadow-sm",
-            user?.role === 'parent' ? "hidden md:flex" : "flex"
-          )}
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        {/* Hide sidebar button for teachers and parents who have BottomNav */}
+        {user?.role !== 'teacher' && user?.role !== 'parent' && (
+          <button 
+            onClick={() => setSidebarOpen(true)}
+            className="p-2.5 sm:p-3 rounded-2xl bg-white text-slate-900 hover:bg-slate-50 transition-all active:scale-95 border border-slate-100 shadow-sm"
+          >
+            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+        )}
       </div>
 
       {/* Sidebar Overlay (Mobile) */}
@@ -126,28 +124,28 @@ export default function AppLayout({ children }: Props) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden pb-24 lg:pb-0 pb-safe transition-all duration-700">
+      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden overflow-y-auto h-full pb-24 lg:pb-0 transition-all duration-700">
         {/* Abstract Background Gradients */}
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
         
         {/* Desktop Header Navigation */}
-        <div className="hidden lg:flex items-center justify-between px-8 py-6 relative z-50">
+        <div className="hidden lg:flex items-center justify-between px-6 xl:px-8 py-4 xl:py-6 relative z-50 sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-xl">
            <div className="flex items-center gap-4">
-              <div className="p-1 px-4 rounded-full text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-600 border-slate-200">
+              <div className="p-1 px-3 xl:px-4 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-600 border-slate-200">
                  نظام الإدارة الذكي — {schoolBranding.name}
               </div>
            </div>
 
-           <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2 p-2 rounded-2xl bg-white border border-slate-100 shadow-sm px-5 h-12 group focus-within:ring-4 focus-within:ring-slate-100 transition-all relative">
-                 <Search className="w-4 h-4 text-slate-300 group-focus-within:text-slate-900 transition-colors" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
+           <div className="flex items-center gap-4 xl:gap-6">
+              <div className="flex items-center gap-2 p-2 rounded-2xl bg-white border border-slate-100 shadow-sm px-4 xl:px-5 h-11 xl:h-12 group focus-within:ring-4 focus-within:ring-slate-100 transition-all relative">
+                 <Search className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-slate-300 group-focus-within:text-slate-900 transition-colors" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
                  <input 
                     type="text" 
                     placeholder="بحث سريع عن الطلاب أو المعلمين..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="bg-transparent border-none text-xs font-bold placeholder:text-slate-300 focus:outline-none w-64" 
+                    className="bg-transparent border-none text-xs font-bold placeholder:text-slate-300 focus:outline-none w-48 xl:w-64" 
                  />
                  
                  {/* Search Results Dropdown */}
@@ -172,11 +170,11 @@ export default function AppLayout({ children }: Props) {
               
               <div 
                 onClick={() => navigate('/notifications')}
-                className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all cursor-pointer shadow-sm relative hover:scale-105 active:scale-95 group"
+                className="w-10 h-10 xl:w-12 xl:h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all cursor-pointer shadow-sm relative hover:scale-105 active:scale-95 group"
               >
-                 <Bell className="w-5 h-5 group-hover:rotate-12 transition-transform" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
+                 <Bell className="w-4 h-4 xl:w-5 xl:h-5 group-hover:rotate-12 transition-transform" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
                  {unreadCount > 0 && (
-                   <span className="absolute -top-1 -right-1 min-w-[20px] h-5 rounded-full bg-rose-500 text-white text-[10px] font-black flex items-center justify-center px-1 border-2 border-white shadow-lg animate-in zoom-in">
+                   <span className="absolute -top-1 -right-1 min-w-[18px] h-4 xl:h-5 rounded-full bg-rose-500 text-white text-[9px] xl:text-[10px] font-black flex items-center justify-center px-1 border-2 border-white shadow-lg animate-in zoom-in">
                      {unreadCount > 9 ? '9+' : unreadCount}
                    </span>
                  )}
@@ -194,13 +192,13 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Scaled Padding for Main Content */}
-        <div className="flex-1 w-full px-4 sm:px-6 lg:px-10 py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10 overflow-x-hidden">
+        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10 overflow-x-hidden">
           {children}
         </div>
         
         {/* Scaled Footer */}
-        <footer className="py-8 px-6 sm:px-10 lg:px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-20 pb-24 lg:pb-12">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-8 max-w-[1400px] mx-auto">
+        <footer className="py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-16 lg:mt-20 pb-20 lg:pb-12">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
              <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">
                    {schoolBranding.logo ? (

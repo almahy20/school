@@ -83,7 +83,7 @@ export default function ClassesPage() {
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
   const handleFilterChange = (val: string) => { setFilterLevel(val); setPage(1); };  return (
     <AppLayout>
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
         {/* Premium Header - Scaled Down */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
           <div className="space-y-2">
@@ -180,37 +180,40 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
   const percentage = Math.min((classItem.student_count || 0) / capacity * 100, 100);
 
   return (
-    <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
-      <div className="p-6 space-y-6">
+    <div 
+      className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" 
+      onClick={onClick}
+    >
+      <div className="p-5 md:p-6 space-y-5 md:space-y-6">
          <div className="flex items-start justify-between">
-            <div className="w-12 h-12 rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
-               <School className="w-6 h-6" />
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-[16px] md:rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
+               <School className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <Badge variant="outline" className="rounded-lg px-3 py-1 bg-slate-50 border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <Badge variant="outline" className="rounded-lg px-2.5 py-0.5 md:px-3 md:py-1 bg-slate-50 border-slate-100 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400">
                {classItem.grade_level || 'مرحلة عامة'}
             </Badge>
          </div>
 
          <div>
-            <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
+            <h3 className="text-base md:text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
             <div className="flex items-center gap-2 text-slate-400">
-               <User className="w-3.5 h-3.5" />
-               <span className="text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
+               <User className="w-3 h-3 md:w-3.5 md:h-3.5" />
+               <span className="text-[9px] md:text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
             </div>
          </div>
 
          <div className="space-y-2">
-            <div className="flex justify-between items-end text-[8px] font-black uppercase tracking-widest">
+            <div className="flex justify-between items-end text-[7px] md:text-[8px] font-black uppercase tracking-widest">
                <span className="text-slate-300">سعة الطلاب</span>
                <span className={cn("font-black", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>{classItem.student_count} / {capacity}</span>
             </div>
-            <Progress value={percentage} className="h-1.5 bg-slate-100" />
+            <Progress value={percentage} className="h-1 md:h-1.5 bg-slate-100" />
          </div>
 
-         <div className="flex gap-4 pt-2 border-t border-slate-50">
-            <Button onClick={onClick} className="flex-1 h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-xs">
+         <div className="flex gap-3 md:gap-4 pt-2 border-t border-slate-50">
+            <div className="flex-1 h-10 md:h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-[10px] md:text-xs">
                استعراض الفصل
-            </Button>
+            </div>
          </div>
       </div>
     </div>
@@ -218,12 +221,15 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
 }
 
 // ─── Modals (Scaled Down) ────────────────────────────────────────────────────
-function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]; user: any; onClose: () => void; onSuccess?: () => void }) {
+function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; user: any; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [teacherId, setTeacherId] = useState('');
   const addMutation = useAddClass();
+  
+  // Ensure teachers is an array
+  const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -265,7 +271,7 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
               className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
               <option value="">بدون معلم</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
             </select>
           </div>
           <div className="flex gap-4 pt-6">
@@ -288,6 +294,9 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
     const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
     const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
     const updateMutation = useUpdateClass();
+    
+    // Ensure teachers is an array
+    const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -328,7 +337,7 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
               <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
                 className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                 <option value="">بدون معلم</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
               </select>
             </div>
             <div className="flex gap-4 pt-6">
