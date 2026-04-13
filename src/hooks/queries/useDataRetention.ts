@@ -240,6 +240,14 @@ export function useCleanupEstimate() {
 
         // Parse interval (e.g., "90 days")
         const days = parseInt(policy.retention_period.split(' ')[0]);
+        
+        // Skip estimates for "forever" periods (long intervals > 100 years or specifically flagged)
+        // 36500 days = 100 years
+        if (days > 36500) {
+          estimates[policy.table_name] = 0;
+          continue;
+        }
+
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
 

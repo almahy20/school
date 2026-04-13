@@ -2,6 +2,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
 import { ReactNode } from 'react';
+import { PageLoader } from '@/components/ui/PageLoader';
 
 interface Props {
   children: ReactNode;
@@ -15,11 +16,7 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   const navigate = useNavigate();
   
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-      </div>
-    );
+    return <PageLoader />;
   }
   
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;

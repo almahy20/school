@@ -29,8 +29,6 @@ const adminLinks: SidebarLink[] = [
   { to: '/classes', label: 'الفصول الدراسية', icon: School },
   { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
   { to: '/fees', label: 'المصروفات', icon: CreditCard },
-  { to: '/database', label: 'إدارة قاعدة البيانات', icon: Database },
-  { to: '/data-retention', label: 'سياسات الاحتفاظ', icon: Database },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
 ];
 
@@ -167,7 +165,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-1.5 overflow-y-auto overlay-scrollbar flex flex-col justify-start pt-2 pb-4">
+      <nav className="flex-1 px-3 space-y-1.5 overflow-y-auto scrollbar-hide flex flex-col justify-start pt-2 pb-4">
         {links.map(link => (
           <NavLink 
             key={link.to} 

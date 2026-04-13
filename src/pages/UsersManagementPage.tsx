@@ -14,7 +14,8 @@ import {
   useDeleteUser, 
   useUpdateUserRole, 
   useUpdateUserStatus,
-  useUpdateUserProfile
+  useUpdateUserProfile,
+  useBranding
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Button } from '@/components/ui/button';
@@ -51,6 +52,7 @@ export default function UsersManagementPage() {
   }, [search]);
 
   // ── Queries ──
+  const { data: branding } = useBranding();
   const { 
     data, 
     isLoading: loading, 
@@ -131,7 +133,7 @@ export default function UsersManagementPage() {
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
-          <div className="space-y-4 relative z-10">
+          <div className="space-y-4 relative z-10 w-full xl:w-1/2">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                  <ShieldCheck className="w-7 h-7" />
@@ -139,9 +141,40 @@ export default function UsersManagementPage() {
               <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">إدارة المستخدمين والصلاحيات</h1>
             </div>
             <p className="text-slate-500 font-medium text-lg pr-1">تحكم كامل في الكادر التعليمي، الإداري، وأولياء الأمور داخل منظومة {currentUser?.schoolId && 'المدرسة'}.</p>
+            
+            {/* LINK COPYING SECTION */}
+            {branding?.slug && (
+               <div className="flex flex-col gap-3 pt-4">
+                 <div className="flex items-center gap-2 group/btn cursor-pointer" onClick={() => {
+                   navigator.clipboard.writeText(`${window.location.origin}/register/parents/${branding.slug}`);
+                   toast({ title: 'تعميم الرابط', description: 'تم نسخ رابط تسجيل أولياء الأمور للمشاركة الدورية.' });
+                 }}>
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover/btn:scale-110 transition-transform">
+                       <LinkIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                       <p className="text-sm font-black text-slate-800">رابط دعوة أولياء الأمور</p>
+                       <p className="text-[10px] font-bold text-slate-400 group-hover/btn:text-indigo-500 transition-colors">اضغط للنسخ والمشاركة</p>
+                    </div>
+                 </div>
+
+                 <div className="flex items-center gap-2 group/btn cursor-pointer" onClick={() => {
+                   navigator.clipboard.writeText(`${window.location.origin}/register/teachers/${branding.slug}`);
+                   toast({ title: 'تعميم الرابط', description: 'تم نسخ رابط تسجيل الكادر التعليمي.' });
+                 }}>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover/btn:scale-110 transition-transform">
+                       <LinkIcon className="w-4 h-4" />
+                    </div>
+                    <div>
+                       <p className="text-sm font-black text-slate-800">رابط دعوة المعلمين</p>
+                       <p className="text-[10px] font-bold text-slate-400 group-hover/btn:text-emerald-500 transition-colors">اضغط للنسخ والمشاركة</p>
+                    </div>
+                 </div>
+               </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-4 relative z-10">
+          <div className="flex items-center gap-4 relative z-10 w-full xl:w-auto xl:justify-end">
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
               <DialogTrigger asChild>
                 <Button className="h-16 px-8 rounded-3xl bg-slate-900 text-white font-black text-xs hover:scale-105 active:scale-95 transition-all gap-3 shadow-2xl shadow-slate-200">

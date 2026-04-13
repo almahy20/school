@@ -25,6 +25,7 @@ export default function AppLayout({ children }: Props) {
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
   const { data: branding } = useBranding();
   const [logoError, setLogoError] = useState(false);
+  const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
 
   const schoolBranding = useMemo(() => {
     const timestamp = Date.now();
@@ -71,7 +72,7 @@ export default function AppLayout({ children }: Props) {
   }, [searchQuery]);
 
   return (
-    <div className="min-h-screen-safe bg-[#FDFEFF] flex flex-col lg:flex-row font-cairo selection:bg-primary/20 overflow-x-hidden relative" dir="rtl">
+    <div className="min-h-screen flex flex-col w-full font-cairo selection:bg-primary/20" dir="rtl">
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
       
@@ -124,13 +125,13 @@ export default function AppLayout({ children }: Props) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 relative lg:mr-72 bg-[#F8FAFC] overflow-x-hidden overflow-y-auto h-full pb-24 lg:pb-0 transition-all duration-700">
+      <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-all duration-700 relative">
         {/* Abstract Background Gradients */}
         <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[40%] h-[40%] bg-violet-500/5 rounded-full blur-[100px] pointer-events-none" />
         
         {/* Desktop Header Navigation */}
-        <div className="hidden lg:flex items-center justify-between px-6 xl:px-8 py-4 xl:py-6 relative z-50 sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-xl">
+        <div className="hidden lg:flex items-center justify-between px-10 xl:px-12 py-4 xl:py-6 relative z-50 sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-xl border-b border-slate-100/50">
            <div className="flex items-center gap-4">
               <div className="p-1 px-3 xl:px-4 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-widest border bg-slate-100 text-slate-600 border-slate-200">
                  نظام الإدارة الذكي — {schoolBranding.name}
@@ -191,13 +192,16 @@ export default function AppLayout({ children }: Props) {
            </div>
         </div>
 
-        {/* Scaled Padding for Main Content */}
-        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10 overflow-x-hidden">
+        {/* Content Section - Flex-1 to push footer down */}
+        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
           {children}
         </div>
         
-        {/* Scaled Footer */}
-        <footer className="py-6 sm:py-8 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-16 lg:mt-20 pb-20 lg:pb-12">
+        {/* Sticky Footer */}
+        <footer className={cn(
+          "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-100/50 bg-white/30 backdrop-blur-md mt-auto",
+          hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
+        )}>
           <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
              <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">

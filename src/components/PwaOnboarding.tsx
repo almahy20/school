@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Download, Bell, ShieldCheck, Smartphone, CheckCircle, Info, X } from 'lucide-react';
+import { Download, Bell, Smartphone, X, Share, PlusSquare } from 'lucide-react';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { cn } from '@/lib/utils';
 
 export default function PwaOnboarding() {
   const { user } = useAuth();
@@ -13,17 +12,13 @@ export default function PwaOnboarding() {
   const [isVisible, setIsVisible] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
-  const [isSafari, setIsSafari] = useState(false);
 
   useEffect(() => {
     // Check for iOS
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isSafariBrowser = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    
     setIsIOS(isIOSDevice);
-    setIsSafari(isSafariBrowser);
 
-    // Check if dismissed - NOW SHOWS ONLY ONCE EVER
+    // Completely hide if permanently dismissed
     if (localStorage.getItem('hide_pwa_onboarding') === 'true') {
       setIsVisible(false);
       return;
@@ -33,21 +28,18 @@ export default function PwaOnboarding() {
     const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(isPWA);
 
-    // If already installed and notifications granted, don't show
     if (isPWA && (permission === 'granted' || permission === 'denied')) {
       localStorage.setItem('hide_pwa_onboarding', 'true');
       setIsVisible(false);
       return;
     }
 
-    // Only show once per session - if they dismissed before, don't show again
-    const sessionShown = sessionStorage.getItem('pwa_onboarding_shown');
-    if (sessionShown === 'true') {
+    // Session cache to not annoy on every refresh
+    if (sessionStorage.getItem('pwa_onboarding_shown') === 'true') {
       setIsVisible(false);
       return;
     }
 
-    // Initial check for existing prompt (Chrome/Edge only)
     if ((window as any).deferredPrompt) {
       setDeferredPrompt((window as any).deferredPrompt);
     }
@@ -56,13 +48,11 @@ export default function PwaOnboarding() {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredPrompt = e; 
-      console.log('✅ PWA Install Prompt Available');
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     
     window.addEventListener('appinstalled', () => {
-      console.log('🎉 App installed successfully');
       setDeferredPrompt(null);
       (window as any).deferredPrompt = null;
       setIsStandalone(true);
@@ -76,10 +66,7 @@ export default function PwaOnboarding() {
   }, [permission]);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) {
-       // On Safari, this button shouldn't even be the primary action if not supported
-       return;
-    }
+    if (!deferredPrompt) return;
     try {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
@@ -88,7 +75,7 @@ export default function PwaOnboarding() {
         setIsStandalone(true);
       }
     } catch (err) {
-      console.error('❌ Install Error:', err);
+      console.error('Install Error:', err);
     }
   };
 
@@ -96,7 +83,7 @@ export default function PwaOnboarding() {
     setIsLoading(true);
     try {
       const success = await subscribeToNotifications();
-      if (success) {
+      if (success && isStandalone) {
         setTimeout(() => setIsVisible(false), 2000);
       }
     } finally {
@@ -105,105 +92,118 @@ export default function PwaOnboarding() {
   };
 
   const handleDismiss = () => {
-    // Permanently dismiss - never show again
-    localStorage.setItem('hide_pwa_onboarding', 'true');
     sessionStorage.setItem('pwa_onboarding_shown', 'true');
     setIsVisible(false);
   };
 
-  if (!isVisible) return null;
-  if (!user) return null;
-  
-  // Only show for parents and teachers
+  const handlePermanentDismiss = () => {
+    localStorage.setItem('hide_pwa_onboarding', 'true');
+    setIsVisible(false);
+  };
+
+  if (!isVisible || !user) return null;
   if (user?.role !== 'parent' && user?.role !== 'teacher') return null;
-  
-  // If already standalone (installed) and notifications granted, never show
   if (isStandalone && permission === 'granted') return null;
 
   return (
-    // Small non-intrusive banner at bottom
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:w-96 z-[9999] animate-in slide-in-from-bottom-10 fade-in duration-500" dir="rtl">
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
-        {/* Header with close button */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-              <Smartphone className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">تحسين تجربتك</h3>
-              <p className="text-xs text-slate-500">خطوات بسيطة لأفضل أداء</p>
-            </div>
-          </div>
-          <button 
-            onClick={handleDismiss}
-            className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </button>
+    <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-500" dir="rtl">
+      <div className="bg-white max-w-sm w-full rounded-[40px] shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-500">
+        
+        {/* Header Background */}
+        <div className="h-32 bg-indigo-600 relative overflow-hidden flex items-center justify-center">
+           <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+           <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-900/40 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+           
+           <div className="w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center relative z-10 rotate-3">
+              <Smartphone className="w-8 h-8 text-indigo-600" />
+           </div>
+           
+           <button 
+             onClick={handleDismiss}
+             className="absolute top-4 right-4 w-8 h-8 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-md transition-all z-20"
+           >
+             <X className="w-4 h-4" />
+           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-4 space-y-3">
-          {/* Step 1: Install */}
-          {!isStandalone && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
-              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-slate-600 shrink-0">
-                <Download className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-700">تثبيت التطبيق</p>
+        <div className="p-8 text-center">
+          <h2 className="text-2xl font-black text-slate-900 mb-2">ثبّت التطبيق الآن</h2>
+          <p className="text-sm font-medium text-slate-500 mb-8 leading-relaxed">
+            للحصول على أفضل تجربة، وسرعة في التصفح، وإشعارات فورية بالدرجات والغياب.
+          </p>
+
+          <div className="space-y-4 text-right">
+            {/* INSTALL APP SECTION */}
+            {!isStandalone && (
+              <div className="bg-slate-50 p-5 rounded-3xl border border-slate-100 flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
+                    <Download className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">إضافة للشاشة الرئيسية</h3>
+                    <p className="text-xs text-slate-400 font-bold">بضغطة زر واحدة فقط</p>
+                  </div>
+                </div>
+
                 {deferredPrompt ? (
                   <Button 
                     onClick={handleInstall} 
-                    className="h-7 px-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 font-bold text-[10px] mt-1"
+                    className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-lg shadow-indigo-600/20 text-sm gap-2"
                   >
-                    تثبيت الآن
+                    <Download className="w-4 h-4" /> تثبيت التطبيق الآن
                   </Button>
                 ) : isIOS ? (
-                  <p className="text-[10px] text-slate-500">اضغط مشاركة ← إضافة للشاشة الرئيسية</p>
+                  <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 space-y-3">
+                    <p className="text-xs font-bold text-indigo-900 text-center">خطوات التثبيت للآيفون (iOS)</p>
+                    <div className="flex items-center justify-center gap-3 text-indigo-600 text-[11px] font-black">
+                      <div className="flex flex-col items-center gap-1">
+                        <Share className="w-6 h-6 p-1 bg-white rounded-md shadow-sm" />
+                        <span>مشاركة</span>
+                      </div>
+                      <span className="text-indigo-300">←</span>
+                      <div className="flex flex-col items-center gap-1">
+                        <PlusSquare className="w-6 h-6 p-1 bg-white rounded-md shadow-sm" />
+                        <span>إضافة للشاشة</span>
+                      </div>
+                    </div>
+                  </div>
                 ) : (
-                  <p className="text-[10px] text-slate-500">استخدم قائمة المتصفح للتثبيت</p>
+                  <p className="text-xs font-bold text-slate-500 text-center bg-white p-3 rounded-xl border border-slate-100">
+                    استخدم زر القائمة في متصفحك (⋮) ثم اختر "تثبيت التطبيق" أو "إضافة للشاشة الرئيسية"
+                  </p>
                 )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Step 2: Notifications */}
-          {permission !== 'granted' && permission !== 'denied' && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
-              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-indigo-600 shrink-0">
-                <Bell className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-700">تفعيل الإشعارات</p>
-                <p className="text-[10px] text-slate-500 mb-1">تنبيهات الغياب والدرجات فوراً</p>
+            {/* NOTIFICATIONS SECTION */}
+            {permission !== 'granted' && permission !== 'denied' && (
+              <div className="bg-emerald-50 p-5 rounded-3xl border border-emerald-100 flex flex-col gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center shrink-0">
+                    <Bell className="w-6 h-6 text-emerald-600 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800 text-base">تفعيل الإشعارات</h3>
+                    <p className="text-xs text-slate-500 font-bold">تنبيهات لحظية بالمستجدات</p>
+                  </div>
+                </div>
                 <Button 
                   onClick={handleNotifications} 
                   disabled={isLoading}
-                  className="h-7 px-3 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 font-bold text-[10px]"
+                  className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg shadow-emerald-600/20 text-sm gap-2"
                 >
-                  {isLoading ? 'جاري...' : 'تفعيل'}
+                  <Bell className="w-4 h-4" /> {isLoading ? 'جاري التفعيل...' : 'السماح بالإشعارات'}
                 </Button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          {isStandalone && permission === 'granted' && (
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50">
-              <CheckCircle className="w-8 h-8 text-emerald-600 shrink-0" />
-              <p className="text-xs font-bold text-emerald-700">تم الإعداد بنجاح! 🎉</p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 pb-3">
           <button 
-            onClick={handleDismiss} 
-            className="w-full text-[10px] font-bold text-slate-400 hover:text-slate-600 transition-colors py-2"
+            onClick={handlePermanentDismiss}
+            className="mt-6 text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors"
           >
-            ربما لاحقاً
+            لا أريد التثبيت، سأستمر من المتصفح
           </button>
         </div>
       </div>

@@ -49,38 +49,41 @@ export default function ParentDetailPage() {
           onRetry={refetchParent}
           loadingMessage="جاري مزامنة بيانات حساب ولي الأمر..."
         >
-          {/* Premium Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 md:gap-10 bg-white/40 backdrop-blur-md p-6 md:p-10 rounded-[40px] md:rounded-[56px] border border-white/50 shadow-xl shadow-slate-100/50 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          {/* Ultra-Premium Hero Banner */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-10 md:p-14 rounded-[40px] md:rounded-[56px] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-amber-500/15 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
+            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             
-            <div className="flex items-center gap-4 md:gap-8 relative z-10">
+            <div className="flex items-center gap-6 md:gap-8 relative z-10 w-full lg:w-2/3">
               <button 
                 onClick={() => navigate('/parents')}
-                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[28px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl shrink-0 backdrop-blur-md"
               >
-                 <ArrowRight className="w-6 h-6 md:w-7 md:h-7" />
+                 <ArrowRight className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               
-              <div className="flex items-center gap-4 md:gap-8">
-                 <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[36px] bg-slate-900 text-indigo-400 flex items-center justify-center shadow-2xl relative group-hover:rotate-6 transition-transform duration-700 shrink-0 border-4 border-white">
+              <div className="flex items-center gap-5 md:gap-8 min-w-0">
+                 <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] bg-gradient-to-tr from-amber-500 to-orange-400 text-white flex items-center justify-center shadow-2xl shadow-amber-500/20 group-hover:rotate-6 transition-transform duration-700 shrink-0 border border-white/20">
                     <User className="w-8 h-8 md:w-12 md:h-12" />
                  </div>
-                 <div className="space-y-1 md:space-y-2">
-                    <h1 className="text-xl md:text-4xl font-black text-slate-900 tracking-tight leading-none mb-1 md:mb-2">{parent?.full_name}</h1>
-                    <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100/50">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">حساب معتمد</span>
-                       </div>
-                       <span className="text-slate-400 text-[10px] font-bold border-r pr-4 border-slate-200 tracking-tight">معرف المستخدم: #{parent?.id?.slice(0, 8)}</span>
+                 <div className="space-y-2 min-w-0">
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{parent?.full_name}</h1>
+                    <div className="flex items-center gap-3 flex-wrap">
+                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block ml-2" />
+                          حساب معتمد
+                       </Badge>
+                       <Badge className="bg-white/10 text-white/70 border border-white/10 font-bold text-[10px] md:text-xs tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md" dir="ltr">
+                          #{parent?.id?.slice(0, 8)}
+                       </Badge>
                     </div>
                  </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-4 relative z-10">
-               <Button className="h-14 md:h-16 px-6 md:px-10 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all shadow-2xl shadow-slate-200 gap-3 text-[10px] md:text-sm">
-                  <Mail className="w-4 h-4 md:w-5 md:h-5 text-indigo-400" /> إرسال رسالة تنبيه
+            <div className="flex items-center gap-4 relative z-10 w-full lg:w-auto lg:justify-end mt-4 lg:mt-0">
+               <Button className="h-14 md:h-16 px-8 rounded-2xl bg-white text-slate-900 font-black gap-3 text-xs md:text-sm shadow-xl hover:bg-slate-50 transition-all">
+                  <Mail className="w-4 h-4 md:w-5 md:h-5 text-amber-600" /> إرسال رسالة تنبيه
                </Button>
             </div>
           </header>

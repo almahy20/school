@@ -3,7 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
-import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
+import { idbPersister } from "@/lib/queryPersister";
+import { PageLoader } from "@/components/ui/PageLoader";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -34,7 +35,6 @@ const FeesPage = lazy(() => import("./pages/FeesPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ParentChildDetailPage = lazy(() => import("./pages/ParentChildDetailPage"));
 const UsersManagementPage = lazy(() => import("./pages/UsersManagementPage"));
-const DatabasePage = lazy(() => import("./pages/DatabasePage"));
 const DataRetentionSettingsPage = lazy(() => import("./pages/DataRetentionSettingsPage"));
 const MessagingPage = lazy(() => import("./pages/MessagingPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -59,13 +59,7 @@ function AppRoutes() {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-        </div>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   return (
@@ -73,11 +67,7 @@ function AppRoutes() {
       <PwaManager />
       <HealthMonitor />
       <PwaOnboarding />
-      <Suspense fallback={
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir="rtl">
-           <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-        </div>
-      }>
+      <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* ── Public Routes ── */}
           <Route path="/home" element={<LandingPage />} />
@@ -114,7 +104,6 @@ function AppRoutes() {
           <Route path="/parent/children/:id/curriculum" element={<ProtectedRoute allowedRoles={['parent']}><StudentCurriculumPage /></ProtectedRoute>} />
           <Route path="/parent/children/:id/data" element={<ProtectedRoute allowedRoles={['parent']}><StudentDataPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />
-          <Route path="/database" element={<ProtectedRoute allowedRoles={['admin']}><DatabasePage /></ProtectedRoute>} />
           <Route path="/data-retention" element={<ProtectedRoute allowedRoles={['admin']}><DataRetentionSettingsPage /></ProtectedRoute>} />
           <Route path="/messages" element={<ProtectedRoute allowedRoles={['admin']}><MessagingPage /></ProtectedRoute>} />
           <Route path="/complaints" element={<ProtectedRoute allowedRoles={['parent']}><ParentComplaintsPage /></ProtectedRoute>} />
@@ -129,19 +118,11 @@ function AppRoutes() {
 }
 
 export default function App() {
-  const persister = typeof window !== 'undefined'
-    ? createSyncStoragePersister({
-        storage: window.localStorage,
-        key: 'rq-persist-v1',
-        throttleTime: 1000,
-      })
-    : undefined;
-
   return (
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={{
-        persister: persister!,
+        persister: idbPersister,
         maxAge: 24 * 60 * 60 * 1000,
         dehydrateOptions: {
           shouldDehydrateQuery: (q) => q.state.status === 'success',

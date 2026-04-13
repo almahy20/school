@@ -54,7 +54,10 @@ export default function StudentsPage() {
 
   const { data: branding } = useBranding();
   const { data: classesData } = useClasses();
-  const classes: Array<{id: string; name: string; grade_level: string | null}> = classesData?.data || [];
+  // Normalize classes to always be an array
+  const classes: Array<{id: string; name: string; grade_level: string | null}> = 
+    Array.isArray(classesData?.data) ? classesData.data : 
+    Array.isArray(classesData) ? classesData : [];
   const deleteMutation = useDeleteStudent();
 
   // ── Debounce Search ──
@@ -251,32 +254,40 @@ export default function StudentsPage() {
 
 function StudentCard({ student, onClick }: { student: any; onClick: () => void }) {
   return (
-    <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
-      <div className="p-6 space-y-6">
+    <div 
+      className="group bg-white rounded-3xl border border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] hover:shadow-[0_15px_30px_-5px_rgba(0,0,0,0.08)] overflow-hidden hover:-translate-y-1.5 transition-all duration-500 text-right cursor-pointer relative" 
+      onClick={onClick}
+    >
+      {/* Soft gradient hover overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+      
+      <div className="p-6 relative z-10 space-y-6">
          <div className="flex items-start justify-between">
-            <div className="w-12 h-12 rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner">
-               <User className="w-6 h-6" />
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50/80 flex items-center justify-center text-indigo-600 transition-all duration-500 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 group-hover:scale-110 shadow-sm border border-indigo-100/50">
+               <User className="w-6 h-6 stroke-[2.5px]" />
             </div>
-            <Badge variant="outline" className="rounded-lg px-3 py-1 bg-slate-50 border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <Badge variant="outline" className="rounded-xl px-3 py-1.5 bg-slate-50 border-slate-200 text-[10px] font-black tracking-widest text-slate-500 shadow-xs group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors">
                {student.classes?.grade_level || 'غير محدد'}
             </Badge>
          </div>
 
-         <div>
-            <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{student.name}</h3>
-            <div className="flex items-center gap-2 text-slate-400">
-               <School className="w-3.5 h-3.5" />
-               <span className="text-[10px] font-black tracking-tight">{student.classes?.name || 'بدون فصل'}</span>
+         <div className="space-y-1.5 mt-2">
+            <h3 className="text-[17px] font-black text-slate-900 group-hover:text-indigo-700 transition-colors leading-tight truncate pr-1">
+               {student.name}
+            </h3>
+            <div className="flex items-center gap-2 text-slate-500 pr-1">
+               <School className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" />
+               <span className="text-[11px] font-bold tracking-tight">{student.classes?.name || 'بدون فصل'}</span>
             </div>
          </div>
 
-         <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-            <div className="flex flex-col">
-               <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">الحالة</span>
-               <span className="text-[10px] font-black text-emerald-600">منتظم</span>
+         <div className="flex items-center justify-between pt-5 border-t border-slate-100/80">
+            <div className="flex items-center gap-2.5">
+               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20"></div>
+               <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">مُنتظم</span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-               <ArrowRight className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-300">
+               <ArrowRight className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
             </div>
          </div>
       </div>
@@ -291,6 +302,9 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
   const [classId, setClassId] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const addMutation = useAddStudent();
+
+  // Normalize classes to always be an array
+  const normalizedClasses = Array.isArray(classes) ? classes : [];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,7 +342,7 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
               <select value={classId} onChange={e => setClassId(e.target.value)}
                 className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                 <option value="">بدون فصل</option>
-                {classes.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
               </select>
             </div>
             <div className="space-y-2">
@@ -358,6 +372,9 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
     const [classId, setClassId] = useState(student.class_id || '');
     const [parentPhone, setParentPhone] = useState(student.parent_phone || '');
     const updateMutation = useUpdateStudent();
+  
+    // Normalize classes to always be an array
+    const normalizedClasses = Array.isArray(classes) ? classes : [];
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -397,7 +414,7 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
                 <select value={classId} onChange={e => setClassId(e.target.value)}
                   className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                   <option value="">بدون فصل</option>
-                  {classes.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                  {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">

@@ -28,6 +28,7 @@ function phoneToEmail(phone: string): string {
 const activeFetchPromises = new Map<string, Promise<AppUser | null>>();
 let lastEventUserId: string | null = null;
 let lastEventTime = 0;
+let lastVisibilityCheckTime = 0; // Throttle visibility checks
 let isLoggingOut = false; // Track logout state
 
 async function fetchAppUser(supaUser: SupabaseUser, retryCount = 0): Promise<AppUser | null> {
@@ -132,21 +133,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const appUser = await fetchAppUser(session.user);
-      // Removed checkUserAccess filter to keep pending users in the 'user' state
-      setUser(prev => {
-        if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
-        return appUser;
-      });
-    } else {
-      setUser(null);
+    try {
+      // First, try to get the current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.warn('⚠️ [refreshUser] getSession error, trying refreshSession:', sessionError.message);
+        // Try to refresh the session
+        const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError || !refreshedSession?.user) {
+          console.error('❌ [refreshUser] Session refresh failed:', refreshError?.message);
+          setUser(null);
+          return;
+        }
+        
+        // Use the refreshed session
+        const appUser = await fetchAppUser(refreshedSession.user);
+        setUser(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+          return appUser;
+        });
+        return;
+      }
+      
+      if (session?.user) {
+        const appUser = await fetchAppUser(session.user);
+        // Removed checkUserAccess filter to keep pending users in the 'user' state
+        setUser(prev => {
+          if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+          return appUser;
+        });
+      } else {
+        // No session, try to refresh it
+        console.log('⚠️ [refreshUser] No session, attempting refresh...');
+        const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+        
+        if (refreshedSession?.user) {
+          const appUser = await fetchAppUser(refreshedSession.user);
+          setUser(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+            return appUser;
+          });
+        } else {
+          setUser(null);
+        }
+      }
+    } catch (error) {
+      console.error('❌ [refreshUser] Critical error:', error);
+      // Don't set to null on unknown errors - preserve existing state
     }
   };
 
   useEffect(() => {
     let isMounted = true;
+    let isInitializing = true; // Track initialization state
 
     const initSession = async () => {
       try {
@@ -174,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } finally {
         if (isMounted) {
           console.log('✅ [AuthContext] Auth initialization complete');
+          isInitializing = false; // Mark initialization as complete
           setLoading(false);
         }
       }
@@ -183,11 +225,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Handle Auth Events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
+      
+      // Ignore events during initialization to prevent race conditions
+      if (isInitializing) {
+        console.log(`⏳ [AuthContext] Ignoring ${event} during initialization`);
+        return;
+      }
 
       console.log(`🔑 Auth Event: ${event} for user: ${session?.user?.id || 'none'}`);
 
       if (event === 'TOKEN_REFRESHED') {
         console.log('🔄 Token refreshed successfully');
+        // Don't refetch user data on token refresh - it's just a token update
+        return;
       }
 
       if (event === 'SIGNED_OUT') {
@@ -195,7 +245,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Only set to null if not already handled by logout function
         if (!isLoggingOut) {
           setUser(null);
+          setLoading(false);
         }
+        return;
+      }
+      
+      // Skip initial session events (handled by initSession)
+      if (event === 'INITIAL_SESSION') {
+        console.log('📋 [AuthContext] INITIAL_SESSION event (already handled)');
         return;
       }
 
@@ -234,6 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
+      isInitializing = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -242,6 +300,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Handle connection monitoring and session refresh
   useEffect(() => {
+    let isMounted = true; // Track mount state for this effect
+    
     const handleOnline = async () => {
       console.log('🌐 [AuthContext] Device back online. Refreshing session...');
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -251,27 +311,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   
     // CRITICAL: Refresh session when tab becomes visible
+    // This prevents the "infinite loader" issue when user returns after a long time
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('⚡ [AuthContext] Tab visible, fast session refresh...');
+      // Throttle visibility checks to once every 2 minutes
+      const now = Date.now();
+      if (document.visibilityState === 'visible' && (now - lastVisibilityCheckTime > 120000)) {
+        lastVisibilityCheckTime = now;
+        console.log('👁️ [AuthContext] Tab became visible, checking session...');
+        
         try {
-          const { data: { session }, error } = await supabase.auth.getSession();
-              
-          if (error) {
-            console.error('❌ [AuthContext] Session refresh error:', error);
-            setUser(null);
+          // Step 1: Try to get current session
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('❌ [AuthContext] getSession error:', sessionError);
+            // Don't set user to null yet - try to refresh
+          }
+          
+          if (session?.user) {
+            console.log('✅ [AuthContext] Session is valid, refreshing user data...');
+            await refreshUser();
+            return; // Session is valid, no need to refresh
+          }
+          
+          // Step 2: If no session or expired, try to refresh it
+          console.log('⚠️ [AuthContext] No active session, attempting to refresh...');
+          
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.warn('⚠️ [AuthContext] Session refresh failed (session truly expired):', refreshError.message);
+            // Session is truly expired, user needs to log in again
+            if (!isLoggingOut) {
+              setUser(null);
+            }
             return;
           }
-              
-          if (session?.user) {
-            console.log('✅ [AuthContext] Session valid, fast user refresh...');
-            await refreshUser();
+          
+          if (refreshedSession?.user) {
+            console.log('✅ [AuthContext] Session refreshed successfully!');
+            // Fetch user data with the new session
+            const appUser = await fetchAppUser(refreshedSession.user);
+            if (isMounted) {
+              setUser(prev => {
+                if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+                return appUser;
+              });
+              setLoading(false);
+            }
           } else {
-            console.warn('⚠️ [AuthContext] No session on visibility change');
-            setUser(null);
+            // No session even after refresh
+            console.warn('⚠️ [AuthContext] No session after refresh attempt');
+            if (!isLoggingOut) {
+              setUser(null);
+            }
           }
         } catch (err) {
-          console.error('❌ [AuthContext] Visibility change session error:', err);
+          console.error('❌ [AuthContext] Visibility change handler error:', err);
+          // Don't set user to null on unknown errors - let existing state persist
         }
       }
     };
@@ -280,6 +377,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
         
     return () => {
+      isMounted = false; // Prevent state updates after unmount
       window.removeEventListener('online', handleOnline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };

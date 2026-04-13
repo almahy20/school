@@ -230,13 +230,13 @@ export function useUpdateStudent() {
       // 2. Optimistically update the UI
       queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
-        return old.map(s => s.id === id ? { ...s, ...data, updated_at: new Date().toISOString() } : s);
+        return old.map(s => s.id === id ? { ...s, ...data } : s);
       });
 
-      // 3. Perform the actual update with updated_at timestamp
+      // 3. Perform the actual update
       const { error } = await supabase
         .from('students')
-        .update({ ...data, updated_at: new Date().toISOString() })
+        .update({ ...data })
         .eq('id', id);
         
       if (error) {

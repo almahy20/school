@@ -7,6 +7,7 @@ import {
   Smartphone, CheckCircle2, Info, Settings2, Palette
 } from 'lucide-react';
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
+import DatabaseManager from '@/components/admin/DatabaseManager';
 import { useToast } from '@/hooks/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useState, useEffect } from 'react';
@@ -17,7 +18,7 @@ import {
   useUpdateMyProfile 
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
-import { Button } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -82,14 +83,7 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-400 font-medium tracking-wide pr-1">إدارة حسابك الشخصي، هوية المؤسسة، وتفضيلات التواصل الرقمي.</p>
         </header>
 
-        <QueryStateHandler
-          loading={isLoading}
-          error={error}
-          data={profile}
-          onRetry={refetch}
-          loadingMessage="جاري مزامنة تفضيلاتك..."
-          emptyMessage="تعذر جلب ملفك الشخصي حالياً."
-        >
+        {/* Settings content always renders — profile data used conditionally */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {/* Left Column: Profile & Navigation */}
             <div className="lg:col-span-4 space-y-8 order-2 lg:order-1">
@@ -158,8 +152,13 @@ export default function SettingsPage() {
             <div className="lg:col-span-8 space-y-12 order-1 lg:order-2">
                {/* Institutional Branding (Admin Only) */}
                {profile?.role === 'admin' && (
-                 <div className="animate-in slide-in-from-top-4 duration-500">
-                    <SchoolBrandingSettings />
+                 <div className="space-y-12">
+                   <div className="animate-in slide-in-from-top-4 duration-500">
+                      <SchoolBrandingSettings />
+                   </div>
+                   <div className="animate-in slide-in-from-top-4 duration-[600ms]">
+                      <DatabaseManager />
+                   </div>
                  </div>
                )}
 
@@ -220,29 +219,30 @@ export default function SettingsPage() {
                {/* Access Level (Admin Only Highlights) */}
                {profile?.role === 'admin' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <button onClick={() => navigate('/users')} className="p-10 rounded-[40px] bg-slate-900 text-white flex flex-col justify-between group hover:scale-[1.02] transition-all shadow-2xl shadow-slate-200 h-64">
-                       <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center transition-all group-hover:rotate-6">
-                          <Users className="w-7 h-7 text-indigo-400" />
+                    <button onClick={() => navigate('/users')} className="p-8 rounded-[32px] bg-slate-900 text-white flex flex-col justify-between group hover:scale-[1.02] transition-all shadow-2xl shadow-slate-200 h-56 relative overflow-hidden text-right">
+                       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
+                       <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center transition-all group-hover:rotate-6 shadow-inner border border-white/5 relative z-10">
+                          <Users className="w-6 h-6 text-indigo-300" />
                        </div>
-                       <div className="text-right">
-                          <h4 className="text-2xl font-black mb-1">إدارة الكوادر</h4>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">التحكم في المعلمين وأولياء الأمور</p>
+                       <div className="text-right relative z-10 w-full">
+                          <h4 className="text-xl font-black mb-1">إدارة الكوادر</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">التحكم المباشر في الصلاحيات</p>
                        </div>
                     </button>
-                    <button onClick={() => navigate('/database')} className="p-10 rounded-[40px] bg-white border border-slate-100 flex flex-col justify-between group hover:scale-[1.02] transition-all shadow-xl shadow-slate-100 h-64">
-                       <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center transition-all group-hover:rotate-6">
-                          <Database className="w-7 h-7 text-slate-300 group-hover:text-slate-900 transition-colors" />
+
+                    <button onClick={() => navigate('/data-retention')} className="p-8 rounded-[32px] bg-white border border-slate-100 flex flex-col justify-between group hover:scale-[1.02] transition-all shadow-xl shadow-slate-100/50 h-56 relative overflow-hidden text-right">
+                       <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center transition-all group-hover:rotate-6 shadow-inner border border-rose-100/50 relative z-10">
+                          <Database className="w-6 h-6 text-rose-500 group-hover:text-rose-600 transition-colors" />
                        </div>
-                       <div className="text-right">
-                          <h4 className="text-2xl font-black text-slate-900 mb-1">مركز البيانات</h4>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">التحكم المباشر في سجلات النظام</p>
+                       <div className="relative z-10 w-full text-right">
+                          <h4 className="text-xl font-black text-slate-900 mb-1">سياسات الحذف</h4>
+                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed">قواعد الأرشفة التلقائية</p>
                        </div>
                     </button>
                  </div>
                )}
             </div>
           </div>
-        </QueryStateHandler>
         
         <div className="text-center p-14 bg-slate-50 rounded-[48px] border border-slate-100 mt-10 relative overflow-hidden">
            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#CBD5E1 1px, transparent 1px)', backgroundSize: '24px 24px' }} />

@@ -63,50 +63,53 @@ export default function TeacherDetailPage() {
           onRetry={refetchTeacher}
           loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
         >
-          {/* Premium Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-10 rounded-[40px] md:rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          {/* Ultra-Premium Hero Banner */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-10 md:p-14 rounded-[40px] md:rounded-[56px] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
+            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-indigo-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             
-            <div className="flex items-center gap-4 md:gap-6 relative z-10 text-right">
+            <div className="flex items-center gap-6 md:gap-8 relative z-10 text-right w-full lg:w-2/3">
               <button 
                 onClick={() => navigate('/teachers')}
-                className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
+                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl shrink-0 backdrop-blur-md"
               >
-                 <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
+                 <ArrowRight className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               
-              <div className="flex items-center gap-4 md:gap-6">
-                 <Avatar className="w-16 h-16 md:w-20 md:h-20 rounded-2xl md:rounded-[32px] border-4 border-white shadow-2xl shrink-0 group-hover:rotate-3 transition-transform duration-500">
-                    <AvatarFallback className="bg-slate-900 text-white text-xl md:text-3xl font-black">
+              <div className="flex items-center gap-5 md:gap-8 min-w-0">
+                 <Avatar className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] border-[3px] border-white/20 shadow-2xl shadow-emerald-900/30 shrink-0 group-hover:rotate-3 transition-transform duration-700">
+                    <AvatarFallback className="bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white text-2xl md:text-4xl font-black rounded-none">
                        {teacher?.full_name?.[0]}
                     </AvatarFallback>
                  </Avatar>
-                 <div className="space-y-1 min-w-0">
-                    <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 md:mb-2 truncate">{teacher?.full_name}</h1>
-                    <div className="flex items-center gap-2 md:gap-3">
-                       <Badge className="bg-indigo-600/5 text-indigo-600 border-none font-black text-[8px] md:text-[10px] uppercase tracking-widest px-3 md:px-4 py-1 md:py-1.5 rounded-full shadow-sm">
+                 <div className="space-y-2 min-w-0">
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{teacher?.full_name}</h1>
+                    <div className="flex items-center gap-3 flex-wrap">
+                       <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
                           {teacher?.specialization || 'التخصص التعليمي'}
                        </Badge>
-                       <span className="text-slate-400 text-[8px] md:text-[10px] font-bold border-r pr-2 md:pr-3 border-slate-200 tracking-tight">عضو نشط منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}</span>
+                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
+                          عضو منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}
+                       </Badge>
                     </div>
                  </div>
               </div>
             </div>
             
             {authUser?.role === 'admin' && (
-              <div className="flex items-center gap-3 md:gap-4 relative z-10">
+              <div className="flex items-center gap-4 relative z-10 w-full lg:w-auto lg:justify-end mt-4 lg:mt-0">
                 <Button 
                   onClick={() => setShowEdit(true)}
-                  className="h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-2xl bg-white border border-slate-100 text-slate-900 font-black hover:bg-slate-50 transition-all shadow-xl shadow-slate-100/50 gap-2 md:gap-3 text-[10px] md:text-xs flex-1 lg:flex-none"
+                  className="h-14 md:h-16 px-8 rounded-2xl md:rounded-[24px] bg-white text-slate-900 font-black text-xs md:text-sm hover:bg-slate-50 transition-all shadow-xl gap-3 flex-1 lg:flex-none"
                 >
-                  <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل السجل
+                  <Edit2 className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" /> تعديل السجل
                 </Button>
                 <Button 
                   onClick={handleDelete}
                   disabled={deleteTeacherMutation.isPending}
-                  className="h-12 w-12 md:h-14 md:w-14 rounded-xl md:rounded-2xl bg-rose-50 border border-rose-100 text-rose-500 hover:bg-rose-100 transition-all shadow-sm flex items-center justify-center shrink-0"
+                  className="h-14 md:h-16 w-14 md:w-16 rounded-2xl md:rounded-[24px] bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 transition-all shadow-lg flex items-center justify-center shrink-0 backdrop-blur-md"
                 >
-                  {deleteTeacherMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
+                  {deleteTeacherMutation.isPending ? <Loader2 className="w-6 h-6 md:w-7 md:h-7 animate-spin" /> : <Trash2 className="w-6 h-6 md:w-7 md:h-7" />}
                 </Button>
               </div>
             )}

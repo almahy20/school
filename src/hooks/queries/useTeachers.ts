@@ -198,12 +198,12 @@ export function useUpdateTeacher() {
       // Optimistic update for better cross-browser UX
       queryClient.setQueriesData({ queryKey: ['teachers'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
-        return old.map(t => t.id === id ? { ...t, full_name, phone, updated_at: new Date().toISOString() } : t);
+        return old.map(t => t.id === id ? { ...t, full_name, phone } : t);
       });
 
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name, phone, updated_at: new Date().toISOString() })
+        .update({ full_name, phone })
         .eq('id', id);
       if (error) throw error;
     },

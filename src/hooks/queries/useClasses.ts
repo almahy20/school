@@ -100,13 +100,17 @@ export function useClass(id: string | undefined | null) {
     queryKey,
     queryFn: async () => {
       if (!id) return null;
+      
+      // Don't use .single() because it throws error if 0 rows (RLS block) or >1 rows
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('id', id)
-        .single();
+        .eq('id', id);
+      
       if (error) throw error;
-      return data as Class;
+      
+      // Return first item or null
+      return (data && data.length > 0) ? data[0] as Class : null;
     },
     enabled: !!id,
     staleTime: 0,
@@ -176,10 +180,10 @@ export function useUpdateClass() {
       // Optimistic update
       queryClient.setQueriesData({ queryKey: ['classes'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
-        return old.map(c => c.id === id ? { ...c, ...data, updated_at: new Date().toISOString() } : c);
+        return old.map(c => c.id === id ? { ...c, ...data } : c);
       });
 
-      const { error } = await supabase.from('classes').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
+      const { error } = await supabase.from('classes').update({ ...data }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

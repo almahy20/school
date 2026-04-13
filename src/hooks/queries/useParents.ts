@@ -193,7 +193,7 @@ export function useParentAction() {
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
       const { error } = await (supabase.from('user_roles') as any)
-        .update({ approval_status: status, updated_at: new Date().toISOString() })
+        .update({ approval_status: status })
         .eq('id', userRoleId);
       if (error) throw error;
     },
@@ -212,10 +212,10 @@ export function useUpdateParent() {
       // Optimistic update
       queryClient.setQueriesData({ queryKey: ['parents'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
-        return old.map(p => p.id === id ? { ...p, ...data, updated_at: new Date().toISOString() } : p);
+        return old.map(p => p.id === id ? { ...p, ...data } : p);
       });
 
-      const { error } = await supabase.from('profiles').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
+      const { error } = await supabase.from('profiles').update({ ...data }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
