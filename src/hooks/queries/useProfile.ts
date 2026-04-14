@@ -36,11 +36,9 @@ export function useProfile() {
       return (data as unknown) as Profile;
     },
     enabled: !!user?.id,
-    staleTime: 5 * 1000, // ⚡ 5 seconds
+    staleTime: 5 * 60 * 1000, // 5 minutes - profile doesn't change often
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     refetchInterval: 10 * 1000, // ⚡ 10 seconds (was 15s)
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

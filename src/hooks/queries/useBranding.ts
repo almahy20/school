@@ -37,9 +37,7 @@ export function useBranding() {
     enabled: !!user?.schoolId,
     staleTime: 60 * 60 * 1000, // Check branding once an hour, realtime will handle updates
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {

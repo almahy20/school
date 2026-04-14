@@ -30,9 +30,8 @@ async function fetchClasses(
   if (!user.isSuperAdmin && user.schoolId) {
     q = q.eq('school_id', user.schoolId);
   }
-  if (user.role === 'teacher') {
-    q = q.eq('teacher_id', user.id);
-  }
+  // Teachers can now see all classes in their school (not just their own)
+  // Removed: if (user.role === 'teacher') { q = q.eq('teacher_id', user.id); }
 
   if (search) {
     q = q.ilike('name', `%${search}%`);
@@ -61,11 +60,9 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = '�
     queryKey,
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 1000, // ⚡ 5 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
@@ -83,7 +80,8 @@ export function useAllClasses() {
       if (!user?.isSuperAdmin && !user?.schoolId) return [];
       let q = supabase.from('classes').select('*');
       if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
-      if (user.role === 'teacher') q = q.eq('teacher_id', user.id);
+      // Teachers can now see all classes in their school (not just their own)
+      // Removed: if (user.role === 'teacher') q = q.eq('teacher_id', user.id);
       const { data, error } = await q.order('name');
       if (error) throw error;
       return data || [];

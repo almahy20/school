@@ -86,11 +86,9 @@ export function useStudents(page = 1, pageSize = 15, search = '', className = '�
     queryFn: () => fetchStudents(user, page, pageSize, search, className),
     enabled: !!user?.id, 
     // ⚡ SPEED: Reduce from 0 to 5s - prevents excessive refetching
-    staleTime: 5 * 1000, // 5 seconds - fast but not excessive
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // Reduce from 15min to 5min
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     // ⚡ SPEED: Reduce retry from 3 to 2 for faster failure
     retry: 2,

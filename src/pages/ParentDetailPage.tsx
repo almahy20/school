@@ -3,7 +3,8 @@ import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowRight, User, Phone, Users, Info, 
-  MapPin, Mail, Shield, ChevronLeft, CreditCard
+  MapPin, Mail, Shield, ChevronLeft, CreditCard,
+  Clock, Bell, CheckCircle, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -14,16 +15,51 @@ import {
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useState, useEffect } from 'react';
 
 export default function ParentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [notificationStats, setNotificationStats] = useState<any>(null);
+  const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
 
   // ── Queries ──
   const { data: parent, isLoading: parentLoading, error: parentError, refetch: refetchParent } = useParent(id);
   const { data: children = [], isLoading: childrenLoading } = useAdminParentChildren(id);
   const deleteParentMutation = useDeleteParent();
+
+  // Fetch notification stats and last_seen
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchParentData = async () => {
+      // Fetch last_seen from profiles
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('last_seen')
+        .eq('id', id)
+        .single();
+
+      if (profileData?.last_seen) {
+        setParentLastSeen(profileData.last_seen);
+      }
+
+      // Fetch notification stats
+      const { data: stats } = await supabase
+        .from('notification_stats')
+        .select('*')
+        .eq('user_id', id)
+        .single();
+
+      if (stats) {
+        setNotificationStats(stats);
+      }
+    };
+
+    fetchParentData();
+  }, [id]);
 
   const handleDelete = async () => {
     if (!id || !window.confirm('هل أنت متأكد من حذف حساب ولي الأمر هذا؟ سيؤدي ذلك لإزالة صلاحياته بالكامل.')) return;
@@ -187,6 +223,105 @@ export default function ParentDetailPage() {
 
             {/* Sidebar Governance */}
             <div className="lg:col-span-4 space-y-12">
+               {/* Activity & Notifications Section */}
+               <section className="bg-white rounded-[64px] p-12 space-y-10 shadow-2xl border border-slate-100">
+                  <div className="flex items-center gap-5">
+                     <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shadow-inner shrink-0">
+                        <Clock className="w-7 h-7" />
+                     </div>
+                     <h2 className="text-xl font-black text-slate-900 leading-none">نشاط الحساب</h2>
+                  </div>
+
+                  {/* Last Seen */}
+                  <div className="p-8 rounded-[48px] bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100">
+                     <div className="flex items-center gap-4 mb-4">
+                        <Clock className="w-5 h-5 text-blue-600" />
+                        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">آخر ظهور</p>
+                     </div>
+                     <p className="text-lg font-black text-slate-900">
+                       {parentLastSeen 
+                         ? new Date(parentLastSeen).toLocaleString('ar-EG', { 
+                             year: 'numeric', 
+                             month: 'long', 
+                             day: 'numeric',
+                             hour: '2-digit',
+                             minute: '2-digit'
+                           })
+                         : 'غير مسجل'
+                       }
+                     </p>
+                  </div>
+
+                  {/* Notification Stats */}
+                  {notificationStats && (
+                    <div className="space-y-6">
+                       <div className="flex items-center gap-5">
+                          <div className="w-14 h-14 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-inner shrink-0">
+                             <Bell className="w-7 h-7" />
+                          </div>
+                          <h2 className="text-xl font-black text-slate-900 leading-none">إحصائيات الإشعارات</h2>
+                       </div>
+
+                       <div className="grid grid-cols-2 gap-4">
+                          {/* Total Sent */}
+                          <div className="p-6 rounded-[32px] bg-amber-50 border border-amber-100">
+                             <div className="flex items-center gap-3 mb-3">
+                                <Send className="w-5 h-5 text-amber-600" />
+                                <p className="text-[9px] font-black text-amber-400 uppercase tracking-widest">تم الإرسال</p>
+                             </div>
+                             <p className="text-3xl font-black text-slate-900">
+                               {notificationStats.total_sent || 0}
+                             </p>
+                          </div>
+
+                          {/* Total Read */}
+                          <div className="p-6 rounded-[32px] bg-emerald-50 border border-emerald-100">
+                             <div className="flex items-center gap-3 mb-3">
+                                <CheckCircle className="w-5 h-5 text-emerald-600" />
+                                <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">تم القراءة</p>
+                             </div>
+                             <p className="text-3xl font-black text-slate-900">
+                               {notificationStats.total_read || 0}
+                             </p>
+                          </div>
+                       </div>
+
+                       {/* Read Rate */}
+                       {notificationStats.total_sent > 0 && (
+                         <div className="p-6 rounded-[32px] bg-slate-50 border border-slate-100">
+                            <div className="flex items-center justify-between mb-4">
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">نسبة القراءة</p>
+                               <p className="text-lg font-black text-slate-900">
+                                 {Math.round((notificationStats.total_read / notificationStats.total_sent) * 100)}%
+                               </p>
+                            </div>
+                            <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden">
+                               <div 
+                                 className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+                                 style={{ width: `${(notificationStats.total_read / notificationStats.total_sent) * 100}%` }}
+                               />
+                            </div>
+                         </div>
+                       )}
+
+                       {/* Last Notification */}
+                       {notificationStats.last_notification_at && (
+                         <div className="p-6 rounded-[32px] bg-indigo-50 border border-indigo-100">
+                            <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2">آخر إشعار</p>
+                            <p className="text-sm font-bold text-slate-900">
+                              {new Date(notificationStats.last_notification_at).toLocaleString('ar-EG', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                         </div>
+                       )}
+                    </div>
+                  )}
+               </section>
+
                <section className="bg-slate-900 rounded-[64px] p-12 space-y-12 shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-20" />
                   

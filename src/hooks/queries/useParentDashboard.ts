@@ -66,12 +66,10 @@ export function useParentChildren() {
       return enrichedKids;
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    staleTime: 5 * 1000, // ⚡ 5 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
     refetchInterval: 10 * 1000, // ⚡ 10 seconds (was 15s)
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     retry: 2, // ⚡ Faster failure
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

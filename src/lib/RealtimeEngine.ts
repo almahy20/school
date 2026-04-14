@@ -25,6 +25,8 @@ class RealtimeEngine {
   private maxDelay = 30000; // 30 seconds
   private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
   private isResyncing = false;
+  private lastResyncTime = 0;
+  private resyncCooldown = 5000; // 5 seconds cooldown between resyncs
 
   constructor() {
     // Listen for auth changes
@@ -47,11 +49,8 @@ class RealtimeEngine {
       // Start health monitoring
       this.startHealthMonitoring();
       
-      // Handle visibility changes
-      this.setupVisibilityHandler();
-      
-      // Handle online/offline events
-      this.setupNetworkHandlers();
+      // Note: Visibility and Network handlers are now coordinated by HealthMonitor
+      // to prevent redundant connection attempts and Auth lock contention.
     }
   }
 
@@ -88,28 +87,16 @@ class RealtimeEngine {
   private createChannel(channelName: string, table: string, callback?: (payload: any) => void, options: { event?: string, filter?: string } = {}) {
     console.log(`[RealtimeEngine] Creating channel: ${channelName} for table: ${table}`);
     
-    // CRITICAL: Check if we already have this channel - prevent duplicate creation
-    const existingSub = this.activeSubscriptions.get(channelName);
-    if (existingSub && existingSub.channel) {
-      const state = existingSub.channel.state;
-      
-      // If channel exists and is already subscribed/joined, DON'T recreate it
-      // This prevents "cannot add postgres_changes after subscribe()" error
-      if ((state === 'subscribed' || state === 'joined') && !existingSub.channel._isBeingRemoved) {
-        console.warn(`[RealtimeEngine] Channel ${channelName} already active (state: ${state}), reusing`);
-        return existingSub.channel;
-      }
-      
-      // Only remove if channel is truly dead or being removed
-      if (existingSub.channel._isBeingRemoved) {
-        console.log(`[RealtimeEngine] Channel ${channelName} is being removed, waiting...`);
-        return existingSub.channel;
-      }
-      
-      // Channel is in bad state - mark and remove
-      console.log(`[RealtimeEngine] Removing dead channel: ${channelName} (state: ${state})`);
-      existingSub.channel._isBeingRemoved = true;
-      supabase.removeChannel(existingSub.channel);
+    // CRITICAL: Always check if Supabase already has a channel with this name
+    // and remove it before creating a new one to avoid "cannot add postgres_changes after subscribe()"
+    // Using safer check for existing channels in various versions of Supabase SDK
+    const supabaseAny = supabase as any;
+    const channels = supabaseAny.channels || (supabaseAny.realtime && supabaseAny.realtime.channels) || [];
+    const existingChannel = Array.isArray(channels) ? channels.find((c: any) => c.topic === `realtime:${channelName}`) : null;
+    
+    if (existingChannel) {
+      console.log(`[RealtimeEngine] Removing globally existing channel: ${channelName}`);
+      supabase.removeChannel(existingChannel);
     }
     
     const channel: any = supabase.channel(channelName, {
@@ -124,6 +111,7 @@ class RealtimeEngine {
       }
     });
     
+    // CRITICAL: Add .on() BEFORE .subscribe() to avoid "cannot add postgres_changes after subscribe()" error
     channel
       .on(
         'postgres_changes' as any,
@@ -450,12 +438,20 @@ class RealtimeEngine {
    * Comprehensive resync after tab becomes visible again
    */
   public async resyncAll() {
+    // Prevent too frequent resyncs (cooldown period)
+    const now = Date.now();
+    if (now - this.lastResyncTime < this.resyncCooldown) {
+      console.log('[RealtimeEngine] Resync cooldown active, skipping...');
+      return;
+    }
+
     if (this.isResyncing) {
       console.log('[RealtimeEngine] Resync already in progress, skipping...');
       return;
     }
 
     this.isResyncing = true;
+    this.lastResyncTime = now;
     console.log('🔄 [RealtimeEngine] Starting comprehensive resync...');
     
     // First, check if Supabase realtime connection is alive
@@ -602,12 +598,12 @@ class RealtimeEngine {
    * Start periodic health monitoring
    */
   private startHealthMonitoring() {
-    // Check health every 30 seconds
+    // Check health every 60 seconds (reduced from 30s to avoid unnecessary checks)
     this.healthCheckInterval = setInterval(() => {
       this.performHealthCheck();
-    }, 30000);
+    }, 60000);
     
-    console.log('[RealtimeEngine] Health monitoring started (30s interval)');
+    console.log('[RealtimeEngine] Health monitoring started (60s interval)');
   }
 
   private async performHealthCheck() {
@@ -626,57 +622,16 @@ class RealtimeEngine {
         }
       }
       
-      // Log warning for channels in bad states
-      if (state === 'closed' || state === 'errored' || state === 'unsubscribed') {
+      // Only reconnect channels in definitively bad states
+      // Don't reconnect on 'closed' as it might be intentional (tab in background)
+      if (state === 'errored' || state === 'unsubscribed') {
         console.warn(`[RealtimeEngine] Unhealthy channel detected: ${channelName} (${state})`);
         this.reconnectChannel(channelName);
       }
     }
   }
 
-  /**
-   * Setup visibility change handler
-   */
-  private setupVisibilityHandler() {
-    if (typeof document === 'undefined') return;
-    
-    document.addEventListener('visibilitychange', async () => {
-      if (document.visibilityState === 'visible') {
-        console.log('👁️ [RealtimeEngine] Tab became visible, checking connections...');
-        
-        // Small delay to ensure network is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Resync all channels
-        await this.resyncAll();
-      }
-    });
-    
-    console.log('[RealtimeEngine] Visibility handler setup complete');
-  }
 
-  /**
-   * Setup network online/offline handlers
-   */
-  private setupNetworkHandlers() {
-    if (typeof window === 'undefined') return;
-    
-    window.addEventListener('online', async () => {
-      console.log('🌐 [RealtimeEngine] Network came online, reconnecting...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      await this.reconnectAll();
-    });
-    
-    window.addEventListener('offline', () => {
-      console.log('🔌 [RealtimeEngine] Network went offline, marking channels as unhealthy');
-      
-      // Mark all channels as unhealthy but don't remove them
-      for (const [channelName, sub] of this.activeSubscriptions.entries()) {
-        sub.isHealthy = false;
-        sub.lastError = new Date();
-      }
-    });
-  }
 
   /**
    * Get subscription status for debugging
@@ -724,7 +679,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['students'],
           exact: false,
-          refetchType: 'active' // تحديث الصفحات الظاهرة حالياً فقط في الخلفية
+          refetchType: 'none' // تحديث الصفحات الظاهرة حالياً فقط في الخلفية
         });
 
         // تحديث استعلام الطالب المنفرد إذا كان مفتوحاً
@@ -738,7 +693,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['teachers'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
         if (eventType === 'UPDATE' || eventType === 'INSERT') {
            queryClient.setQueriesData({ queryKey: ['teacher', newRec.id] }, newRec);
@@ -750,7 +705,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['teachers'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
       }
 
@@ -758,7 +713,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['classes'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
         if (eventType === 'UPDATE' || eventType === 'INSERT') {
            queryClient.setQueriesData({ queryKey: ['class', newRec.id] }, newRec);
@@ -769,12 +724,12 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['complaints'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
         queryClient.invalidateQueries({ 
           queryKey: ['parent-complaints'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
       }
 
@@ -782,12 +737,12 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['exam-templates'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
         queryClient.invalidateQueries({ 
           queryKey: ['student-grades'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
       }
 
@@ -795,7 +750,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['attendance'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
       }
 
@@ -803,12 +758,12 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ 
           queryKey: ['curriculums'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
         queryClient.invalidateQueries({ 
           queryKey: ['curriculum-subjects'],
           exact: false,
-          refetchType: 'active'
+          refetchType: 'none'
         });
       }
       

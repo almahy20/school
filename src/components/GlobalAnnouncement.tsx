@@ -32,24 +32,6 @@ export function GlobalAnnouncement() {
     setIsOpen(true);
   }, []);
 
-  const handleNewMessage = useCallback(async (payload: any) => {
-    const newMsg = payload.new as any;
-    if (markedAsReadRef.current.has(newMsg.id)) return;
-
-    // Fetch sender name
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', newMsg.sender_id)
-      .single();
-
-    addToQueue({
-      id: newMsg.id,
-      content: newMsg.content,
-      sender_name: profile?.full_name || 'الإدارة',
-    });
-  }, [addToQueue]);
-
   useEffect(() => {
     if (!user) return;
 
@@ -78,16 +60,36 @@ export function GlobalAnnouncement() {
     fetchUnread();
 
     // 2. Real-time for NEW messages while user is online
+    // Create inline handler to avoid recreating on every render
+    const handleRealtimeMessage = async (payload: any) => {
+      const newMsg = payload.new as any;
+      if (markedAsReadRef.current.has(newMsg.id)) return;
+
+      // Fetch sender name
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', newMsg.sender_id)
+        .single();
+
+      addToQueue({
+        id: newMsg.id,
+        content: newMsg.content,
+        sender_name: profile?.full_name || 'الإدارة',
+      });
+    };
+
     const unsubscribe = realtimeEngine.subscribe(
       'messages',
-      handleNewMessage,
+      handleRealtimeMessage,
       { event: 'INSERT', filter: `receiver_id=eq.${user.id}` }
     );
 
     return () => {
+      console.log('[GlobalAnnouncement] Cleaning up realtime subscription');
       unsubscribe();
     };
-  }, [user, handleNewMessage]);
+  }, [user, addToQueue]); // Include user and addToQueue as dependencies
 
   const markCurrentAsRead = async (id: string) => {
     if (markedAsReadRef.current.has(id)) return;

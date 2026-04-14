@@ -20,14 +20,14 @@ interface SidebarLink {
 }
 
 const adminLinks: SidebarLink[] = [
-  { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
+  { to: '/', label: 'الرئيسية', icon: Home },
   { to: '/messages', label: 'بث الرسائل', icon: Send },
   { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck },
   { to: '/classes', label: 'الفصول الدراسية', icon: School },
-  { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
+  { to: '/attendance', label: 'سجل حضور المعلمين', icon: CalendarCheck },
   { to: '/fees', label: 'المصروفات', icon: CreditCard },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
 ];
@@ -40,10 +40,8 @@ const superAdminLinks: SidebarLink[] = [
 ];
 
 const teacherLinks: SidebarLink[] = [
-  { to: '/', label: 'لوحة التحكم', icon: LayoutDashboard },
-  { to: '/students', label: 'طلابي', icon: Users },
+  { to: '/', label: 'الرئيسية', icon: Home },
   { to: '/classes', label: 'فصولي', icon: School },
-  { to: '/attendance', label: 'سجل الحضور', icon: CalendarCheck },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 

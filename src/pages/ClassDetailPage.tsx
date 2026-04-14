@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/hooks/use-toast';
@@ -6,9 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, School, Users, Edit2, Trash2, 
   User, ChevronLeft, Calendar, Shield, Activity, 
-  Search, Loader2, Printer, BookOpen, Plus, Edit3, Layers
+  Search, Loader2, Printer, BookOpen, Plus, Edit3, Layers,
+  CalendarCheck, MessageSquare
 } from 'lucide-react';
 import { EditClassModal } from './ClassesPage';
+import ClassExamsView from '@/components/dashboard/ClassExamsView';
+import ClassMessagesView from '@/components/dashboard/ClassMessagesView';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +36,9 @@ import {
   useDeleteCurriculum,
   useUpsertSubject,
   useDeleteSubject,
-  useAssignCurriculumToClass
+  useAssignCurriculumToClass,
+  useClassAttendance,
+  useUpsertAttendance
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
@@ -44,7 +49,7 @@ export default function ClassDetailPage() {
   const { user: currentUser } = useAuth();
   
   const [showEdit, setShowEdit] = useState(false);
-  const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'details' | 'exams' | 'curriculum' | 'attendance' | 'messages'>('details');
 
   // ── Curriculum Management State ──
   const [showAddCurriculum, setShowAddCurriculum] = useState(false);
@@ -55,6 +60,54 @@ export default function ClassDetailPage() {
   const [editingSubject, setEditingSubject] = useState<any | null>(null);
   const [selectedCurriculumForClass, setSelectedCurriculumForClass] = useState<string | null>(null);
   const [searchCurriculum, setSearchCurriculum] = useState('');
+
+  // ── Attendance State ──
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const { data: dbAttendanceData, isLoading: attendanceLoading } = useClassAttendance(id || null, attendanceDate);
+  const dbAttendance = useMemo(() => dbAttendanceData || [], [dbAttendanceData]);
+  const [localAttendance, setLocalAttendance] = useState<any[]>([]);
+  const upsertAttendanceMutation = useUpsertAttendance();
+
+  // Sync local attendance with DB
+  useEffect(() => {
+    if (dbAttendance) {
+      setLocalAttendance(dbAttendance);
+    }
+  }, [dbAttendance]); // Sync local attendance with DB when it changes
+
+  const updateAttendanceStatus = (studentId: string, status: 'present' | 'absent' | 'late') => {
+    setLocalAttendance(prev => prev.map(a => a.studentId === studentId ? { ...a, status } : a));
+  };
+
+  const markAllPresent = () => {
+    setLocalAttendance(prev => prev.map(a => ({ ...a, status: 'present' })));
+  };
+
+  const handleSaveAttendance = async () => {
+    if (!id || !currentUser?.schoolId) return;
+    
+    const records = localAttendance
+      .filter(a => a.status !== null)
+      .map(a => ({
+        student_id: a.studentId,
+        class_id: id,
+        date: attendanceDate,
+        status: a.status,
+        school_id: currentUser.schoolId
+      }));
+
+    if (records.length === 0) {
+      toast({ title: 'تنبيه', description: 'لا توجد سجلات مكتملة' });
+      return;
+    }
+
+    try {
+      await upsertAttendanceMutation.mutateAsync(records);
+      toast({ title: 'تم الاعتماد بنجاح', description: 'تم رصد سجل الحضور للفصل' });
+    } catch (err: any) {
+      toast({ title: 'فشل في الحفظ', description: err.message, variant: 'destructive' });
+    }
+  };
 
   // ── Queries ──
   const { data: classItem, isLoading: classLoading, error: classError, refetch: refetchClass } = useClass(id);
@@ -77,11 +130,6 @@ export default function ClassDetailPage() {
     const teachersArray: any[] = Array.isArray(allTeachers) ? allTeachers : (allTeachers as any)?.data || [];
     return teachersArray.find((t: any) => t.id === classItem?.teacher_id);
   }, [allTeachers, classItem?.teacher_id]);
-
-  const filteredStudents = useMemo(() => 
-    students.filter(s => s.name.toLowerCase().includes(search.toLowerCase())),
-    [students, search]
-  );
 
   const handleDelete = async () => {
     if (!id || !confirm('هل أنت متأكد من حذف هذا الفصل الدراسي نهائياً؟ سيؤدي هذا لإزالة ارتباط الطلاب به.')) return;
@@ -253,7 +301,7 @@ export default function ClassDetailPage() {
                          {classItem?.grade_level || 'المرحلة الأكاديمية'}
                       </Badge>
                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
-                         السنة الأكاديمية الجارية
+                         {students.length} طالب مقيد
                       </Badge>
                     </div>
                  </div>
@@ -279,183 +327,257 @@ export default function ClassDetailPage() {
             )}
           </header>
 
-          {/* Interactive Bento Dashboard */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 md:gap-8 pt-4">
-             <div className="md:col-span-2 bg-gradient-to-tr from-indigo-600 to-indigo-500 p-8 md:p-10 rounded-[48px] text-white flex flex-col justify-between shadow-2xl shadow-indigo-600/30 overflow-hidden relative group">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none mix-blend-overlay" />
-                <div className="flex items-start justify-between relative z-10 mb-10">
-                   <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-inner">
-                      <Users className="w-7 h-7 text-white" />
-                   </div>
-                   <Badge className="bg-white text-indigo-600 font-bold uppercase tracking-widest text-[9px] border-none shadow-sm shadow-black/5 px-4">تفاعلي</Badge>
-                </div>
-                <div className="relative z-10">
-                   <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-2 text-indigo-100">إجمالي طلاب الفصل</p>
-                   <div className="flex items-end gap-3">
-                      <h2 className="text-6xl md:text-7xl font-black tracking-tighter drop-shadow-md">{students.length}</h2>
-                      <span className="text-sm font-bold text-indigo-200 mb-3 block border-r border-indigo-400/30 pr-3">طالب<br/>مقيد</span>
-                   </div>
-                </div>
-             </div>
+          {/* Action Cards for Teachers and Admins */}
+          {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && viewMode === 'details' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10 mt-8">
+              {/* Attendance Card */}
+              <button
+                onClick={() => setViewMode('attendance')}
+                className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-10 rounded-[48px] text-white flex flex-col items-center justify-center gap-5 shadow-2xl hover:scale-105 transition-all group min-h-[240px]"
+              >
+                <CalendarCheck className="w-20 h-20 group-hover:scale-110 transition-transform" />
+                <h3 className="text-3xl font-black">رصد الحضور</h3>
+                <p className="text-base text-indigo-100">تسجيل حضور وغياب الطلاب</p>
+                <span className="mt-2 px-6 py-2 bg-white/20 rounded-full text-sm font-bold group-hover:bg-white/30 transition-all">
+                  فتح سجل الحضور ←
+                </span>
+              </button>
 
-             <div className="md:col-span-2 bg-white border border-slate-100 p-8 md:p-10 rounded-[48px] flex flex-col justify-between shadow-xl shadow-slate-200/20 group hover:border-indigo-100 transition-colors relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-                <div className="flex items-start justify-between relative z-10 mb-8">
-                   <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center group-hover:rotate-6 transition-transform shadow-sm">
-                      <User className="w-7 h-7 text-emerald-600" />
-                   </div>
-                   <div className="flex items-center gap-1 -space-x-3 -space-x-reverse">
-                      <div className="w-8 h-8 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center text-[10px] text-white font-bold truncate z-20" title={teacher?.full_name}>
-                        {teacher?.full_name?.charAt(0) || '?'}
-                      </div>
-                      <button className="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white flex items-center justify-center text-indigo-600 hover:scale-110 transition-all z-10" title="إضافة معلم مساعد">
-                         <Plus className="w-3 h-3" />
-                      </button>
-                   </div>
-                </div>
-                <div className="relative z-10">
-                   <p className="text-[11px] font-black uppercase tracking-[0.2em] mb-2 text-slate-400">هيئة التدريس</p>
-                   <div className="flex items-end gap-3">
-                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 truncate leading-tight w-full max-w-[200px]">{teacher?.full_name || 'غير محدد'}</h2>
-                   </div>
-                   <p className="text-xs font-bold text-indigo-600 mt-2 cursor-pointer hover:underline">المعلم الرئيسي للفصل • إدارة الكوادر</p>
-                </div>
-             </div>
-          </div>
+              {/* Exams Card */}
+              <button
+                onClick={() => setViewMode('exams')}
+                className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-10 rounded-[48px] text-white flex flex-col items-center justify-center gap-5 shadow-2xl hover:scale-105 transition-all group min-h-[240px]"
+              >
+                <BookOpen className="w-20 h-20 group-hover:scale-110 transition-transform" />
+                <h3 className="text-3xl font-black">الاختبارات والدرجات</h3>
+                <p className="text-base text-emerald-100">إنشاء اختبارات ورصد الدرجات</p>
+                <span className="mt-2 px-6 py-2 bg-white/20 rounded-full text-sm font-bold group-hover:bg-white/30 transition-all">
+                  إدارة الاختبارات ←
+                </span>
+              </button>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8 lg:gap-10">
-            <div className="lg:col-span-8 space-y-6 md:space-y-8 lg:space-y-10">
-                <section className="bg-white border border-slate-50 p-6 md:p-10 rounded-[32px] md:rounded-[48px] lg:rounded-[56px] shadow-xl shadow-slate-100/50 space-y-6 md:space-y-8 lg:space-y-10">
-                   <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 md:gap-6 border-b border-slate-50 pb-6 md:pb-8">
-                      <div className="flex items-center gap-3 md:gap-4">
-                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl md:rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
-                            <Users className="w-6 h-6 md:w-7 md:h-7" />
-                         </div>
-                         <div>
-                            <h2 className="text-lg md:text-2xl font-black text-slate-900 mb-0.5 md:mb-1">قائمة طلاب الفصل</h2>
-                            <p className="text-[8px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none">إجمالي المقيدين: {students.length} شخص</p>
-                         </div>
-                      </div>
-                      
-                      <div className="relative group w-full sm:w-80">
-                        <Search className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-                        <input 
-                          type="text" 
-                          placeholder="ابحث عن طالب بالاسم..." 
-                          value={search}
-                          onChange={e => setSearch(e.target.value)}
-                          className="w-full pr-14 pl-6 py-4 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-[12px] focus:ring-indigo-600/5 transition-all text-sm font-bold placeholder:text-slate-200" 
-                        />
-                      </div>
-                   </header>
+              {/* Messages Card - Teacher Only */}
+              {currentUser?.role === 'teacher' && (
+                <button
+                  onClick={() => setViewMode('messages')}
+                  className="bg-gradient-to-br from-blue-500 to-blue-600 p-10 rounded-[48px] text-white flex flex-col items-center justify-center gap-5 shadow-2xl hover:scale-105 transition-all group min-h-[240px]"
+                >
+                  <MessageSquare className="w-20 h-20 group-hover:scale-110 transition-transform" />
+                  <h3 className="text-3xl font-black">رسائل لأولياء الأمور</h3>
+                  <p className="text-base text-blue-100">إرسال رسائل لأولياء أمور طلاب هذا الفصل</p>
+                  <span className="mt-2 px-6 py-2 bg-white/20 rounded-full text-sm font-bold group-hover:bg-white/30 transition-all">
+                    فتح الرسائل ←
+                  </span>
+                </button>
+              )}
 
-                   {filteredStudents.length === 0 ? (
-                     <div className="p-24 text-center bg-slate-50 rounded-[48px] border border-dashed border-slate-100">
-                        <Users className="w-16 h-16 text-slate-100 mx-auto mb-6" />
-                        <p className="text-lg font-black text-slate-400">لم يتم العثور على نتائج</p>
-                        <p className="text-xs text-slate-300 font-medium mt-2">جرب البحث بكلمات مختلفة أو تأكد من تسجيل الطلاب</p>
-                     </div>
-                   ) : (
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {filteredStudents.map((s, idx) => (
-                          <div 
-                            key={s.id} 
-                            onClick={() => navigate(`/students/${s.id}`)} 
-                            className="p-6 rounded-[32px] bg-white border border-slate-50 hover:border-indigo-100 hover:shadow-2xl hover:shadow-slate-200/50 hover:translate-y-[-4px] transition-all duration-500 group flex items-center justify-between cursor-pointer"
-                          >
-                            <div className="flex items-center gap-5 min-w-0">
-                              <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[11px] font-black text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-all shadow-sm shrink-0">
-                                {idx + 1}
-                              </div>
-                              <div className="min-w-0">
-                                <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate mb-1">{s.name}</h3>
-                                <div className="flex items-center gap-2">
-                                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                   <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none">طالب منتظم</p>
-                                </div>
-                              </div>
-                            </div>
-                            <ChevronLeft className="w-5 h-5 text-slate-100 group-hover:text-indigo-600 transition-all translate-x-2 group-hover:translate-x-0" />
+              {/* Curriculum Management Card - Teacher and Admin */}
+              <button
+                onClick={() => setViewMode('curriculum')}
+                className="bg-gradient-to-br from-purple-500 to-purple-600 p-10 rounded-[48px] text-white flex flex-col items-center justify-center gap-5 shadow-2xl hover:scale-105 transition-all group min-h-[240px]"
+              >
+                <Layers className="w-20 h-20 group-hover:scale-110 transition-transform" />
+                <h3 className="text-3xl font-black">إدارة المنهج</h3>
+                <p className="text-base text-purple-100">
+                  {classItem?.curriculum_id ? 'عرض وتغيير المنهج' : 'ربط منهج بالفصل'}
+                </p>
+                <span className="mt-2 px-6 py-2 bg-white/20 rounded-full text-sm font-bold group-hover:bg-white/30 transition-all">
+                  إدارة المنهج الدراسي ←
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Exams View for Teachers and Admins */}
+          {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && viewMode === 'exams' && (
+            <div className="space-y-8 mt-8">
+              {/* Back Button */}
+              <button
+                onClick={() => setViewMode('details')}
+                className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 font-bold transition-colors text-lg"
+              >
+                <ArrowRight className="w-6 h-6" />
+                <span>العودة إلى تفاصيل الفصل</span>
+              </button>
+
+              {/* Exams View */}
+              <ClassExamsView 
+                classId={id!} 
+                className={classItem?.name || ''} 
+              />
+            </div>
+          )}
+
+          {/* Messages View for Teachers and Admins */}
+          {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && viewMode === 'messages' && (
+            <div className="space-y-8 mt-8">
+              {/* Back Button */}
+              <button
+                onClick={() => setViewMode('details')}
+                className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 font-bold transition-colors text-lg"
+              >
+                <ArrowRight className="w-6 h-6" />
+                <span>العودة إلى تفاصيل الفصل</span>
+              </button>
+
+              {/* Messages View */}
+              <ClassMessagesView 
+                classId={id!} 
+                className={classItem?.name || ''} 
+              />
+            </div>
+          )}
+
+          {/* Attendance View for Teachers and Admins */}
+          {(currentUser?.role === 'teacher' || currentUser?.role === 'admin') && viewMode === 'attendance' && (
+            <div className="space-y-8 mt-8">
+              {/* Back Button */}
+              <button
+                onClick={() => setViewMode('details')}
+                className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 font-bold transition-colors text-lg"
+              >
+                <ArrowRight className="w-6 h-6" />
+                <span>العودة إلى تفاصيل الفصل</span>
+              </button>
+
+              {/* Attendance Section */}
+              <section className="bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl space-y-10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-[22px] bg-indigo-600 flex items-center justify-center text-white shadow-xl">
+                      <CalendarCheck className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">رصد الحضور والغياب</h2>
+                      <p className="text-xs text-slate-500 font-medium mt-1">{classItem?.name || ''}</p>
+                    </div>
+                  </div>
+                  <div className="relative group">
+                    <input 
+                      type="date" 
+                      value={attendanceDate} 
+                      onChange={e => setAttendanceDate(e.target.value)}
+                      className="pr-12 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl focus:ring-4 focus:ring-indigo-600/5 transition-all cursor-pointer" 
+                    />
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-emerald-50 p-4 sm:p-6 rounded-2xl text-center border border-emerald-100 shadow-sm">
+                    <p className="text-2xl sm:text-3xl font-black text-emerald-600">{localAttendance.filter(a => a.status === 'present').length}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-emerald-700 mt-1 uppercase tracking-wider">حاضر</p>
+                  </div>
+                  <div className="bg-rose-50 p-4 sm:p-6 rounded-2xl text-center border border-rose-100 shadow-sm">
+                    <p className="text-2xl sm:text-3xl font-black text-rose-600">{localAttendance.filter(a => a.status === 'absent').length}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-rose-700 mt-1 uppercase tracking-wider">غائب</p>
+                  </div>
+                  <div className="bg-amber-50 p-4 sm:p-6 rounded-2xl text-center border border-amber-100 shadow-sm">
+                    <p className="text-2xl sm:text-3xl font-black text-amber-600">{localAttendance.filter(a => a.status === 'late').length}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-amber-700 mt-1 uppercase tracking-wider">متأخر</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 sm:p-6 rounded-2xl text-center border border-slate-200 shadow-sm">
+                    <p className="text-2xl sm:text-3xl font-black text-slate-600">{localAttendance.length}</p>
+                    <p className="text-[10px] sm:text-xs font-bold text-slate-700 mt-1 uppercase tracking-wider">الإجمالي</p>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <button
+                    onClick={markAllPresent}
+                    className="w-full sm:w-auto px-6 h-12 rounded-2xl bg-emerald-500 text-white font-black hover:bg-emerald-600 transition-all shadow-md active:scale-95"
+                  >
+                    تحديد الكل حاضر
+                  </button>
+                </div>
+
+                {/* Students List */}
+                <div className="space-y-4">
+                  {localAttendance.map((record) => (
+                    <div key={record.studentId} className="bg-white p-4 sm:p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-black shadow-inner group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                            {record.studentName.charAt(0)}
                           </div>
-                        ))}
-                     </div>
-                   )}
-                </section>
-            </div>
-
-            {/* Sidebar Controls */}
-            <div className="lg:col-span-4 space-y-10">
-               <section className="bg-slate-900 rounded-[56px] p-10 space-y-10 shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-40" />
-                  <div className="flex items-center gap-4 relative z-10">
-                     <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white shrink-0">
-                        <Shield className="w-6 h-6 border-none" />
-                     </div>
-                     <h2 className="text-xl font-black text-white leading-none">الحوكمة والتقارير</h2>
-                  </div>
-
-                  <div className="space-y-8 relative z-10">
-                     <div className="p-8 rounded-[40px] bg-white/5 border border-white/5 space-y-6">
-                        <header className="flex justify-between items-center">
-                           <p className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">السعة الاستيعابية</p>
-                           <Badge className="bg-indigo-600 text-white border-none font-bold text-[9px] px-3">مستقر</Badge>
-                        </header>
-                        
-                        <div className="space-y-4">
-                           <div className="flex justify-between items-end">
-                              <span className="text-4xl font-black text-white">{students.length} <span className="text-[11px] font-bold text-white/40 tracking-normal mx-1">طالب</span></span>
-                              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">90% ممتلئ</span>
-                           </div>
-                           <Progress value={90} className="h-2 bg-white/10" />
+                          <h3 className="text-base sm:text-lg font-black text-slate-900 truncate">{record.studentName}</h3>
                         </div>
-                     </div>
-                     
-                     <div className="grid grid-cols-1 gap-4">
-                        <div className="p-6 rounded-[32px] bg-white/5 border border-white/5 flex items-center gap-5 hover:bg-white/10 transition-colors cursor-pointer group">
-                           <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white group-hover:rotate-6 transition-transform">
-                              <Calendar className="w-6 h-6" />
-                           </div>
-                           <div>
-                              <p className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] mb-1">الفترة الزمنية</p>
-                              <p className="text-[12px] font-bold text-white">العام الدراسي 2024 - 2025</p>
-                           </div>
+                        <div className="flex items-center gap-1.5 sm:gap-3 overflow-x-auto pb-1 sm:pb-0 no-scrollbar max-w-full">
+                          <button
+                            onClick={() => updateAttendanceStatus(record.studentId, 'present')}
+                            className={`px-4 sm:px-6 h-10 rounded-xl font-bold text-[10px] sm:text-xs transition-all whitespace-nowrap border ${
+                              record.status === 'present'
+                                ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-200'
+                                : 'bg-white text-slate-400 border-slate-100 hover:bg-emerald-50 hover:text-emerald-600'
+                            }`}
+                          >
+                            حاضر
+                          </button>
+                          <button
+                            onClick={() => updateAttendanceStatus(record.studentId, 'late')}
+                            className={`px-4 sm:px-6 h-10 rounded-xl font-bold text-[10px] sm:text-xs transition-all whitespace-nowrap border ${
+                              record.status === 'late'
+                                ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-200'
+                                : 'bg-white text-slate-400 border-slate-100 hover:bg-amber-50 hover:text-amber-600'
+                            }`}
+                          >
+                            متأخر
+                          </button>
+                          <button
+                            onClick={() => updateAttendanceStatus(record.studentId, 'absent')}
+                            className={`px-4 sm:px-6 h-10 rounded-xl font-bold text-[10px] sm:text-xs transition-all whitespace-nowrap border ${
+                              record.status === 'absent'
+                                ? 'bg-rose-500 text-white border-rose-500 shadow-lg shadow-rose-200'
+                                : 'bg-white text-slate-400 border-slate-100 hover:bg-rose-50 hover:text-rose-600'
+                            }`}
+                          >
+                            غائب
+                          </button>
                         </div>
-                     </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-                     <Button className="w-full h-16 rounded-[24px] bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all text-sm shadow-2xl shadow-indigo-900/60 relative z-10 gap-3 group">
-                        <Printer className="w-5 h-5 text-indigo-300 group-hover:text-white transition-colors" />
-                        تصدير كشف الفصل الذكي
-                     </Button>
-                  </div>
-               </section>
-               
-               <div className="p-10 rounded-[48px] bg-white border border-slate-50 flex flex-col items-center gap-6 text-center shadow-lg">
-                  <div className="w-20 h-20 bg-slate-50 rounded-[32px] border border-slate-100 flex items-center justify-center text-slate-300">
-                      <Users className="w-10 h-10" />
-                  </div>
-                  <div className="space-y-2">
-                     <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">تلميح إداري</p>
-                     <p className="text-xs font-bold text-slate-500 leading-relaxed italic">يمكنك تعيين أكثر من معلم لنفس الفصل من خلال نظام الصلاحيات المتقدم في قسم إدارة الكوادر.</p>
-                  </div>
-               </div>
+                {/* Save Button */}
+                <button
+                  onClick={handleSaveAttendance}
+                  disabled={upsertAttendanceMutation.isPending}
+                  className="w-full h-16 rounded-2xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all shadow-lg disabled:opacity-50"
+                >
+                  {upsertAttendanceMutation.isPending ? 'جاري الحفظ...' : 'حفظ الحضور'}
+                </button>
+              </section>
             </div>
-          </div>
+          )}
         </QueryStateHandler>
 
-        {/* Curriculum Management Section */}
-        {currentUser?.role === 'admin' && (
-          <section className="bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl space-y-10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-[22px] bg-indigo-600 flex items-center justify-center text-white shadow-xl">
-                  <BookOpen className="w-7 h-7" />
+          {/* Curriculum View for Teachers and Admins */}
+          {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && viewMode === 'curriculum' && (
+            <div className="space-y-8 mt-8">
+              {/* Back Button */}
+              <button
+                onClick={() => setViewMode('details')}
+                className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 font-bold transition-colors text-lg"
+              >
+                <ArrowRight className="w-6 h-6" />
+                <span>العودة إلى تفاصيل الفصل</span>
+              </button>
+
+              {/* Curriculum Management Section */}
+              <section className="bg-white/40 backdrop-blur-md p-10 rounded-[48px] border border-white/50 shadow-xl space-y-10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-[22px] bg-indigo-600 flex items-center justify-center text-white shadow-xl">
+                      <BookOpen className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900">إدارة المنهج الدراسي</h2>
+                      <p className="text-xs text-slate-500 font-medium mt-1">إنشاء وإدارة المناهج والمواد التعليمية لهذا الفصل</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-black text-slate-900">إدارة المنهج الدراسي</h2>
-                  <p className="text-xs text-slate-500 font-medium mt-1">إنشاء وإدارة المناهج والمواد التعليمية لهذا الفصل</p>
-                </div>
-              </div>
-            </div>
 
             {/* Curriculum Assignment */}
             <div className="space-y-6">
@@ -553,7 +675,8 @@ export default function ClassDetailPage() {
               )}
             </div>
           </section>
-        )}
+        </div>
+          )}
       </div>
 
       {showEdit && classItem && (

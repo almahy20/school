@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useClasses, useTeachers, useStudents, useAddClass, useUpdateClass, useDeleteClass } from '@/hooks/queries';
+import { useClasses, useTeachers, useAddClass, useUpdateClass, useDeleteClass } from '@/hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Users, School, User, Search, Filter, 
@@ -58,9 +59,34 @@ export default function ClassesPage() {
   // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي فقط)
   // يفضل مستقبلاً استخدام joins من الخادم مباشرة لكل ما هو ممكن
   const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
-  const teachers = teachersData?.data || [];
-  const { data: studentsData, isLoading: studentsLoading } = useStudents(1, 1000, '', 'الكل');
-  const students = studentsData?.data || [];
+  const teachers = useMemo(() => teachersData?.data || [], [teachersData]);
+  
+  // For student count, we need ALL students in the school (not just teacher's classes)
+  // So we fetch directly from Supabase instead of using useStudents hook
+  const [students, setStudents] = useState<any[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchAllStudents = async () => {
+      if (!user?.schoolId) {
+        setStudents([]);
+        setStudentsLoading(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, class_id')
+        .eq('school_id', user.schoolId);
+      
+      if (data) {
+        setStudents(data);
+      }
+      setStudentsLoading(false);
+    };
+    
+    fetchAllStudents();
+  }, [user?.schoolId]);
 
   const addMutation = useAddClass();
   const deleteMutation = useDeleteClass();

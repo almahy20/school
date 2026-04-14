@@ -55,9 +55,9 @@ export default function StudentsPage() {
   const { data: branding } = useBranding();
   const { data: classesData } = useClasses();
   // Normalize classes to always be an array
-  const classes: Array<{id: string; name: string; grade_level: string | null}> = 
+  const classes: Array<{id: string; name: string; grade_level: string | null}> = useMemo(() => 
     Array.isArray(classesData?.data) ? classesData.data : 
-    Array.isArray(classesData) ? classesData : [];
+    Array.isArray(classesData) ? (classesData as any) : [], [classesData]);
   const deleteMutation = useDeleteStudent();
 
   // ── Debounce Search ──
@@ -336,7 +336,7 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
             <Input value={name} onChange={e => setName(e.target.value)} required
               className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: أحمد محمد علي" />
           </div>
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
               <select value={classId} onChange={e => setClassId(e.target.value)}
@@ -408,7 +408,7 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
                 className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner" />
             </div>
             
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
                 <select value={classId} onChange={e => setClassId(e.target.value)}

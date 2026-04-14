@@ -66,11 +66,9 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
       return { data, count: count || 0 };
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 15 * 1000, // ⚡ 15 seconds (was 30s)
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

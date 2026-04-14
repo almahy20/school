@@ -75,11 +75,9 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       };
     },
     enabled: !!user?.schoolId,
-    staleTime: 15 * 1000, // ⚡ 15 seconds (was 30s)
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

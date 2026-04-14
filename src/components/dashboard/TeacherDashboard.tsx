@@ -13,7 +13,8 @@ import { StatsCard } from './StatsCard';
 export function TeacherDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: myClasses = [] } = useClasses();
+  const { data: classesData } = useClasses();
+  const myClasses = classesData?.data || [];
   const { data: stats = { classes: 0, students: 0 } } = useTeacherStats();
 
   return (
@@ -47,79 +48,9 @@ export function TeacherDashboard() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <StatsCard title="فصولي الدراسية" value={stats.classes} icon={School} color="indigo" trend="نشط" />
-        <StatsCard title="الطلاب النشطون" value={stats.students} icon={Users} color="emerald" />
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
+        <StatsCard title="إجمالي الفصول" value={stats.classes} icon={School} color="indigo" trend="نشط" />
       </div>
-
-      <section className="premium-card p-12">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
-           <div className="flex items-center gap-5">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm">
-                <LayoutGrid className="w-7 h-7" />
-              </div>
-              <div>
-                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">إدارة الفصول النشطة</h2>
-                 <p className="text-slate-400 font-medium text-sm mt-1">عرض وتحديث سجلات الطلاب والمنهج لكل فصل</p>
-              </div>
-           </div>
-           <Button variant="outline" className="h-14 px-8 rounded-2xl border-slate-200 font-black text-xs gap-3 hover:bg-slate-50 transition-all">
-              <Filter className="w-4 h-4" /> تصفية الفصول
-           </Button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-           {myClasses.length > 0 ? myClasses.map(c => (
-             <div key={c.id} className="p-10 rounded-[40px] bg-slate-50/50 border border-slate-100 group hover:bg-white hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-500 relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-2 h-full bg-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-               
-               <div className="flex items-center justify-between mb-6">
-                  <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-slate-900 font-black border border-slate-100 shadow-sm group-hover:scale-110 transition-transform">
-                     {c.name.trim()[0]}
-                  </div>
-                  <Badge className="bg-white border-slate-100 text-slate-400 font-black text-[9px] uppercase tracking-widest shadow-sm">
-                    {c.grade_level || 'دراسات عليا'}
-                  </Badge>
-               </div>
-
-               <h3 className="text-2xl font-black text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">{c.name}</h3>
-               <p className="text-xs font-medium text-slate-400 leading-relaxed mb-8">
-                  إدارة شاملة لطلاب الفصل، رصد الدرجات، ومتابعة التقدم في الخطة الدراسية.
-               </p>
-
-               <div className="flex items-center justify-between pt-6 border-t border-slate-100">
-                  <div className="flex -space-x-3 space-x-reverse">
-                     {[1,2,3].map(i => (
-                       <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-500">
-                          {i}
-                       </div>
-                     ))}
-                     <div className="w-8 h-8 rounded-full bg-slate-900 border-2 border-white flex items-center justify-center text-[8px] font-bold text-white">
-                        +20
-                     </div>
-                  </div>
-                  <Button 
-                    onClick={() => navigate(`/classes/${c.id}`)}
-                    className="rounded-2xl bg-white text-slate-900 border border-slate-200 hover:bg-slate-900 hover:text-white transition-all px-6 font-black text-xs h-11"
-                  >
-                     دخول السجل
-                  </Button>
-               </div>
-             </div>
-           )) : (
-             <div className="col-span-full p-20 text-center flex flex-col items-center gap-6 bg-slate-50/50 border border-dashed border-slate-200 rounded-[40px] relative overflow-hidden group">
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="w-16 h-16 rounded-[24px] bg-white flex items-center justify-center text-slate-200 shadow-inner border border-slate-100 relative z-10 group-hover:scale-110 transition-transform">
-                   <School className="w-8 h-8" />
-                </div>
-                <div className="relative z-10 space-y-2">
-                   <p className="text-slate-900 font-black text-lg">لا توجد فصول دراسية</p>
-                   <p className="text-slate-400 font-medium text-sm">لم يتم تعيين أي فصول دراسية لك بعد. يرجى التواصل مع إدارة المدرسة.</p>
-                </div>
-             </div>
-           )}
-        </div>
-      </section>
     </div>
   );
 }

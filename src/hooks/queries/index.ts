@@ -16,6 +16,7 @@ export * from './useCurriculum';
 export * from './useMessaging';
 export * from './useComplaints';
 export * from './useSuperAdmin';
+export * from './useTeacherAttendance';
 export * from './useProfile';
 export * from './useDataRetention';
 export * from './useDatabase';

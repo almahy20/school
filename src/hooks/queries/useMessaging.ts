@@ -43,7 +43,7 @@ export function useSendMessage() {
   
   return useMutation({
     // التنفيذ المتفائل: إظهار الرسالة في القائمة فوراً
-    onMutate: async ({ targets, content }: { targets: string[], content: string }) => {
+    onMutate: async ({ targets, content, senderName, studentId }: { targets: string[], content: string, senderName?: string, studentId?: string }) => {
       await queryClient.cancelQueries({ queryKey: ['messages', user?.id] });
       const previousMessages = queryClient.getQueryData(['messages', user?.id]);
       
@@ -55,7 +55,8 @@ export function useSendMessage() {
         is_read: false,
         created_at: new Date().toISOString(),
         school_id: user?.schoolId,
-        sender: { full_name: user?.full_name || 'أنا' },
+        student_id: studentId || null,
+        sender: { full_name: user?.fullName || 'أنا' },
         receiver: { full_name: 'جاري الإرسال...' } // Placeholder
       }));
 
@@ -71,7 +72,7 @@ export function useSendMessage() {
         queryClient.setQueriesData({ queryKey: ['messages', user?.id] }, context.previousMessages);
       }
     },
-    mutationFn: async ({ targets, content }: { targets: string[], content: string }) => {
+    mutationFn: async ({ targets, content, senderName, studentId }: { targets: string[], content: string, senderName?: string, studentId?: string }) => {
       if (!user?.id || !user?.schoolId) {
         throw new Error('معلومات المستخدم غير مكتملة');
       }
@@ -82,10 +83,9 @@ export function useSendMessage() {
         receiver_id: targetId,
         content: content.trim(),
         is_read: false,
-        school_id: user.schoolId
+        school_id: user.schoolId,
+        student_id: studentId || null
       }));
-
-      console.log('Inserting messages:', messages);
 
       const { error: msgError } = await supabase.from('messages').insert(messages);
       if (msgError) {
@@ -96,14 +96,12 @@ export function useSendMessage() {
       const notifications = targets.map(targetId => ({
         user_id: targetId,
         school_id: user.schoolId,
-        type: 'broadcast_message',
-        title: 'رسالة جديدة من إدارة المدرسة',
+        type: senderName ? 'teacher_message' : 'broadcast_message',
+        title: senderName ? `رسالة جديدة من ${senderName}` : 'رسالة جديدة من إدارة المدرسة',
         message: content.trim().substring(0, 100),
         is_read: false,
-        metadata: { sender_id: user.id, full_content: content.trim() }
+        metadata: { sender_id: user.id, full_content: content.trim(), student_id: studentId }
       }));
-
-      console.log('Inserting notifications:', notifications);
 
       const { error: ntError } = await (supabase as any).from('notifications').insert(notifications);
       if (ntError) {

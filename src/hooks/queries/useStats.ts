@@ -59,11 +59,9 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000, // ⚡ 30 seconds (was 60s)
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -103,9 +101,7 @@ export function useTeacherStats() {
     enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
     staleTime: 2 * 60 * 1000, // ⚡ 2 minutes (was 5m)
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
   useMarkAllAsRead, 
-  useDeleteNotification 
+  useDeleteNotification,
+  useNotificationsRealtime
 } from '@/hooks/queries/useNotifications';
 import { 
   Bell, Check, Trash2, Clock, CreditCard, 
@@ -21,9 +22,16 @@ const PAGE_SIZE = 15;
 export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const { data, isLoading, error, refetch } = useNotifications(page, PAGE_SIZE);
+  const notificationsRealtime = useNotificationsRealtime();
   
   const notifications = data?.data || [];
   const totalItems = data?.count || 0;
+
+  // Setup real-time subscription
+  useEffect(() => {
+    const cleanup = notificationsRealtime.subscribe();
+    return () => cleanup?.();
+  }, [notificationsRealtime]);
 
   // ── Mutations ──
   const markAllAsReadMutation = useMarkAllAsRead();
@@ -58,6 +66,8 @@ export default function NotificationsPage() {
         return { icon: AlertCircle, color: 'text-rose-500', bg: 'bg-rose-50' };
       case 'broadcast_message':
         return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' };
+      case 'teacher_message':
+        return { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-50' };
       default:
         return { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' };
     }

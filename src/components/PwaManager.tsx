@@ -73,7 +73,7 @@ export default function PwaManager() {
     const timestamp = Date.now();
     const cacheBustIcon = icon.includes('?') ? `${icon}&v=${timestamp}` : `${icon}?v=${timestamp}`;
 
-    // @ts-ignore - Deep type instantiation
+    // @ts-expect-error - Deep type instantiation
     const manifest = {
       name: name,
       short_name: shortName,

@@ -36,9 +36,7 @@ export function useCurriculums() {
     enabled: !!user?.schoolId,
     staleTime: 2 * 60 * 1000, // ⚡ 2 minutes (was 5m) - المناهج لا تتغير كثيراً
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

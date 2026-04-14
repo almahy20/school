@@ -1,4 +1,5 @@
 import { QueryClient, QueryCache, MutationCache, focusManager, onlineManager } from "@tanstack/react-query";
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,33 +19,18 @@ if (typeof window !== 'undefined') {
     };
   });
 
-  const handleVisibilityChange = async () => {
-    if (document.visibilityState === 'visible') {
-      console.log('⚡ [QueryClient] Tab visible - fast refresh');
-      focusManager.setFocused(true);
-      
-      // تأكد من صحة الجلسة قبل محاولة استئناف العمليات أو تحديث البيانات
-      try {
-        await supabase.auth.getSession();
-      } catch (e) {
-        console.warn('[QueryClient] Failed to refresh session on focus:', e);
-      }
-
-      // ⚡ SPEED IMPROVEMENT: Reduce delay from 300ms to 100ms
-      // Resume mutations immediately for faster response
-      setTimeout(() => {
-        queryClient.resumePausedMutations();
-        queryClient.invalidateQueries(); // ALL queries, not just active
-      }, 100); // كان 300ms - الآن 100ms فقط
-    } else {
-      focusManager.setFocused(false);
-    }
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('focus', handleVisibilityChange);
-  window.addEventListener('blur', () => focusManager.setFocused(false));
+  // Note: Visibility/Focus handlers are now coordinated by HealthMonitor
+  // to prevent concurrent Auth/Data load race conditions.
 }
+
+// Create a persister for offline cache persistence
+export const queryPersister = createSyncStoragePersister({
+  storage: window.localStorage,
+  key: 'school-app-query-cache',
+  // Only persist successful queries
+  serialize: (data) => JSON.stringify(data),
+  deserialize: (data) => JSON.parse(data),
+});
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
@@ -87,7 +73,7 @@ export const queryClient = new QueryClient({
       networkMode: 'offlineFirst',
       retry: (failureCount, error: any) => {
         if (error) console.error(`[Query Error] Attempt ${failureCount}:`, error);
-        // ⚡ SPEED: Reduce retries from 5 to 3 for faster failure
+        // Retry only for network errors, fail fast for other errors
         if (failureCount < 2) return true;
         if (failureCount < 3) {
           const isNetworkError = typeof window !== 'undefined' && !window.navigator.onLine;
@@ -101,25 +87,22 @@ export const queryClient = new QueryClient({
         }
         return false;
       },
-      // ⚡ SPEED: Faster retry delays (was 1s, 2s, 4s - now 0.5s, 1s, 2s)
       retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 10000),
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false, // Managed manually by HealthMonitor
       refetchOnMount: true,
-      refetchOnReconnect: true,
-      // ⚡ SPEED: Reduce staleTime from 1min to 30s for faster updates
-      staleTime: 1000 * 30, // 30 seconds - balanced speed & freshness
-      gcTime: 10 * 60 * 1000, // Reduce from 24h to 10min to save memory
+      refetchOnReconnect: false, // Managed manually by HealthMonitor
+      // Cache data for 5 minutes - prevents excessive refetching
+      staleTime: 1000 * 60 * 5, // 5 minutes - professional app behavior
+      // Keep cached data for 30 minutes (not 24h - saves memory)
+      gcTime: 30 * 60 * 1000, // 30 minutes
       refetchIntervalInBackground: false,
-      // ⚡ SPEED: Enable parallel queries
       structuralSharing: true,
-      // ⚡ SPEED: Use previous data while fetching (instant UI)
+      // Show cached data immediately while refetching in background
       placeholderData: (previousData: any) => previousData,
     },
     mutations: {
       networkMode: 'offlineFirst',
-      // ⚡ SPEED: Reduce mutation retries from 3 to 2
       retry: 2,
-      // ⚡ SPEED: Faster mutation retry delays
       retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
     },
   },

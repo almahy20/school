@@ -59,14 +59,13 @@ export default function TeachersPage() {
   } = useTeachers(page, PAGE_SIZE, debouncedSearch, 'معتمد');
 
   // جلب المعلمين المنتظرين (قائمة صغيرة عادةً، نكتفي بالصفحة الأولى)
-  const { 
-    data: pendingData, 
+  const { data: pendingData, 
     isLoading: loadingPending,
     refetch: refetchPending 
   } = useTeachers(1, 100, '', 'معلق');
 
   const { data: allClassesData } = useClasses();
-  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = allClassesData?.data || [];
+  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = useMemo(() => allClassesData?.data || [], [allClassesData]);
   const { data: branding } = useBranding();
   
   const deleteMutation = useDeleteTeacher();

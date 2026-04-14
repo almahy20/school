@@ -42,15 +42,48 @@ export function useNotifications(page = 1, pageSize = 15) {
       return { data: data || [], count: count || 0 };
     },
     enabled: !!user?.id,
-    staleTime: 15 * 1000, // ⚡ 15 seconds (was 30s)
+    staleTime: 1 * 60 * 1000, // 1 minute - notifications should be fresh
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
+}
+
+// Real-time subscription for notifications
+export function useNotificationsRealtime() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return {
+    subscribe: () => {
+      if (!user?.id) return () => {};
+
+      const channel = supabase
+        .channel('notifications-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            // Invalidate queries to refetch
+            queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user.id] });
+          }
+        )
+        .subscribe();
+
+      // Return cleanup function
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  };
 }
 
 export function useMarkAllAsRead() {

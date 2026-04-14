@@ -289,12 +289,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Session Heartbeat - prevent session expiration during long idle periods
+    const heartbeatInterval = setInterval(async () => {
+      if (user && isMounted) {
+        console.log('💓 [AuthContext] Session heartbeat...');
+        try {
+          const { error } = await supabase.auth.getSession();
+          if (error) console.error('❌ Heartbeat session check failed:', error);
+        } catch (e) {
+          console.error('❌ Heartbeat critical error:', e);
+        }
+      }
+    }, 10 * 60 * 1000); // Every 10 minutes
+
     return () => {
       isMounted = false;
       isInitializing = false;
+      clearInterval(heartbeatInterval);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   // تم إزالة مؤقت تسجيل الخروج التلقائي بناءً على طلب المستخدم لمنع تسجيل الخروج المفاجئ.
 

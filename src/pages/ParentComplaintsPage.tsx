@@ -87,38 +87,38 @@ export default function ParentComplaintsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1200px] mx-auto text-right pb-20 px-2 md:px-0">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/20">
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1200px] mx-auto text-right pb-20 px-4 md:px-0">
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 sm:p-8 rounded-[24px] sm:rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/20">
           <div className="space-y-2">
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <span className="w-2 h-10 bg-indigo-600 rounded-full" />
+            <h1 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <span className="w-1.5 h-8 sm:w-2 sm:h-10 bg-indigo-600 rounded-full" />
               مركز التواصل والشكاوى
             </h1>
-            <p className="text-slate-500 font-medium text-lg pr-5">نسمع لمقترحاتك ونعمل على حل مشكلاتك لضمان جودة التعليم.</p>
+            <p className="text-slate-500 font-medium text-sm sm:text-lg pr-5">نسمع لمقترحاتك ونعمل على حل مشكلاتك لضمان جودة التعليم.</p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="h-16 px-8 rounded-3xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg shadow-2xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-95 gap-3">
-                <Plus className="w-6 h-6" />
+              <Button className="h-14 sm:h-16 px-6 sm:px-8 rounded-2xl sm:rounded-3xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-sm sm:text-lg shadow-2xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-95 gap-3">
+                <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
                 إرسال شكوى جديدة
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] rounded-[40px] p-0 overflow-hidden border-none shadow-none bg-transparent outline-none">
-              <div className="bg-white p-10 space-y-8 text-right rounded-[40px]">
+            <DialogContent className="w-[95%] max-w-[600px] rounded-[24px] sm:rounded-[40px] p-0 overflow-hidden border-none shadow-none bg-transparent outline-none">
+              <div className="bg-white p-6 sm:p-10 space-y-6 sm:space-y-8 text-right rounded-[24px] sm:rounded-[40px]">
                 <DialogHeader>
-                  <DialogTitle className="text-3xl font-black text-slate-900 leading-tight">شكوى جديدة</DialogTitle>
+                  <DialogTitle className="text-xl sm:text-3xl font-black text-slate-900 leading-tight">شكوى جديدة</DialogTitle>
                 </DialogHeader>
                 
-                <form onSubmit={submit} className="space-y-8">
+                <form onSubmit={submit} className="space-y-6 sm:space-y-8">
                   <div className="space-y-4">
-                    <label className="text-sm font-black text-slate-800 mr-2 block">اختر الابن المعني (اختياري)</label>
-                    <div className="flex flex-wrap gap-3 justify-end">
+                    <label className="text-xs sm:text-sm font-black text-slate-800 mr-2 block">اختر الابن المعني (اختياري)</label>
+                    <div className="flex flex-wrap gap-2 sm:gap-3 justify-end">
                       <button
                         type="button"
                         onClick={() => setChildId('')}
                         className={cn(
-                          "px-6 py-3 rounded-2xl border-2 transition-all font-bold text-sm",
+                          "px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border-2 transition-all font-bold text-xs sm:text-sm",
                           childId === '' 
                             ? "border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100" 
                             : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
@@ -132,14 +132,14 @@ export default function ParentComplaintsPage() {
                           type="button"
                           onClick={() => setChildId(c.id)}
                           className={cn(
-                            "flex items-center gap-3 px-5 py-3 rounded-2xl border-2 transition-all font-bold text-sm",
+                            "flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 rounded-xl sm:rounded-2xl border-2 transition-all font-bold text-xs sm:text-sm",
                             childId === c.id 
                               ? "border-indigo-600 bg-indigo-50 text-indigo-600 shadow-lg shadow-indigo-100" 
                               : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
                           )}
                         >
-                          <Avatar className="w-6 h-6 border-2 border-white">
-                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-[10px]">{c.name?.[0] || '?'}</AvatarFallback>
+                          <Avatar className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-white">
+                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-[8px] sm:text-[10px]">{c.name?.[0] || '?'}</AvatarFallback>
                           </Avatar>
                           {c.name || 'طالب'}
                         </button>
@@ -148,13 +148,13 @@ export default function ParentComplaintsPage() {
                   </div>
 
                   <div className="space-y-4">
-                    <label className="text-sm font-black text-slate-800 mr-2 block">ما هي مشكلتك؟ *</label>
+                    <label className="text-xs sm:text-sm font-black text-slate-800 mr-2 block">ما هي مشكلتك؟ *</label>
                     <div className="relative group">
                        <Textarea 
                          value={content} 
                          onChange={e => setContent(e.target.value)} 
                          placeholder="اشرح لنا بالتفصيل لنتمكن من مساعدتك..."
-                         className="min-h-[180px] rounded-3xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-600/5 text-lg font-medium p-6 transition-all shadow-inner resize-none"
+                         className="min-h-[150px] sm:min-h-[180px] rounded-2xl sm:rounded-3xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-600/5 text-sm sm:text-lg font-medium p-4 sm:p-6 transition-all shadow-inner resize-none"
                          required
                        />
                     </div>
@@ -164,7 +164,7 @@ export default function ParentComplaintsPage() {
                     <Button 
                       type="submit" 
                       disabled={upsertComplaintMutation.isPending} 
-                      className="flex-1 h-16 rounded-3xl bg-slate-900 text-white font-black text-lg shadow-xl shadow-slate-200"
+                      className="flex-1 h-14 sm:h-16 rounded-2xl sm:rounded-3xl bg-slate-900 text-white font-black text-base sm:text-lg shadow-xl shadow-slate-200"
                     >
                       {upsertComplaintMutation.isPending ? 'جاري الإرسال...' : 'إرسال الشكوى الآن'}
                     </Button>

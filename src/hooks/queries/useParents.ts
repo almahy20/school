@@ -100,11 +100,9 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryKey,
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!user?.schoolId,
-    staleTime: 5 * 1000, // ⚡ 5 seconds
+    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
     gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    refetchOnMount: true,
+            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

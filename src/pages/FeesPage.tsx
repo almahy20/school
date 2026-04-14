@@ -15,12 +15,13 @@ import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useCl
 import DataPagination from '@/components/ui/DataPagination';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
+const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
 export default function FeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
   // Monthly system
-  const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
   const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   
@@ -57,9 +58,9 @@ export default function FeesPage() {
     isRefetching 
   } = useFees(selectedTerm, page, PAGE_SIZE, debouncedSearch, selectedClassId);
 
-  const studentsData = data?.data || [];
+  const studentsData = useMemo(() => data?.data || [], [data]);
   const totalItems = data?.count || 0;
-  const termStats = data?.stats || { total_due: 0, total_paid: 0 };
+  const termStats = useMemo(() => data?.stats || { total_due: 0, total_paid: 0 }, [data]);
 
   // ── Derived Data ──
   const stats = useMemo(() => {
@@ -100,7 +101,7 @@ export default function FeesPage() {
       list.push(`شهر ${MONTHS_AR[d.getMonth()]} ${d.getFullYear()}`);
     }
     return list;
-  }, [MONTHS_AR]);
+  }, []);
 
   const onUpdateSuccess = () => {
     toast({ title: 'تم التحديث بنجاح', description: 'تم تحديث سجل الرسوم المالية.' });
@@ -108,22 +109,22 @@ export default function FeesPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="flex items-center gap-6 text-right">
-            <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-4 md:px-0">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 sm:p-8 rounded-[24px] sm:rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
+          <div className="flex items-center gap-4 sm:gap-6 text-right">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-[24px] bg-white p-2 sm:p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
                {branding?.logo_url ? (
                  <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
                ) : (
-                 <CreditCard className="w-8 h-8 text-indigo-600" />
+                 <CreditCard className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-600" />
                )}
             </div>
             <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-3">
-                 <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight truncate">{branding?.name || 'إدارة الرسوم المالية'}</h1>
-                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[8px] md:text-[9px] uppercase px-2 md:px-3 whitespace-nowrap">منصة المحاسبة</Badge>
+              <div className="flex items-center gap-2 sm:gap-3">
+                 <h1 className="text-lg sm:text-xl md:text-2xl font-black text-slate-900 tracking-tight truncate">{branding?.name || 'إدارة الرسوم المالية'}</h1>
+                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[7px] sm:text-[9px] uppercase px-2 md:px-3 whitespace-nowrap">منصة المحاسبة</Badge>
               </div>
-              <p className="text-slate-500 font-medium text-xs md:text-sm truncate">متابعة الأقساط المدرسية والإيرادات للفترات الدراسية</p>
+              <p className="text-slate-500 font-medium text-[10px] sm:text-sm truncate">متابعة الأقساط المدرسية للفترات الدراسية</p>
             </div>
           </div>
 
@@ -153,16 +154,16 @@ export default function FeesPage() {
           emptyMessage="لم يتم العثور على طلاب مسجلين لتحصيل رسوم منهم."
           isEmpty={studentsData.length === 0}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-             <FinanceCard title={`إجمالي مستحقات ${selectedTerm}`} value={stats.total_due.toLocaleString()} symbol="ج.م" icon={Wallet} color="indigo" />
-             <FinanceCard title="المبالغ المحصلة" value={stats.total_paid.toLocaleString()} symbol="ج.م" icon={CheckCircle} color="emerald" />
-             <FinanceCard title="الرسوم المستحقة" value={stats.outstanding.toLocaleString()} symbol="ج.م" icon={Clock} color="rose" />
-             <FinanceCard title="نسبة التحصيل" value={`${stats.rate}%`} icon={TrendingUp} color="slate" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+             <FinanceCard title={`مستحقات ${selectedTerm}`} value={stats.total_due.toLocaleString()} symbol="ج.م" icon={Wallet} color="indigo" />
+             <FinanceCard title="المحصلة" value={stats.total_paid.toLocaleString()} symbol="ج.م" icon={CheckCircle} color="emerald" />
+             <FinanceCard title="المتبقية" value={stats.outstanding.toLocaleString()} symbol="ج.م" icon={Clock} color="rose" />
+             <FinanceCard title="النسبة" value={`${stats.rate}%`} icon={TrendingUp} color="slate" />
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white/40 backdrop-blur-md p-6 rounded-[30px] border border-white/50 shadow-sm">
-             <div className="flex items-center gap-4 w-full lg:w-auto">
-               <div className="relative group min-w-[240px]">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between bg-white/40 backdrop-blur-md p-4 sm:p-6 rounded-[24px] sm:rounded-[30px] border border-white/50 shadow-sm">
+             <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+               <div className="relative group w-full sm:min-w-[240px]">
                  <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
                  <select value={selectedTerm} onChange={e => handleTermChange(e.target.value)}
                    className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 appearance-none w-full cursor-pointer">
@@ -170,7 +171,7 @@ export default function FeesPage() {
                  </select>
                </div>
 
-               <div className="relative group flex-1 min-w-[300px] text-right">
+               <div className="relative group w-full sm:min-w-[300px] text-right">
                  <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
                  <Input 
                    placeholder="ابحث باسم الطالب..." 
@@ -181,11 +182,11 @@ export default function FeesPage() {
                </div>
             </div>
             
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 no-scrollbar w-full lg:w-auto justify-start lg:justify-end">
                {['الكل', 'مدفوع', 'متأخر', 'جزئي'].map(status => (
                  <button key={status} onClick={() => handleStatusChange(status)}
                    className={cn(
-                     "px-6 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
+                     "px-4 sm:px-6 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
                      filterStatus === status ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-white text-slate-400 font-bold"
                    )}>
                    {status}
