@@ -88,7 +88,7 @@ export default function ParentComplaintsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1200px] mx-auto text-right pb-20 px-4 md:px-0">
+      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-6xl mx-auto text-right pt-2 md:pt-6 pb-24 px-4 md:px-6">
         <PageHeader
           icon={MessageSquare}
           title="مركز التواصل والشكاوى"

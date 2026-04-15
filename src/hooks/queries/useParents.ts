@@ -225,7 +225,10 @@ export function useDeleteParent() {
 
   return useMutation({
     mutationFn: async (parentId: string) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', parentId).eq('role', 'parent');
+      // @ts-expect-error - Custom RPC
+      const { error } = await supabase.rpc('delete_user_entirely', { 
+        p_user_id: parentId 
+      });
       if (error) throw error;
     },
     onSuccess: () => {

@@ -56,7 +56,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ onClose }: SidebarProps) {
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: initialUnreadCount = 0 } = useUnreadNotificationsCount();
@@ -94,12 +94,10 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
-      await logout();
-      // Navigation is handled by ProtectedRoute after user state changes
+      await signOut();
       navigate('/login', { replace: true });
     } catch (error) {
       console.error('Logout failed:', error);
-      // Force navigation even if logout fails
       navigate('/login', { replace: true });
     }
   };

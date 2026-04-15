@@ -101,7 +101,7 @@ export default function ParentChildDetailPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+      <div className="main-content-standard animate-in fade-in duration-700" dir="rtl">
         <QueryStateHandler
           loading={isLoading}
           error={error}
@@ -109,41 +109,12 @@ export default function ParentChildDetailPage() {
           onRetry={refetch}
           loadingMessage="جاري مزامنة بيانات الطالب بالكامل..."
         >
-          {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="flex items-center gap-4 md:gap-6 text-right relative z-10">
-              <button
-                onClick={() => navigate('/')}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/80 text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
-              >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-3 md:gap-4">
-                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-[20px] bg-slate-900 flex items-center justify-center text-white text-xl font-black shadow-xl shadow-slate-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
-                    {child?.name?.[0]}
-                 </div>
-                 <div className="min-w-0">
-                   <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 truncate">{child?.name}</h1>
-                   <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] md:text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
-                      <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{child?.academic_year || '2025/2026'}</span>
-                   </div>
-                 </div>
-              </div>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10">
-              <div className="px-5 md:px-8 py-3.5 md:py-5 rounded-[24px] bg-white border border-slate-100 shadow-sm relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
-                 <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
-                   <Calendar className="w-5 h-5 md:w-7 md:h-7" />
-                 </div>
-                 <div className="min-w-0">
-                   <p className="text-[8px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest leading-none mb-1 md:mb-2 text-right">اليوم</p>
-                   <p className="text-sm md:text-xl font-black text-slate-900 leading-none text-right truncate">{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                 </div>
-              </div>
-            </div>
+          {/* Standard Page Header */}
+          <header className="mb-10 md:mb-14">
+             <div className="flex flex-col gap-2">
+                <h1 className="page-title-standard">{child?.name}</h1>
+                <p className="page-subtitle-standard">{child?.className} • السنة الدراسية {child?.academic_year || '2024'}</p>
+             </div>
           </header>
 
           {/* Summary Cards */}

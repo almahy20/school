@@ -107,7 +107,7 @@ export default function ParentDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-12 max-w-[1400px] mx-auto text-right pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+      <div className="main-content-standard animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
         
         <QueryStateHandler
           loading={parentLoading}
@@ -136,6 +136,24 @@ export default function ParentDetailPage() {
                  <div className="space-y-2 min-w-0">
                     <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{parent?.full_name}</h1>
                     <div className="flex items-center gap-3 flex-wrap">
+                        {parentLastSeen && (
+                          <Badge className={cn(
+                            "border-none font-bold text-[10px] md:text-xs tracking-wide px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md",
+                            (new Date().getTime() - new Date(parentLastSeen).getTime() < 3 * 60 * 1000) 
+                              ? "bg-emerald-500/20 text-emerald-300 animate-pulse" 
+                              : "bg-white/5 text-white/50"
+                          )}>
+                            <div className={cn(
+                              "w-2 h-2 rounded-full ml-2",
+                              (new Date().getTime() - new Date(parentLastSeen).getTime() < 3 * 60 * 1000) 
+                                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" 
+                                : "bg-white/20"
+                            )} />
+                            {(new Date().getTime() - new Date(parentLastSeen).getTime() < 3 * 60 * 1000) 
+                              ? "نشط الآن" 
+                              : `آخر ظهور ${new Date(parentLastSeen).toLocaleDateString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`}
+                          </Badge>
+                        )}
                        <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block ml-2" />
                           حساب معتمد
@@ -155,10 +173,10 @@ export default function ParentDetailPage() {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
             {/* Main Information Section */}
-            <div className="lg:col-span-8 space-y-12">
-                <section className="bg-white border border-slate-50 p-6 md:p-12 rounded-[40px] md:rounded-[64px] shadow-xl shadow-slate-100/50 space-y-8 md:space-y-12">
+            <div className="lg:col-span-8 space-y-6 md:space-y-8">
+                <section className="bg-white border border-slate-50 p-5 md:p-8 rounded-[28px] md:rounded-[40px] shadow-lg shadow-slate-100/50 space-y-6">
                    <header className="flex items-center gap-5 border-b border-slate-50 pb-6 md:pb-8">
                       <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
                          <Info className="w-6 h-6 md:w-8 md:h-8" />
@@ -235,7 +253,7 @@ export default function ParentDetailPage() {
                    </div>
                 </section>
 
-                <section className="bg-white border border-slate-50 p-6 md:p-12 rounded-[40px] md:rounded-[64px] shadow-xl shadow-slate-100/50 space-y-8 md:space-y-12">
+                <section className="bg-white border border-slate-50 p-5 md:p-8 rounded-[28px] md:rounded-[40px] shadow-lg shadow-slate-100/50 space-y-6">
                    <header className="flex items-center justify-between border-b border-slate-50 pb-6 md:pb-8">
                       <div className="flex items-center gap-5">
                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-32 bg-emerald-50 flex items-center justify-center text-emerald-600 shadow-inner shrink-0">
@@ -301,9 +319,9 @@ export default function ParentDetailPage() {
             </div>
 
             {/* Sidebar Governance */}
-            <div className="lg:col-span-4 space-y-12">
+            <div className="lg:col-span-4 space-y-6">
                {/* Activity & Notifications Section */}
-               <section className="bg-white rounded-[64px] p-12 space-y-10 shadow-2xl border border-slate-100">
+               <section className="bg-white rounded-[28px] md:rounded-[40px] p-5 md:p-8 space-y-6 shadow-lg border border-slate-100">
                   <div className="flex items-center gap-5">
                      <div className="w-14 h-14 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-600 shadow-inner shrink-0">
                         <Clock className="w-7 h-7" />
@@ -401,7 +419,7 @@ export default function ParentDetailPage() {
                   )}
                </section>
 
-               <section className="bg-slate-900 rounded-[64px] p-12 space-y-12 shadow-2xl relative overflow-hidden group">
+               <section className="bg-slate-900 rounded-[28px] md:rounded-[40px] p-5 md:p-8 space-y-6 shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-20" />
                   
                   <div className="flex items-center gap-5 relative z-10">
@@ -452,7 +470,7 @@ export default function ParentDetailPage() {
                   </div>
                </section>
 
-               <div className="p-12 rounded-[56px] bg-emerald-600 text-white flex flex-col items-center gap-8 text-center shadow-2xl relative overflow-hidden group">
+               <div className="p-6 md:p-8 rounded-[28px] md:rounded-[40px] bg-emerald-600 text-white flex flex-col items-center gap-6 text-center shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
                   <div className="w-24 h-24 bg-white/20 rounded-[40px] flex items-center justify-center relative z-10 transition-transform duration-700 group-hover:scale-110">
                       <Users className="w-12 h-12" />

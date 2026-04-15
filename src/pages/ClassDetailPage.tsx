@@ -266,7 +266,7 @@ export default function ClassDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 lg:gap-10 max-w-[1400px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700 px-3 md:px-0" dir="rtl">
+      <div className="flex flex-col gap-6 md:gap-10 max-w-6xl mx-auto text-right pt-2 md:pt-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700 px-4 md:px-6" dir="rtl">
         
         <QueryStateHandler
           loading={classLoading}

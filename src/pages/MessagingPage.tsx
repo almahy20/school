@@ -100,7 +100,7 @@ export default function MessagingPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right animate-in fade-in slide-in-from-bottom-4 duration-1000 pb-20">
+      <div className="flex flex-col gap-6 md:gap-10 max-w-6xl mx-auto text-right pt-2 md:pt-6 pb-24 px-4 md:px-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-12 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           

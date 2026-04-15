@@ -84,10 +84,9 @@ export function useDeleteUser() {
 
   return useMutation({
     mutationFn: async (userId: string) => {
-      const { error } = await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', userId);
+      const { error } = await supabase.rpc('delete_user_entirely', {
+        p_user_id: userId
+      });
 
       if (error) throw error;
       return userId;

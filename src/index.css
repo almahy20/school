@@ -358,6 +358,26 @@
   .input-field {
     @apply h-12 px-5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all;
   }
+
+  /* --- NEW STANDARDIZATION SYSTEM --- */
+  
+  .main-content-standard {
+    @apply w-full max-w-[1400px] mx-auto px-4 md:px-8 xl:px-12 py-8 md:py-12 space-y-8 md:space-y-12;
+  }
+
+  .page-title-standard {
+    @apply text-2xl md:text-3xl lg:text-4xl font-[900] text-slate-900 leading-tight tracking-tight text-right;
+  }
+
+  .page-subtitle-standard {
+    @apply text-xs md:text-sm font-[600] text-slate-500 mt-1 md:mt-2 text-right;
+  }
+
+  .section-card-standard {
+    @apply bg-white rounded-[40px] border border-slate-100/50 shadow-xl shadow-slate-200/20 p-6 md:p-10;
+  }
+
+  /* --------------------------------- */
   
   /* Utility classes for micro-interactions */
   .hover-lift {

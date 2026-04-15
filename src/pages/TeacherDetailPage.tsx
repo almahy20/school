@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, User, Users, School, Info, Mail, Shield, 
   Edit2, Trash2, Activity, Phone, MapPin, CheckCircle, 
-  BookOpen, ChevronLeft, Loader2, Key, Eye, EyeOff
+  BookOpen, ChevronLeft, Loader2, Key, Eye, EyeOff, Clock
 } from 'lucide-react';
 import { EditTeacherModal } from './TeachersPage';
 import { cn } from '@/lib/utils';
@@ -85,7 +85,7 @@ export default function TeacherDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1400px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+      <div className="main-content-standard animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
         
         <QueryStateHandler
           loading={teacherLoading}
@@ -116,12 +116,30 @@ export default function TeacherDetailPage() {
                  <div className="space-y-2 min-w-0">
                     <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{teacher?.full_name}</h1>
                     <div className="flex items-center gap-3 flex-wrap">
-                       <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
-                          {teacher?.specialization || 'التخصص التعليمي'}
-                       </Badge>
-                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
-                          عضو منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}
-                       </Badge>
+                        {teacher?.last_seen && (
+                          <Badge className={cn(
+                            "border-none font-bold text-[10px] md:text-xs tracking-wide px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md",
+                            (new Date().getTime() - new Date(teacher.last_seen).getTime() < 3 * 60 * 1000) 
+                              ? "bg-emerald-500/20 text-emerald-300 animate-pulse" 
+                              : "bg-white/5 text-white/50"
+                          )}>
+                            <div className={cn(
+                              "w-2 h-2 rounded-full ml-2",
+                              (new Date().getTime() - new Date(teacher.last_seen).getTime() < 3 * 60 * 1000) 
+                                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" 
+                                : "bg-white/20"
+                            )} />
+                            {(new Date().getTime() - new Date(teacher.last_seen).getTime() < 3 * 60 * 1000) 
+                              ? "نشط الآن" 
+                              : `آخر ظهور ${new Date(teacher.last_seen).toLocaleDateString('ar-EG', { hour: '2-digit', minute: '2-digit' })}`}
+                          </Badge>
+                        )}
+                        <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
+                           {teacher?.specialization || 'التخصص التعليمي'}
+                        </Badge>
+                        <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
+                           عضو منذ {teacher?.created_at ? new Date(teacher.created_at).getFullYear() : '—'}
+                        </Badge>
                     </div>
                  </div>
               </div>
@@ -147,16 +165,16 @@ export default function TeacherDetailPage() {
           </header>
 
           {/* Teacher Metrics Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
              <StatsCard title="النصاب التعليمي" value={classes.length} sub="فصول مسندة" icon={School} color="indigo" />
              <StatsCard title="إجمالي الطلاب" value={stats.studentCount} sub="شخص تحت الإشراف" icon={Users} color="emerald" />
              <StatsCard title="تغطية المنهج" value={`${stats.curriculumProgress}%`} sub="متوسط الإنجاز" icon={BookOpen} color="amber" />
              <StatsCard title="حالة الكادر" value={teacher?.approval_status === 'approved' ? 'نشط' : 'قيد المراجعة'} sub="الحالة الوظيفية" icon={CheckCircle} color="slate" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <div className="lg:col-span-8 space-y-10">
-                <section className="bg-white border border-slate-50 p-10 rounded-[56px] shadow-xl shadow-slate-100/50 space-y-10">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+            <div className="lg:col-span-8 space-y-6 md:space-y-8">
+                <section className="bg-white border border-slate-50 p-5 md:p-8 rounded-[28px] md:rounded-[40px] shadow-lg shadow-slate-100/50 space-y-6">
                    <header className="flex items-center gap-4 border-b border-slate-50 pb-8">
                       <div className="w-14 h-14 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
                          <School className="w-7 h-7" />
@@ -196,7 +214,7 @@ export default function TeacherDetailPage() {
                    </div>
                 </section>
 
-                <section className="bg-white border border-slate-50 p-10 rounded-[56px] shadow-xl shadow-slate-100/50 space-y-10">
+                <section className="bg-white border border-slate-50 p-5 md:p-8 rounded-[28px] md:rounded-[40px] shadow-lg shadow-slate-100/50 space-y-6">
                    <header className="flex items-center gap-4 border-b border-slate-50 pb-8">
                       <div className="w-14 h-14 rounded-32 bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-inner shrink-0">
                          <Activity className="w-7 h-7" />
@@ -216,8 +234,8 @@ export default function TeacherDetailPage() {
             </div>
 
             {/* Sidebar Context */}
-            <div className="lg:col-span-4 space-y-10">
-               <section className="bg-slate-900 rounded-[56px] p-10 space-y-10 shadow-2xl relative overflow-hidden group">
+            <div className="lg:col-span-4 space-y-6">
+               <section className="bg-slate-900 rounded-[28px] md:rounded-[40px] p-5 md:p-8 space-y-6 shadow-2xl relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none opacity-20" />
                   <div className="flex items-center gap-4 relative z-10">
                      <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white shrink-0 shadow-inner">
@@ -290,7 +308,7 @@ export default function TeacherDetailPage() {
                   </div>
                </section>
 
-               <div className="p-10 rounded-[48px] bg-slate-50 border border-slate-100 text-center relative overflow-hidden group">
+               <div className="p-6 md:p-8 rounded-[28px] md:rounded-[40px] bg-slate-50 border border-slate-100 text-center relative overflow-hidden group">
                   <div className="relative z-10 space-y-6">
                      <div className="w-20 h-20 bg-white rounded-[32px] shadow-xl shadow-slate-200/50 flex items-center justify-center mx-auto text-slate-200 transition-transform duration-700 group-hover:scale-110">
                          <User className="w-10 h-10 border-none" />
@@ -334,15 +352,15 @@ function StatsCard({ title, value, sub, icon: Icon, color, smallValue }: any) {
   };
 
   return (
-    <div className={cn("premium-card p-8 md:p-10 flex flex-col justify-between border-[0.5px] h-52 md:h-60 rounded-[40px] md:rounded-[48px] transition-all hover:scale-[1.03] duration-500", configs[color])}>
-       <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center shadow-sm", iconConfigs[color])}>
-          <Icon className="w-6 h-6 md:w-7 md:h-7" />
+    <div className={cn("premium-card p-5 md:p-8 flex flex-col justify-between border-[0.5px] h-40 md:h-52 rounded-[24px] md:rounded-[40px] transition-all hover:scale-[1.03] duration-500", configs[color])}>
+       <div className={cn("w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center shadow-sm", iconConfigs[color])}>
+          <Icon className="w-5 h-5 md:w-6 md:h-6" />
        </div>
-       <div className="mt-6 md:mt-8 text-right">
-          <p className={cn("text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
+       <div className="mt-3 md:mt-6 text-right">
+          <p className={cn("text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
           <div className="flex flex-col">
-             <h3 className={cn("font-black tracking-tighter leading-none mb-1 md:mb-2", smallValue ? "text-xl md:text-2xl" : "text-3xl md:text-5xl")}>{value}</h3>
-             <span className={cn("text-[9px] md:text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
+             <h3 className={cn("font-black tracking-tighter leading-none mb-1", smallValue ? "text-lg md:text-2xl" : "text-2xl md:text-4xl")}>{value}</h3>
+             <span className={cn("text-[9px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
           </div>
        </div>
     </div>

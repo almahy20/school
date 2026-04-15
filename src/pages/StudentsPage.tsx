@@ -103,7 +103,7 @@ export default function StudentsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
+      <div className="main-content-standard animate-in fade-in slide-in-from-bottom-4 duration-1000">
         <PageHeader
           icon={GraduationCap}
           title="إدارة شؤون الطلاب"

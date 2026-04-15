@@ -32,9 +32,9 @@ export default function StudentGradesPage() {
   const latestGrades = Object.entries(bySubject)
     .map(([subject, grades]) => {
       // رتبنا الدرجات داخل المادة من الأقدم للأحدث (حسب طلب المستخدم)
-      const sorted = grades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      // أحدث درجة هي آخر عنصر في المصفوفة المرتبة تصاعدياً
-      return { subject, latest: sorted[sorted.length - 1], all: sorted };
+      const sorted = grades.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // أحدث درجة هي أول عنصر في المصفوفة المرتبة تنازلياً
+      return { subject, latest: sorted[0], all: sorted };
     })
     .sort((a, b) => {
       // رتبنا المواد نفسها بحيث تظهر المادة التي حدثت مؤخراً في الأعلى
@@ -45,7 +45,7 @@ export default function StudentGradesPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+      <div className="main-content-standard animate-in fade-in duration-700" dir="rtl">
         <QueryStateHandler
           loading={isLoading}
           error={error}
@@ -54,22 +54,11 @@ export default function StudentGradesPage() {
           loadingMessage="جاري تحميل الدرجات..."
         >
           {/* Header */}
-          <header className="flex items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => navigate(`/parent/children/${id}`)}
-                className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
-              >
-                <ArrowRight className="w-5 h-5" />
-              </button>
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
-                <BookOpen className="w-6 h-6" />
-              </div>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-none mb-1">درجات {child?.name}</h1>
-                <p className="text-sm text-slate-500 font-medium">{child?.className} • {child?.academic_year}</p>
-              </div>
-            </div>
+          <header className="mb-10 md:mb-14">
+             <div className="flex flex-col gap-2">
+                <h1 className="page-title-standard">درجات {child?.name}</h1>
+                <p className="page-subtitle-standard">{child?.className} • {child?.academic_year}</p>
+             </div>
           </header>
 
           {/* View Mode Toggle */}

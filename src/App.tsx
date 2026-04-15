@@ -12,6 +12,10 @@ import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 import { OfflineIndicator } from "./components/OfflineIndicator";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
+import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useLastSeenUpdate } from './hooks/useLastSeenUpdate';
+import { InstallPWA } from './components/pwa/InstallPWA';
+import { RefreshCw, X } from 'lucide-react';
 
 
 // Lazy Load Pages
@@ -64,25 +68,67 @@ const GLOBAL_SYNC_TABLES = [
   'profiles',
   'user_roles',
   'schools',
-  'complaints'
+  'complaints',
+  'grades',
+  'attendance',
+  'fees',
+  'classes',
+  'students'
 ];
 
 import { PageLoader } from "./components/PageLoader";
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   
   // تفعيل التزامن الفوري للجداول الأساسية فقط
   useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
-  if (loading) {
-    return <PageLoader />;
-  }
+  // تحديث "آخر ظهور" تلقائياً لضمان دقة عداد النشاط
+  useLastSeenUpdate();
+
+  // إدارة تحديثات التطبيق (حل مشكلة الكاش)
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW();
 
   return (
     <>
       <PwaManager />
-      <PwaOnboarding />
+      <InstallPWA />
+      
+      {/* Update Prompt (Clears cache and forces new version) */}
+      {needRefresh && (
+        <div className="fixed top-6 left-4 right-4 md:left-1/2 md:-translate-x-1/2 z-[10000] animate-in slide-in-from-top-10">
+          <div className="bg-slate-900 text-white px-5 py-4 rounded-3xl shadow-2xl flex items-center justify-between gap-6 border border-white/10 backdrop-blur-xl">
+             <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center animate-spin">
+                   <RefreshCw className="w-5 h-5" />
+                </div>
+                <div className="text-right">
+                   <p className="text-sm font-black">تحديث متاح!</p>
+                   <p className="text-[10px] text-white/50 font-bold">إصدار جديد متوفر الآن</p>
+                </div>
+             </div>
+             <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => updateServiceWorker(true)}
+                  className="bg-white text-slate-900 px-4 py-2 rounded-xl text-xs font-black hover:bg-slate-50 transition-all active:scale-95 whitespace-nowrap"
+                >
+                  تحديث الآن
+                </button>
+                <button 
+                  onClick={() => setNeedRefresh(false)}
+                  className="p-2 text-white/30 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
+
       <Suspense fallback={null}>
         <Routes>
           {/* ── Public Routes ── */}
@@ -149,7 +195,11 @@ export default function App() {
         <AuthProvider>
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <GlobalErrorBoundary>
-              <AppRoutes />
+              <div className="min-h-screen bg-[#f8fafc] selection:bg-indigo-500/10" dir="rtl">
+                <Suspense fallback={<PageLoader />}>
+                  <AppRoutes />
+                </Suspense>
+              </div>
             </GlobalErrorBoundary>
             <Toaster />
             <RealtimeNotificationsManager />

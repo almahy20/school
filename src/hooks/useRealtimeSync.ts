@@ -44,7 +44,7 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
           const mappings: Record<string, string[]> = {
             'schools': ['school-branding'],
             'exam_templates': ['exam-templates'],
-            'grades': ['student-grades', 'parent-child-overview', 'child-full-details'],
+            'grades': ['student-grades', 'parent-child-overview', 'child-full-details', 'parent-children'],
             'curriculum_subjects': ['curriculum-subjects'],
             'school_orders': ['school-orders'],
             'user_profiles': ['admin-users'],

@@ -64,7 +64,7 @@ export default function StudentDetailPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+      <div className="main-content-standard animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
         
           {/* Ultra-Premium Hero Banner - Shown Immediately if possible or with skeleton */}
           <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">

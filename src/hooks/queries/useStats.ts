@@ -44,8 +44,9 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000, // 5 minutes - optimized
-    gcTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 60 * 1000, // ⚡ 1 minute (was 5m)
+    refetchInterval: 60 * 1000, // 🔄 Auto-refresh stats every 1 minute
+    gcTime: 15 * 60 * 1000,
     refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

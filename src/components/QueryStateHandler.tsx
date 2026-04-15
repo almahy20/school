@@ -25,7 +25,7 @@ export function QueryStateHandler({
   isRefetching = false,
   errorMessage = 'عذراً، حدث خطأ أثناء جلب البيانات. يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى.',
   emptyMessage = 'لم يتم العثور على بيانات.',
-  loadingMessage = 'جاري التحميل...',
+  loadingMessage = 'جاري مزامنة البيانات...',
   children,
   isEmpty = false,
 }: QueryStateHandlerProps) {
@@ -59,7 +59,7 @@ export function QueryStateHandler({
   // 1. Loading State
   if (loading && !isRefetching && !showTimeoutError) {
     return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
+      <div className="min-h-[500px] flex flex-col items-center justify-center gap-10 p-12 animate-in fade-in duration-700 rounded-[40px] bg-white border border-slate-100/50 relative overflow-hidden shadow-sm">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
         <div className="relative flex items-center justify-center">
           <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-100 rounded-full animate-ping opacity-75"></div>

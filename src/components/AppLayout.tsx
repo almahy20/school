@@ -107,7 +107,7 @@ export default function AppLayout({ children }: Props) {
 
 
       {/* Mobile Glass Header */}
-      <div className="lg:hidden flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm">
+      <div className="lg:hidden flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 bg-white/80 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm transform-gpu">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900">
             {schoolBranding.logo && !logoError ? (
@@ -155,11 +155,11 @@ export default function AppLayout({ children }: Props) {
         {/* Abstract Background Gradients (Enhanced for better visual consistency) */}
         <div 
           style={{ animationDuration: '10s' }} 
-          className="absolute top-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none animate-pulse" 
+          className="absolute top-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none animate-pulse will-change-[transform,opacity]" 
         />
         <div 
           style={{ animationDuration: '15s' }}
-          className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" 
+          className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[80px] pointer-events-none animate-pulse will-change-[transform,opacity]" 
         />
 
         {/* Desktop Header Navigation */}
@@ -225,8 +225,15 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Content Section - Flex-1 to push footer down */}
-        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
-          {children}
+        <div className={cn(
+          "flex-1 w-full relative z-10 transform-gpu",
+          "px-4 md:px-8 lg:px-12",
+          "pt-6 md:pt-10",
+          hasBottomNav ? "pb-24 sm:pb-32" : "pb-12 md:pb-20"
+        )}>
+          <div className="max-w-[1400px] mx-auto animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {children}
+          </div>
         </div>
 
         {/* Sticky Footer */}

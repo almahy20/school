@@ -61,8 +61,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const syncUser = async (currentSession: Session | null) => {
     setSession(currentSession);
     if (currentSession?.user) {
+      // ⚡ Optimization: Set initial user data from metadata (synced by migration)
+      const meta = currentSession.user.user_metadata;
+      if (meta && meta.role) {
+        setUser({
+          id: currentSession.user.id,
+          email: currentSession.user.email || '',
+          phone: meta.phone || '',
+          fullName: meta.full_name || '',
+          role: meta.role as AppRole,
+          isSuperAdmin: meta.is_super_admin || false,
+          schoolId: meta.school_id,
+          schoolStatus: 'active',
+          approval_status: meta.approval_status || 'approved',
+          subscriptionExpired: false,
+        });
+      }
+
+      // 🔄 Still fetch complete data as backup and update
       const appUser = await getAppUserData(currentSession.user);
-      setUser(appUser);
+      if (appUser) setUser(appUser);
     } else {
       setUser(null);
     }

@@ -83,10 +83,10 @@ export function useParentChildOverview(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
@@ -175,11 +175,11 @@ export function useChildFullDetails(studentId: string | undefined) {
         }
       };
     },
-    enabled: !!(studentId && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    enabled: !!studentId,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 

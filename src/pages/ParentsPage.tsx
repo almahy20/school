@@ -79,7 +79,7 @@ export default function ParentsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20 px-2 md:px-0">
+      <div className="main-content-standard animate-in fade-in slide-in-from-bottom-4 duration-700">
         <PageHeader
           icon={UserCheck}
           title="أولياء الأمور"
@@ -159,7 +159,7 @@ export default function ParentsPage() {
         )}
 
         {/* Search */}
-        <div className="relative group max-w-2xl w-full">
+        <div className="relative group max-w-2xl w-full mx-auto md:mx-0">
           <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
           <Input
             type="text"

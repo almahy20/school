@@ -163,7 +163,10 @@ export function useDeleteTeacher() {
 
   return useMutation({
     mutationFn: async (teacherId: string) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', teacherId).eq('role', 'teacher');
+      // @ts-expect-error - Custom RPC
+      const { error } = await supabase.rpc('delete_user_entirely', { 
+        p_user_id: teacherId 
+      });
       if (error) throw error;
     },
     onSuccess: () => {
