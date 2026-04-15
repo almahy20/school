@@ -18,6 +18,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import DataDetailModal from '@/components/DataDetailModal';
+import PageHeader from '@/components/layout/PageHeader';
 
 interface ClassItem {
   id: string;
@@ -110,24 +111,18 @@ export default function ClassesPage() {
   const handleFilterChange = (val: string) => { setFilterLevel(val); setPage(1); };  return (
     <AppLayout>
       <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
-        {/* Premium Header - Scaled Down */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">إدارة الفصول الدراسية</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">تنظيم الكثافة الطلابية وتوزيع الهيئة التدريسية</p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4">
-             {user?.role === 'admin' && (
-               <Button onClick={() => setShowAdd(true)} className="h-11 px-6 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
-                 <Plus className="w-4.5 h-4.5" /> إنشاء فصل جديد
-               </Button>
-             )}
-          </div>
-        </header>
+        <PageHeader
+          icon={School}
+          title="إدارة الفصول الدراسية"
+          subtitle="تنظيم الكثافة الطلابية وتوزيع الهيئة التدريسية"
+          action={
+            user?.role === 'admin' && (
+              <Button onClick={() => setShowAdd(true)} className="h-12 px-8 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
+                <Plus className="w-5 h-5" /> إنشاء فصل جديد
+              </Button>
+            )
+          }
+        />
 
         {/* Filters and Search - Scaled Down */}
         <div className="flex flex-col lg:flex-row gap-4 items-center">

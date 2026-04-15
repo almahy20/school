@@ -101,17 +101,19 @@ export default function MessagingPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right animate-in fade-in slide-in-from-bottom-4 duration-1000 pb-20">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-12 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
-          <div className="space-y-4 relative z-10">
+          <div className="space-y-3 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
+              <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
                  <Megaphone className="w-7 h-7" />
               </div>
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">مركز البث والرسائل</h1>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none mb-1">مركز البث والرسائل</h1>
+                <p className="text-slate-500 font-medium text-sm">تواصل مع الكادر التعليمي وأولياء الأمور عبر البث أو الرسائل الخاصة.</p>
+              </div>
             </div>
-            <p className="text-slate-500 font-medium text-lg pr-1">تواصل مع الكادر التعليمي وأولياء الأمور عبر البث المباشر أو الرسائل الخاصة.</p>
           </div>
         </header>
 

@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 
 export interface Teacher {
   id: string; // This is the user_id (profiles.id)
@@ -164,10 +166,20 @@ export function useDeleteTeacher() {
 
   return useMutation({
     mutationFn: async (teacherId: string) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('delete', 'user_roles', { user_id: teacherId, role: 'teacher' });
+        toast.success('تم تحديد المعلم للحذف');
+        return { offline: true };
+      }
+
       const { error } = await supabase.from('user_roles').delete().eq('user_id', teacherId).eq('role', 'teacher');
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف المعلم بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['teachers-page'] });
     },
@@ -179,10 +191,20 @@ export function useTeacherAction() {
 
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('update', 'user_roles', { id: userRoleId, approval_status: status });
+        toast.success(`تم ${status === 'approved' ? 'قبول' : 'رفض'} المعلم`);
+        return { offline: true };
+      }
+
       const { error } = await (supabase.from('user_roles') as any).update({ approval_status: status }).eq('id', userRoleId);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم تحديث حالة المعلم');
+      }
       queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['teachers-page'] });
     },
@@ -193,6 +215,12 @@ export function useUpdateTeacher() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, full_name, phone }: { id: string; full_name: string; phone: string }) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('update', 'profiles', { id, full_name, phone });
+        toast.success('تم حفظ التغييرات');
+        return { offline: true };
+      }
+
       // Optimistic update for better cross-browser UX
       queryClient.setQueriesData({ queryKey: ['teachers'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
@@ -204,8 +232,12 @@ export function useUpdateTeacher() {
         .update({ full_name, phone })
         .eq('id', id);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
+      if (!result?.offline) {
+        toast.success('تم تحديث بيانات المعلم');
+      }
       queryClient.invalidateQueries({ queryKey: ['teachers'], refetchType: 'active' });
       queryClient.invalidateQueries({ queryKey: ['teacher', variables.id], refetchType: 'active' });
     },

@@ -34,30 +34,30 @@ function InteractiveCard({
   return (
     <button
       onClick={onClick}
-      className="group bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-right"
+      className="group premium-card p-6 hover:translate-y-[-4px] transition-all duration-300 text-right w-full"
     >
-      <div className="flex items-start justify-between mb-4">
-        <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center", color)}>
+      <div className="flex items-start justify-between mb-5">
+        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500", color)}>
           <Icon className="w-6 h-6" />
         </div>
         {badge && (
-          <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold">
+          <Badge className="bg-slate-50 text-slate-500 border-none text-[9px] font-black uppercase tracking-widest">
             {badge}
           </Badge>
         )}
       </div>
       
-      <h3 className="font-bold text-slate-900 mb-1">{title}</h3>
+      <h3 className="font-black text-slate-900 text-base mb-1">{title}</h3>
       {value && (
         <p className="text-2xl font-black text-slate-900 mb-1">{value}</p>
       )}
       {subtitle && (
-        <p className="text-xs text-slate-500 font-medium">{subtitle}</p>
+        <p className="text-xs text-slate-400 font-medium">{subtitle}</p>
       )}
       
-      <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 group-hover:text-indigo-600 transition-colors">
-        <span>عرض التفاصيل</span>
-        <ArrowRight className="w-4 h-4 rtl:rotate-180 group-hover:translate-x-1 transition-transform" />
+      <div className="mt-5 pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-300 group-hover:text-indigo-600 transition-colors">
+        <span className="font-black uppercase tracking-widest">عرض التفاصيل</span>
+        <ArrowRight className="w-4 h-4"/>
       </div>
     </button>
   );
@@ -110,20 +110,21 @@ export default function ParentChildDetailPage() {
           loadingMessage="جاري مزامنة بيانات الطالب بالكامل..."
         >
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 md:pb-10 border-b border-slate-100">
-            <div className="flex items-center gap-4 md:gap-6 text-right translate-x-0">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+            <div className="flex items-center gap-4 md:gap-6 text-right relative z-10">
               <button
                 onClick={() => navigate('/')}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-white text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/80 text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
               >
-                <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
+                <ArrowRight className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-3 md:gap-4">
-                 <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl md:rounded-[24px] bg-slate-900 flex items-center justify-center text-white text-xl md:text-2xl font-black shadow-xl shadow-slate-200 shrink-0">
+                 <div className="w-12 h-12 md:w-14 md:h-14 rounded-[20px] bg-slate-900 flex items-center justify-center text-white text-xl font-black shadow-xl shadow-slate-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
                     {child?.name?.[0]}
                  </div>
                  <div className="min-w-0">
-                   <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 md:mb-2 truncate">{child?.name}</h1>
+                   <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 truncate">{child?.name}</h1>
                    <div className="flex items-center gap-2">
                       <Badge variant="outline" className="bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] md:text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
                       <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{child?.academic_year || '2025/2026'}</span>
@@ -132,8 +133,8 @@ export default function ParentChildDetailPage() {
               </div>
             </div>
             
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-              <div className="px-5 md:px-8 py-3.5 md:py-5 rounded-[20px] md:rounded-[32px] bg-white border border-slate-100 shadow-sm relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10">
+              <div className="px-5 md:px-8 py-3.5 md:py-5 rounded-[24px] bg-white border border-slate-100 shadow-sm relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
                  <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
                    <Calendar className="w-5 h-5 md:w-7 md:h-7" />
                  </div>

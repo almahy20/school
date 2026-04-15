@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { 
   BookOpen, Plus, Trash2, Edit3, Users, 
-  Save, X, Award, Calendar
+  Save, X, Award, Calendar, Type, Hash
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +48,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     exam_type: 'monthly',
     max_score: '100',
     term: 'الفصل الأول',
+    score_type: 'numeric' as 'numeric' | 'text', // New field
   });
 
   // Queries
@@ -95,6 +96,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         max_score: Number(newExam.max_score),
         weight: 1,
         term: newExam.term,
+        score_type: newExam.score_type, // ✅ حفظ نوع الدرجة
         teacher_id: '', // Will be overridden by mutation
       } as any);
 
@@ -105,6 +107,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         exam_type: 'monthly',
         max_score: '100',
         term: 'الفصل الأول',
+        score_type: 'numeric',
       });
       
       toast({ title: 'تم إنشاء الاختبار بنجاح' });
@@ -183,7 +186,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
             <div className="min-w-0">
               <h2 className="text-xl sm:text-2xl font-black text-slate-900 truncate">{selectedTemplate.title}</h2>
               <p className="text-[10px] sm:text-sm text-slate-500 font-bold truncate">
-                {selectedTemplate.subject} • {selectedTemplate.term} • الدرجة: {selectedTemplate.max_score}
+                {selectedTemplate.subject} • {selectedTemplate.term} • 
+                {(selectedTemplate as any).score_type === 'text' ? 'تقدير نصي' : `الدرجة: ${selectedTemplate.max_score}`}
               </p>
             </div>
           </div>
@@ -233,16 +237,23 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <div className="relative">
                       <Input
-                        type="number"
-                        min="0"
-                        max={selectedTemplate.max_score}
+                        type={(selectedTemplate as any).score_type === 'text' ? 'text' : 'number'}
+                        min={(selectedTemplate as any).score_type === 'numeric' ? "0" : undefined}
+                        max={(selectedTemplate as any).score_type === 'numeric' ? selectedTemplate.max_score : undefined}
                         value={grade.score}
                         onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
-                        placeholder="0"
-                        className="w-16 sm:w-24 h-10 sm:h-12 px-2 rounded-lg sm:rounded-xl border-2 border-slate-200 text-center font-black text-sm sm:text-base focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                        placeholder={(selectedTemplate as any).score_type === 'text' ? 'أدخل التقدير' : '0'}
+                        className={cn(
+                          "w-16 sm:w-24 h-10 sm:h-12 px-2 rounded-lg sm:rounded-xl border-2 text-center font-black text-sm sm:text-base focus:ring-4 transition-all",
+                          (selectedTemplate as any).score_type === 'text'
+                            ? "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
+                            : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10"
+                        )}
                       />
                     </div>
-                    <span className="text-[10px] sm:text-sm font-bold text-slate-400 whitespace-nowrap">/ {selectedTemplate.max_score}</span>
+                    {(selectedTemplate as any).score_type === 'numeric' && (
+                      <span className="text-[10px] sm:text-sm font-bold text-slate-400 whitespace-nowrap">/ {selectedTemplate.max_score}</span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -329,7 +340,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                   {template.exam_type === 'final' ? 'نهائي' : template.exam_type === 'monthly' ? 'شهري' : 'يومي'}
                 </Badge>
                 <span className="text-sm font-black text-slate-700">
-                  الدرجة القصوى: {template.max_score}
+                  {(template as any).score_type === 'text' ? '📝 تقدير نصي' : `🔢 الدرجة: ${template.max_score}`}
                 </span>
               </div>
             </div>
@@ -339,73 +350,47 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
       {/* Create Exam Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
-          <DialogHeader className="text-right">
-            <DialogTitle className="text-2xl font-black text-slate-900">إنشاء اختبار جديد</DialogTitle>
-            <DialogDescription className="text-sm font-bold text-slate-400">
+        <DialogContent className="max-w-lg rounded-[32px] p-8 text-right">
+          <DialogHeader className="text-right mb-6">
+            <DialogTitle className="text-xl font-black text-slate-900">إنشاء اختبار جديد</DialogTitle>
+            <DialogDescription className="text-xs font-bold text-slate-400">
               أدخل بيانات الاختبار الجديد للفصل
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleCreateExam} className="mt-8 space-y-6">
+          <form onSubmit={handleCreateExam} className="space-y-5">
+            {/* Exam Title */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">عنوان الاختبار</label>
+              <label className="text-xs font-bold text-slate-600">عنوان الاختبار</label>
               <Input
                 value={newExam.title}
                 onChange={(e) => setNewExam({ ...newExam, title: e.target.value })}
                 placeholder="مثال: اختبار الشهر الأول"
-                className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg"
+                className="h-12 rounded-xl text-right"
                 required
               />
             </div>
 
+            {/* Subject */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المادة</label>
+              <label className="text-xs font-bold text-slate-600">المادة</label>
               <Input
                 value={newExam.subject}
                 onChange={(e) => setNewExam({ ...newExam, subject: e.target.value })}
                 placeholder="مثال: الرياضيات"
-                className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg"
+                className="h-12 rounded-xl text-right"
                 required
               />
             </div>
 
+            {/* Term */}
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">نوع الاختبار</label>
-              <Select
-                value={newExam.exam_type}
-                onValueChange={(value) => setNewExam({ ...newExam, exam_type: value })}
-              >
-                <SelectTrigger className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">شهري</SelectItem>
-                  <SelectItem value="final">نهائي</SelectItem>
-                  <SelectItem value="daily">يومي</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة القصوى</label>
-              <Input
-                type="number"
-                min="1"
-                value={newExam.max_score}
-                onChange={(e) => setNewExam({ ...newExam, max_score: e.target.value })}
-                className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
+              <label className="text-xs font-bold text-slate-600">الفصل الدراسي</label>
               <Select
                 value={newExam.term}
                 onValueChange={(value) => setNewExam({ ...newExam, term: value })}
               >
-                <SelectTrigger className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg">
+                <SelectTrigger className="h-12 rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -416,11 +401,60 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
               </Select>
             </div>
 
-            <div className="flex gap-4 pt-4">
+            {/* Score Type Toggle */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-slate-600">نظام الدرجات</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setNewExam({ ...newExam, score_type: 'numeric' })}
+                  className={cn(
+                    "h-14 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all",
+                    newExam.score_type === 'numeric'
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  )}
+                >
+                  <Hash className="w-4 h-4" />
+                  رقمي
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewExam({ ...newExam, score_type: 'text' })}
+                  className={cn(
+                    "h-14 rounded-xl border-2 flex items-center justify-center gap-2 font-bold text-sm transition-all",
+                    newExam.score_type === 'text'
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                  )}
+                >
+                  <Type className="w-4 h-4" />
+                  نصي
+                </button>
+              </div>
+            </div>
+
+            {/* Max Score (only for numeric) */}
+            {newExam.score_type === 'numeric' && (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-600">الدرجة القصوى</label>
+                <Input
+                  type="number"
+                  min="1"
+                  value={newExam.max_score}
+                  onChange={(e) => setNewExam({ ...newExam, max_score: e.target.value })}
+                  className="h-12 rounded-xl text-right"
+                  required
+                />
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
               <Button
                 type="submit"
                 disabled={createExamMutation.isPending}
-                className="flex-1 h-14 rounded-2xl bg-emerald-600 text-white font-black text-lg hover:bg-emerald-700"
+                className="flex-1 h-12 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700"
               >
                 {createExamMutation.isPending ? 'جاري الإنشاء...' : 'إنشاء الاختبار'}
               </Button>
@@ -428,7 +462,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                 type="button"
                 onClick={() => setShowCreateDialog(false)}
                 variant="ghost"
-                className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold"
+                className="h-12 px-6 rounded-xl bg-slate-100 text-slate-600 font-bold hover:bg-slate-200"
               >
                 إلغاء
               </Button>

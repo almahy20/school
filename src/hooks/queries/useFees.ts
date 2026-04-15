@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { useMemo } from 'react';
 
 export interface FeeRecord {
@@ -90,6 +92,13 @@ export function useUpsertFee() {
 
   return useMutation({
     mutationFn: async (record: Partial<FeeRecord> & { student_id: string; term: string }) => {
+      // Offline-first
+      if (!window.navigator.onLine) {
+        await enqueueMutation('create', 'fees', record);
+        toast.success('تم حفظ الرسوم');
+        return { id: `temp-${Date.now()}`, offline: true };
+      }
+
       // 1. Try to find existing record for this student and term
       const { data: existing } = await supabase
         .from('fees')
@@ -98,6 +107,7 @@ export function useUpsertFee() {
         .eq('term', record.term)
         .maybeSingle();
 
+      let result;
       if (existing) {
         // 2. Update existing
         const { data, error } = await supabase
@@ -113,7 +123,7 @@ export function useUpsertFee() {
           .select()
           .single();
         if (error) throw error;
-        return data;
+        result = data;
       } else {
         // 3. Insert new
         const { data, error } = await supabase
@@ -129,11 +139,15 @@ export function useUpsertFee() {
           .select()
           .single();
         if (error) throw error;
-        return data;
+        result = data;
       }
+      return { ...result, offline: false };
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, data.term] });
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حفظ الرسوم بنجاح');
+      }
+      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, result.term] });
       queryClient.invalidateQueries({ queryKey: ['parent-children'] });
       queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });

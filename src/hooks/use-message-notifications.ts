@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 function playChime() {
   try {
@@ -74,7 +73,7 @@ export function useMessageNotifications() {
       .from('profiles')
       .select('full_name')
       .eq('id', msg.sender_id)
-      .single();
+      .maybeSingle();
 
     const senderName = profile?.full_name || 'مستخدم';
 
@@ -86,14 +85,16 @@ export function useMessageNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = realtimeEngine.subscribe(
-      'messages',
-      handleNewMessage,
-      { event: 'INSERT' }
-    );
+    const channel = supabase.channel('messages-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+      }, handleNewMessage)
+      .subscribe();
 
     return () => {
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [user, handleNewMessage]);
 }

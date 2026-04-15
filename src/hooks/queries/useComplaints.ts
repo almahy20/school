@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -110,6 +112,13 @@ export function useUpsertComplaint() {
 
   return useMutation({
     mutationFn: async (complaint: any) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('update', 'complaints', complaint);
+        toast.success('تم حفظ الشكوى - سيتم الإرسال عند عودة الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       // Strip UI helper fields
       const { 
         parent_name, 
@@ -138,12 +147,15 @@ export function useUpsertComplaint() {
 
       const { data, error } = await query.select().single();
       if (error) throw error;
-      return data;
+      return { ...data, offline: false };
     },
-    onSuccess: (data: any) => {
+    onSuccess: (result: any) => {
+      if (!result?.offline) {
+        toast.success('تم حفظ الشكوى بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['complaints', user?.schoolId] });
-      if (data?.parent_id) {
-        queryClient.invalidateQueries({ queryKey: ['parent-complaints', data.parent_id] });
+      if (result?.parent_id) {
+        queryClient.invalidateQueries({ queryKey: ['parent-complaints', result.parent_id] });
       }
     },
   });
@@ -155,10 +167,21 @@ export function useDeleteComplaint() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('delete', 'complaints', { id });
+        toast.success('تم تحديد الشكوى للحذف - سيتم الحذف عند عودة الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       const { error } = await supabase.from('complaints').delete().eq('id', id);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف الشكوى بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['complaints', user?.schoolId] });
       queryClient.invalidateQueries({ queryKey: ['parent-complaints'] });
     },
@@ -171,6 +194,20 @@ export function useCreateComplaint() {
 
   return useMutation({
     mutationFn: async ({ studentId, content }: { studentId: string; content: string }) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const complaintData = {
+          parent_id: user?.id,
+          student_id: studentId,
+          content: content.trim(),
+          school_id: user?.schoolId,
+          status: 'pending'
+        };
+        const mutationId = await enqueueMutation('create', 'complaints', complaintData);
+        toast.success('تم حفظ الشكوى - سيتم الإرسال عند عودة الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       if (!user?.schoolId) throw new Error('School ID not found');
       
       const { data, error } = await supabase
@@ -186,9 +223,12 @@ export function useCreateComplaint() {
         .single();
       
       if (error) throw error;
-      return data;
+      return { ...data, offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم إرسال الشكوى بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['complaints'] });
       queryClient.invalidateQueries({ queryKey: ['parent-complaints', user?.id] });
     },

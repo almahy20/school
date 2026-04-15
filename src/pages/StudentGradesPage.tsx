@@ -44,20 +44,20 @@ export default function StudentGradesPage() {
           loadingMessage="جاري تحميل الدرجات..."
         >
           {/* Header */}
-          <header className="flex items-center gap-4 pb-6 border-b border-slate-100">
-            <button
-              onClick={() => navigate(`/parent/children/${id}`)}
-              className="w-12 h-12 rounded-2xl bg-white text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm"
-            >
-              <ArrowRight className="w-6 h-6" />
-            </button>
+          <header className="flex items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <BookOpen className="w-8 h-8" />
+              <button
+                onClick={() => navigate(`/parent/children/${id}`)}
+                className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
+              >
+                <ArrowRight className="w-5 h-5" />
+              </button>
+              <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
+                <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-slate-900">درجات {child?.name}</h1>
-                <p className="text-sm text-slate-500">{child?.className} • {child?.academic_year}</p>
+                <h1 className="text-2xl md:text-3xl font-black text-slate-900 leading-none mb-1">درجات {child?.name}</h1>
+                <p className="text-sm text-slate-500 font-medium">{child?.className} • {child?.academic_year}</p>
               </div>
             </div>
           </header>

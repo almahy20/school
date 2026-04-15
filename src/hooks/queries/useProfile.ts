@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -36,10 +38,10 @@ export function useProfile() {
       return (data as unknown) as Profile;
     },
     enabled: !!user?.id,
-    staleTime: 5 * 60 * 1000, // 5 minutes - profile doesn't change often
-    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-            refetchOnMount: true,
-    refetchInterval: 10 * 1000, // ⚡ 10 seconds (was 15s)
+    staleTime: 30 * 60 * 1000, // 30 minutes - profile doesn't change often
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnMount: true,
+    refetchInterval: false, // Optimized: removed unnecessary polling
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -50,15 +52,28 @@ export function useUpdateNotificationPrefs() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (prefs: any) => {
-      if (!user?.id) return;
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('update', 'profiles', { 
+          id: user?.id,
+          notification_prefs: prefs 
+        });
+        toast.success('تم حفظ الإعدادات - سيتم التحديث عند الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
+      if (!user?.id) return { offline: false };
       const { error } = await supabase
         .from('profiles')
         .update({ notification_prefs: prefs } as any)
         .eq('id', user.id);
       if (error) throw error;
-      return prefs;
+      return { ...prefs, offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حفظ الإعدادات بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });
@@ -69,7 +84,17 @@ export function useUpdateMyProfile() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (updates: Partial<Profile>) => {
-      if (!user?.id) return;
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('update', 'profiles', { 
+          id: user?.id,
+          ...updates 
+        });
+        toast.success('تم حفظ التغييرات - سيتم التحديث عند الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
+      if (!user?.id) return { offline: false };
       const { data, error } = await supabase
         .from('profiles')
         .update(updates)
@@ -77,9 +102,12 @@ export function useUpdateMyProfile() {
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return { ...data, offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حفظ التغييرات بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
     },
   });

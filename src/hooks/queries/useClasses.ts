@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -111,8 +113,8 @@ export function useClass(id: string | undefined | null) {
       return (data && data.length > 0) ? data[0] as Class : null;
     },
     enabled: !!id,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000, // 30 ثانية — كافية لصفحة تفاصيل الفصل
+    refetchInterval: false, // أُوقف الـ polling غير الضروري
   });
 }
 
@@ -144,10 +146,20 @@ export function useDeleteClass() {
 
   return useMutation({
     mutationFn: async (classId: string) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('delete', 'classes', { id: classId });
+        toast.success('تم تحديد الفصل للحذف');
+        return { offline: true };
+      }
+
       const { error } = await supabase.from('classes').delete().eq('id', classId);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف الفصل بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
@@ -159,11 +171,20 @@ export function useAddClass() {
 
   return useMutation({
     mutationFn: async (classData: Omit<Class, 'id' | 'created_at'>) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('create', 'classes', classData);
+        toast.success('تم حفظ الفصل');
+        return { id: `temp-${Date.now()}`, offline: true };
+      }
+
       const { data, error } = await supabase.from('classes').insert(classData).select().single();
       if (error) throw error;
-      return data;
+      return { ...data, offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم إضافة الفصل بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
@@ -175,6 +196,12 @@ export function useUpdateClass() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Class> & { id: string }) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('update', 'classes', { id, ...data });
+        toast.success('تم حفظ التغييرات');
+        return { offline: true };
+      }
+
       // Optimistic update
       queryClient.setQueriesData({ queryKey: ['classes'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
@@ -183,8 +210,12 @@ export function useUpdateClass() {
 
       const { error } = await supabase.from('classes').update({ ...data }).eq('id', id);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم تحديث الفصل بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });

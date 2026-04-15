@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface Student {
   id: string;
@@ -107,33 +109,58 @@ export function useStudent(id: string | undefined) {
     queryKey,
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
+      
+      // Add timeout to prevent hanging requests
+      const queryPromise = supabase
         .from('students')
         .select('*, classes:classes!students_class_id_fkey(*)')
         .eq('id', id)
-        .single();
+        .maybeSingle();
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout: Student data fetch took too long')), 10000)
+      );
+      
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any;
       
       if (error) throw error;
       
       // Fetch teacher name separately if teacher_id exists
-      if (data.classes?.teacher_id) {
-        const { data: teacherProfile } = await supabase
+      if (data?.classes?.teacher_id) {
+        const teacherPromise = supabase
           .from('profiles')
           .select('full_name')
           .eq('id', data.classes.teacher_id)
-          .single();
+          .maybeSingle();
         
-        if (teacherProfile) {
-          (data.classes as any).teacher = { full_name: teacherProfile.full_name };
+        const teacherTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Teacher fetch timeout')), 5000)
+        );
+        
+        try {
+          const { data: teacherProfile } = await Promise.race([teacherPromise, teacherTimeout]) as any;
+          
+          if (teacherProfile) {
+            (data.classes as any).teacher = { full_name: teacherProfile.full_name };
+          }
+        } catch (teacherError) {
+          console.warn('Failed to fetch teacher name, continuing without it:', teacherError);
         }
       }
       
       return data as Student & { classes: any };
     },
     enabled: !!id,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000, // 30 seconds - reduced from 0
+    gcTime: 5 * 60 * 1000, // 5 minutes
+    refetchInterval: false, // Disable auto-refetch to prevent stuck states
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true, // ✅ Refetch when network reconnects
+    networkMode: 'online', // ✅ Only fetch when online
     placeholderData: keepPreviousData,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
 
@@ -162,8 +189,21 @@ export function useDeleteStudent() {
       }
     },
     mutationFn: async (studentId: string) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('delete', 'students', { id: studentId });
+        toast.success('تم تحديد الطالب للحذف - سيتم الحذف عند عودة الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       const { error } = await supabase.from('students').delete().eq('id', studentId);
       if (error) throw error;
+      return { offline: false };
+    },
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف الطالب بنجاح');
+      }
     },
     onSettled: () => {
       // تحديث هادئ في الخلفية لتأكيد العملية
@@ -205,9 +245,21 @@ export function useAddStudent() {
       }
     },
     mutationFn: async (studentData: Omit<Student, 'id' | 'created_at' | 'classes'>) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('create', 'students', studentData);
+        toast.success('تم حفظ الطالب - سيتم المزامنة عند عودة الاتصال');
+        return { id: `temp-${Date.now()}`, offline: true };
+      }
+
       const { data, error } = await supabase.from('students').insert(studentData).select().single();
       if (error) throw error;
-      return data;
+      return { ...data, offline: false };
+    },
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم إضافة الطالب بنجاح');
+      }
     },
     onSettled: () => {
       // استبدال المعرف المؤقت بالحقيفي بصمت
@@ -222,6 +274,13 @@ export function useUpdateStudent() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Student> & { id: string }) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('update', 'students', { id, ...data });
+        toast.success('تم حفظ التغييرات - سيتم المزامنة عند عودة الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       // 1. Snapshot previous value for rollback if needed
       const previousStudents = queryClient.getQueryData(['students']);
       
@@ -242,12 +301,17 @@ export function useUpdateStudent() {
         queryClient.setQueriesData({ queryKey: ['students'] }, previousStudents);
         throw error;
       }
+
+      return { offline: false };
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       // Background refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ['students'], refetchType: 'active' });
-      queryClient.invalidateQueries({ queryKey: ['student', variables.id], refetchType: 'active' });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], refetchType: 'active' });
+      if (!result?.offline) {
+        queryClient.invalidateQueries({ queryKey: ['students'], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['student', variables.id], refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], refetchType: 'active' });
+        toast.success('تم تحديث الطالب بنجاح');
+      }
     },
   });
 }

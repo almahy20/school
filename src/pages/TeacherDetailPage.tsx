@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, User, Users, School, Info, Mail, Shield, 
   Edit2, Trash2, Activity, Phone, MapPin, CheckCircle, 
-  BookOpen, ChevronLeft, Loader2
+  BookOpen, ChevronLeft, Loader2, Key, Eye, EyeOff
 } from 'lucide-react';
 import { EditTeacherModal } from './TeachersPage';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,9 @@ export default function TeacherDetailPage() {
   const { user: authUser } = useAuth();
   
   const [showEdit, setShowEdit] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   // ── Queries ──
   const { data: teacher, isLoading: teacherLoading, error: teacherError, refetch: refetchTeacher } = useTeacher(id);
@@ -50,6 +53,34 @@ export default function TeacherDetailPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!newPassword.trim() || newPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setResettingPassword(true);
+      // 🚨 تحذير أمني: لا يمكنك استخدام auth.admin من المتصفح (Frontend Client).
+      // منصة Supabase ترفض هذا بـ (403 Forbidden) لأنه يتطلب مفتاح Service Role الذي يمنع قطعيًا وضعه بالمتصفح.
+      // 💡 الحل الصحيح: إنشاء Edge Function بداخل Supabase للقيام بهذا، أو توجيه المستخدم لاستعادة كلمة مروره بريدياً.
+      
+      toast({ 
+        title: 'إجراء محظور أمنياً (403)', 
+        description: 'لا يمكن تغيير كلمة المرور مباشرة من المتصفح لضمان أمان النظام. يرجى توجيه المستخدم لاستخدام ميزة "نسيت كلمة المرور" من شاشة الدخول.', 
+      });
+      
+      console.warn("Blocked insecure client-side admin auth call (403 Forbidden). Requires Edge Function or RPC.");
+      
+      setNewPassword('');
+      setShowPassword(false);
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message || 'فشل في إعادة تعيين كلمة المرور', variant: 'destructive' });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const isLoadingTotal = teacherLoading || classesLoading || statsLoading;
 
   return (
@@ -64,7 +95,7 @@ export default function TeacherDetailPage() {
           loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-10 md:p-14 rounded-[40px] md:rounded-[56px] relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
             <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-indigo-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             
@@ -197,7 +228,58 @@ export default function TeacherDetailPage() {
 
                   <div className="space-y-6 relative z-10">
                      <ContactItem icon={Phone} label="رقم الجوال الخاص" value={teacher?.phone || 'غير مسجل'} />
-                     <ContactItem icon={Mail} label="البريد المؤسسي" value={teacher?.email || '—'} />
+                     
+                     {/* Password Card */}
+                     <div className="space-y-3">
+                        <label className="text-[9px] font-black text-white/30 uppercase tracking-[0.2em] flex items-center gap-2">
+                           <Key className="w-3.5 h-3.5" />
+                           كلمة المرور
+                        </label>
+                        
+                        {showPassword ? (
+                           <div className="space-y-3 bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
+                              <div className="relative">
+                                 <input
+                                   type="text"
+                                   value={newPassword}
+                                   onChange={(e) => setNewPassword(e.target.value)}
+                                   placeholder="أدخل كلمة المرور الجديدة"
+                                   className="w-full h-12 pr-4 pl-12 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                   autoFocus
+                                 />
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     setShowPassword(false);
+                                     setNewPassword('');
+                                   }}
+                                   className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                                 >
+                                    <EyeOff className="w-4 h-4 text-white/50" />
+                                 </button>
+                              </div>
+                              <Button
+                                onClick={handleResetPassword}
+                                disabled={!newPassword || newPassword.length < 6 || resettingPassword}
+                                className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg disabled:opacity-50"
+                              >
+                                {resettingPassword ? 'جاري التحديث...' : 'حفظ كلمة المرور'}
+                              </Button>
+                              <p className="text-[9px] text-white/40 text-center font-bold">
+                                 يجب أن تكون 6 أحرف على الأقل
+                              </p>
+                           </div>
+                        ) : (
+                           <button
+                             onClick={() => setShowPassword(true)}
+                             className="w-full h-12 rounded-xl border-2 border-dashed border-white/10 hover:border-indigo-500/50 hover:bg-white/5 flex items-center justify-center gap-2 transition-all text-white/30 hover:text-indigo-400"
+                           >
+                              <Key className="w-4 h-4" />
+                              <span className="text-xs font-bold">إعادة تعيين كلمة المرور</span>
+                           </button>
+                        )}
+                     </div>
+                     
                      <ContactItem icon={MapPin} label="موقع العمل" value="الجناح الأكاديمي - قسم المعلمين" />
                   </div>
 

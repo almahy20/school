@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+import { logger } from '@/utils/logger';
 
 export function useAdminStats() {
   const { user } = useAuth();
@@ -18,53 +19,82 @@ export function useAdminStats() {
       
       if (!user?.isSuperAdmin && !user?.schoolId) return emptyStats;
 
-      const baseQuery = (table: string) => {
-        const q = (supabase as any).from(table).select('id', { count: 'exact', head: true });
-        if (!user?.isSuperAdmin && user?.schoolId) {
-          q.eq('school_id', user.schoolId);
-        }
-        return q;
-      };
-
       try {
-        const [s, t, p, c, f, a] = await Promise.all([
-          baseQuery('students'),
-          supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId).eq('role', 'teacher'),
-          supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId).eq('role', 'parent'),
-          baseQuery('classes'),
-          supabase.from('fees').select('amount_due, amount_paid').eq('school_id', user.schoolId),
-          supabase.from('attendance').select('status').eq('school_id', user.schoolId).eq('date', new Date().toISOString().split('T')[0]),
-        ]);
-
-        const totalDue = (f.data || []).reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0);
-        const totalPaid = (f.data || []).reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0);
+        // Use optimized SQL aggregate function (single RPC call)
+        // Before: 6 parallel queries, ~500KB data transfer
+        // After: 1 RPC call, ~100 bytes data transfer
+        // NOTE: Requires running migrations: 20260415000002_add_aggregate_functions.sql
+        const { data: stats, error } = await (supabase as any)
+          .rpc('get_dashboard_stats', {
+            p_school_id: user.schoolId,
+            p_is_super_admin: user.isSuperAdmin || false
+          });
         
-        const attendance = a.data || [];
-        const presentToday = attendance.filter((att: any) => att.status === 'present').length;
-        const attendanceRate = attendance.length > 0 ? Math.round((presentToday / attendance.length) * 100) : 0;
-
-        return {
-          students: s.count || 0,
-          teachers: t.count || 0,
-          parents: p.count || 0,
-          classes: c.count || 0,
-          totalDue,
-          totalPaid,
-          attendanceRate,
-          presentToday
-        };
+        if (error) {
+          logger.warn('Dashboard stats RPC not available, using fallback method:', error.message);
+          // Fallback to old method if RPC fails (e.g., migration not run yet)
+          return await fetchStatsFallback(user);
+        }
+        
+        return stats || emptyStats;
       } catch (error) {
-        console.error('Error fetching admin stats:', error);
-        return emptyStats;
+        logger.warn('Error fetching admin stats via RPC, using fallback:', error);
+        // Fallback to ensure app works even if migration hasn't been run
+        return await fetchStatsFallback(user);
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
-    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-            refetchOnMount: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes - optimized
+    gcTime: 15 * 60 * 1000, // 15 minutes
+    refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
+}
+
+// Fallback method for backward compatibility
+async function fetchStatsFallback(user: any) {
+  const emptyStats = { 
+    students: 0, teachers: 0, parents: 0, classes: 0, 
+    totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0 
+  };
+
+  const baseQuery = (table: string) => {
+    const q = (supabase as any).from(table).select('id', { count: 'exact', head: true });
+    if (!user?.isSuperAdmin && user?.schoolId) {
+      q.eq('school_id', user.schoolId);
+    }
+    return q;
+  };
+
+  const [s, t, p, c, f, a] = await Promise.all([
+    baseQuery('students'),
+    supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId).eq('role', 'teacher'),
+    supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId).eq('role', 'parent'),
+    baseQuery('classes'),
+    supabase.from('fees').select('amount_due, amount_paid').eq('school_id', user.schoolId),
+    supabase.from('attendance').select('status').eq('school_id', user.schoolId).eq('date', new Date().toISOString().split('T')[0]),
+  ]);
+
+  // حسابات مباشرة بدون hooks — useMemo لا يعمل خارج React components
+  const feeData = f.data || [];
+  const totalDue = feeData.reduce((sum: number, fee: any) => sum + (Number(fee.amount_due) || 0), 0);
+  const totalPaid = feeData.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0);
+  
+  const attendance = a.data || [];
+  const presentToday = attendance.filter((att: any) => att.status === 'present').length;
+  const attendanceRate = attendance.length > 0 ? Math.round((presentToday / attendance.length) * 100) : 0;
+
+  return {
+    students: s.count || 0,
+    teachers: t.count || 0,
+    parents: p.count || 0,
+    classes: c.count || 0,
+    totalDue,
+    totalPaid,
+    attendanceRate,
+    presentToday
+  };
 }
 
 export function useTeacherStats() {

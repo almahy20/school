@@ -7,7 +7,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Megaphone, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 interface AnnouncementMessage {
   id: string;
@@ -70,7 +69,7 @@ export function GlobalAnnouncement() {
         .from('profiles')
         .select('full_name')
         .eq('id', newMsg.sender_id)
-        .single();
+        .maybeSingle();
 
       addToQueue({
         id: newMsg.id,
@@ -79,15 +78,17 @@ export function GlobalAnnouncement() {
       });
     };
 
-    const unsubscribe = realtimeEngine.subscribe(
-      'messages',
-      handleRealtimeMessage,
-      { event: 'INSERT', filter: `receiver_id=eq.${user.id}` }
-    );
+    const channel = supabase.channel('global-announcements')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`
+      }, handleRealtimeMessage)
+      .subscribe();
 
     return () => {
-      console.log('[GlobalAnnouncement] Cleaning up realtime subscription');
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [user, addToQueue]); // Include user and addToQueue as dependencies
 

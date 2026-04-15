@@ -1,4 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -190,12 +192,22 @@ export function useParentAction() {
 
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('update', 'user_roles', { id: userRoleId, approval_status: status });
+        toast.success(`تم ${status === 'approved' ? 'قبول' : 'رفض'} ولي الأمر`);
+        return { offline: true };
+      }
+
       const { error } = await (supabase.from('user_roles') as any)
         .update({ approval_status: status })
         .eq('id', userRoleId);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم تحديث حالة ولي الأمر');
+      }
       queryClient.invalidateQueries({ queryKey: ['parents'] });
       queryClient.invalidateQueries({ queryKey: ['parents-page'] });
     },
@@ -207,6 +219,12 @@ export function useUpdateParent() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Parent> & { id: string }) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('update', 'profiles', { id, ...data });
+        toast.success('تم حفظ التغييرات');
+        return { offline: true };
+      }
+
       // Optimistic update
       queryClient.setQueriesData({ queryKey: ['parents'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
@@ -215,8 +233,12 @@ export function useUpdateParent() {
 
       const { error } = await supabase.from('profiles').update({ ...data }).eq('id', id);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم تحديث بيانات ولي الأمر');
+      }
       queryClient.invalidateQueries({ queryKey: ['parents'] });
     },
   });
@@ -227,10 +249,20 @@ export function useDeleteParent() {
 
   return useMutation({
     mutationFn: async (parentId: string) => {
+      if (!window.navigator.onLine) {
+        await enqueueMutation('delete', 'user_roles', { user_id: parentId, role: 'parent' });
+        toast.success('تم تحديد ولي الأمر للحذف');
+        return { offline: true };
+      }
+
       const { error } = await supabase.from('user_roles').delete().eq('user_id', parentId).eq('role', 'parent');
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف ولي الأمر بنجاح');
+      }
       queryClient.invalidateQueries({ queryKey: ['parents'] });
     },
   });

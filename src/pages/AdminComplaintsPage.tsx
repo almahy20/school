@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useComplaints, useUpsertComplaint } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import DataPagination from '@/components/ui/DataPagination';
+import PageHeader from '@/components/layout/PageHeader';
 
 const PAGE_SIZE = 10;
 
@@ -63,24 +64,20 @@ export default function AdminComplaintsPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-4 md:px-0">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 sm:p-8 rounded-[24px] sm:rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-6 sm:h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">مركز الشكاوى والمقترحات</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-xs sm:text-sm pr-4">متابعة بلاغات أولياء الأمور وحلها لضمان استمرارية الجودة التعليمية.</p>
-          </div>
-        </header>
+        <PageHeader
+          icon={MessageSquare}
+          title="مركز الشكاوى والمقترحات"
+          subtitle="متابعة بلاغات أولياء الأمور وحلها لضمان استمرارية الجودة التعليمية"
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 items-center">
            <div className="lg:col-span-2 relative group w-full text-right order-2 lg:order-1">
-              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-              <Input 
-                placeholder="بحث بالمحتوى أو اسم ولي الأمر..." 
+              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+              <Input
+                placeholder="بحث بالمحتوى أو اسم ولي الأمر..."
                 value={search}
                 onChange={e => handleSearch(e.target.value)}
-                className="h-12 pr-12 pl-6 rounded-2xl sm:rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
+                className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
               />
            </div>
            

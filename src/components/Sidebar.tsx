@@ -171,7 +171,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             end={link.to === '/'}
             onClick={onClose}
             className={({ isActive }) => cn(
-              "flex items-center justify-between px-4 h-12 rounded-xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
+              "flex items-center justify-between px-4 h-12 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
               isActive 
                 ? "bg-gradient-to-l from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/20" 
                 : "text-white/50 hover:text-white hover:bg-white/[0.05]"

@@ -15,7 +15,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    lock: (name: string, _timeout: number, acquire: () => Promise<any>) => acquire(),
   },
   global: {
     headers: {
@@ -27,13 +26,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   realtime: {
     params: {
       eventsPerSecond: 10,
-    },
-    heartbeatIntervalMs: 10000,       // Send heartbeat every 10s (more frequent)
-    reconnectAfterMs: (tries: number) => {
-      // Aggressive reconnection: 100ms, 200ms, 500ms, 1s, 2s, 5s, 10s
-      const delays = [100, 200, 500, 1000, 2000, 5000, 10000];
-      return delays[Math.min(tries, delays.length - 1)];
-    },
-    timeout: 10000,                   // Timeout after 10s (faster detection)
+    }
   },
 });

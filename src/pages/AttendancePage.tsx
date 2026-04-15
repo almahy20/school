@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { useBranding, useTeacherAttendance, useUpsertTeacherAttendance } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import PageHeader from '@/components/layout/PageHeader';
 
 interface TeacherAttendanceRecord {
   teacherId: string;
@@ -86,42 +87,28 @@ export default function TeacherAttendancePage() {
     total: localAttendance.length
   };
 
-  const filteredAttendance = localAttendance.filter(a => (a.teacherName || '').toLowerCase().includes(search.toLowerCase()));
+  const filteredAttendance = localAttendance.filter(a => (a.teacherName || '').toLowerCase().includes((search || '').toLowerCase()));
   const loading = attendanceLoading && !isRefetching;
 
   return (
     <AppLayout>
       <div className="flex flex-col gap-6 md:gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000 px-2 md:px-0">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="flex items-center gap-6">
-            <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
-               {branding?.logo_url ? (
-                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
-               ) : (
-                 <UserCheck className="w-8 h-8 text-indigo-600" />
-               )}
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'سجل حضور المعلمين'}</h1>
-                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">الكوادر التعليمية</Badge>
-              </div>
-              <p className="text-slate-500 font-medium text-sm">متابعة حضور وانصراف المعلمين يومياً</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-5">
-             <div className="relative group min-w-[200px]">
-               <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-               <input 
-                type="date" 
-                value={date} 
+        <PageHeader
+          icon={CalendarCheck}
+          title="سجل حضور المعلمين"
+          subtitle="متابعة حضور وانصراف الكادر التعليمي يومياً"
+          action={
+            <div className="relative group">
+              <Calendar className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+              <input
+                type="date"
+                value={date}
                 onChange={e => setDate(e.target.value)}
-                className="w-full pr-12 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer" 
-               />
-             </div>
-          </div>
-        </header>
+                className="pr-12 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer"
+              />
+            </div>
+          }
+        />
 
         <QueryStateHandler
           loading={loading}

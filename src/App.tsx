@@ -11,7 +11,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import PwaManager from "./components/PwaManager";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
-import { HealthMonitor } from "./components/HealthMonitor";
+import { OfflineIndicator } from "./components/OfflineIndicator";
+import "@/lib/supabaseHealth"; // Initialize the new simple health manager
 
 // Lazy Load Pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -65,7 +66,6 @@ function AppRoutes() {
   return (
     <>
       <PwaManager />
-      <HealthMonitor />
       <PwaOnboarding />
       <Suspense fallback={<PageLoader />}>
         <Routes>
@@ -137,6 +137,7 @@ export default function App() {
             </GlobalErrorBoundary>
             <Toaster />
             <RealtimeNotificationsManager />
+            <OfflineIndicator />
             <Sonner position="top-center" dir="rtl" expand={true} richColors />
           </BrowserRouter>
         </AuthProvider>

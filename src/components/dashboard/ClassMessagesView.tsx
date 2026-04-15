@@ -32,7 +32,7 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
 
   // Filter students by search
   const filteredStudents = students.filter((s: any) => 
-    s.name?.toLowerCase().includes(search.toLowerCase())
+    (s.name || '').toLowerCase().includes((search || '').toLowerCase())
   );
 
   // Fetch parents for selected student
@@ -54,7 +54,8 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
         const parentIds = parentLinks.map(link => link.parent_id);
         
         // Try fetching from profiles first
-        let { data: parentProfiles, error: profilesError } = await supabase
+        let parentProfiles;
+        const { data, error: profilesError } = await supabase
           .from('profiles')
           .select('id, full_name')
           .in('id', parentIds);
@@ -62,6 +63,8 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
         if (profilesError) {
           // Profiles query failed, will use fallback below
         }
+        
+        parentProfiles = data;
         
         // If profiles query returned empty, fetch basic info directly
         if (!parentProfiles || parentProfiles.length === 0) {

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import DataPagination from '@/components/ui/DataPagination';
+import PageHeader from '@/components/layout/PageHeader';
 
 const PAGE_SIZE = 15;
 
@@ -76,27 +77,22 @@ export default function NotificationsPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1000px] mx-auto text-right pb-14 px-2 md:px-0">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">مركز التنبيهات الذكي</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">تابع آخر التحديثات والرسائل الهامة المتعلقة بمسيرتك التعليمية.</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-             <Button 
-                variant="outline" 
-                onClick={handleMarkAllAsRead} 
-                disabled={markAllAsReadMutation.isPending || notifications.filter(n => !n.is_read).length === 0}
-                className="h-11 px-6 rounded-xl border-slate-200 text-slate-600 font-black text-xs gap-2 hover:bg-slate-50 transition-all"
-             >
-               <Check className="w-4 h-4 text-emerald-500" />
-               {markAllAsReadMutation.isPending ? 'جاري التحديث...' : 'تحديد الكل كمقروء'}
-             </Button>
-          </div>
-        </header>
+        <PageHeader
+          icon={Bell}
+          title="مركز التنبيهات"
+          subtitle="تابع آخر التحديثات والرسائل الهامة المتعلقة بمسيرتك التعليمية"
+          action={
+            <Button
+              variant="outline"
+              onClick={handleMarkAllAsRead}
+              disabled={markAllAsReadMutation.isPending || notifications.filter(n => !n.is_read).length === 0}
+              className="h-12 px-6 rounded-2xl border-slate-200 text-slate-700 font-black text-xs gap-2 hover:bg-slate-50 transition-all shadow-sm"
+            >
+              <Check className="w-4 h-4 text-emerald-500" />
+              {markAllAsReadMutation.isPending ? 'جاري التحديث...' : 'تحديد الكل كمقروء'}
+            </Button>
+          }
+        />
 
         <QueryStateHandler
           loading={isLoading}

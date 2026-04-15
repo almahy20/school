@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowRight, User, Phone, Users, Info, 
   MapPin, Mail, Shield, ChevronLeft, CreditCard,
-  Clock, Bell, CheckCircle, Send
+  Clock, Bell, CheckCircle, Send, Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { 
@@ -24,6 +24,9 @@ export default function ParentDetailPage() {
   const { toast } = useToast();
   const [notificationStats, setNotificationStats] = useState<any>(null);
   const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   // ── Queries ──
   const { data: parent, isLoading: parentLoading, error: parentError, refetch: refetchParent } = useParent(id);
@@ -72,6 +75,34 @@ export default function ParentDetailPage() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!newPassword.trim() || newPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setResettingPassword(true);
+      // 🚨 تحذير أمني: لا يمكنك استخدام auth.admin من المتصفح (Frontend Client).
+      // منصة Supabase ترفض هذا بـ (403 Forbidden) لأنه يتطلب مفتاح Service Role الذي يمنع قطعيًا وضعه بالمتصفح.
+      // 💡 الحل الصحيح: إنشاء Edge Function بداخل Supabase للقيام بهذا، أو توجيه المستخدم لاستعادة كلمة مروره بريدياً.
+      
+      toast({ 
+        title: 'إجراء محظور أمنياً (403)', 
+        description: 'لا يمكن تغيير كلمة المرور مباشرة من المتصفح لضمان أمان النظام. يرجى توجيه المستخدم لاستخدام ميزة "نسيت كلمة المرور" من شاشة الدخول.', 
+      });
+      
+      console.warn("Blocked insecure client-side admin auth call (403 Forbidden). Requires Edge Function or RPC.");
+      
+      setNewPassword('');
+      setShowPassword(false);
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message || 'فشل في إعادة تعيين كلمة المرور', variant: 'destructive' });
+    } finally {
+      setResettingPassword(false);
+    }
+  };
+
   const isLoadingTotal = parentLoading || childrenLoading;
 
   return (
@@ -86,7 +117,7 @@ export default function ParentDetailPage() {
           loadingMessage="جاري مزامنة بيانات حساب ولي الأمر..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-10 md:p-14 rounded-[40px] md:rounded-[56px] relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-amber-500/15 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
             <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             
@@ -146,13 +177,61 @@ export default function ParentDetailPage() {
                         actionText="اتصال هاتفي"
                         color="indigo"
                       />
-                      <ContactCard 
-                        icon={Mail} 
-                        label="البريد الإلكتروني المعتمد" 
-                        value={parent?.email || '—'} 
-                        actionText="مراسلة إلكترونية"
-                        color="slate"
-                      />
+                      
+                      {/* Password Card */}
+                      <div className="p-8 rounded-[48px] flex flex-col justify-between h-64 border transition-all duration-500 hover:scale-[1.04] bg-slate-900 text-white shadow-3xl shadow-slate-200">
+                         <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center shadow-inner">
+                            <Key className="w-7 h-7" />
+                         </div>
+                         <div className="space-y-4">
+                            <div>
+                               <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-2 text-white/40">كلمة المرور</p>
+                               
+                               {showPassword ? (
+                                  <div className="space-y-3">
+                                     <div className="relative">
+                                        <input
+                                          type="text"
+                                          value={newPassword}
+                                          onChange={(e) => setNewPassword(e.target.value)}
+                                          placeholder="أدخل كلمة المرور الجديدة"
+                                          className="w-full h-12 pr-4 pl-12 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-sm font-bold focus:outline-none focus:border-indigo-500 transition-colors"
+                                          autoFocus
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setShowPassword(false);
+                                            setNewPassword('');
+                                          }}
+                                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                                        >
+                                           <Key className="w-4 h-4 text-white/50" />
+                                        </button>
+                                     </div>
+                                     <Button
+                                       onClick={handleResetPassword}
+                                       disabled={!newPassword || newPassword.length < 6 || resettingPassword}
+                                       className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg disabled:opacity-50"
+                                     >
+                                       {resettingPassword ? 'جاري التحديث...' : 'حفظ كلمة المرور'}
+                                     </Button>
+                                     <p className="text-[9px] text-white/40 text-center font-bold">
+                                        يجب أن تكون 6 أحرف على الأقل
+                                     </p>
+                                  </div>
+                               ) : (
+                                  <button
+                                    onClick={() => setShowPassword(true)}
+                                    className="w-full h-12 rounded-xl border-2 border-dashed border-white/20 hover:border-indigo-500/50 hover:bg-white/5 flex items-center justify-center gap-2 transition-all text-white/30 hover:text-indigo-400"
+                                  >
+                                     <Key className="w-4 h-4" />
+                                     <span className="text-xs font-bold">إعادة تعيين كلمة المرور</span>
+                                  </button>
+                               )}
+                            </div>
+                         </div>
+                      </div>
                    </div>
                 </section>
 

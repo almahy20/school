@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import DataDetailModal from '@/components/DataDetailModal';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import PageHeader from '@/components/layout/PageHeader';
 
 const PAGE_SIZE = 15;
 
@@ -103,45 +104,32 @@ export default function StudentsPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
-        {/* Premium Header - Dynamic & Modern */}
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 sm:p-8 rounded-3xl border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-          
-          <div className="space-y-4 relative z-10">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
-                  <GraduationCap className="w-6 h-6" />
-               </div>
-               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">إدارة شؤون الطلاب</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-base pr-1">قاعدة البيانات المركزية، السجلات الأكاديمية، ونتائج المتابعة الشاملة.</p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4 relative z-10">
-             {user?.role === 'admin' && (
-               <Button 
-                 onClick={() => setShowAdd(true)} 
-                 className="h-12 px-8 rounded-xl bg-indigo-600 text-white font-bold hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-200 gap-2"
-               >
-                 <Plus className="w-5 h-5" /> إضافة طالب جديد
-               </Button>
-             )}
-          </div>
-        </header>
+        <PageHeader
+          icon={GraduationCap}
+          title="إدارة شؤون الطلاب"
+          subtitle="قاعدة البيانات المركزية، السجلات الأكاديمية، ونتائج المتابعة الشاملة"
+          action={
+            user?.role === 'admin' && (
+              <Button
+                onClick={() => setShowAdd(true)}
+                className="h-12 px-8 rounded-2xl bg-indigo-600 text-white font-black hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-200 gap-2"
+              >
+                <Plus className="w-5 h-5" /> إضافة طالب جديد
+              </Button>
+            )
+          }
+        />
 
         {/* Filters and Search - Premium Scaling */}
         <div className="flex flex-col lg:flex-row gap-6 items-center">
           <div className="relative group flex-1 w-full">
-            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition duration-500" />
-            <div className="relative">
-              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
-              <Input 
-                placeholder="ابحث عن اسم الطالب..." 
-                value={search}
-                onChange={e => handleSearch(e.target.value)}
-                className="h-12 pr-12 pl-6 rounded-xl border-none bg-white text-sm font-bold shadow-md shadow-slate-200/50 transition-all focus:ring-0 placeholder:text-slate-300"
-              />
-            </div>
+            <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+            <Input
+              placeholder="ابحث عن اسم الطالب..."
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
+            />
           </div>
           
           <div className="flex items-center gap-3 overflow-x-auto pb-4 no-scrollbar lg:w-auto w-full px-2">

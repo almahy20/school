@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 import { AppRole, AppUser } from '@/types/auth';
+import { logger } from '@/utils/logger';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -67,12 +68,12 @@ async function fetchAppUser(supaUser: SupabaseUser, retryCount = 0): Promise<App
         // If it's a lock error, we retry after a small delay
         if (rpcErr.message?.includes('AbortError') || rpcErr.message?.includes('Lock broken')) {
            if (retryCount < 3) {
-             console.warn(`Auth Lock conflict detected, retrying (${retryCount + 1})...`);
+             logger.warn(`Auth Lock conflict detected, retrying (${retryCount + 1})...`);
              await new Promise(r => setTimeout(r, 100 * (retryCount + 1))); // Exponential backoff
              return fetchAppUser(supaUser, retryCount + 1);
            }
         }
-        console.error('RPC fetch error (get_complete_user_data):', rpcErr);
+        logger.error('RPC fetch error (get_complete_user_data):', rpcErr);
         return null;
       }
 
@@ -138,12 +139,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
-        console.warn('⚠️ [refreshUser] getSession error, trying refreshSession:', sessionError.message);
+        logger.warn('⚠️ [refreshUser] getSession error, trying refreshSession:', sessionError.message);
         // Try to refresh the session
         const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
         
         if (refreshError || !refreshedSession?.user) {
-          console.error('❌ [refreshUser] Session refresh failed:', refreshError?.message);
+          logger.error('❌ [refreshUser] Session refresh failed:', refreshError?.message);
           setUser(null);
           return;
         }
@@ -166,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       } else {
         // No session, try to refresh it
-        console.log('⚠️ [refreshUser] No session, attempting refresh...');
+        logger.log('⚠️ [refreshUser] No session, attempting refresh...');
         const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
         
         if (refreshedSession?.user) {
@@ -180,7 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('❌ [refreshUser] Critical error:', error);
+      logger.error('❌ [refreshUser] Critical error:', error);
       // Don't set to null on unknown errors - preserve existing state
     }
   };
@@ -191,15 +192,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initSession = async () => {
       try {
-        console.log('🔑 [AuthContext] Initializing session...');
+        logger.log('🔑 [AuthContext] Initializing session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('❌ [AuthContext] Session init error:', error);
+          logger.error('❌ [AuthContext] Session init error:', error);
         }
         
         if (session?.user && isMounted) {
-          console.log('✅ [AuthContext] Session found for user:', session.user.id);
+          logger.log('✅ [AuthContext] Session found for user:', session.user.id);
           const appUser = await fetchAppUser(session.user);
           if (isMounted) {
             setUser(prev => {
@@ -208,13 +209,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
           }
         } else {
-          console.warn('⚠️ [AuthContext] No active session found');
+          logger.warn('⚠️ [AuthContext] No active session found');
         }
       } catch (err) {
-        console.error('❌ [AuthContext] Session init error:', err);
+        logger.error('❌ [AuthContext] Session init error:', err);
       } finally {
         if (isMounted) {
-          console.log('✅ [AuthContext] Auth initialization complete');
+          logger.log('✅ [AuthContext] Auth initialization complete');
           isInitializing = false; // Mark initialization as complete
           setLoading(false);
         }
@@ -228,20 +229,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Ignore events during initialization to prevent race conditions
       if (isInitializing) {
-        console.log(`⏳ [AuthContext] Ignoring ${event} during initialization`);
+        logger.log(`⏳ [AuthContext] Ignoring ${event} during initialization`);
         return;
       }
 
-      console.log(`🔑 Auth Event: ${event} for user: ${session?.user?.id || 'none'}`);
+      logger.log(`🔑 Auth Event: ${event} for user: ${session?.user?.id || 'none'}`);
 
       if (event === 'TOKEN_REFRESHED') {
-        console.log('🔄 Token refreshed successfully');
+        logger.log('🔄 Token refreshed successfully');
         // Don't refetch user data on token refresh - it's just a token update
         return;
       }
 
       if (event === 'SIGNED_OUT') {
-        console.warn('🚪 User signed out or session expired');
+        logger.warn('🚪 User signed out or session expired');
         // Only set to null if not already handled by logout function
         if (!isLoggingOut) {
           setUser(null);
@@ -252,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Skip initial session events (handled by initSession)
       if (event === 'INITIAL_SESSION') {
-        console.log('📋 [AuthContext] INITIAL_SESSION event (already handled)');
+        logger.log('📋 [AuthContext] INITIAL_SESSION event (already handled)');
         return;
       }
 
@@ -284,7 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } catch (err) {
-        console.error("Auth Change Critical Error:", err);
+        logger.error("Auth Change Critical Error:", err);
         if (isMounted) setLoading(false);
       }
     });
@@ -292,12 +293,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Session Heartbeat - prevent session expiration during long idle periods
     const heartbeatInterval = setInterval(async () => {
       if (user && isMounted) {
-        console.log('💓 [AuthContext] Session heartbeat...');
+        logger.log('💓 [AuthContext] Session heartbeat...');
         try {
           const { error } = await supabase.auth.getSession();
-          if (error) console.error('❌ Heartbeat session check failed:', error);
+          if (error) logger.error('❌ Heartbeat session check failed:', error);
         } catch (e) {
-          console.error('❌ Heartbeat critical error:', e);
+          logger.error('❌ Heartbeat critical error:', e);
         }
       }
     }, 10 * 60 * 1000); // Every 10 minutes
@@ -308,7 +309,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearInterval(heartbeatInterval);
       subscription.unsubscribe();
     };
-  }, [user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once only — user dep caused subscription leak on every setUser() call
 
   // تم إزالة مؤقت تسجيل الخروج التلقائي بناءً على طلب المستخدم لمنع تسجيل الخروج المفاجئ.
 
@@ -317,7 +319,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true; // Track mount state for this effect
     
     const handleOnline = async () => {
-      console.log('🌐 [AuthContext] Device back online. Refreshing session...');
+      logger.log('🌐 [AuthContext] Device back online. Refreshing session...');
       const { data: { session }, error } = await supabase.auth.getSession();
       if (!error && session) {
         await refreshUser();
@@ -331,30 +333,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       if (document.visibilityState === 'visible' && (now - lastVisibilityCheckTime > 120000)) {
         lastVisibilityCheckTime = now;
-        console.log('👁️ [AuthContext] Tab became visible, checking session...');
+        logger.log('👁️ [AuthContext] Tab became visible, checking session...');
         
         try {
           // Step 1: Try to get current session
           const { data: { session }, error: sessionError } = await supabase.auth.getSession();
           
           if (sessionError) {
-            console.error('❌ [AuthContext] getSession error:', sessionError);
+            logger.error('❌ [AuthContext] getSession error:', sessionError);
             // Don't set user to null yet - try to refresh
           }
           
           if (session?.user) {
-            console.log('✅ [AuthContext] Session is valid, refreshing user data...');
+            logger.log('✅ [AuthContext] Session is valid, refreshing user data...');
             await refreshUser();
             return; // Session is valid, no need to refresh
           }
           
           // Step 2: If no session or expired, try to refresh it
-          console.log('⚠️ [AuthContext] No active session, attempting to refresh...');
+          logger.log('⚠️ [AuthContext] No active session, attempting to refresh...');
           
           const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
           
           if (refreshError) {
-            console.warn('⚠️ [AuthContext] Session refresh failed (session truly expired):', refreshError.message);
+            logger.warn('⚠️ [AuthContext] Session refresh failed (session truly expired):', refreshError.message);
             // Session is truly expired, user needs to log in again
             if (!isLoggingOut) {
               setUser(null);
@@ -363,7 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           
           if (refreshedSession?.user) {
-            console.log('✅ [AuthContext] Session refreshed successfully!');
+            logger.log('✅ [AuthContext] Session refreshed successfully!');
             // Fetch user data with the new session
             const appUser = await fetchAppUser(refreshedSession.user);
             if (isMounted) {
@@ -375,13 +377,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           } else {
             // No session even after refresh
-            console.warn('⚠️ [AuthContext] No session after refresh attempt');
+            logger.warn('⚠️ [AuthContext] No session after refresh attempt');
             if (!isLoggingOut) {
               setUser(null);
             }
           }
         } catch (err) {
-          console.error('❌ [AuthContext] Visibility change handler error:', err);
+          logger.error('❌ [AuthContext] Visibility change handler error:', err);
           // Don't set user to null on unknown errors - let existing state persist
         }
       }
@@ -453,7 +455,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('🚪 Initiating logout...');
+      logger.log('🚪 Initiating logout...');
       isLoggingOut = true;
       
       // Set loading to prevent race conditions during logout
@@ -463,7 +465,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         window.dispatchEvent(new Event('logout-clear-cache'));
       } catch (e) {
-        console.warn('Failed to dispatch cache clear event');
+        logger.warn('Failed to dispatch cache clear event');
       }
       
       // Clear all active fetch promises
@@ -474,7 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Remove React Query persisted cache
         localStorage.removeItem('rq-persist-v1');
       } catch (e) {
-        console.warn('Failed to clear localStorage');
+        logger.warn('Failed to clear localStorage');
       }
       
       // Sign out from Supabase with local scope (only this tab)
@@ -484,11 +486,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       
       if (error) {
-        console.error('❌ Logout error:', error);
+        logger.error('❌ Logout error:', error);
         // Continue anyway - clear local state
       }
       
-      console.log('✅ Logout successful, clearing state...');
+      logger.log('✅ Logout successful, clearing state...');
       
       // Clear local state IMMEDIATELY
       setUser(null);
@@ -498,7 +500,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut({ scope: 'local' });
       
     } catch (err) {
-      console.error('❌ Logout critical error:', err);
+      logger.error('❌ Logout critical error:', err);
       // Force clear state even on error
       setUser(null);
       setLoading(false);

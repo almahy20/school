@@ -2,6 +2,12 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+// Global Error Interceptor & Console Cleaner - MUST be first
+if (import.meta.env.DEV) {
+  import("./utils/errorInterceptor");
+  import("./utils/earlyConsoleCleaner");
+}
+
 // Service Worker registration logic
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 

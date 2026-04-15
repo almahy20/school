@@ -1,72 +1,68 @@
-import { useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBranding } from '@/hooks/queries';
+import { useLocation } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 
 export default function PwaManager() {
   const { user } = useAuth();
+  const location = useLocation();
+  const { data: brandingData } = useBranding();
 
-  const updateManifest = useCallback(async () => {
+  // Helper to get slug from URL if user is not logged in
+  const urlSlug = useMemo(() => {
+    if (user?.schoolId) return null;
+    
+    const pathParts = location.pathname.split('/');
+    const isReg = pathParts.includes('register');
+    const slugInPath = pathParts[pathParts.length - 1];
+    const params = new URLSearchParams(location.search);
+    const querySlug = params.get('school');
+    
+    return querySlug || (isReg ? slugInPath : null);
+  }, [user?.schoolId, location.pathname, location.search]);
+
+  // Fetch school by slug if no user schoolId
+  const { data: slugBrandingData } = useQuery({
+    queryKey: ['school-by-slug-pwa', urlSlug],
+    queryFn: async () => {
+      if (!urlSlug) return null;
+      const { data: school, error } = await supabase
+        .from('schools')
+        .select('id, name, logo_url, slug')
+        .eq('slug', urlSlug)
+        .maybeSingle();
+      
+      if (error) return null;
+      return school;
+    },
+    enabled: !!urlSlug && !user?.schoolId
+  });
+
+  const activeBranding = brandingData || slugBrandingData;
+
+  const updateManifest = useCallback(() => {
     let name = "المدرسة الذكية";
     let shortName = "المدرسة";
     const defaultIcon = "/icons/icon-192.png";
     let icon = defaultIcon;
     let slug = "";
-    let themeColor = "#1e293b";
+    const themeColor = "#1e293b";
 
-    // 1. Determine school context
-    if (user?.schoolId) {
-      try {
-        const { data, error } = await supabase
-          .from('schools')
-          .select('name, slug, logo_url')
-          .eq('id', user.schoolId)
-          .maybeSingle();
-        
-        if (error) {
-          console.error('Error fetching PWA school data:', error);
-        } else if (data) {
-          const school = data as any;
-          name = school.name;
-          shortName = school.name.split(' ')[0];
-          icon = school.logo_url || "/icons/icon-192.png";
-          slug = school.slug;
-          themeColor = "#1e293b";
-        }
-      } catch (err) {
-        console.error('Fatal error in PwaManager fetch:', err);
+    if (activeBranding) {
+      name = activeBranding.name;
+      // Use full name as short name if it's reasonably short (up to 12 chars), otherwise use first 2 words or first word
+      const words = activeBranding.name.split(' ');
+      if (activeBranding.name.length <= 15) {
+        shortName = activeBranding.name;
+      } else if (words.length > 1) {
+        shortName = `${words[0]} ${words[1]}`.slice(0, 12);
+      } else {
+        shortName = words[0].slice(0, 12);
       }
-    } else {
-      // Check URL for registration slugs or query params
-      const pathParts = window.location.pathname.split('/');
-      const isReg = pathParts.includes('register');
-      const urlSlug = pathParts[pathParts.length - 1];
-      const params = new URLSearchParams(window.location.search);
-      const querySlug = params.get('school');
-      
-      const finalSlug = querySlug || (isReg ? urlSlug : null);
-      
-      if (finalSlug) {
-         try {
-           const { data, error } = await supabase
-            .from('schools')
-            .select('name, slug, logo_url')
-            .eq('slug', finalSlug)
-            .maybeSingle();
-          
-          if (error) {
-            console.error('Error fetching PWA school data by slug:', error);
-          } else if (data) {
-            const school = data as any;
-            name = school.name;
-            shortName = school.name.split(' ')[0];
-            icon = school.logo_url || "/icons/icon-192.png";
-            slug = school.slug;
-            themeColor = "#1e293b";
-          }
-        } catch (err) {
-          console.error('Fatal error in PwaManager fetch by slug:', err);
-        }
-      }
+      icon = activeBranding.logo_url || defaultIcon;
+      slug = activeBranding.slug;
     }
 
     // Add cache busting to icon to force refresh when changed in dashboard
@@ -101,13 +97,13 @@ export default function PwaManager() {
     const blob = new Blob([stringManifest], { type: 'application/json' });
     const manifestURL = URL.createObjectURL(blob);
 
-    // 3. Update DOM
+    // Update DOM
     const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
     if (link) {
       link.href = manifestURL;
     }
 
-    // 4. Update Title & Favicon & Theme Color
+    // Update Title & Favicon & Theme Color
     document.title = name;
     
     const updateIcon = (rel: string, href: string) => {
@@ -135,18 +131,12 @@ export default function PwaManager() {
       document.head.appendChild(metaTheme);
     }
     metaTheme.content = themeColor;
-  }, [user?.schoolId]);
+  }, [activeBranding]);
 
   useEffect(() => {
     updateManifest();
-
-    // No realtime subscription needed - manifest updates on auth change only
-    // Realtime engine was causing "cannot add postgres_changes after subscribe()" error
-    
-    return () => {
-      // Cleanup if needed
-    };
-  }, [user?.schoolId, updateManifest]);
+  }, [updateManifest]);
 
   return null;
 }
+

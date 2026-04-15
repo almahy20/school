@@ -141,8 +141,8 @@ export function useMessages() {
       return data;
     },
     enabled: !!user?.id,
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30 seconds
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    refetchInterval: false, // Optimized: removed polling, using realtime instead
   });
 }

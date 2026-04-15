@@ -20,30 +20,30 @@ export function AdminDashboard() {
 
   return (
     <div className="flex flex-col gap-6 md:gap-8 lg:gap-10 max-w-[1400px] xl:max-w-[1500px] mx-auto text-right px-4 md:px-0">
-      <header className="bg-slate-900 p-5 sm:p-6 md:p-8 rounded-[24px] sm:rounded-[32px] text-white shadow-2xl relative overflow-hidden group">
+      <header className="bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 p-8 md:p-12 rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
+        {/* Removed external image dependency for better performance */}
         
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-8">
-          <div className="flex items-center gap-4 md:gap-5 text-right">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl bg-white flex items-center justify-center shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
-               <School className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-slate-900" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="flex items-center gap-6 text-right">
+            <div className="w-16 h-16 md:w-20 md:h-20 rounded-[28px] bg-white flex items-center justify-center shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
+               <School className="w-8 h-8 md:w-10 md:h-10 text-slate-900" />
             </div>
-            <div className="space-y-1 md:space-y-1.5">
-               <h1 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black tracking-tight leading-tight">مرحباً، {userName}</h1>
-               <p className="text-white/50 text-[10px] sm:text-xs md:text-sm font-medium leading-relaxed max-w-2xl">
+            <div className="space-y-2">
+               <h1 className="text-2xl md:text-4xl font-black tracking-tight leading-tight">مرحباً، {userName}</h1>
+               <p className="text-white/50 text-xs md:text-base font-medium leading-relaxed max-w-2xl">
                  نظرة عامة شاملة على أداء المدرسة اليوم. تابع التحصيل المالي، حضور الطلاب، ونشاط الكادر التعليمي.
                </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-3 md:gap-4 px-5 md:px-6 py-3.5 md:py-4 rounded-xl md:rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 group hover:scale-105 transition-all w-full md:w-auto">
-             <div className="w-9 h-9 md:w-10 md:h-10 lg:w-12 lg:h-12 rounded-lg md:rounded-xl bg-white/10 flex items-center justify-center text-white/50 group-hover:text-white transition-colors shrink-0">
-               <Calendar className="w-4 h-4 md:w-5 md:h-5 lg:w-6 lg:h-6" />
+          <div className="flex items-center gap-4 px-8 py-5 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 group hover:scale-105 transition-all w-full md:w-auto">
+             <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white/50 group-hover:text-white transition-colors shrink-0">
+               <Calendar className="w-6 h-6" />
              </div>
              <div className="min-w-0">
-               <p className="text-[8px] sm:text-[9px] md:text-[10px] font-bold text-white/40 uppercase tracking-wider leading-none mb-1 md:mb-1.5 text-right">تاريخ اليوم</p>
-               <p className="text-sm sm:text-base md:text-lg lg:text-xl font-black text-white leading-none text-right truncate">
+               <p className="text-[10px] font-black text-white/30 uppercase tracking-widest leading-none mb-2 text-right">تاريخ اليوم</p>
+               <p className="text-lg md:text-xl font-black text-white leading-none text-right truncate">
                  {formatDisplayDate(new Date(), { weekday: 'long', day: 'numeric', month: 'long' })}
                </p>
              </div>

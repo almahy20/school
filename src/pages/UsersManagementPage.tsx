@@ -5,7 +5,8 @@ import { AppRole } from '@/types/auth';
 import { 
   ShieldCheck, Users, Phone, Trash2, Edit2, Ban, 
   CheckCircle, Search, X, Save, UserPlus, ShieldPlus, 
-  UserCheck, ShieldAlert, MoreHorizontal, LinkIcon 
+  UserCheck, ShieldAlert, MoreHorizontal, LinkIcon,
+  Key, Eye, EyeOff
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -44,6 +45,9 @@ export default function UsersManagementPage() {
   const [createForm, setCreateForm] = useState({ fullName: '', phone: '', password: '', role: 'parent' as AppRole });
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState('الكل');
+  const [showPassword, setShowPassword] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingUserId, setResettingUserId] = useState<string | null>(null);
 
   // ── Debounce Search ──
   useEffect(() => {
@@ -94,7 +98,7 @@ export default function UsersManagementPage() {
 
   const handleStatusChange = async (userId: string, status: 'approved' | 'rejected') => {
     try {
-      await updateStatusMutation.mutateAsync({ userId, status });
+      await updateStatusMutation.mutateAsync({ userId, status: status as any });
       toast({ title: status === 'approved' ? 'تم تفعيل الحساب' : 'تم تعطيل الحساب' });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
@@ -117,8 +121,10 @@ export default function UsersManagementPage() {
     try {
       await updateProfileMutation.mutateAsync({ 
         userId, 
-        full_name: editForm.fullName, 
-        phone: editForm.phone 
+        updates: {
+          full_name: editForm.fullName, 
+          phone: editForm.phone 
+        } as any
       });
       toast({ title: 'تم تحديث البيانات بنجاح' });
       setEditingId(null);
@@ -127,10 +133,44 @@ export default function UsersManagementPage() {
     }
   };
 
+  const handleResetPassword = async (userId: string) => {
+    if (!newPassword.trim()) {
+      toast({ title: 'خطأ', description: 'الرجاء إدخال كلمة المرور الجديدة', variant: 'destructive' });
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast({ title: 'خطأ', description: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      // 🚨 تحذير أمني: لا يمكنك استخدام auth.admin من المتصفح (Frontend Client).
+      // منصة Supabase ترفض هذا بـ (403 Forbidden) لأنه يتطلب مفتاح Service Role الذي يمنع قطعيًا وضعه بالمتصفح.
+      // 💡 الحل الصحيح: إنشاء Edge Function بداخل Supabase للقيام بهذا، أو توجيه المستخدم لاستعادة كلمة مروره بريدياً.
+      
+      toast({ 
+        title: 'إجراء محظور أمنياً (403)', 
+        description: 'لا يمكن تغيير كلمة المرور مباشرة من المتصفح لضمان أمان النظام. يرجى توجيه المستخدم لاستخدام ميزة "نسيت كلمة المرور" من شاشة الدخول.', 
+      });
+      
+      console.warn("Blocked insecure client-side admin auth call (403 Forbidden). Requires Edge Function or RPC.");
+      
+      setNewPassword('');
+      setShowPassword(null);
+      setResettingUserId(null);
+    } catch (err: any) {
+      toast({ 
+        title: 'خطأ', 
+        description: err.message || 'فشل في إعادة تعيين كلمة المرور', 
+        variant: 'destructive' 
+      });
+    }
+  };
+
   return (
     <AppLayout>
       <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-12 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
           <div className="space-y-4 relative z-10 w-full xl:w-1/2">
@@ -270,6 +310,12 @@ export default function UsersManagementPage() {
                    onRoleChange={handleRoleChange}
                    onStatusChange={handleStatusChange}
                    onEditProfile={(u: any) => { setEditingId(u.id); setEditForm({ fullName: u.fullName, phone: u.phone }); }}
+                   onResetPassword={(userId: string) => { setShowPassword(userId); setResettingUserId(userId); setNewPassword(''); }}
+                   showPassword={showPassword}
+                   newPassword={newPassword}
+                   onNewPasswordChange={setNewPassword}
+                   onHidePassword={() => setShowPassword(null)}
+                   handleResetPassword={handleResetPassword}
                    isUpdating={deleteUserMutation.isPending || updateRoleMutation.isPending || updateStatusMutation.isPending}
                  />
                ))}
@@ -316,7 +362,21 @@ export default function UsersManagementPage() {
   );
 }
 
-function ManagedUserCard({ user, currentAdminId, onDelete, onRoleChange, onStatusChange, onEditProfile, isUpdating }: any) {
+function ManagedUserCard({ 
+  user, 
+  currentAdminId, 
+  onDelete, 
+  onRoleChange, 
+  onStatusChange, 
+  onEditProfile,
+  onResetPassword,
+  showPassword,
+  newPassword,
+  onNewPasswordChange,
+  onHidePassword,
+  handleResetPassword,
+  isUpdating 
+}: any) {
   const isMe = user.id === currentAdminId;
   const roleColors: any = {
     admin: "bg-indigo-600 text-white shadow-indigo-100",
@@ -363,6 +423,60 @@ function ManagedUserCard({ user, currentAdminId, onDelete, onRoleChange, onStatu
                 <span>عضو منذ {new Date(user.createdAt).toLocaleDateString('ar-EG')}</span>
              </div>
           </div>
+
+          {/* Password Card */}
+          {!isMe && (
+            <div className="space-y-3 pt-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                <Key className="w-3.5 h-3.5" />
+                كلمة المرور
+              </label>
+              
+              {showPassword === user.id ? (
+                <div className="space-y-3 bg-gradient-to-br from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-200/50">
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={newPassword}
+                      onChange={(e) => onNewPasswordChange(e.target.value)}
+                      placeholder="أدخل كلمة المرور الجديدة"
+                      className="h-11 pr-4 pl-12 rounded-xl bg-white border-amber-200 font-bold text-sm"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onHidePassword();
+                        onNewPasswordChange('');
+                      }}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5 text-slate-500" />
+                    </button>
+                  </div>
+                  <Button
+                    onClick={() => handleResetPassword(user.id)}
+                    disabled={!newPassword || newPassword.length < 6}
+                    className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-[10px] shadow-lg shadow-amber-100 disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    حفظ كلمة المرور
+                  </Button>
+                  <p className="text-[9px] text-amber-600/70 font-bold text-center">
+                    يجب أن تكون 6 أحرف على الأقل
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => onResetPassword(user.id)}
+                  className="w-full h-10 rounded-xl border-2 border-dashed border-slate-200 hover:border-amber-400 hover:bg-amber-50/50 flex items-center justify-center gap-2 transition-all text-slate-400 hover:text-amber-600"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-black">إعادة تعيين كلمة المرور</span>
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
              <Button variant="ghost" onClick={() => onEditProfile(user)} className="h-10 px-4 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all font-black text-[10px] gap-2">

@@ -74,7 +74,7 @@ export default function StudentDetailPage() {
           loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-10 md:p-14 rounded-[40px] md:rounded-[56px] relative overflow-hidden group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
             <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-purple-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             

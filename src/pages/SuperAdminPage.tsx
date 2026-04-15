@@ -70,11 +70,11 @@ export default function SuperAdminPage() {
   };
 
   const filteredSchools = useMemo(() => {
-    return schools.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
+    return (schools || []).filter(s => (s.name || '').toLowerCase().includes((search || '').toLowerCase()));
   }, [schools, search]);
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => o.school_name.toLowerCase().includes(search.toLowerCase()));
+    return (orders || []).filter(o => (o.school_name || '').toLowerCase().includes((search || '').toLowerCase()));
   }, [orders, search]);
 
   const stats = useMemo(() => ({

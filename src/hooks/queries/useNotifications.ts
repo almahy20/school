@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { enqueueMutation } from '@/lib/offlineQueue';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -91,15 +93,29 @@ export function useMarkAllAsRead() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async () => {
-      if (!user?.id) return;
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('update', 'notifications', { 
+          markAllAsRead: true, 
+          userId: user?.id 
+        });
+        toast.success('تم تحديد الكل كمقروء - سيتم التحديث عند الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
+      if (!user?.id) return { offline: false };
       const { error } = await db
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
         .eq('is_read', false);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم تحديد الكل كمقروء');
+      }
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
     },
@@ -111,13 +127,24 @@ export function useDeleteNotification() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (id: string) => {
+      // Offline-first: queue if offline
+      if (!window.navigator.onLine) {
+        const mutationId = await enqueueMutation('delete', 'notifications', { id });
+        toast.success('تم تحديد التنبيه للحذف - سيتم الحذف عند الاتصال');
+        return { id: mutationId, offline: true };
+      }
+
       const { error } = await db
         .from('notifications')
         .delete()
         .eq('id', id);
       if (error) throw error;
+      return { offline: false };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (!result?.offline) {
+        toast.success('تم حذف التنبيه');
+      }
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
     },
