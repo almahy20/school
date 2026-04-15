@@ -1,9 +1,9 @@
 import { useState, ReactNode, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
 import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
-import { GlobalSyncIndicator } from './GlobalSyncIndicator';
 import BottomNav from './layout/BottomNav';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +21,9 @@ export default function AppLayout({ children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
+  const queryClient = useQueryClient(); // ✅ إضافة هذا السطر
   const navigate = useNavigate();
+
   const { data: unreadCount = 0 } = useUnreadNotificationsCount();
   const { data: branding } = useBranding();
   const [logoError, setLogoError] = useState(false);
@@ -47,12 +49,37 @@ export default function AppLayout({ children }: Props) {
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
   const { permission } = usePushNotifications();
 
+  // 🚀 تحسين السرعة عبر جلب البيانات في الخلفية (Prefetching)
+  useEffect(() => {
+    if (user?.schoolId) {
+      const commonOptions = { staleTime: 5 * 60 * 1000 };
+      
+      // التوقع المسبق للبيانات الأكثر استخداماً
+      const prefetch = async () => {
+        try {
+          // جلب الصفحة الأولى من الطلاب والمعلمين والفصول
+          await Promise.allSettled([
+            queryClient.prefetchQuery({ queryKey: ['students', user.schoolId, 1, 15, '', 'الكل'], ...commonOptions }),
+            queryClient.prefetchQuery({ queryKey: ['teachers', user.schoolId, false, 1, 15, '', 'الكل'], ...commonOptions }),
+            queryClient.prefetchQuery({ queryKey: ['classes', user.schoolId], ...commonOptions }),
+            queryClient.prefetchQuery({ queryKey: ['parents', user.schoolId, 1, 15, '', 'الكل'], ...commonOptions }),
+          ]);
+        } catch (e) {
+          console.warn('Prefetching failed, but that is fine:', e);
+        }
+      };
+      
+      prefetch();
+    }
+  }, [user?.schoolId, queryClient]);
+
   // Show a non-blocking toast reminder if user is in browser but already logged in
   useEffect(() => {
     if (user && !isPWA) {
       // Logic for PWA reminder could go here if needed in future
     }
   }, [user, isPWA]);
+
 
   // Quick navigation search
   const allLinks = useMemo(() => {
@@ -77,7 +104,6 @@ export default function AppLayout({ children }: Props) {
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
 
       <GlobalAnnouncement />
-      <GlobalSyncIndicator />
 
 
       {/* Mobile Glass Header */}
@@ -127,8 +153,14 @@ export default function AppLayout({ children }: Props) {
       {/* Main Content Area */}
       <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-all duration-700 relative">
         {/* Abstract Background Gradients (Enhanced for better visual consistency) */}
-        <div className="absolute top-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none animate-pulse duration-[10s]" />
-        <div className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse duration-[15s]" />
+        <div 
+          style={{ animationDuration: '10s' }} 
+          className="absolute top-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none animate-pulse" 
+        />
+        <div 
+          style={{ animationDuration: '15s' }}
+          className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" 
+        />
 
         {/* Desktop Header Navigation */}
         <div className="hidden lg:flex items-center justify-between px-10 xl:px-12 py-4 xl:py-6 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50">
@@ -224,8 +256,9 @@ export default function AppLayout({ children }: Props) {
           </div>
         </footer>
       </main>
-
+      
       <BottomNav />
     </div>
   );
 }
+

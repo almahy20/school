@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 interface QueryStateHandlerProps {
   loading: boolean;
@@ -29,8 +30,34 @@ export function QueryStateHandler({
   isEmpty = false,
 }: QueryStateHandlerProps) {
   
+  const [showTimeoutError, setShowTimeoutError] = React.useState(false);
+  const [loadingStartTime, setLoadingStartTime] = React.useState<number>(0);
+
+  // ✅ Watchdog: لو التحميل طول عن 30 ثانية (زيادة من 12)، اظهر زر إعادة محاولة
+  // على الشبكات البطيئة، 12 ثانية قليل جداً
+  React.useEffect(() => {
+    let timer: any;
+    if (loading && !isRefetching) {
+      setLoadingStartTime(Date.now());
+      timer = setTimeout(() => {
+        setShowTimeoutError(true);
+      }, 30000); // 30 ثانية (أكثر تسامحاً مع الشبكات البطيئة)
+    } else {
+      setShowTimeoutError(false);
+      const loadDuration = Date.now() - loadingStartTime;
+      if (loadingStartTime > 0 && loadDuration > 5000) {
+        // تسجيل إذا استغرق التحميل وقتاً طويلاً (لكن لم يصل للـ timeout)
+        logger.log(`⏱️ [QueryStateHandler] Loading took ${Math.round(loadDuration / 1000)}s (slow but successful)`);
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [loading, isRefetching]);
+
+  // Use either the real error or the timeout error
+  const finalError = error || (showTimeoutError ? new Error('تأخرت الاستجابة من السيرفر') : null);
+
   // 1. Loading State
-  if (loading && !isRefetching) {
+  if (loading && !isRefetching && !showTimeoutError) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -47,7 +74,10 @@ export function QueryStateHandler({
   }
 
   // 2. Error State
-  if (error) {
+  if (finalError) {
+    const isTimeout = showTimeoutError && !error;
+    const loadDuration = Date.now() - loadingStartTime;
+    
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-8 p-10 text-center bg-white rounded-[40px] border border-rose-100 shadow-2xl shadow-rose-900/5 animate-in fade-in slide-in-from-bottom-8 duration-700 relative overflow-hidden group">
         <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/0 via-rose-500 to-rose-500/0 opacity-50"></div>
@@ -56,11 +86,20 @@ export function QueryStateHandler({
           <AlertCircle className="w-10 h-10 relative z-10" />
         </div>
         <div className="space-y-4 max-w-md">
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">حدث خطأ في الاتصال</h2>
-          <p className="text-slate-500 font-medium leading-relaxed">{errorMessage}</p>
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            {isTimeout ? 'استغرقت العملية وقتاً طويلاً' : 'حدث خطأ في الاتصال'}
+          </h2>
+          <p className="text-slate-500 font-medium leading-relaxed">
+            {isTimeout 
+              ? `استمرت المحاولة ${Math.round(loadDuration / 1000)} ثانية. قد يكون هناك مشكلة في الشبكة أو ضغط على الخادم.` 
+              : errorMessage}
+          </p>
         </div>
         <Button 
-          onClick={onRetry}
+          onClick={() => {
+            setShowTimeoutError(false);
+            onRetry();
+          }}
           disabled={isRefetching}
           className="h-14 px-10 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-lg flex items-center gap-3 shadow-xl shadow-rose-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] overflow-hidden relative group"
         >

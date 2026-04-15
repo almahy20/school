@@ -4,7 +4,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { idbPersister } from "@/lib/queryPersister";
-import { PageLoader } from "@/components/ui/PageLoader";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -12,7 +11,8 @@ import PwaManager from "./components/PwaManager";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import { supabase } from "@/integrations/supabase/client";
 import { OfflineIndicator } from "./components/OfflineIndicator";
-import "@/lib/supabaseHealth"; // Initialize the new simple health manager
+import { useRealtimeSync } from "./hooks/useRealtimeSync";
+
 
 // Lazy Load Pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -56,8 +56,24 @@ import PwaOnboarding from "./components/PwaOnboarding";
 import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
 import { queryClient } from "./lib/queryClient";
 
+// القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
+// تم تقليص القائمة لمنع استنزاف موارد المتصفح وتجمد الموقع
+const GLOBAL_SYNC_TABLES = [
+  'messages', 
+  'notifications', 
+  'profiles',
+  'user_roles',
+  'schools',
+  'complaints'
+];
+
+import { PageLoader } from "./components/PageLoader";
+
 function AppRoutes() {
   const { user, loading } = useAuth();
+  
+  // تفعيل التزامن الفوري للجداول الأساسية فقط
+  useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
   if (loading) {
     return <PageLoader />;
@@ -67,7 +83,7 @@ function AppRoutes() {
     <>
       <PwaManager />
       <PwaOnboarding />
-      <Suspense fallback={<PageLoader />}>
+      <Suspense fallback={null}>
         <Routes>
           {/* ── Public Routes ── */}
           <Route path="/home" element={<LandingPage />} />

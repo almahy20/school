@@ -66,12 +66,8 @@ export function useParentChildren() {
       return enrichedKids;
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
-    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-    refetchInterval: 10 * 1000, // ⚡ 10 seconds (was 15s)
-            refetchOnMount: true,
-    retry: 2, // ⚡ Faster failure
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
@@ -87,8 +83,10 @@ export function useParentChildOverview(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -104,8 +102,10 @@ export function useParentChildActivities(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
@@ -163,21 +163,23 @@ export function useChildFullDetails(studentId: string | undefined) {
 
       return {
         ...student,
-        className: student.classes?.name || '',
-        academic_year: '2025/2026', // Standard default or can be derived from metadata if available
-        address: student.notes?.includes('العنوان:') ? student.notes.split('العنوان:')[1].trim() : 'غير مسجل',
         grades: grades || [],
         attendance: attendance || [],
-        attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0,
-        avgGrade,
-        feesRemaining: Math.max(0, totalDue - totalPaid),
         fees: fees || [],
-        payments,
-        curriculum,
+        payments: payments || [],
+        curriculum: curriculum || [],
+        summary: {
+          avgGrade,
+          attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 100,
+          feesRemaining: Math.max(0, totalDue - totalPaid)
+        }
       };
     },
     enabled: !!(studentId && user?.schoolId),
-    staleTime: 30 * 1000,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 

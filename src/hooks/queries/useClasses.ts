@@ -62,9 +62,6 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'Ø
     queryKey,
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
-    gcTime: 5 * 60 * 1000, // âš¡ 5 minutes
-            refetchOnMount: true,
     placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

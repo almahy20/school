@@ -33,7 +33,6 @@ export function useSchools() {
     },
     enabled: !!user?.isSuperAdmin,
     staleTime: 0,
-    refetchInterval: 15 * 1000,
   });
 }
 
@@ -53,7 +52,6 @@ export function useSchoolOrders() {
     },
     enabled: !!user?.isSuperAdmin,
     staleTime: 0,
-    refetchInterval: 15 * 1000,
   });
 }
 

@@ -62,10 +62,14 @@ export function useTeacherAttendance(date: string) {
       }) as TeacherAttendanceRecord[];
     },
     enabled: !!user?.schoolId,
+    // ⚡ REALTIME: No more polling or auto-refetch. Realtime handles it.
+    staleTime: 1000 * 60 * 60, 
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     placeholderData: keepPreviousData,
-    staleTime: 30000,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: 60000,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 

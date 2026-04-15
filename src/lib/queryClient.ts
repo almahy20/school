@@ -80,40 +80,18 @@ export const queryClient = new QueryClient({
   }),
   defaultOptions: {
     queries: {
-      networkMode: 'offlineFirst',
-      retry: (failureCount, error: any) => {
-        if (error) logger.error(`[Query Error] Attempt ${failureCount}:`, error);
-        // Retry only for network errors, fail fast for other errors
-        if (failureCount < 2) return true;
-        if (failureCount < 3) {
-          const isNetworkError = typeof window !== 'undefined' && !window.navigator.onLine;
-          const errorMessage = error?.message?.toLowerCase() || '';
-          const isConnectionError = 
-            errorMessage.includes('fetch') || 
-            errorMessage.includes('network') ||
-            errorMessage.includes('postgresterror') ||
-            errorMessage.includes('failed to fetch');
-          if (isNetworkError || isConnectionError) return true;
-        }
-        return false;
-      },
-      retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 10000),
-      refetchOnWindowFocus: true, // Let React Query fetch on focus (vital for PWA backgrounding)
-      refetchOnMount: true,
-      refetchOnReconnect: true, // Automatic fetch on reconnection
-      // Cache data for 5 minutes - prevents excessive refetching
-      staleTime: 1000 * 60 * 5, // 5 minutes - professional app behavior
-      // Keep cached data for 30 minutes (not 24h - saves memory)
-      gcTime: 30 * 60 * 1000, // 30 minutes
-      refetchIntervalInBackground: false,
-      structuralSharing: true,
-      // Show cached data immediately while refetching in background
-      placeholderData: (previousData: any) => previousData,
+      staleTime: 1000 * 60 * 5,        // 5 دقائق
+      gcTime: 1000 * 60 * 30,           // 30 دقيقة
+      refetchOnWindowFocus: true,       // تحديث عند العودة للتبويب
+      refetchOnReconnect: true,         // تحديث عند عودة الإنترنت
+      retry: 2,                         // محاولتين فقط عند الفشل
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      networkMode: 'always',            // السماح ببدء الطلبات بمجرد العودة للاتصال
     },
     mutations: {
-      networkMode: 'offlineFirst',
-      retry: 2,
-      retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+      retry: 1,
+      networkMode: 'always',
     },
   },
 });
+

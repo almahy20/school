@@ -51,21 +51,7 @@ export default defineConfig(({ mode }) => ({
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/rest\/v1\/.*/i,
-            handler: 'NetworkFirst', // Changed from NetworkOnly for better offline support
-            options: {
-              cacheName: 'api-cache',
-              networkTimeoutSeconds: 5,
-              expiration: {
-                maxEntries: 100,       // Limit to 100 responses
-                maxAgeSeconds: 5 * 60, // 5 minutes only
-              },
-              backgroundSync: {
-                name: 'supabase-queue',
-                options: {
-                  maxRetentionTime: 24 * 60
-                }
-              }
-            }
+            handler: 'NetworkOnly', // تم الإلغاء لضمان استقرار الاتصال اللحظي
           },
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/auth\/v1\/.*/i,

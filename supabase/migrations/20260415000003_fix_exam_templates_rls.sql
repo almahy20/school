@@ -10,6 +10,10 @@ DROP POLICY IF EXISTS "Enable read access for authenticated users" ON public.exa
 DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.exam_templates;
 DROP POLICY IF EXISTS "Enable update for authenticated users" ON public.exam_templates;
 DROP POLICY IF EXISTS "Enable delete for authenticated users" ON public.exam_templates;
+DROP POLICY IF EXISTS "exam_templates_select_policy" ON public.exam_templates;
+DROP POLICY IF EXISTS "exam_templates_insert_policy" ON public.exam_templates;
+DROP POLICY IF EXISTS "exam_templates_update_policy" ON public.exam_templates;
+DROP POLICY IF EXISTS "exam_templates_delete_policy" ON public.exam_templates;
 
 -- 3. Create comprehensive policies
 -- Allow SELECT for all authenticated users in the same school

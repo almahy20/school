@@ -68,12 +68,9 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
       return { data, count: count || 0 };
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
-    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-            refetchOnMount: true,
     placeholderData: keepPreviousData,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
@@ -98,10 +95,13 @@ export function useParentComplaints(page = 1, pageSize = 10) {
         .range(from, to);
 
       if (error) throw error;
-      return { data: data as Complaint[], count: count || 0 };
+      return { data: (data || []) as Complaint[], count: count || 0 };
     },
     enabled: !!(user?.id && user?.schoolId),
-    staleTime: 30 * 1000,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     placeholderData: keepPreviousData,
   });
 }

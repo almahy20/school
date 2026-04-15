@@ -66,14 +66,7 @@ export default function StudentDetailPage() {
     <AppLayout>
       <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
         
-        <QueryStateHandler
-          loading={studentLoading}
-          error={studentError}
-          data={student}
-          onRetry={refetchStudent}
-          loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
-        >
-          {/* Ultra-Premium Hero Banner */}
+          {/* Ultra-Premium Hero Banner - Shown Immediately if possible or with skeleton */}
           <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
             <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-purple-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
@@ -86,24 +79,36 @@ export default function StudentDetailPage() {
                  <ArrowRight className="w-5 h-5 md:w-7 md:h-7" />
               </button>
               
-              <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] bg-gradient-to-tr from-purple-500 to-indigo-500 text-white shadow-2xl shadow-indigo-500/20 flex items-center justify-center font-black text-2xl md:text-4xl group-hover:rotate-3 transition-transform duration-700 shrink-0 border border-white/20">
-                 {student?.name?.trim()[0]}
-              </div>
-              
-              <div className="space-y-2 min-w-0">
-                <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{student?.name}</h1>
-                <div className="flex flex-wrap items-center gap-3">
-                   <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
-                      {student?.classes?.name || 'غير مسجل بفصل'}
-                   </Badge>
-                   <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
-                      انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
-                   </Badge>
+              {student ? (
+                <>
+                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] bg-gradient-to-tr from-purple-500 to-indigo-500 text-white shadow-2xl shadow-indigo-500/20 flex items-center justify-center font-black text-2xl md:text-4xl group-hover:rotate-3 transition-transform duration-700 shrink-0 border border-white/20">
+                     {student?.name?.trim()[0]}
+                  </div>
+                  
+                  <div className="space-y-2 min-w-0">
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{student?.name}</h1>
+                    <div className="flex flex-wrap items-center gap-3">
+                       <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
+                          {student?.classes?.name || 'غير مسجل بفصل'}
+                       </Badge>
+                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
+                          انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
+                       </Badge>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-4 animate-pulse">
+                   <div className="w-16 h-16 md:w-20 md:h-20 bg-white/5 rounded-3xl" />
+                   <div className="space-y-2">
+                      <div className="h-8 w-48 bg-white/10 rounded-lg" />
+                      <div className="h-4 w-32 bg-white/5 rounded-lg" />
+                   </div>
                 </div>
-              </div>
+              )}
             </div>
             
-            {currentUser?.role === 'admin' && (
+            {(currentUser?.role === 'admin' && student) && (
               <div className="flex items-center gap-4 relative z-10 w-full lg:w-auto lg:justify-end mt-4 lg:mt-0">
                 <Button 
                   onClick={() => setShowEdit(true)} 
@@ -121,6 +126,14 @@ export default function StudentDetailPage() {
               </div>
             )}
           </header>
+
+        <QueryStateHandler
+          loading={studentLoading}
+          error={studentError}
+          data={student}
+          onRetry={refetchStudent}
+          loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
+        >
 
           {/* Navigation Tabs */}
           <div className="flex overflow-x-auto hide-scrollbar gap-3 md:gap-4 px-2 pb-2 -mx-2">

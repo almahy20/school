@@ -54,9 +54,9 @@ export function useExamTemplates(classId: string | null, subject: string | null,
       return { data: (data as ExamTemplate[]) || [], count: count || 0 };
     },
     enabled: !!(user?.schoolId && classId),
-    staleTime: 30 * 1000,
-    gcTime: 15 * 60 * 1000,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData: any) => previousData,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
@@ -97,9 +97,13 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
       }) as StudentGrade[];
     },
     enabled: !!(user?.schoolId && classId && templateId),
-    staleTime: 30 * 1000,
-    gcTime: 15 * 60 * 1000,
-    placeholderData: keepPreviousData,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    placeholderData: (previousData: any) => previousData,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
@@ -160,10 +164,16 @@ export function useUpsertGrades() {
         .eq('exam_template_id', templateId)
         .in('student_id', studentIds);
         
-      // 2. Clean id and insert fresh
-      const cleanedGrades = grades.map(({ id, ...rest }) => rest);
+      // 2. Clean id and insert fresh with school context
+      const cleanedGrades = grades.map(({ id, ...rest }) => ({
+        ...rest,
+        school_id: user.schoolId,
+        teacher_id: user.id
+      }));
+
       const { error } = await supabase.from('grades').insert(cleanedGrades);
       if (error) throw error;
+
     },
     onSuccess: (_, variables) => {
       if (variables.length > 0) {

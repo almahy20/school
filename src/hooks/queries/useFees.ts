@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { enqueueMutation } from '@/lib/offlineQueue';
 import { toast } from 'sonner';
 import { useMemo } from 'react';
 
@@ -27,15 +26,14 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       if (!user?.schoolId) return { data: [], count: 0, stats: { total_due: 0, total_paid: 0 } };
 
       // ─── جلب الإحصائيات (الكل لهذا الترم والمدرسة) ───
-      // ملاحظة: مع تزايد البيانات، يفضل استخدام RPC لحساب المجموع في قاعدة البيانات مباشرة
-      const statsQuery = supabase
+      let statsQ = supabase
         .from('fees')
         .select('amount_due, amount_paid')
         .eq('school_id', user.schoolId);
-      if (term) statsQuery.eq('term', term);
-      const { data: allFees } = await statsQuery;
+      if (term) statsQ = statsQ.eq('term', term); // ✅ إعادة تعيين النتيجة
+      const { data: allFees } = await statsQ;
       
-      const total_due = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_due) || 0), 0);
+      const total_due  = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_due)  || 0), 0);
       const total_paid = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
 
       // ─── جلب القائمة (مجزأة) ───
@@ -77,12 +75,7 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       };
     },
     enabled: !!user?.schoolId,
-    staleTime: 2 * 60 * 1000, // 2 minutes - professional app
-    gcTime: 5 * 60 * 1000, // ⚡ 5 minutes
-            refetchOnMount: true,
     placeholderData: keepPreviousData,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 
@@ -92,13 +85,6 @@ export function useUpsertFee() {
 
   return useMutation({
     mutationFn: async (record: Partial<FeeRecord> & { student_id: string; term: string }) => {
-      // Offline-first
-      if (!window.navigator.onLine) {
-        await enqueueMutation('create', 'fees', record);
-        toast.success('تم حفظ الرسوم');
-        return { id: `temp-${Date.now()}`, offline: true };
-      }
-
       // 1. Try to find existing record for this student and term
       const { data: existing } = await supabase
         .from('fees')
@@ -107,10 +93,9 @@ export function useUpsertFee() {
         .eq('term', record.term)
         .maybeSingle();
 
-      let result;
       if (existing) {
         // 2. Update existing
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('fees')
           .update({
             amount_due: record.amount_due,
@@ -119,14 +104,11 @@ export function useUpsertFee() {
             term: record.term,
             school_id: record.school_id || user?.schoolId
           })
-          .eq('id', existing.id)
-          .select()
-          .single();
+          .eq('id', existing.id);
         if (error) throw error;
-        result = data;
       } else {
         // 3. Insert new
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('fees')
           .insert({
             student_id: record.student_id,
@@ -135,25 +117,18 @@ export function useUpsertFee() {
             amount_paid: record.amount_paid || 0,
             status: record.status || 'unpaid',
             school_id: record.school_id || user?.schoolId
-          })
-          .select()
-          .single();
+          });
         if (error) throw error;
-        result = data;
       }
-      return { ...result, offline: false };
     },
-    onSuccess: (result) => {
-      if (!result?.offline) {
-        toast.success('تم حفظ الرسوم بنجاح');
-      }
-      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, result.term] });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+    onSuccess: (_, variables) => {
+      toast.success('تم حفظ الرسوم بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, variables.term] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
+
 
 export function useGenerateFees() {
   const queryClient = useQueryClient();

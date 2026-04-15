@@ -39,7 +39,53 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <style>
+        .initial-loader {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          background-color: #0a0f1e;
+          z-index: 9999;
+          font-family: 'Cairo', sans-serif;
+        }
+        .initial-icon {
+          width: 80px; height: 80px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 25px;
+          display: flex; align-items: center; justify-content: center;
+          margin-bottom: 20px;
+          animation: pulse 2s infinite ease-in-out;
+        }
+        .initial-bar {
+          width: 150px; height: 3px;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        .initial-progress {
+          width: 40%; height: 100%;
+          background: linear-gradient(90deg, #6366f1, #8b5cf6);
+          animation: move 2s infinite linear;
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.05); opacity: 1; }
+        }
+        @keyframes move {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(250%); }
+        }
+      </style>
+      <div class="initial-loader">
+        <div class="initial-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+        </div>
+        <div class="initial-bar"><div class="initial-progress"></div></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

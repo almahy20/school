@@ -30,42 +30,15 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 export function useBranding() {
   const { user } = useAuth();
   const queryKey = useMemo(() => ['school-branding', user?.schoolId], [user?.schoolId]);
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    if (!user?.schoolId) return;
-
-    // Listen for realtime changes to the school branding
-    const channelId = `branding-${user.schoolId}-${Math.random().toString(36).slice(2, 9)}`;
-    const channel = supabase
-      .channel(channelId)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen for any change to the school record
-          schema: 'public',
-          table: 'schools',
-          filter: `id=eq.${user.schoolId}`,
-        },
-        () => {
-          console.log('🔔 School branding updated via Realtime!');
-          queryClient.invalidateQueries({ queryKey });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.schoolId, queryKey, queryClient]);
 
   return useQuery({
     queryKey,
     queryFn: () => fetchBranding(user?.schoolId || null),
     enabled: !!user?.schoolId,
-    staleTime: 5 * 60 * 1000, 
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: true,
+    placeholderData: (previousData: any) => previousData,
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {
@@ -87,6 +60,7 @@ export function useSchoolBySlug(slug: string | undefined | null) {
       return school;
     },
     enabled: !!slug,
-    staleTime: 60 * 60 * 1000,
+    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
   });
 }
+

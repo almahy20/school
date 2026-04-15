@@ -38,23 +38,23 @@ export default function ParentDetailPage() {
     if (!id) return;
 
     const fetchParentData = async () => {
-      // Fetch last_seen from profiles
+      // جلب last_seen من profiles
       const { data: profileData } = await supabase
         .from('profiles')
         .select('last_seen')
         .eq('id', id)
-        .single();
+        .maybeSingle(); // ✅ maybeSingle بدل single — لا 404/406 لو لم يجده
 
       if (profileData?.last_seen) {
         setParentLastSeen(profileData.last_seen);
       }
 
-      // Fetch notification stats
+      // جلب إحصائيات الإ捎عارات — الجدول موجود زي الكثيرين ما عندهم صف في notification_stats
       const { data: stats } = await supabase
         .from('notification_stats')
         .select('*')
         .eq('user_id', id)
-        .single();
+        .maybeSingle(); // ✅ maybeSingle: يرجع null بدل 406 لو لم يوجد صف
 
       if (stats) {
         setNotificationStats(stats);

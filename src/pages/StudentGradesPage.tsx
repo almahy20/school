@@ -7,7 +7,8 @@ import { cn } from '@/lib/utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { useState } from 'react';
 
-function gradeInfo(pct: number) {
+function gradeInfo(pct: number | null) {
+  if (pct === null || isNaN(pct)) return { color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200', label: 'تقييم وصفي', icon: BookOpen };
   if (pct >= 90) return { color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', label: 'ممتاز', icon: TrendingUp };
   if (pct >= 75) return { color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200', label: 'جيد جداً', icon: TrendingUp };
   if (pct >= 60) return { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', label: 'جيد', icon: Minus };
@@ -27,11 +28,20 @@ export default function StudentGradesPage() {
     bySubject[g.subject].push(g);
   });
 
-  // Get latest grade per subject
-  const latestGrades = Object.entries(bySubject).map(([subject, grades]) => {
-    const sorted = grades.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return { subject, latest: sorted[0], all: sorted };
-  });
+  // Get latest grade per subject and sort subjects by latest grade date
+  const latestGrades = Object.entries(bySubject)
+    .map(([subject, grades]) => {
+      // رتبنا الدرجات داخل المادة من الأقدم للأحدث (حسب طلب المستخدم)
+      const sorted = grades.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // أحدث درجة هي آخر عنصر في المصفوفة المرتبة تصاعدياً
+      return { subject, latest: sorted[sorted.length - 1], all: sorted };
+    })
+    .sort((a, b) => {
+      // رتبنا المواد نفسها بحيث تظهر المادة التي حدثت مؤخراً في الأعلى
+      return new Date(b.latest.date).getTime() - new Date(a.latest.date).getTime();
+    });
+
+
 
   return (
     <AppLayout>
@@ -88,7 +98,9 @@ export default function StudentGradesPage() {
           {viewMode === 'latest' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {latestGrades.map(({ subject, latest }) => {
-                const pct = (Number(latest.score) / latest.max_score) * 100;
+                const scoreNum = Number(latest.score);
+                const isNumeric = !isNaN(scoreNum);
+                const pct = isNumeric ? (scoreNum / latest.max_score) * 100 : null;
                 const gi = gradeInfo(pct);
                 const Icon = gi.icon;
 
@@ -109,7 +121,9 @@ export default function StudentGradesPage() {
                       <div>
                         <p className="text-4xl font-black mb-1">
                           <span className={gi.color}>{latest.score}</span>
-                          <span className="text-lg text-slate-400">/{latest.max_score}</span>
+                          {isNumeric && (
+                            <span className="text-lg text-slate-400">/{latest.max_score}</span>
+                          )}
                         </p>
                         <p className="text-sm text-slate-500">
                           {new Date(latest.date).toLocaleDateString('ar-EG', { 
@@ -119,12 +133,14 @@ export default function StudentGradesPage() {
                           })}
                         </p>
                       </div>
-                      <div className="text-left">
-                        <p className="text-2xl font-black mb-1">
-                          <span className={gi.color}>{Math.round(pct)}%</span>
-                        </p>
-                        <p className="text-xs text-slate-400">النسبة المئوية</p>
-                      </div>
+                      {isNumeric && (
+                        <div className="text-left">
+                          <p className="text-2xl font-black mb-1">
+                            <span className={gi.color}>{Math.round(pct || 0)}%</span>
+                          </p>
+                          <p className="text-xs text-slate-400">النسبة المئوية</p>
+                        </div>
+                      )}
                     </div>
 
                     {latest.term && (
@@ -140,11 +156,13 @@ export default function StudentGradesPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {Object.entries(bySubject).map(([subject, grades]) => {
+              {latestGrades.map(({ subject, all: grades }) => {
+
                 const numericGrades = grades.filter(g => !isNaN(Number(g.score)));
-                const avg = numericGrades.length > 0 
+                const hasNumeric = numericGrades.length > 0;
+                const avg = hasNumeric
                   ? Math.round(numericGrades.reduce((s, g) => s + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
-                  : 0;
+                  : null;
                 const gi = gradeInfo(avg);
 
                 return (
@@ -156,14 +174,18 @@ export default function StudentGradesPage() {
                         </div>
                         <span className="font-bold text-slate-900">{subject}</span>
                       </div>
-                      <Badge className={cn("bg-white border-none font-bold", gi.color)}>
-                        المتوسط {avg}%
-                      </Badge>
+                      {avg !== null && (
+                        <Badge className={cn("bg-white border-none font-bold", gi.color)}>
+                          المتوسط {avg}%
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="divide-y divide-slate-50">
                       {grades.map((g: any, idx) => {
-                        const pct = (Number(g.score) / g.max_score) * 100;
+                        const scoreNum = Number(g.score);
+                        const isNumeric = !isNaN(scoreNum);
+                        const pct = isNumeric ? (scoreNum / g.max_score) * 100 : null;
                         const itemGi = gradeInfo(pct);
                         const gradeDate = new Date(g.date);
                         const isRecent = (Date.now() - gradeDate.getTime()) < (7 * 24 * 60 * 60 * 1000);
@@ -194,13 +216,19 @@ export default function StudentGradesPage() {
                             </div>
                             <div className="text-left">
                               <p className={cn("text-xl font-black", itemGi.color)}>
-                                {g.score}/{g.max_score}
+                                {g.score}
+                                {isNumeric && (
+                                  <span className="text-xs opacity-60 ml-1">/{g.max_score}</span>
+                                )}
                               </p>
-                              <p className={cn("text-xs font-bold", itemGi.color)}>
-                                {Math.round(pct)}%
-                              </p>
+                              {isNumeric && (
+                                <p className={cn("text-xs font-bold", itemGi.color)}>
+                                  {Math.round(pct || 0)}%
+                                </p>
+                              )}
                             </div>
                           </div>
+
                         );
                       })}
                     </div>

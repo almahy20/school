@@ -56,7 +56,9 @@ export function GlobalAnnouncement() {
       }
     };
 
-    fetchUnread();
+    fetchUnread().catch(err => {
+      console.error('Failed to fetch unread announcements:', err);
+    });
 
     // 2. Real-time for NEW messages while user is online
     // Create inline handler to avoid recreating on every render
@@ -64,18 +66,22 @@ export function GlobalAnnouncement() {
       const newMsg = payload.new as any;
       if (markedAsReadRef.current.has(newMsg.id)) return;
 
-      // Fetch sender name
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', newMsg.sender_id)
-        .maybeSingle();
+      try {
+        // Fetch sender name
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', newMsg.sender_id)
+          .maybeSingle();
 
-      addToQueue({
-        id: newMsg.id,
-        content: newMsg.content,
-        sender_name: profile?.full_name || 'الإدارة',
-      });
+        addToQueue({
+          id: newMsg.id,
+          content: newMsg.content,
+          sender_name: profile?.full_name || 'الإدارة',
+        });
+      } catch (err) {
+        console.error('Error processing realtime announcement:', err);
+      }
     };
 
     const channel = supabase.channel('global-announcements')
@@ -88,7 +94,7 @@ export function GlobalAnnouncement() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      void supabase.removeChannel(channel);
     };
   }, [user, addToQueue]); // Include user and addToQueue as dependencies
 
