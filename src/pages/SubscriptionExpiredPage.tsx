@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Phone, LogOut, ExternalLink } from "lucide-react";
 
 export default function SubscriptionExpiredPage() {
-  const { signOut, user } = useAuth();
+  const { logout, user } = useAuth();
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-cairo text-right" dir="rtl">
@@ -48,7 +48,7 @@ export default function SubscriptionExpiredPage() {
           </Button>
           <Button 
             variant="ghost" 
-            onClick={signOut}
+            onClick={logout}
             className="h-14 rounded-2xl text-slate-400 font-bold hover:text-rose-500 hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
           >
             <LogOut className="w-4 h-4" />

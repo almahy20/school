@@ -1,6 +1,6 @@
 {
   "name": "المدرسة الذكية",
-  "short_name": "المدرسة الذكية",
+  "short_name": "المدرسة",
   "description": "نظام إدارة المدارس الذكي المتكامل",
   "start_url": "/",
   "display": "standalone",

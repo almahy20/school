@@ -66,8 +66,11 @@ export function useParentChildren() {
       return enrichedKids;
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    retry: 1,
-    retryDelay: 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    retry: 3,
   });
 }
 
@@ -83,10 +86,8 @@ export function useParentChildOverview(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -102,10 +103,8 @@ export function useParentChildActivities(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -163,23 +162,21 @@ export function useChildFullDetails(studentId: string | undefined) {
 
       return {
         ...student,
+        className: student.classes?.name || '',
+        academic_year: '2025/2026', // Standard default or can be derived from metadata if available
+        address: student.notes?.includes('العنوان:') ? student.notes.split('العنوان:')[1].trim() : 'غير مسجل',
         grades: grades || [],
         attendance: attendance || [],
+        attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0,
+        avgGrade,
+        feesRemaining: Math.max(0, totalDue - totalPaid),
         fees: fees || [],
-        payments: payments || [],
-        curriculum: curriculum || [],
-        summary: {
-          avgGrade,
-          attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 100,
-          feesRemaining: Math.max(0, totalDue - totalPaid)
-        }
+        payments,
+        curriculum,
       };
     },
     enabled: !!(studentId && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 30 * 1000,
   });
 }
 

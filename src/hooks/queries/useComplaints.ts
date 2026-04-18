@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMemo } from 'react';
 
 export interface Complaint {
   id: string;
@@ -16,92 +16,72 @@ export interface Complaint {
   student_name?: string;
 }
 
-export function useComplaints(page = 1, pageSize = 15, search = '', status = 'الكل') {
+export function useComplaints() {
   const { user } = useAuth();
-  const queryKey = ['complaints', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
+  const queryKey = useMemo(() => ['complaints', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.schoolId && !user?.isSuperAdmin) return { data: [], count: 0 };
+      if (!user?.schoolId && !user?.isSuperAdmin) return [];
       
-      let q = supabase.from('complaints').select('*', { count: 'exact' });
+      const query = supabase.from('complaints').select(`
+        *,
+        students:students!complaints_student_id_fkey(name)
+      `).order('created_at', { ascending: false });
 
       if (!user?.isSuperAdmin && user?.schoolId) {
-        q = q.eq('school_id', user.schoolId);
+        query.eq('school_id', user.schoolId);
       }
 
-      if (status !== 'الكل') {
-        q = q.eq('status', status);
-      }
-
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data: complaintsData, error, count } = await q
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
+      const { data: complaintsData, error } = await query;
       if (error) throw error;
 
-      // Get parent names separately
-      const parentIds = (complaintsData || []).map(c => c.parent_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', parentIds);
+      // Extract unique parent IDs for enrichment
+      const parentIds = [...new Set(complaintsData.map((c: any) => c.parent_id))].filter(Boolean) as string[];
+      
+      let profiles: any[] = [];
+      if (parentIds.length > 0) {
+        const profilesQuery = supabase.from('profiles').select('id, full_name');
+        if (!user?.isSuperAdmin && user?.schoolId) {
+          profilesQuery.eq('school_id', user.schoolId);
+        }
+        const { data } = await profilesQuery.in('id', parentIds);
+        profiles = data || [];
+      }
 
-      // Get student names separately
-      const studentIds = (complaintsData || []).map(c => c.student_id).filter(Boolean);
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name')
-        .in('id', studentIds);
-
-      const data = (complaintsData || []).map((c: any) => ({
+      return (complaintsData || []).map((c: any) => ({
         ...c,
         parent_name: profiles?.find(p => p.id === c.parent_id)?.full_name || 'ولي أمر',
-        student_name: students?.find(s => s.id === c.student_id)?.name || 'غير محدد',
+        student_name: c.students?.name || 'غير محدد',
       })) as Complaint[];
-
-      return { data, count: count || 0 };
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    placeholderData: keepPreviousData,
-    retry: 1,
-    retryDelay: 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
-export function useParentComplaints(page = 1, pageSize = 10) {
+export function useParentComplaints() {
   const { user } = useAuth();
-  const queryKey = ['parent-complaints', user?.id, user?.schoolId, page, pageSize];
+  const queryKey = useMemo(() => ['parent-complaints', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.id || !user?.schoolId) return { data: [], count: 0 };
-      
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data, error, count } = await supabase
+      if (!user?.id || !user?.schoolId) return [];
+      const { data, error } = await supabase
         .from('complaints')
-        .select('*', { count: 'exact' })
+        .select('*')
         .eq('school_id', user.schoolId)
         .eq('parent_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      return { data: (data || []) as Complaint[], count: count || 0 };
+      return data as Complaint[];
     },
     enabled: !!(user?.id && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    placeholderData: keepPreviousData,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -141,11 +121,10 @@ export function useUpsertComplaint() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (result: any) => {
-      toast.success('تم حفظ الشكوى بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
-      if (result?.parent_id) {
-        queryClient.invalidateQueries({ queryKey: ['parent-complaints', result.parent_id] });
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['complaints', user?.schoolId] });
+      if (data?.parent_id) {
+        queryClient.invalidateQueries({ queryKey: ['parent-complaints', data.parent_id] });
       }
     },
   });
@@ -159,11 +138,9 @@ export function useDeleteComplaint() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('complaints').delete().eq('id', id);
       if (error) throw error;
-      return id;
     },
     onSuccess: () => {
-      toast.success('تم حذف الشكوى بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['complaints', user?.schoolId] });
       queryClient.invalidateQueries({ queryKey: ['parent-complaints'] });
     },
   });
@@ -193,8 +170,7 @@ export function useCreateComplaint() {
       return data;
     },
     onSuccess: () => {
-      toast.success('تم إرسال الشكوى بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['complaints'] });
       queryClient.invalidateQueries({ queryKey: ['parent-complaints', user?.id] });
     },
   });

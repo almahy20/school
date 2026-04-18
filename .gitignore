@@ -10,11 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-dev-dist
-tmp
-scratch
 *.local
-*.lockb
 
 # Editor directories and files
 .vscode/*

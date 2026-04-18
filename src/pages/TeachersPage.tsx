@@ -18,7 +18,6 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import DataDetailModal from '@/components/DataDetailModal';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
-import PageHeader from '@/components/layout/PageHeader';
 
 const PAGE_SIZE = 15;
 
@@ -36,51 +35,40 @@ export default function TeachersPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
-  const [showDetail, setShowDetail] = useState(false);
-
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  // ── React Query Hooks ──
-  // جلب المعلمين المعتمدين مع التجزئة والبحث
-  const { 
-    data: activeData, 
-    isLoading: loadingActive, 
-    error: errorActive, 
-    refetch: refetchActive, 
-    isRefetching: isRefetchingActive 
-  } = useTeachers(page, PAGE_SIZE, debouncedSearch, 'معتمد');
-
-  // جلب المعلمين المنتظرين (قائمة صغيرة عادةً، نكتفي بالصفحة الأولى)
-  const { data: pendingData, 
-    isLoading: loadingPending,
-    refetch: refetchPending 
-  } = useTeachers(1, 100, '', 'معلق');
-
-  const { data: allClassesData } = useClasses();
-  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = useMemo(() => allClassesData?.data || [], [allClassesData]);
+  const { data: allTeachers = [], isLoading: loading, error, refetch, isRefetching } = useTeachers();
+  const { data: allClasses = [] } = useClasses();
   const { data: branding } = useBranding();
   
   const deleteMutation = useDeleteTeacher();
   const actionMutation = useTeacherAction();
 
-  const teachers = useMemo(() => {
-    return (activeData?.data || []).map(t => ({
-      ...t,
-      classes: allClasses.filter(c => c.teacher_id === t.id).map(c => ({ id: c.id, name: c.name }))
-    }));
-  }, [activeData, allClasses]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
+  const [showDetail, setShowDetail] = useState(false);
 
-  const pendingTeachers = pendingData?.data || [];
-  const totalItems = activeData?.count || 0;
+  // Split and enrich data
+  const { active: teachers, pending: pendingTeachers } = useMemo(() => {
+    const active = allTeachers
+      .filter(t => t.approval_status === 'approved')
+      .map(t => ({
+        ...t,
+        classes: allClasses.filter(c => c.teacher_id === t.id).map(c => ({ id: c.id, name: c.name }))
+      }));
+    const pending = allTeachers.filter(t => t.approval_status === 'pending');
+    return { active, pending };
+  }, [allTeachers, allClasses]);
+
+  const filtered = useMemo(() =>
+    teachers.filter(t => (t.full_name || '').includes(search)),
+    [teachers, search]
+  );
+
+  const totalItems = filtered.length;
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
@@ -104,9 +92,6 @@ export default function TeachersPage() {
     try {
       await actionMutation.mutateAsync({ userRoleId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
-      // إعادة جلب البيانات بعد الموافقة/الرفض
-      refetchActive();
-      refetchPending();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
@@ -124,20 +109,23 @@ export default function TeachersPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
-        <PageHeader
-          icon={GraduationCap}
-          title="إدارة الكادر التعليمي"
-          subtitle="إحصائيات الهيئة التدريسية، توزيع الأعباء، وطلبات الانضمام"
-          action={
-            <button
-              onClick={copyLink}
-              className="h-12 px-8 rounded-2xl bg-slate-900 text-white font-black text-sm hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-slate-200 gap-3 flex items-center"
-            >
-              <Copy className="w-4 h-4 ml-2" /> نسخ رابط التسجيل
-            </button>
-          }
-        />
+      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
+        {/* Premium Header - Scaled Down */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
+               <h1 className="text-2xl font-black text-slate-900 tracking-tight">إدارة الكادر التعليمي</h1>
+            </div>
+            <p className="text-slate-500 font-medium text-sm pr-4">إحصائيات الهيئة التدريسية وتوزيع الأعباء الأكاديمية</p>
+          </div>
+          
+          <div className="flex items-center gap-4">
+             <Button className="h-11 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] transition-all gap-3">
+               تصدير التقارير
+             </Button>
+          </div>
+        </header>
 
         {/* Registration Link & Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -203,15 +191,15 @@ export default function TeachersPage() {
         </div>
 
         <QueryStateHandler
-          loading={loadingActive}
-          error={errorActive}
-          data={activeData?.data || []}
-          onRetry={refetchActive}
-          isRefetching={isRefetchingActive}
+          loading={loading}
+          error={error}
+          data={allTeachers}
+          onRetry={refetch}
+          isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات المعلمين..."
           errorMessage="فشل تحميل قائمة المعلمين."
           emptyMessage="لا يوجد معلمون مسجلون حالياً."
-          isEmpty={teachers.length === 0}
+          isEmpty={filtered.length === 0}
         >
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
@@ -220,8 +208,8 @@ export default function TeachersPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {teachers.map(t => (
-                <TeacherCard key={t.id} teacher={t as any} onClick={() => navigate(`/teachers/${t.id}`)} />
+              {paginated.map(t => (
+                <TeacherCard key={t.id} teacher={t as any} onClick={() => handleShowDetail(t)} />
               ))}
             </div>
             <DataPagination
@@ -234,6 +222,29 @@ export default function TeachersPage() {
         </QueryStateHandler>
       </div>
 
+      {selectedTeacher && (
+        <DataDetailModal
+          isOpen={showDetail}
+          onClose={() => setShowDetail(false)}
+          title={selectedTeacher.full_name}
+          subtitle="معلم معتمد في المنصة"
+          icon={GraduationCap}
+          badge={{ label: 'نشط', variant: 'secondary' }}
+          data={[
+            { label: 'الاسم الكامل', value: selectedTeacher.full_name, icon: User, fullWidth: true },
+            { label: 'رقم الهاتف', value: selectedTeacher.phone || 'غير مسجل', icon: Phone },
+            { label: 'الفصول المسندة', value: selectedTeacher.classes.length > 0 
+                ? selectedTeacher.classes.map((c: any) => c.name).join(' ، ') 
+                : 'لا توجد فصول حالياً', icon: School, fullWidth: true },
+            { label: 'تاريخ الانضمام', value: 'أبريل 2026', icon: Calendar },
+            { label: 'حالة الحساب', value: 'مفعل ومؤمن', icon: Shield },
+          ]}
+          actions={[
+            { label: 'تعديل الصلاحيات', icon: Settings, onClick: () => navigate(`/teachers/${selectedTeacher.id}`) },
+            { label: 'إلغاء الصلاحيات', icon: Trash2, variant: 'destructive', onClick: () => handleDeleteTeacher(selectedTeacher.id) }
+          ]}
+        />
+      )}
     </AppLayout>
   );
 }

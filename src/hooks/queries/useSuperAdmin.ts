@@ -33,6 +33,7 @@ export function useSchools() {
     },
     enabled: !!user?.isSuperAdmin,
     staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -52,6 +53,7 @@ export function useSchoolOrders() {
     },
     enabled: !!user?.isSuperAdmin,
     staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -59,12 +61,14 @@ export function useUpdateSchool() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<School> & { id: string }) => {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('schools')
         .update(updates)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      return { id, ...updates };
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['schools'] });

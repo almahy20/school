@@ -52,112 +52,12 @@ Deno.serve(async (req) => {
         if (userId === caller.id) {
           return new Response(JSON.stringify({ error: "Cannot delete yourself" }), { status: 400, headers: corsHeaders });
         }
-        
-        // Get user's profile data before deletion
-        const { data: profileData } = await adminClient
-          .from("profiles")
-          .select("phone, role, school_id")
-          .eq("id", userId)
-          .single();
-        
-        const userRole = profileData?.role;
-        const userPhone = profileData?.phone;
-        
-        console.log(`[Delete User] Deleting user ${userId} with role: ${userRole}`);
-        
-        // ═══════════════════════════════════════════════════
-        // STEP 1: Delete all data related to this user
-        // ═══════════════════════════════════════════════════
-        
-        // 1.1 If parent: Remove phone from students and delete relationships
-        if (userRole === "parent" && userPhone) {
-          console.log(`[Delete User] Cleaning parent phone from students: ${userPhone}`);
-          
-          // Remove phone from all students' parent_phone field
-          await adminClient
-            .from("students")
-            .update({ parent_phone: null })
-            .eq("parent_phone", userPhone);
-          
-          // Delete all student-parent relationships (cascade will handle related data)
-          await adminClient
-            .from("student_parents")
-            .delete()
-            .eq("parent_id", userId);
-        }
-        
-        // 1.2 If teacher: Remove from classes (set to NULL)
-        if (userRole === "teacher") {
-          console.log(`[Delete User] Removing teacher from classes`);
-          await adminClient
-            .from("classes")
-            .update({ teacher_id: null })
-            .eq("teacher_id", userId);
-        }
-        
-        // 1.3 Delete all messages sent/received by this user
-        console.log(`[Delete User] Deleting messages`);
-        await adminClient
-          .from("messages")
-          .delete()
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
-        
-        // 1.4 Delete all complaints created by this user
-        console.log(`[Delete User] Deleting complaints`);
-        await adminClient
-          .from("complaints")
-          .delete()
-          .eq("user_id", userId);
-        
-        // 1.5 Delete user's attendance records (if they're a student - unlikely but safe)
-        // Note: This would only apply if the user is also a student, which is rare
-        
-        // 1.6 Delete grades (if user is linked as a student - rare)
-        // This is handled by the students table cascade
-        
-        // 1.7 Delete any fees/fee_payments if user is a student
-        // This is handled by the students table cascade
-        
-        // ═══════════════════════════════════════════════════
-        // STEP 2: Delete user's core data
-        // ═══════════════════════════════════════════════════
-        
-        // 2.1 Delete user roles
-        console.log(`[Delete User] Deleting user roles`);
-        await adminClient
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId);
-        
-        // 2.2 Delete profile
-        console.log(`[Delete User] Deleting profile`);
-        await adminClient
-          .from("profiles")
-          .delete()
-          .eq("id", userId);
-        
-        // 2.3 Delete from Supabase Auth (this is the actual user account)
-        console.log(`[Delete User] Deleting auth user`);
-        const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
-        
-        if (authError) {
-          console.error(`[Delete User] Auth deletion error:`, authError);
-          return new Response(JSON.stringify({ 
-            success: false, 
-            error: `فشل في حذف الحساب من نظام المصادقة: ${authError.message}` 
-          }), { 
-            status: 500, 
-            headers: corsHeaders 
-          });
-        }
-        
-        console.log(`[Delete User] Successfully deleted user ${userId}`);
-        return new Response(JSON.stringify({ 
-          success: true, 
-          message: 'تم الحذف نهائياً من قاعدة البيانات مع جميع البيانات المرتبطة'
-        }), { 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        });
+        // Delete profile and roles first (cascade should handle, but be safe)
+        await adminClient.from("user_roles").delete().eq("user_id", userId);
+        await adminClient.from("profiles").delete().eq("id", userId);
+        const { error } = await adminClient.auth.admin.deleteUser(userId);
+        if (error) throw error;
+        return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
       case "update_role": {

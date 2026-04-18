@@ -14,16 +14,14 @@ export default function SchoolBrandingSettings() {
   const updateSchoolMutation = useUpdateSchool();
 
   const [branding, setBranding] = useState({
-    logo_url: '',
-    name: ''
+    logo_url: ''
   });
   const [uploading, setUploading] = useState<'logo' | 'icon' | null>(null);
 
   useEffect(() => {
     if (brandingData) {
       setBranding({
-        logo_url: brandingData.logo_url || '',
-        name: brandingData.name || ''
+        logo_url: brandingData.logo_url || ''
       });
     }
   }, [brandingData]);
@@ -67,7 +65,6 @@ export default function SchoolBrandingSettings() {
     try {
       await updateSchoolMutation.mutateAsync({ 
         id: user.schoolId, 
-        name: branding.name,
         logo_url: branding.logo_url 
       });
       toast({ title: 'تم الحفظ بنجاح', description: 'تم تحديث هوية المدرسة البصرية.' });
@@ -99,20 +96,6 @@ export default function SchoolBrandingSettings() {
             حفظ الهوية الجديدة
          </Button>
       </header>
-
-      <div className="bg-white p-10 border border-slate-100 rounded-[40px] shadow-sm space-y-6">
-         <div className="space-y-2">
-            <h3 className="font-black text-xl text-slate-900">الاسم الرسمي للمدرسة</h3>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">سيظهر هذا الاسم في جميع التقارير، الواجهات، وتطبيقات الطلاب.</p>
-         </div>
-         <input 
-            type="text"
-            value={branding.name}
-            onChange={(e) => setBranding(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="مثال: مدارس الأوائل الأهلية"
-            className="w-full h-16 px-6 rounded-2xl bg-slate-50 border-none font-black text-xl text-slate-900 shadow-inner focus:ring-4 focus:ring-indigo-600/10 transition-all placeholder:text-slate-300 placeholder:font-medium"
-         />
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
          <div className="p-10 bg-white border border-slate-100 rounded-[40px] shadow-sm space-y-8 group">
@@ -173,4 +156,3 @@ export default function SchoolBrandingSettings() {
     </div>
   );
 }
-// Force HMR reload

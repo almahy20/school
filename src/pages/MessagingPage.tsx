@@ -1,6 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -12,7 +11,6 @@ import {
   useSendMessage, 
   useBranding 
 } from '@/hooks/queries';
-import { useQuery } from '@tanstack/react-query';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,46 +26,24 @@ export default function MessagingPage() {
   const [targetType, setTargetType] = useState<'all' | 'specific'>('all');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // ── Queries ──
   const { data: branding } = useBranding();
-  
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 500);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
   const { 
-    data: profilesData, 
+    data: profiles = [], 
     isLoading: profilesLoading, 
     error: profilesError, 
     refetch: refetchProfiles 
-  } = useProfiles(debouncedSearch, 1, 50); // جلب أول 50 مستخدم مطابق للبحث
-
-  const profiles = profilesData?.data || [];
-
-  // Cache all profiles for broadcast messaging
-  const { data: allProfilesCache } = useQuery({
-    queryKey: ['all-profiles', user?.schoolId],
-    queryFn: async () => {
-      if (!user?.schoolId) return [];
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('school_id', user.schoolId)
-        .neq('id', user.id);
-      
-      return (data || []).map((p: any) => p.id);
-    },
-    enabled: !!user?.schoolId,
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
-    gcTime: 15 * 60 * 1000,
-  });
+  } = useProfiles();
 
   // ── Mutations ──
   const sendMessageMutation = useSendMessage();
+
+  const filteredProfiles = useMemo(() => {
+    return profiles.filter(p => 
+      p.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [profiles, searchQuery]);
 
   const handleSend = async () => {
     if (!content.trim()) {
@@ -81,19 +57,9 @@ export default function MessagingPage() {
     }
 
     try {
-      let targets: string[];
-      
-      if (targetType === 'all') {
-        // استخدام البروفايلات المخزنة في الكاش بدلاً من طلب جديد
-        targets = allProfilesCache || [];
-        
-        if (targets.length === 0) {
-          toast({ title: 'تنبيه', description: 'لا يوجد مستخدمين آخرين لإرسال الرسالة لهم', variant: 'destructive' });
-          return;
-        }
-      } else {
-        targets = [selectedProfileId];
-      }
+      const targets = targetType === 'all' 
+        ? profiles.map(p => p.id)
+        : [selectedProfileId];
 
       await sendMessageMutation.mutateAsync({
         targets,
@@ -102,7 +68,7 @@ export default function MessagingPage() {
 
       toast({ 
         title: 'تم الإرسال بنجاح', 
-        description: targetType === 'all' ? `تم إرسال الرسالة لـ ${targets.length} مستخدم` : 'تم إرسال الرسالة للمستخدم المختار' 
+        description: targetType === 'all' ? 'تم بث الرسالة للجميع بنجاح' : 'تم إرسال الرسالة للمستخدم المختار' 
       });
       setContent('');
       setSelectedProfileId('');
@@ -114,19 +80,17 @@ export default function MessagingPage() {
   return (
     <AppLayout>
       <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right animate-in fade-in slide-in-from-bottom-4 duration-1000 pb-20">
-        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-12 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-10 sm:p-14 rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
-          <div className="space-y-3 relative z-10">
+          <div className="space-y-4 relative z-10">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 shrink-0">
+              <div className="w-14 h-14 rounded-[22px] bg-slate-900 flex items-center justify-center text-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                  <Megaphone className="w-7 h-7" />
               </div>
-              <div>
-                <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight leading-none mb-1">مركز البث والرسائل</h1>
-                <p className="text-slate-500 font-medium text-sm">تواصل مع الكادر التعليمي وأولياء الأمور عبر البث أو الرسائل الخاصة.</p>
-              </div>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">مركز البث والرسائل</h1>
             </div>
+            <p className="text-slate-500 font-medium text-lg pr-1">تواصل مع الكادر التعليمي وأولياء الأمور عبر البث المباشر أو الرسائل الخاصة.</p>
           </div>
         </header>
 
@@ -172,12 +136,12 @@ export default function MessagingPage() {
                        error={profilesError}
                        data={profiles}
                        onRetry={refetchProfiles}
-                       isEmpty={profiles.length === 0}
+                       isEmpty={filteredProfiles.length === 0}
                        loadingMessage="جاري جلب القائمة..."
                        emptyMessage="لم يتم العثور على مستخدمين."
                      >
                        <div className="flex flex-wrap gap-3 mt-4 max-h-48 overflow-y-auto p-4 bg-white/50 rounded-3xl border border-slate-50 scrollbar-hide">
-                          {profiles.map(p => (
+                          {filteredProfiles.map(p => (
                             <button key={p.id} onClick={() => setSelectedProfileId(p.id)}
                               className={cn(
                                 "flex items-center gap-3 px-5 py-3 rounded-2xl text-sm font-bold border-2 transition-all",

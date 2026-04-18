@@ -20,6 +20,8 @@ export function useClassAttendance(classId: string | null, date: string) {
     queryFn: async () => {
       if (!user?.schoolId || !classId) return [];
 
+      console.log(`Fetching attendance for class ${classId} on ${date}`);
+
       // Fetch students in class
       const { data: students, error: sError } = await supabase
         .from('students')
@@ -50,6 +52,9 @@ export function useClassAttendance(classId: string | null, date: string) {
     },
     enabled: !!(user?.schoolId && classId),
     placeholderData: keepPreviousData,
+    staleTime: 30000, // Increased staleTime to avoid constant refetching
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 60000, // Check every minute
   });
 
   return queryResult;
@@ -104,5 +109,8 @@ export function useStudentAttendance(studentId: string | null) {
     },
     enabled: !!studentId,
     placeholderData: keepPreviousData,
+    staleTime: 0,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 1000,
   });
 }

@@ -1,8 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMemo, useEffect } from 'react';
-import { logger } from '@/utils/logger';
+import { useMemo } from 'react';
 
 export interface SchoolBranding {
   id: string;
@@ -18,10 +17,10 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
     .from('schools')
     .select('id, name, logo_url, slug')
     .eq('id', schoolId)
-    .maybeSingle();
+    .single();
     
-  if (error && error.code !== 'PGRST116') {
-    logger.error('Error fetching school branding:', error);
+  if (error) {
+    console.error('Error fetching school branding:', error);
     return null;
   }
   
@@ -31,15 +30,14 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 export function useBranding() {
   const { user } = useAuth();
   const queryKey = useMemo(() => ['school-branding', user?.schoolId], [user?.schoolId]);
-
+    
   return useQuery({
     queryKey,
     queryFn: () => fetchBranding(user?.schoolId || null),
     enabled: !!user?.schoolId,
-    placeholderData: (previousData: any) => previousData,
-    retry: 1,
-    retryDelay: 1000,
-    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
+    staleTime: 60 * 60 * 1000, // Check branding once an hour, realtime will handle updates
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {
@@ -55,13 +53,12 @@ export function useSchoolBySlug(slug: string | undefined | null) {
         .from('schools')
         .select('id, name, logo_url')
         .eq('id', schoolId as string)
-        .maybeSingle();
+        .single();
       
-      if (schoolError && schoolError.code !== 'PGRST116') throw schoolError;
+      if (schoolError) throw schoolError;
       return school;
     },
     enabled: !!slug,
-    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
+    staleTime: 60 * 60 * 1000,
   });
 }
-

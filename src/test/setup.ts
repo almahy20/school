@@ -1,16 +1,15 @@
-import '@testing-library/jest-dom';
+import "@testing-library/jest-dom";
 
-// يُستخدم لمحاكاة دوال المتصفح التي قد لا تكون موجودة في jsdom
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
     matches: false,
     media: query,
     onchange: null,
-    addListener: () => {}, // Deprecated
-    removeListener: () => {}, // Deprecated
+    addListener: () => {},
+    removeListener: () => {},
     addEventListener: () => {},
     removeEventListener: () => {},
-    dispatchEvent: () => false,
+    dispatchEvent: () => {},
   }),
 });

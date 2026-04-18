@@ -439,7 +439,6 @@ export type Database = {
           receiver_id: string
           sender_id: string
           student_id: string | null
-          school_id: string | null
         }
         Insert: {
           content: string
@@ -449,7 +448,6 @@ export type Database = {
           receiver_id: string
           sender_id: string
           student_id?: string | null
-          school_id?: string | null
         }
         Update: {
           content?: string
@@ -459,7 +457,6 @@ export type Database = {
           receiver_id?: string
           sender_id?: string
           student_id?: string | null
-          school_id?: string | null
         }
         Relationships: [
           {
@@ -483,13 +480,6 @@ export type Database = {
             referencedRelation: "students"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "messages_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
         ]
       }
       profiles: {
@@ -502,7 +492,6 @@ export type Database = {
           school_id: string | null
           specialization: string | null
           updated_at: string
-          last_seen: string | null
         }
         Insert: {
           created_at?: string
@@ -513,7 +502,6 @@ export type Database = {
           school_id?: string | null
           specialization?: string | null
           updated_at?: string
-          last_seen?: string | null
         }
         Update: {
           created_at?: string
@@ -524,7 +512,6 @@ export type Database = {
           school_id?: string | null
           specialization?: string | null
           updated_at?: string
-          last_seen?: string | null
         }
         Relationships: [
           {

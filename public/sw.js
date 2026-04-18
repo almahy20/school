@@ -1,61 +1,15 @@
-const CACHE_NAME = 'school-v1';
-const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
-
-// تثبيت عامل الخدمة والكاش الأولي
+// تثبيت عامل الخدمة بسرعة
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
-// تنظيف الكاش القديم
+// التفويض فور التنشيط
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
-  return self.clients.claim();
+  event.waitUntil(self.clients.claim());
 });
 
-// استراتيجية Stale-While-Revalidate لفتح التطبيق فجأة وبرق
-self.addEventListener('fetch', (event) => {
-  // لا تقم بعمل كاش لطلبات Supabase أو الـ API
-  if (event.request.url.includes('supabase.co')) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // تحديث الكاش بالنسخة الجديدة في الخلفية
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-        }
-        return networkResponse;
-      });
-
-      // ارجع النسخة المخبأة فوراً لو وجدت، وإلا انتظر الشبكة
-      return cachedResponse || fetchPromise;
-    })
-  );
-});
+// التعامل مع طلبات الشبكة العادية (يمكن التوسع فيه لطلبات الكاش لاحقاً)
+self.addEventListener('fetch', () => {});
 
 
 // ===== الكود الجديد لاستقبال الإشعارات في الخلفية (والتطبيق مغلق) =====

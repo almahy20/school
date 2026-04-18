@@ -2,17 +2,7 @@
 -- Goal: Final fixes for the notification system, ensuring all events trigger push notifications
 
 -- 0. Enable required extensions
--- FIX: Use pg_net instead of net, or skip if not available
-DO $$
-BEGIN
-    -- Try to create the extension
-    BEGIN
-        CREATE EXTENSION IF NOT EXISTS pg_net SCHEMA extensions;
-    EXCEPTION WHEN OTHERS THEN
-        -- If pg_net is not available, log a warning
-        RAISE NOTICE 'pg_net extension not available, push notifications will not work';
-    END;
-END $$;
+CREATE EXTENSION IF NOT EXISTS net;
 
 -- 1. Ensure columns exist for triggers
 ALTER TABLE public.complaints ADD COLUMN IF NOT EXISTS school_id UUID REFERENCES public.schools(id) ON DELETE CASCADE;
@@ -138,7 +128,6 @@ CREATE TRIGGER tr_notify_new_fee
     FOR EACH ROW EXECUTE FUNCTION public.notify_new_fee();
 
 -- 6. Unified Push Function (The heart of notifications)
--- FIX: Use pg_net with error handling
 CREATE OR REPLACE FUNCTION public.trigger_push_on_notification_insert()
 RETURNS trigger AS $$
 DECLARE
@@ -149,25 +138,19 @@ BEGIN
     -- This key must be valid for your project.
     v_supabase_anon_key := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lY3V0d2hyZXl3andzdGlycGthIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzI5MDEsImV4cCI6MjA5MDQ0ODkwMX0.jlWByWUJI1pTeK_JfFzouD1b5NJC02dE1LILA2iNkII';
 
-    -- Try to send push notification, but don't fail if pg_net is not available
-    BEGIN
-        PERFORM net.http_post(
-            url := v_supabase_url || '/functions/v1/send-push-notification',
-            headers := jsonb_build_object(
-                'Content-Type', 'application/json',
-                'Authorization', 'Bearer ' || v_supabase_anon_key
-            ),
-            body := jsonb_build_object(
-                'user_id', NEW.user_id,
-                'title', NEW.title,
-                'body', NEW.message,
-                'url', COALESCE(NEW.metadata->>'url', '/')
-            )
-        );
-    EXCEPTION WHEN OTHERS THEN
-        -- Log error but don't fail the notification insert
-        RAISE NOTICE 'Failed to send push notification: %', SQLERRM;
-    END;
+    PERFORM net.http_post(
+        url := v_supabase_url || '/functions/v1/send-push-notification',
+        headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || v_supabase_anon_key
+        ),
+        body := jsonb_build_object(
+            'user_id', NEW.user_id,
+            'title', NEW.title,
+            'body', NEW.message,
+            'url', COALESCE(NEW.metadata->>'url', '/')
+        )
+    );
 
     RETURN NEW;
 END;

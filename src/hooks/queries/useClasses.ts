@@ -1,9 +1,8 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { toast } from 'sonner';
-import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
+import { useMemo } from 'react';
 
 export interface Class {
   id: string;
@@ -15,73 +14,36 @@ export interface Class {
   created_at: string;
 }
 
-async function fetchClasses(
-  user: AppUser | null,
-  page = 1,
-  pageSize = 15,
-  search = '',
-  gradeLevel = 'الكل'
-): Promise<{ data: Class[]; count: number }> {
-  if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
+async function fetchClasses(user: AppUser | null): Promise<Class[]> {
+  if (!user?.isSuperAdmin && !user?.schoolId) return [];
 
-  let q = supabase
-    .from('classes')
-    .select('*', { count: 'exact' });
-
+  const q = supabase.from('classes').select('*');
   if (!user.isSuperAdmin && user.schoolId) {
-    q = q.eq('school_id', user.schoolId);
+    q.eq('school_id', user.schoolId);
+  }
+  if (user.role === 'teacher') {
+    q.eq('teacher_id', user.id);
   }
 
-  if (search) {
-    q = q.ilike('name', `%${search}%`);
-  }
-
-  if (gradeLevel !== 'الكل') {
-    q = q.eq('grade_level', gradeLevel);
-  }
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const { data, error, count } = await q
-    .order('name')
-    .range(from, to);
-
+  const { data, error } = await q.order('name');
   if (error) throw error;
-  return { data: (data || []) as Class[], count: count || 0 };
+  return data || [];
 }
 
-export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
+export function useClasses() {
   const { user } = useAuth();
-  const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id, page, pageSize, search, gradeLevel];
+  const queryKey = useMemo(() => ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id], [user?.schoolId, user?.isSuperAdmin, user?.role, user?.id]);
+  
   
   return useQuery({
     queryKey,
-    queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
+    queryFn: () => fetchClasses(user),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    placeholderData: keepPreviousData,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
-  });
-}
-
-// دالة لجلب كافة الفصول (بدون تجزئة) لاستخدامها في القوائم المنسدلة
-export function useAllClasses() {
-  const { user } = useAuth();
-  const queryKey = ['classes', 'all', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
-  
-  return useQuery({
-    queryKey,
-    queryFn: async () => {
-      if (!user?.isSuperAdmin && !user?.schoolId) return [];
-      let q = supabase.from('classes').select('*');
-      if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
-      const { data, error } = await q.order('name');
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 10 * 60 * 1000,
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
@@ -92,18 +54,17 @@ export function useClass(id: string | undefined | null) {
     queryKey,
     queryFn: async () => {
       if (!id) return null;
-      
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('id', id);
-      
+        .eq('id', id)
+        .single();
       if (error) throw error;
-      return (data && data.length > 0) ? data[0] as Class : null;
+      return data as Class;
     },
     enabled: !!id,
-    staleTime: 30 * 1000,
-    refetchInterval: false,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -131,23 +92,22 @@ export function useTeacherClasses(teacherId: string | undefined) {
 
 export function useDeleteClass() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (classId: string) => {
       const { error } = await supabase.from('classes').delete().eq('id', classId);
       if (error) throw error;
-      return classId;
     },
     onSuccess: () => {
-      toast.success('تم حذف الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
 }
 
 export function useAddClass() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (classData: Omit<Class, 'id' | 'created_at'>) => {
@@ -156,32 +116,28 @@ export function useAddClass() {
       return data;
     },
     onSuccess: () => {
-      toast.success('تم إضافة الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
 }
 
 export function useUpdateClass() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Class> & { id: string }) => {
       // Optimistic update
       queryClient.setQueriesData({ queryKey: ['classes'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
-        return old.map(c => c.id === id ? { ...c, ...data } : c);
+        return old.map(c => c.id === id ? { ...c, ...data, updated_at: new Date().toISOString() } : c);
       });
 
-      const { error } = await supabase.from('classes').update({ ...data }).eq('id', id);
+      const { error } = await supabase.from('classes').update({ ...data, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw error;
-      return { id, ...data };
     },
     onSuccess: () => {
-      toast.success('تم تحديث الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
     },
   });
 }

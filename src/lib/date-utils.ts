@@ -4,8 +4,6 @@
  * It requires ISO 8601 with 'T' or the slash '/' separator.
  */
 
-import { logger } from '@/utils/logger';
-
 export const parseSafeDate = (dateString: any): Date => {
   if (!dateString) return new Date();
   if (dateString instanceof Date) return dateString;
@@ -26,7 +24,7 @@ export const parseSafeDate = (dateString: any): Date => {
     
     return date;
   } catch (e) {
-    logger.error('Date parsing error for:', dateString, e);
+    console.error('Date parsing error for:', dateString, e);
     return new Date();
   }
 };
@@ -47,29 +45,5 @@ export const formatDisplayDateTime = (date: any) => {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit'
-  });
-};
-
-/**
- * Format bytes to human-readable size
- */
-export const formatBytes = (bytes: number): string => {
-  if (bytes === 0) return '0 B';
-  
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-};
-
-/**
- * Format date to Arabic locale
- */
-export const formatDate = (date: string | Date): string => {
-  return new Date(date).toLocaleDateString('ar-EG', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
   });
 };

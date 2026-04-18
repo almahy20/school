@@ -1,201 +1,313 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { AppUser, AppRole } from '@/types/auth';
-import { logger } from '@/utils/logger';
-import { queryClient } from '@/lib/queryClient';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+
+import { AppRole, AppUser } from '@/types/auth';
 
 interface AuthContextType {
-  session: Session | null;
   user: AppUser | null;
   loading: boolean;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
-  refreshUser: () => Promise<void>;
   login: (phone: string, password: string) => Promise<string | null>;
-  signup: (phone: string, password: string, fullName: string, role: string, schoolId: string) => Promise<string | null>;
+  signup: (phone: string, password: string, fullName: string, role?: AppRole, schoolId?: string) => Promise<string | null>;
+  logout: () => Promise<void>;
+  isRole: (role: AppRole) => boolean;
+  refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
-/**
- * دالة بسيطة لجلب بيانات المستخدم الإضافية (الرتبة والمدرسة)
- */
-async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
-  try {
-    // جلب البيانات عبر RPC واحد بسيط
-    const { data: userData, error } = await supabase.rpc('get_complete_user_data', { 
-      p_user_id: supaUser.id 
-    });
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
 
+function phoneToEmail(phone: string): string {
+  return `${normalizePhone(phone)}@school.local`;
+}
 
-    if (error || !userData) {
-      logger.error('Error fetching app user data:', error);
-      return null;
-    }
+// Cache for active fetch promises to prevent concurrent race conditions
+const activeFetchPromises = new Map<string, Promise<AppUser | null>>();
+let lastEventUserId: string | null = null;
+let lastEventTime = 0;
 
-    const { profile, role, school } = userData as any;
-    
-    return {
-      id: supaUser.id,
-      email: supaUser.email || '',
-      phone: profile?.phone || '',
-      fullName: profile?.full_name || '',
-      role: (role?.role || 'parent') as AppRole,
-      isSuperAdmin: role?.is_super_admin || false,
-      schoolId: profile?.school_id,
-      schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || 'approved',
-      subscriptionExpired: false, // يتم التحقق منه في الحسابات المالية
-    };
-  } catch (err) {
-    logger.error('Unexpected error in getAppUserData:', err);
-    return null;
+async function fetchAppUser(supaUser: SupabaseUser, retryCount = 0): Promise<AppUser | null> {
+  // If there's already an active fetch for this user, return it
+  if (activeFetchPromises.has(supaUser.id)) {
+    return activeFetchPromises.get(supaUser.id)!;
   }
-}
 
-/**
- * Prefetch common queries when user logs in to improve initial load performance
- */
-async function prefetchCommonQueries(appUser: AppUser) {
-  try {
-    // Prefetch user's own profile
-    queryClient.prefetchQuery({
-      queryKey: ['profile', appUser.id],
-      queryFn: async () => {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', appUser.id)
-          .maybeSingle();
-        return data;
-      },
-      staleTime: 5 * 60 * 1000,
-    });
+  const fetchPromise = (async () => {
+    try {
+      const normalizedPhone = normalizePhone((supaUser.user_metadata?.phone as string) || supaUser.phone || '');
+      const isDeveloperUser = normalizedPhone === '0192837465' || supaUser.email === '0192837465@school.local';
 
-    // Prefetch all profiles for messaging (IDs only)
-    if (appUser.schoolId) {
-      queryClient.prefetchQuery({
-        queryKey: ['all-profiles', appUser.schoolId],
-        queryFn: async () => {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('school_id', appUser.schoolId)
-            .neq('id', appUser.id);
-          
-          return (data || []).map((p: any) => p.id);
-        },
-        staleTime: 5 * 60 * 1000,
+      // Developer shortcut
+      if (isDeveloperUser) {
+        return {
+          id: supaUser.id,
+          email: supaUser.email || '',
+          phone: normalizedPhone,
+          fullName: (supaUser.user_metadata?.full_name as string) || 'المطور الماحي',
+          role: 'admin' as AppRole,
+          isSuperAdmin: true,
+          schoolId: null,
+          schoolStatus: 'active' as const,
+          approvalStatus: 'approved' as const,
+          subscriptionExpired: false,
+        };
+      }
+
+      // Single RPC for all user data - prevents Auth Lock contention
+      const { data: userData, error: rpcErr } = await (supabase as any).rpc('get_complete_user_data', { 
+        p_user_id: supaUser.id 
       });
-    }
 
-    logger.log('[Prefetch] Common queries prefetched for user:', appUser.id);
-  } catch (err) {
-    logger.error('[Prefetch] Error prefetching queries:', err);
-  }
+      if (rpcErr) {
+        // If it's a lock error, we retry after a small delay
+        if (rpcErr.message?.includes('AbortError') || rpcErr.message?.includes('Lock broken')) {
+           if (retryCount < 3) {
+             console.warn(`Auth Lock conflict detected, retrying (${retryCount + 1})...`);
+             await new Promise(r => setTimeout(r, 100 * (retryCount + 1))); // Exponential backoff
+             return fetchAppUser(supaUser, retryCount + 1);
+           }
+        }
+        console.error('RPC fetch error (get_complete_user_data):', rpcErr);
+        return null;
+      }
+
+      if (!userData) return null;
+
+      const { profile, role, school } = userData as any;
+      if (!profile || !role) return null;
+
+      return {
+        id: supaUser.id,
+        email: supaUser.email || '',
+        phone: profile.phone || normalizedPhone,
+        fullName: profile.full_name || '',
+        role: (role?.role || 'parent') as AppRole,
+        isSuperAdmin: role?.is_super_admin || false,
+        schoolId: profile?.school_id,
+        schoolStatus: school?.status || 'active',
+        approvalStatus: role?.approval_status || 'pending',
+        subscriptionExpired: school?.subscription_end_date ? new Date(school.subscription_end_date) < new Date() : false,
+      };
+    } catch (error: any) {
+      // Catch AbortError from navigator.locks or network layer
+      if (error?.name === 'AbortError' || error?.message?.includes('Lock broken')) {
+        if (retryCount < 3) {
+          await new Promise(r => setTimeout(r, 100 * (retryCount + 1)));
+          return fetchAppUser(supaUser, retryCount + 1);
+        }
+      }
+    } finally {
+      activeFetchPromises.delete(supaUser.id);
+    }
+  })();
+
+  activeFetchPromises.set(supaUser.id, fetchPromise);
+  return fetchPromise;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const syncUser = async (currentSession: Session | null) => {
-    setSession(currentSession);
-    if (currentSession?.user) {
-      const appUser = await getAppUserData(currentSession.user);
-      setUser(appUser);
-      
-      // Prefetch common queries in background after user is set
-      if (appUser) {
-        // Use setTimeout to not block the auth flow
-        setTimeout(() => {
-          prefetchCommonQueries(appUser);
-        }, 100);
-      }
-    } else {
-      setUser(null);
+  const roleLabel = user?.isSuperAdmin ? 'المشرف العام'
+    : user?.role === 'admin' ? 'مدير النظام'
+    : user?.role === 'teacher' ? 'معلم ممارس'
+    : user?.role === 'parent' ? 'ولي أمر معتمد'
+    : 'زائر';
+
+  const checkUserAccess = async (appUser: AppUser | null): Promise<string | null> => {
+    if (!appUser) return 'فشل تحميل بيانات المستخدم';
+    
+    if (appUser.approvalStatus === 'pending') {
+      return 'حسابك ما زال قيد المراجعة في انتظار موافقة الإدارة';
     }
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    // 1. جلب الجلسة الحالية عند التشغيل
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      syncUser(session);
-    });
-
-    // 2. الاستماع لتغييرات التوثيق (Refresh, SignOut, SignIn)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        syncUser(session);
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-  };
-
-  const login = async (phone: string, password: string): Promise<string | null> => {
-    try {
-      const email = `${phone}@edara.com`;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          return 'رقم الهاتف أو كلمة المرور غير صحيحة';
-        }
-        return error.message;
-      }
-      return null;
-    } catch (err: any) {
-      return err.message;
+    if (appUser.approvalStatus === 'rejected') {
+      return 'تم رفض طلب انضمامك للمكتب الثقافي/المدرسة';
     }
-  };
-
-  const signup = async (phone: string, password: string, fullName: string, role: string, schoolId: string): Promise<string | null> => {
-    try {
-      const email = `${phone}@edara.com`;
-      const { error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone: phone, // ✅ إضافة رقم الهاتف
-            role: role,
-            school_id: schoolId
-          }
-        }
-      });
-      if (error) return error.message;
-      return null;
-    } catch (err: any) {
-      return err.message;
-    }
+    return null;
   };
 
   const refreshUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
-    await syncUser(session);
+    if (session?.user) {
+      const appUser = await fetchAppUser(session.user);
+      // Removed checkUserAccess filter to keep pending users in the 'user' state
+      setUser(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+        return appUser;
+      });
+    } else {
+      setUser(null);
+    }
   };
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const initSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          const appUser = await fetchAppUser(session.user);
+          if (isMounted) {
+            setUser(prev => {
+              if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+              return appUser;
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Session init error:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    initSession();
+
+    // Handle Auth Events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+
+      console.log(`🔑 Auth Event: ${event} for user: ${session?.user?.id || 'none'}`);
+
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('🔄 Token refreshed successfully');
+      }
+
+      if (event === 'SIGNED_OUT') {
+        console.warn('🚪 User signed out or session expired');
+        setUser(null);
+        return;
+      }
+
+      const now = Date.now();
+      const userId = session?.user?.id || null;
+      
+      // Deduplicate rapid-fire events for the same user (common in Strict Mode)
+      if (userId === lastEventUserId && (now - lastEventTime) < 500) {
+        return;
+      }
+      
+      lastEventUserId = userId;
+      lastEventTime = now;
+      
+      try {
+        if (session?.user) {
+          const appUser = await fetchAppUser(session.user);
+          if (isMounted) {
+            setUser(prev => {
+              if (JSON.stringify(prev) === JSON.stringify(appUser)) return prev;
+              return appUser;
+            });
+            setLoading(false);
+          }
+        } else {
+          if (isMounted) {
+            setUser(null);
+            setLoading(false);
+          }
+        }
+      } catch (err) {
+        console.error("Auth Change Critical Error:", err);
+        if (isMounted) setLoading(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // تم إزالة مؤقت تسجيل الخروج التلقائي بناءً على طلب المستخدم لمنع تسجيل الخروج المفاجئ.
+
+  // Handle connection monitoring and session refresh
+  useEffect(() => {
+    const handleOnline = async () => {
+      console.log('🌐 Device back online. Refreshing session...');
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (!error && session) {
+        await refreshUser();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
+
+  const login = async (phone: string, password: string): Promise<string | null> => {
+    try {
+      const email = phoneToEmail(phone);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) return error.message === 'Invalid login credentials' 
+        ? 'رقم الهاتف أو كلمة المرور غير صحيحة' 
+        : error.message;
+
+      if (data.session?.user) {
+        // Wait for user context (profile + role)
+        const appUser = await fetchAppUser(data.session.user);
+
+        if (!appUser) {
+          // If profile is missing but auth exists, it's a configuration error or pending initialization
+          return 'حسابك غير مكتمل أو قيد المراجعة. يرجى مراجعة إدارة المنصة.';
+        }
+
+        // Allow pending users to log in, but reject 'rejected' status
+        if (appUser.approvalStatus === 'rejected') {
+          await supabase.auth.signOut();
+          return 'تم رفض طلب انضمامك للمكتب الثقافي/المدرسة';
+        }
+
+        setUser(appUser);
+      }
+      return null;
+    } catch (err: any) {
+      return err.message || 'حدث خطأ أثناء تسجيل الدخول';
+    }
+  };
+
+  const signup = async (phone: string, password: string, fullName: string, role?: AppRole, schoolId?: string): Promise<string | null> => {
+    const normalizedPhone = normalizePhone(phone);
+    const email = phoneToEmail(normalizedPhone);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { 
+        data: { 
+          full_name: fullName, 
+          phone: normalizedPhone,
+          role: role || 'parent',
+          school_id: schoolId || null
+        } 
+      },
+    });
+    if (error) {
+      if (error.message.includes('already registered')) return 'رقم الهاتف مسجل بالفعل';
+      return error.message;
+    }
+    return null;
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
+
+  const isRole = (role: AppRole) => user?.role === role;
+
   return (
-    <AuthContext.Provider value={{ session, user, loading: isLoading, isLoading, signOut, refreshUser, login, signup }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout, isRole, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
-
 }
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-};
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+}

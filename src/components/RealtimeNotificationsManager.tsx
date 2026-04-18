@@ -5,8 +5,7 @@ import { toast } from 'sonner';
 import { Bell, MessageSquare, GraduationCap, AlertCircle, CreditCard } from 'lucide-react';
 import { playNotificationSound, sendLocalNotification } from '@/utils/notifications';
 import React from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { logger } from '@/utils/logger';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 const getTypeConfig = (type: string) => {
   switch (type) {
@@ -30,7 +29,7 @@ export default function RealtimeNotificationsManager() {
 
   const handleNewNotification = useCallback((payload: any) => {
     const newNotification = payload.new;
-    logger.log('🔔 Realtime Notifications: New event received', newNotification.type);
+    console.log('🔔 Realtime Notifications: New event received', newNotification.type);
 
     // 1. Browser local notification
     sendLocalNotification(
@@ -64,39 +63,20 @@ export default function RealtimeNotificationsManager() {
   useEffect(() => {
     if (!user?.id) return;
 
-    // 1. Channel for personal notifications
-    const notificationsChannel = supabase.channel('realtime-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, handleNewNotification)
-      .subscribe();
-
-    // 2. Channel for global school branding updates
-    let brandingChannel: any = null;
-    if (user.schoolId) {
-      brandingChannel = supabase.channel('realtime-branding')
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'schools',
-          filter: `id=eq.${user.schoolId}`
-        }, () => {
-          logger.log('🔄 School Branding updated! Refreshing UI...');
-          // Invalidate specific cache keys to trigger immediate re-fetch
-          queryClient.invalidateQueries({ queryKey: ['school-branding', user.schoolId] });
-        })
-        .subscribe();
-    }
+    // Use robust engine for subscription
+    const unsubscribe = realtimeEngine.subscribe(
+      'notifications', 
+      handleNewNotification, 
+      { 
+        event: 'INSERT', 
+        filter: `user_id=eq.${user.id}` 
+      }
+    );
 
     return () => {
-      supabase.removeChannel(notificationsChannel);
-      if (brandingChannel) supabase.removeChannel(brandingChannel);
+      unsubscribe();
     };
-  }, [user?.id, user?.schoolId, handleNewNotification, queryClient]);
+  }, [user?.id, handleNewNotification]);
 
   return null;
 }
-// Force HMR reload

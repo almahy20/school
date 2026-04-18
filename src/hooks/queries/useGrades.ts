@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMemo } from 'react';
 
 export interface ExamTemplate {
   id: string;
@@ -24,92 +24,75 @@ export interface StudentGrade {
   gradeId?: string;
 }
 
-export function useExamTemplates(classId: string | null, subject: string | null, page = 1, pageSize = 10) {
+
+
+export function useExamTemplates(classId: string | null, subject: string | null) {
   const { user } = useAuth();
-  const queryKey = ['exam-templates', user?.schoolId, classId, subject, page, pageSize];
+  const queryKey = useMemo(() => ['exam-templates', user?.schoolId, classId, subject], [user?.schoolId, classId, subject]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.schoolId || !classId) return { data: [], count: 0 };
-      
-      let q = supabase
+      if (!user?.schoolId || !classId) return [];
+      let query = supabase
         .from('exam_templates')
-        .select('*', { count: 'exact' })
+        .select('*')
         .eq('school_id', user.schoolId)
         .eq('class_id', classId);
       
       if (subject) {
-        q = q.eq('subject', subject);
+        query = query.eq('subject', subject);
       }
       
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data, error, count } = await q
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      return { data: (data as ExamTemplate[]) || [], count: count || 0 };
+      return (data as ExamTemplate[]) || [];
     },
     enabled: !!(user?.schoolId && classId),
-    placeholderData: (previousData: any) => previousData,
-    retry: 1,
-    retryDelay: 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
 export function useStudentGrades(templateId: string | null, classId: string | null) {
   const { user } = useAuth();
-  const queryKey = ['student-grades', templateId, classId];
+  const queryKey = useMemo(() => ['student-grades', templateId, classId], [templateId, classId]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!user?.schoolId || !classId || !templateId) return [];
       
-      // Optimized: Single query with JOIN instead of two separate queries
-      const { data: studentsWithGrades, error } = await supabase
+      // Fetch students in class
+      const { data: students, error: sError } = await supabase
         .from('students')
-        .select(`
-          id,
-          name,
-          grades!grades_student_id_fkey(
-            id,
-            score,
-            exam_template_id
-          )
-        `)
+        .select('id, name')
         .eq('school_id', user.schoolId)
         .eq('class_id', classId)
         .order('name');
-      
-      if (error) throw error;
-      if (!studentsWithGrades?.length) return [];
+      if (sError) throw sError;
+      if (!students?.length) return [];
 
-      // Transform data to match expected format
-      return studentsWithGrades.map(s => {
-        const grade = Array.isArray(s.grades) 
-          ? s.grades.find((g: any) => g.exam_template_id === templateId)
-          : s.grades;
-        
+      // Fetch grades for template
+      const { data: grades, error: gError } = await supabase.from('grades').select('*')
+        .eq('school_id', user.schoolId)
+        .in('student_id', students.map(s => s.id))
+        .eq('exam_template_id', templateId);
+      if (gError) throw gError;
+
+      return students.map(s => {
+        const existing = grades?.find(g => g.student_id === s.id);
         return {
           studentId: s.id,
           studentName: s.name,
-          score: grade ? String(grade.score) : '',
-          gradeId: grade?.id,
+          score: existing ? String(existing.score) : '',
+          gradeId: existing?.id,
         };
       }) as StudentGrade[];
     },
     enabled: !!(user?.schoolId && classId && templateId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    placeholderData: (previousData: any) => previousData,
-    retry: 1,
-    retryDelay: 1000,
+    staleTime: 0,
+    refetchInterval: 15 * 1000,
   });
 }
 
@@ -148,7 +131,7 @@ export function useDeleteExamTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
       queryClient.invalidateQueries({ queryKey: ['student-grades'] });
-      queryClient.invalidateQueries({ queryKey: ['grades'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
     },
   });
 }
@@ -170,16 +153,10 @@ export function useUpsertGrades() {
         .eq('exam_template_id', templateId)
         .in('student_id', studentIds);
         
-      // 2. Clean id and insert fresh with school context
-      const cleanedGrades = grades.map(({ id, ...rest }) => ({
-        ...rest,
-        school_id: user.schoolId,
-        teacher_id: user.id
-      }));
-
+      // 2. Clean id and insert fresh
+      const cleanedGrades = grades.map(({ id, ...rest }) => rest);
       const { error } = await supabase.from('grades').insert(cleanedGrades);
       if (error) throw error;
-
     },
     onSuccess: (_, variables) => {
       if (variables.length > 0) {
