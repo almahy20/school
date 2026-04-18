@@ -2,7 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
+import { queryClient } from '@/lib/queryClient';
 
 function playChime() {
   try {
@@ -69,14 +69,31 @@ export function useMessageNotifications() {
     if (msg.receiver_id !== user?.id) return;
     if (locationRef.current === '/messages') return;
 
-    // Fetch sender name
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', msg.sender_id)
-      .single();
-
-    const senderName = profile?.full_name || 'مستخدم';
+    // Try to get sender name from cache first
+    let senderName = 'مستخدم';
+    
+    // Check react-query cache for profile
+    const cachedProfile = queryClient.getQueryData(['profile-by-id', msg.sender_id]);
+    if (cachedProfile) {
+      senderName = (cachedProfile as any)?.full_name || 'مستخدم';
+    } else {
+      // Fetch sender name and cache it
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .eq('id', msg.sender_id)
+          .maybeSingle();
+        
+        if (profile) {
+          senderName = profile.full_name || 'مستخدم';
+          // Cache the profile for future use
+          queryClient.setQueryData(['profile-by-id', msg.sender_id], profile);
+        }
+      } catch (err) {
+        console.error('Failed to fetch sender profile:', err);
+      }
+    }
 
     // playChime(); // Disabled sound by request
     vibrate();
@@ -86,14 +103,16 @@ export function useMessageNotifications() {
   useEffect(() => {
     if (!user) return;
 
-    const unsubscribe = realtimeEngine.subscribe(
-      'messages',
-      handleNewMessage,
-      { event: 'INSERT' }
-    );
+    const channel = supabase.channel('messages-notifications')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+      }, handleNewMessage)
+      .subscribe();
 
     return () => {
-      unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [user, handleNewMessage]);
 }

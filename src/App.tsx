@@ -1,19 +1,18 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import PwaManager from "./components/PwaManager";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
-import { supabase } from "@/integrations/supabase/client";
-import { HealthMonitor } from "./components/HealthMonitor";
+import { useRealtimeSync } from "./hooks/useRealtimeSync";
+import { useSchoolFavicon } from "./hooks/queries";
+
 
 // Lazy Load Pages
 const LoginPage = lazy(() => import("./pages/LoginPage"));
-const SignupPage = lazy(() => import("./pages/SignupPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TeacherSignupPage = lazy(() => import("./pages/TeacherSignupPage"));
@@ -29,14 +28,12 @@ const ParentDetailPage = lazy(() => import("./pages/ParentDetailPage"));
 const ClassesPage = lazy(() => import("./pages/ClassesPage"));
 const ClassDetailPage = lazy(() => import("./pages/ClassDetailPage"));
 
-const CurriculumManagementPage = lazy(() => import("./pages/CurriculumManagementPage"));
-const GradesPage = lazy(() => import("./pages/GradesPage"));
 const AttendancePage = lazy(() => import("./pages/AttendancePage"));
 const FeesPage = lazy(() => import("./pages/FeesPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ParentChildDetailPage = lazy(() => import("./pages/ParentChildDetailPage"));
 const UsersManagementPage = lazy(() => import("./pages/UsersManagementPage"));
-const DatabasePage = lazy(() => import("./pages/DatabasePage"));
+const DataRetentionSettingsPage = lazy(() => import("./pages/DataRetentionSettingsPage"));
 const MessagingPage = lazy(() => import("./pages/MessagingPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ParentComplaintsPage = lazy(() => import("./pages/ParentComplaintsPage"));
@@ -47,33 +44,66 @@ const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const SubscriptionExpiredPage = lazy(() => import("./pages/SubscriptionExpiredPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const WaitingApprovalPage = lazy(() => import("./pages/WaitingApprovalPage"));
-import PwaOnboarding from "./components/PwaOnboarding";
+const StudentGradesPage = lazy(() => import("./pages/StudentGradesPage"));
+const StudentAttendancePage = lazy(() => import("./pages/StudentAttendancePage"));
+const StudentFinancialPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentFinancialPage })));
+const StudentCurriculumPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentCurriculumPage })));
+const StudentDataPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentDataPage })));
 import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
 import { queryClient } from "./lib/queryClient";
 
+// القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
+// تم تقليلها للجداول الحرجة فقط - الباقي يستخدم staleTime بدلاً من realtime
+const GLOBAL_SYNC_TABLES = [
+  'messages',        // رسائل جديدة - يحتاج تحديث فوري
+  'notifications',   // تنبيهات جديدة - يحتاج تحديث فوري
+  // ✅ إزالة: profiles, user_roles, schools, complaints
+  // هذه الجداول تتغير نادراً، staleTime 5-10 دقائق كافٍ
+];
+
+import { PageLoader } from "./components/PageLoader";
+
 function AppRoutes() {
   const { user, loading } = useAuth();
+  const [appReady, setAppReady] = useState(false);
+  
+  // Update favicon with school logo
+  useSchoolFavicon();
+  
+  // تفعيل التزامن الفوري للجداول الأساسية فقط
+  useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
+  // Signal that the app is ready and loader can be hidden
+  useEffect(() => {
+    if (!loading) {
+      setAppReady(true);
+      // Hide the initial loader
+      const loader = document.querySelector('.initial-loader');
+      if (loader && !loader.classList.contains('fade-out')) {
+        requestAnimationFrame(() => {
+          loader.classList.add('fade-out');
+          setTimeout(() => {
+            loader.classList.add('hidden');
+          }, 300);
+        });
+      }
+    }
+  }, [loading]);
+
+  // Show loading screen while auth is being checked
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6" dir="rtl">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-500 font-bold">جاري التحميل...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      <PwaManager />
-      <HealthMonitor />
-      <PwaOnboarding />
-      <Suspense fallback={
-        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir="rtl">
-           <div className="w-12 h-12 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
-        </div>
-      }>
+    <Suspense fallback={null}>
         <Routes>
           {/* ── Public Routes ── */}
           <Route path="/home" element={<LandingPage />} />
@@ -99,15 +129,18 @@ function AppRoutes() {
           <Route path="/parents/:id" element={<ProtectedRoute allowedRoles={['admin']}><ParentDetailPage /></ProtectedRoute>} />
           <Route path="/classes" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassesPage /></ProtectedRoute>} />
           <Route path="/classes/:id" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassDetailPage /></ProtectedRoute>} />
-          <Route path="/curriculum-management" element={<ProtectedRoute allowedRoles={['admin']}><CurriculumManagementPage /></ProtectedRoute>} />
 
-          <Route path="/grades" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><GradesPage /></ProtectedRoute>} />
           <Route path="/attendance" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AttendancePage /></ProtectedRoute>} />
           <Route path="/fees" element={<ProtectedRoute allowedRoles={['admin']}><FeesPage /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
           <Route path="/parent/children/:id" element={<ProtectedRoute allowedRoles={['parent']}><ParentChildDetailPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/grades" element={<ProtectedRoute allowedRoles={['parent']}><StudentGradesPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/attendance" element={<ProtectedRoute allowedRoles={['parent']}><StudentAttendancePage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/financial" element={<ProtectedRoute allowedRoles={['parent']}><StudentFinancialPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/curriculum" element={<ProtectedRoute allowedRoles={['parent']}><StudentCurriculumPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/data" element={<ProtectedRoute allowedRoles={['parent']}><StudentDataPage /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />
-          <Route path="/database" element={<ProtectedRoute allowedRoles={['admin']}><DatabasePage /></ProtectedRoute>} />
+          <Route path="/data-retention" element={<ProtectedRoute allowedRoles={['admin']}><DataRetentionSettingsPage /></ProtectedRoute>} />
           <Route path="/messages" element={<ProtectedRoute allowedRoles={['admin']}><MessagingPage /></ProtectedRoute>} />
           <Route path="/complaints" element={<ProtectedRoute allowedRoles={['parent']}><ParentComplaintsPage /></ProtectedRoute>} />
           <Route path="/manage-complaints" element={<ProtectedRoute allowedRoles={['admin']}><AdminComplaintsPage /></ProtectedRoute>} />
@@ -115,8 +148,7 @@ function AppRoutes() {
           <Route path="/expired" element={<ProtectedRoute><SubscriptionExpiredPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </Suspense>
-    </>
+    </Suspense>
   );
 }
 

@@ -2,14 +2,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, Clock, ShieldCheck, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { logger } from '@/utils/logger';
 
 export default function WaitingApprovalPage() {
-  const { user, logout, refreshUser } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
-    await logout();
-    navigate('/login');
+    try {
+      await signOut();
+      // Navigation is handled by ProtectedRoute after user state changes
+      navigate('/login', { replace: true });
+    } catch (error) {
+      logger.error('Logout failed:', error);
+      // Force navigation even if logout fails
+      navigate('/login', { replace: true });
+    }
   };
 
   if (user?.approvalStatus === 'approved') {

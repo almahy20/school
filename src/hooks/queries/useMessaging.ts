@@ -1,28 +1,40 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMemo } from 'react';
+import { logger } from '@/utils/logger';
 
-export function useProfiles() {
+export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['profiles', user?.schoolId], [user?.schoolId]);
+  const queryKey = ['profiles', user?.schoolId, search, page, pageSize];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.schoolId) return [];
-      const { data, error } = await supabase
+      if (!user?.schoolId) return { data: [], count: 0 };
+      
+      let q = supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name', { count: 'exact' })
         .eq('school_id', user.schoolId)
-        .neq('id', user.id)
-        .order('full_name');
+        .neq('id', user.id);
+
+      if (search) {
+        q = q.ilike('full_name', `%${search}%`);
+      }
+
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await q
+        .order('full_name')
+        .range(from, to);
+
       if (error) throw error;
-      return data;
+      return { data: data || [], count: count || 0 };
     },
     enabled: !!user?.schoolId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -32,7 +44,7 @@ export function useSendMessage() {
   
   return useMutation({
     // التنفيذ المتفائل: إظهار الرسالة في القائمة فوراً
-    onMutate: async ({ targets, content }: { targets: string[], content: string }) => {
+    onMutate: async ({ targets, content, senderName, studentId }: { targets: string[], content: string, senderName?: string, studentId?: string }) => {
       await queryClient.cancelQueries({ queryKey: ['messages', user?.id] });
       const previousMessages = queryClient.getQueryData(['messages', user?.id]);
       
@@ -44,7 +56,8 @@ export function useSendMessage() {
         is_read: false,
         created_at: new Date().toISOString(),
         school_id: user?.schoolId,
-        sender: { full_name: user?.full_name || 'أنا' },
+        student_id: studentId || null,
+        sender: { full_name: user?.fullName || 'أنا' },
         receiver: { full_name: 'جاري الإرسال...' } // Placeholder
       }));
 
@@ -60,31 +73,42 @@ export function useSendMessage() {
         queryClient.setQueriesData({ queryKey: ['messages', user?.id] }, context.previousMessages);
       }
     },
-    mutationFn: async ({ targets, content }: { targets: string[], content: string }) => {
+    mutationFn: async ({ targets, content, senderName, studentId }: { targets: string[], content: string, senderName?: string, studentId?: string }) => {
+      if (!user?.id || !user?.schoolId) {
+        throw new Error('معلومات المستخدم غير مكتملة');
+      }
+
       // 1. Send to messages table
       const messages = targets.map(targetId => ({
-        sender_id: user?.id,
+        sender_id: user.id,
         receiver_id: targetId,
         content: content.trim(),
         is_read: false,
-        school_id: user?.schoolId
+        school_id: user.schoolId,
+        student_id: studentId || null
       }));
 
       const { error: msgError } = await supabase.from('messages').insert(messages);
-      if (msgError) throw msgError;
+      if (msgError) {
+        logger.error('Message insert error:', msgError);
+        throw msgError;
+      }
 
       const notifications = targets.map(targetId => ({
         user_id: targetId,
-        school_id: user?.schoolId,
-        type: 'broadcast_message',
-        title: 'رسالة جديدة من إدارة المدرسة',
+        school_id: user.schoolId,
+        type: senderName ? 'teacher_message' : 'broadcast_message',
+        title: senderName ? `رسالة جديدة من ${senderName}` : 'رسالة جديدة من إدارة المدرسة',
         message: content.trim().substring(0, 100),
         is_read: false,
-        metadata: { sender_id: user?.id, full_content: content.trim() }
+        metadata: { sender_id: user.id, full_content: content.trim(), student_id: studentId }
       }));
 
       const { error: ntError } = await (supabase as any).from('notifications').insert(notifications);
-      if (ntError) throw ntError;
+      if (ntError) {
+        logger.error('Notification insert error:', ntError);
+        throw ntError;
+      }
 
       return { targets, content };
     },
@@ -118,8 +142,8 @@ export function useMessages() {
       return data;
     },
     enabled: !!user?.id,
-    staleTime: 0,
+    staleTime: 30 * 1000, // 30 seconds
     gcTime: 10 * 60 * 1000,
-    refetchInterval: 15 * 1000,
+    refetchInterval: false, // Optimized: removed polling, using realtime instead
   });
 }

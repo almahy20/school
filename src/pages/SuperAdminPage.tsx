@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   ShieldAlert, Plus, Search, Building2, CheckCircle2, 
   XCircle, Users, Activity, Clock, Eye, 
-  PackageCheck, PackageX, Target, Wallet
+  PackageCheck, PackageX, Target, Wallet, Database, HardDrive, Table
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -15,13 +15,14 @@ import {
   useSchools, 
   useSchoolOrders, 
   useUpdateSchool, 
-  useUpdateOrder 
+  useUpdateOrder,
+  useDatabaseStats
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
 export default function SuperAdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'schools' | 'orders'>('schools');
+  const [activeTab, setActiveTab] = useState<'schools' | 'orders' | 'database'>('schools');
   const [search, setSearch] = useState('');
 
   // ── Queries ──
@@ -38,6 +39,12 @@ export default function SuperAdminPage() {
     error: ordersError, 
     refetch: refetchOrders 
   } = useSchoolOrders();
+
+  const {
+    data: dbStats,
+    isLoading: dbStatsLoading,
+    refetch: refetchDbStats
+  } = useDatabaseStats();
 
   // ── Mutations ──
   const updateSchoolMutation = useUpdateSchool();
@@ -63,11 +70,11 @@ export default function SuperAdminPage() {
   };
 
   const filteredSchools = useMemo(() => {
-    return schools.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
+    return (schools || []).filter(s => (s.name || '').toLowerCase().includes((search || '').toLowerCase()));
   }, [schools, search]);
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => o.school_name.toLowerCase().includes(search.toLowerCase()));
+    return (orders || []).filter(o => (o.school_name || '').toLowerCase().includes((search || '').toLowerCase()));
   }, [orders, search]);
 
   const stats = useMemo(() => ({
@@ -103,6 +110,10 @@ export default function SuperAdminPage() {
                   onClick={() => setActiveTab('orders')}
                   className={cn("px-8 py-3 rounded-xl text-xs font-black transition-all", activeTab === 'orders' ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white")}
                 >طلبات الانضمام {stats.pendingOrders > 0 && <Badge className="mr-2 h-5 min-w-5 px-1 bg-rose-500 text-white border-none text-[8px] animate-pulse">{stats.pendingOrders}</Badge>} </button>
+                <button 
+                  onClick={() => setActiveTab('database')}
+                  className={cn("px-8 py-3 rounded-xl text-xs font-black transition-all", activeTab === 'database' ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white")}
+                >قاعدة البيانات</button>
              </div>
              <Button className="h-14 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs hover:bg-indigo-700 transition-all gap-4 shadow-2xl shadow-indigo-500/20">
                <Plus className="w-4 h-4" /> إضافة مدرسة
@@ -116,6 +127,87 @@ export default function SuperAdminPage() {
            <SuperAdminStatsCard title="مدارس معلقة" value={stats.suspended} icon={XCircle} color="rose" />
            <SuperAdminStatsCard title="طلبات معلقة" value={stats.pendingOrders} icon={Clock} color="amber" />
         </div>
+
+        {/* Database Management Tab */}
+        {activeTab === 'database' && (
+          <div className="space-y-8">
+            {/* Database Overview */}
+            <div className="premium-card p-10 bg-gradient-to-br from-slate-900 to-slate-800 text-white">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
+                    <Database className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-black">إدارة قاعدة البيانات</h2>
+                    <p className="text-slate-400 text-sm mt-1">مراقبة استخدام المساحة والأداء</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={refetchDbStats}
+                  disabled={dbStatsLoading}
+                  className="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-black text-xs"
+                >
+                  {dbStatsLoading ? 'جاري التحديث...' : 'تحديث الإحصائيات'}
+                </Button>
+              </div>
+
+              {/* Summary Stats */}
+              {dbStats && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Table className="w-5 h-5 text-indigo-400" />
+                      <p className="text-xs font-bold text-slate-400">إجمالي الجداول</p>
+                    </div>
+                    <p className="text-3xl font-black">{dbStats.totalTables}</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Users className="w-5 h-5 text-emerald-400" />
+                      <p className="text-xs font-bold text-slate-400">إجمالي السجلات</p>
+                    </div>
+                    <p className="text-3xl font-black">{dbStats.totalRows.toLocaleString('ar-EG')}</p>
+                  </div>
+                  <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
+                    <div className="flex items-center gap-3 mb-2">
+                      <HardDrive className="w-5 h-5 text-amber-400" />
+                      <p className="text-xs font-bold text-slate-400">آخر تحديث</p>
+                    </div>
+                    <p className="text-sm font-bold">{new Date(dbStats.lastUpdated).toLocaleTimeString('ar-EG')}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Tables Grid */}
+              {dbStatsLoading ? (
+                <div className="flex items-center justify-center py-20">
+                  <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                </div>
+              ) : dbStats ? (
+                <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8">
+                  <h3 className="text-lg font-black mb-6">تفاصيل الجداول</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {Object.entries(dbStats.tables).map(([tableName, stats]: [string, any]) => (
+                      <div key={tableName} className="bg-white/10 p-5 rounded-xl hover:bg-white/15 transition-all">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-black text-sm capitalize">{tableName}</h4>
+                          <Badge className="bg-indigo-500/20 text-indigo-300 border-none text-[10px]">
+                            {stats.count.toLocaleString('ar-EG')} سجل
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-slate-400">
+                          <HardDrive className="w-4 h-4" />
+                          <span>المساحة التقديرية: <span className="text-white font-bold">{stats.size_estimate}</span></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         <div className="relative group w-full lg:max-w-2xl self-start">
            <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />

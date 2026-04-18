@@ -1,6 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 import { useMemo } from 'react';
 
 export interface FeeRecord {
@@ -15,30 +16,66 @@ export interface FeeRecord {
   updated_at?: string | null;
 }
 
-export function useFees(term?: string) {
+export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all') {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['fees', user?.schoolId, term], [user?.schoolId, term]);
+  const queryKey = ['fees', user?.schoolId, term, page, pageSize, search, classId];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.schoolId) return [];
-      let query = supabase
+      if (!user?.schoolId) return { data: [], count: 0, stats: { total_due: 0, total_paid: 0 } };
+
+      // ─── جلب الإحصائيات (الكل لهذا الترم والمدرسة) ───
+      let statsQ = supabase
         .from('fees')
-        .select('*')
+        .select('amount_due, amount_paid')
         .eq('school_id', user.schoolId);
+      if (term) statsQ = statsQ.eq('term', term); // ✅ إعادة تعيين النتيجة
+      const { data: allFees } = await statsQ;
       
+      const total_due  = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_due)  || 0), 0);
+      const total_paid = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+
+      // ─── جلب القائمة (مجزأة) ───
+      // نستخدم الطلاب كنقطة انطلاق ثم ننضم مع الرسوم لهذا الترم
+      let q = supabase
+        .from('students')
+        .select('*, classes(id, name), fees!left(*)', { count: 'exact' })
+        .eq('school_id', user.schoolId);
+
       if (term) {
-        query = query.eq('term', term);
+        q = q.eq('fees.term', term);
       }
-      
-      const { data, error } = await query;
+      if (search) {
+        q = q.ilike('name', `%${search}%`);
+      }
+      if (classId !== 'all') {
+        q = q.eq('class_id', classId);
+      }
+
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data, error, count } = await q
+        .order('name')
+        .range(from, to);
+
       if (error) throw error;
-      return data as FeeRecord[];
+
+      // ننسق البيانات لتشبه الهيكل المتوقع في الواجهة
+      const enrichedData = (data || []).map((s: any) => ({
+        ...s,
+        fee: Array.isArray(s.fees) ? s.fees[0] : s.fees
+      }));
+
+      return { 
+        data: enrichedData, 
+        count: count || 0, 
+        stats: { total_due, total_paid } 
+      };
     },
     enabled: !!user?.schoolId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -58,7 +95,7 @@ export function useUpsertFee() {
 
       if (existing) {
         // 2. Update existing
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('fees')
           .update({
             amount_due: record.amount_due,
@@ -67,14 +104,11 @@ export function useUpsertFee() {
             term: record.term,
             school_id: record.school_id || user?.schoolId
           })
-          .eq('id', existing.id)
-          .select()
-          .single();
+          .eq('id', existing.id);
         if (error) throw error;
-        return data;
       } else {
         // 3. Insert new
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('fees')
           .insert({
             student_id: record.student_id,
@@ -83,21 +117,18 @@ export function useUpsertFee() {
             amount_paid: record.amount_paid || 0,
             status: record.status || 'unpaid',
             school_id: record.school_id || user?.schoolId
-          })
-          .select()
-          .single();
+          });
         if (error) throw error;
-        return data;
       }
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, data.term] });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+    onSuccess: (_, variables) => {
+      toast.success('تم حفظ الرسوم بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
+
 
 export function useGenerateFees() {
   const queryClient = useQueryClient();
@@ -134,7 +165,7 @@ export function useGenerateFees() {
       if (error) throw error;
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['fees', user?.schoolId, variables.term] });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
     },
   });
 }

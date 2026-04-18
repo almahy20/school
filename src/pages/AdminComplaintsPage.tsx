@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -13,19 +13,34 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useComplaints, useUpsertComplaint } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import DataPagination from '@/components/ui/DataPagination';
+import PageHeader from '@/components/layout/PageHeader';
+
+const PAGE_SIZE = 10;
 
 export default function AdminComplaintsPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
+  const [page, setPage] = useState(1);
+
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // ── Queries ──
   const { 
-    data: complaints = [], 
+    data, 
     isLoading: loading, 
     error, 
     refetch 
-  } = useComplaints();
+  } = useComplaints(page, PAGE_SIZE, debouncedSearch, filterStatus);
+
+  const complaints = data?.data || [];
+  const totalItems = data?.count || 0;
 
   // ── Mutations ──
   const upsertComplaintMutation = useUpsertComplaint();
@@ -43,44 +58,34 @@ export default function AdminComplaintsPage() {
     }
   };
 
-  const filtered = useMemo(() => {
-    return complaints.filter(c => {
-      const matchSearch = c.content.toLowerCase().includes(search.toLowerCase()) || 
-                        c.parent_name?.toLowerCase().includes(search.toLowerCase());
-      const matchStatus = filterStatus === 'الكل' || c.status === filterStatus;
-      return matchSearch && matchStatus;
-    });
-  }, [complaints, search, filterStatus]);
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleFilterChange = (val: string) => { setFilterStatus(val); setPage(1); };
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">مركز الشكاوى والمقترحات</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">متابعة بلاغات أولياء الأمور وحلها لضمان استمرارية الجودة التعليمية.</p>
-          </div>
-        </header>
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-4 md:px-0">
+        <PageHeader
+          icon={MessageSquare}
+          title="مركز الشكاوى والمقترحات"
+          subtitle="متابعة بلاغات أولياء الأمور وحلها لضمان استمرارية الجودة التعليمية"
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-center">
-           <div className="lg:col-span-2 relative group w-full text-right">
-              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-              <Input 
-                placeholder="بحث بالمحتوى أو اسم ولي الأمر..." 
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6 items-center">
+           <div className="lg:col-span-2 relative group w-full text-right order-2 lg:order-1">
+              <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+              <Input
+                placeholder="بحث بالمحتوى أو اسم ولي الأمر..."
                 value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
+                onChange={e => handleSearch(e.target.value)}
+                className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
               />
            </div>
            
-           <div className="lg:col-span-2 flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide justify-end">
+           <div className="lg:col-span-2 flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 no-scrollbar justify-start lg:justify-end order-1 lg:order-2">
               {['الكل', 'pending', 'in_progress', 'resolved'].map(status => (
-                <button key={status} onClick={() => setFilterStatus(status)}
+                <button key={status} onClick={() => handleFilterChange(status)}
                   className={cn(
-                    "px-5 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
+                    "px-4 sm:px-5 py-2 rounded-xl text-[10px] font-black whitespace-nowrap transition-all border shadow-sm",
                     filterStatus === status ? "bg-slate-900 border-slate-900 text-white shadow-lg" : "bg-white border-white text-slate-400"
                   )}>
                   {status === 'pending' ? 'بانتظار المراجعة' : status === 'in_progress' ? 'قيد المعالجة' : status === 'resolved' ? 'تم الحل' : 'جميع الشكاوى'}
@@ -94,14 +99,31 @@ export default function AdminComplaintsPage() {
           error={error}
           data={complaints}
           onRetry={refetch}
-          isEmpty={filtered.length === 0}
+          isEmpty={complaints.length === 0}
           loadingMessage="جاري مزامنة البلاغات..."
           emptyMessage={search ? 'لم نجد نتائج مطابقة لطلبك' : 'لا توجد شكاوى معلقة حالياً'}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {filtered.map(c => (
-              <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} isUpdating={upsertComplaintMutation.isPending} />
-            ))}
+          <div className="space-y-10">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                {totalItems} بلاغ متاح — الصفحة {page}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {complaints.map(c => (
+                <ComplaintCard key={c.id} complaint={c} onStatusChange={updateStatus} isUpdating={upsertComplaintMutation.isPending} />
+              ))}
+            </div>
+
+            <div className="pt-4">
+              <DataPagination
+                currentPage={page}
+                totalItems={totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </div>
           </div>
         </QueryStateHandler>
       </div>

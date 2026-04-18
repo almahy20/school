@@ -1,7 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMemo } from 'react';
 
 export interface Curriculum {
   id: string;
@@ -20,7 +19,7 @@ export interface CurriculumSubject {
 
 export function useCurriculums() {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['curriculums', user?.schoolId], [user?.schoolId]);
+  const queryKey = ['curriculums', user?.schoolId];
   
   return useQuery({
     queryKey,
@@ -35,13 +34,14 @@ export function useCurriculums() {
       return data as Curriculum[];
     },
     enabled: !!user?.schoolId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    placeholderData: (previousData: any) => previousData,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
 export function useCurriculumSubjects(curriculumId: string | null) {
-  const queryKey = useMemo(() => ['curriculum-subjects', curriculumId], [curriculumId]);
+  const queryKey = ['curriculum-subjects', curriculumId];
   
   return useQuery({
     queryKey,
@@ -56,8 +56,13 @@ export function useCurriculumSubjects(curriculumId: string | null) {
       return data as CurriculumSubject[];
     },
     enabled: !!curriculumId,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    placeholderData: (previousData: any) => previousData,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 

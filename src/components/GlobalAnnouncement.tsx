@@ -1,27 +1,105 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useProfilesByIds } from '@/hooks/queries/useProfile';
+import { logger } from '@/utils/logger';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Megaphone, Bell, ChevronLeft, ChevronRight } from 'lucide-react';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 interface AnnouncementMessage {
   id: string;
   content: string;
   sender_name: string;
+  sender_id?: string;
 }
 
 export function GlobalAnnouncement() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   // Message queue: all pending unread messages
   const [queue, setQueue] = useState<AnnouncementMessage[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const markedAsReadRef = useRef<Set<string>>(new Set());
+  const [senderIds, setSenderIds] = useState<string[]>([]);
+  
+  // ✅ نحفظ الرسائل المقروءة في localStorage عشان مظهرش تاني
+  const dismissedRef = useRef<Set<string>>(
+    new Set(JSON.parse(localStorage.getItem(`dismissed-announcements-${user?.id}`) || '[]'))
+  );
+
+  // Use react-query to cache unread messages
+  const { data: unreadMessages } = useQuery({
+    queryKey: ['unread-announcements', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const { data } = await supabase
+        .from('messages')
+        .select(`id, content, sender_id`)
+        .eq('receiver_id', user.id)
+        .eq('is_read', false)
+        .order('created_at', { ascending: true })
+        .limit(20);
+      
+      return data || [];
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5, // ✅ 5 دقائق - نقلل الـ refetch
+    gcTime: 1000 * 60 * 15, // 15 دقيقة
+    refetchOnMount: false, // ✅ منع الـ refetch غير الضروري
+    refetchOnWindowFocus: false, // ✅ منع الـ refetch غير الضروري
+    refetchInterval: false, // Using realtime instead
+  });
+
+  // ✅ استخدام useProfilesByIds الموحد لمنع duplicate requests
+  const { data: profilesArray } = useProfilesByIds(
+    senderIds.length > 0 ? senderIds : null
+  );
+
+  // تحويل profiles array إلى map للاستخدام السهل
+  const senderProfiles = useMemo(() => {
+    if (!profilesArray) return {};
+    const map: Record<string, string> = {};
+    profilesArray.forEach(p => {
+      map[p.id] = p.full_name || 'الإدارة';
+    });
+    return map;
+  }, [profilesArray]);
+
+  // Update queue when unread messages are loaded
+  useEffect(() => {
+    if (!unreadMessages || unreadMessages.length === 0) return;
+
+    // ✅ نشيل الرسائل اللي المستخدم قفلها قبل كده
+    const filteredMessages = unreadMessages.filter(
+      (msg: any) => !dismissedRef.current.has(msg.id)
+    );
+
+    if (filteredMessages.length === 0) return;
+
+    // Collect sender IDs for batch fetching
+    const ids = filteredMessages.map((msg: any) => msg.sender_id).filter(Boolean);
+    setSenderIds(ids);
+
+    // Create announcement items
+    const items: AnnouncementMessage[] = filteredMessages.map((msg: any) => ({
+      id: msg.id,
+      content: msg.content,
+      sender_name: senderProfiles?.[msg.sender_id] || 'جاري التحميل...',
+      sender_id: msg.sender_id,
+    }));
+    
+    setQueue(items);
+    setCurrentIndex(0);
+    if (items.length > 0) {
+      setIsOpen(true);
+    }
+  }, [unreadMessages]);
 
   const addToQueue = useCallback((msg: AnnouncementMessage) => {
     setQueue(prev => {
@@ -32,66 +110,62 @@ export function GlobalAnnouncement() {
     setIsOpen(true);
   }, []);
 
-  const handleNewMessage = useCallback(async (payload: any) => {
-    const newMsg = payload.new as any;
-    if (markedAsReadRef.current.has(newMsg.id)) return;
-
-    // Fetch sender name
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', newMsg.sender_id)
-      .single();
-
-    addToQueue({
-      id: newMsg.id,
-      content: newMsg.content,
-      sender_name: profile?.full_name || 'الإدارة',
-    });
-  }, [addToQueue]);
-
   useEffect(() => {
     if (!user) return;
 
-    // 1. Fetch ALL unread broadcast messages on mount
-    const fetchUnread = async () => {
-      const { data: messages } = await supabase
-        .from('messages')
-        .select(`id, content, sender_id, profiles!messages_sender_id_fkey (full_name)`)
-        .eq('receiver_id', user.id)
-        .eq('is_read', false)
-        .order('created_at', { ascending: true }) // oldest first
-        .limit(20);
+    // Real-time for NEW messages while user is online
+    const handleRealtimeMessage = async (payload: any) => {
+      const newMsg = payload.new as any;
+      if (markedAsReadRef.current.has(newMsg.id)) return;
 
-      if (messages && messages.length > 0) {
-        const items: AnnouncementMessage[] = messages.map((msg: any) => ({
-          id: msg.id,
-          content: msg.content,
-          sender_name: (msg.profiles as any)?.full_name || 'الإدارة',
-        }));
-        setQueue(items);
-        setCurrentIndex(0);
-        setIsOpen(true);
+      // Add to queue, fetch profile asynchronously
+      setQueue(prev => {
+        if (prev.some(m => m.id === newMsg.id)) return prev;
+        return [...prev, {
+          id: newMsg.id,
+          content: newMsg.content,
+          sender_name: 'جاري التحميل...',
+          sender_id: newMsg.sender_id,
+        }];
+      });
+      setIsOpen(true);
+
+      // Fetch sender profile and cache it
+      if (newMsg.sender_id) {
+        setSenderIds(prev => prev.includes(newMsg.sender_id) ? prev : [...prev, newMsg.sender_id]);
+        
+        // Invalidate the unread messages query to update cache
+        queryClient.invalidateQueries({ queryKey: ['unread-announcements', user.id] });
       }
     };
 
-    fetchUnread();
-
-    // 2. Real-time for NEW messages while user is online
-    const unsubscribe = realtimeEngine.subscribe(
-      'messages',
-      handleNewMessage,
-      { event: 'INSERT', filter: `receiver_id=eq.${user.id}` }
-    );
+    const channel = supabase.channel('global-announcements')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`
+      }, handleRealtimeMessage)
+      .subscribe();
 
     return () => {
-      unsubscribe();
+      void supabase.removeChannel(channel);
     };
-  }, [user, handleNewMessage]);
+  }, [user, queryClient]);
 
   const markCurrentAsRead = async (id: string) => {
     if (markedAsReadRef.current.has(id)) return;
     markedAsReadRef.current.add(id);
+    
+    // ✅ نحفظ في localStorage عشان مظهرش تاني
+    dismissedRef.current.add(id);
+    if (user?.id) {
+      localStorage.setItem(
+        `dismissed-announcements-${user.id}`,
+        JSON.stringify(Array.from(dismissedRef.current))
+      );
+    }
+    
     await supabase.from('messages').update({ is_read: true }).eq('id', id);
   };
 

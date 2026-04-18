@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { useClasses, useTeachers, useStudents, useAddClass, useUpdateClass, useDeleteClass } from '@/hooks/queries';
+import { useClasses, useTeachers, useAddClass, useUpdateClass, useDeleteClass } from '@/hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Users, School, User, Search, Filter, 
@@ -17,6 +18,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import DataDetailModal from '@/components/DataDetailModal';
+import PageHeader from '@/components/layout/PageHeader';
 
 interface ClassItem {
   id: string;
@@ -32,67 +34,95 @@ export default function ClassesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { data: rawClasses = [], isLoading: classesLoading, error, refetch, isRefetching } = useClasses();
-  const { data: teachers = [], isLoading: teachersLoading } = useTeachers();
-  const { data: students = [], isLoading: studentsLoading } = useStudents();
-
-  const addMutation = useAddClass();
-  const deleteMutation = useDeleteClass();
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterLevel, setFilterLevel] = useState('الكل');
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  // ── Debounce Search ──
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── React Query Hooks ──
+  const { 
+    data: classesData, 
+    isLoading: classesLoading, 
+    error, 
+    refetch, 
+    isRefetching 
+  } = useClasses(page, PAGE_SIZE, debouncedSearch, filterLevel);
+
+  // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي فقط)
+  // يفضل مستقبلاً استخدام joins من الخادم مباشرة لكل ما هو ممكن
+  const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
+  const teachers = useMemo(() => teachersData?.data || [], [teachersData]);
+  
+  // For student count, we need ALL students in the school (not just teacher's classes)
+  // So we fetch directly from Supabase instead of using useStudents hook
+  const [students, setStudents] = useState<any[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
+  
+  useEffect(() => {
+    const fetchAllStudents = async () => {
+      if (!user?.schoolId) {
+        setStudents([]);
+        setStudentsLoading(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name, class_id')
+        .eq('school_id', user.schoolId);
+      
+      if (data) {
+        setStudents(data);
+      }
+      setStudentsLoading(false);
+    };
+    
+    fetchAllStudents();
+  }, [user?.schoolId]);
+
+  const addMutation = useAddClass();
+  const deleteMutation = useDeleteClass();
+
   // Enrich classes with teacher name and student count
-  const enrichedClasses = useMemo(() => {
-    return rawClasses.map(c => ({
+  const classes = useMemo(() => {
+    return (classesData?.data || []).map(c => ({
       ...c,
-      teacher_name: teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
+      teacher_name: (c as any).profiles?.full_name || teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
       student_count: students.filter(s => s.class_id === c.id).length
     }));
-  }, [rawClasses, teachers, students]);
+  }, [classesData, teachers, students]);
 
-  const loading = classesLoading || teachersLoading || studentsLoading;
+  const totalItems = classesData?.count || 0;
+  const loading = classesLoading || (teachersLoading && !classesData) || (studentsLoading && !classesData);
 
-  const gradeLevels = useMemo(() => ['الكل', ...new Set(enrichedClasses.map(c => c.grade_level).filter(Boolean) as string[])], [enrichedClasses]);
-  const filtered = useMemo(() => enrichedClasses.filter(c => {
-    const matchSearch = !search || c.name.includes(search) || (c.teacher_name || '').includes(search);
-    const matchLevel = filterLevel === 'الكل' || c.grade_level === filterLevel;
-    return matchSearch && matchLevel;
-  }), [enrichedClasses, search, filterLevel]);
+  // نستخدم قائمة المراحل من الخادم أو ثابتة بدلاً من استنتاجها من البيانات المجزأة
+  const gradeLevels = useMemo(() => ['الكل', 'الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس'], []);
 
-  const totalItems = filtered.length;
-  const paginated = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filtered.slice(start, start + PAGE_SIZE);
-  }, [filtered, page]);
-
-  // Reset page when search or filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, filterLevel]);  return (
+  const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleFilterChange = (val: string) => { setFilterLevel(val); setPage(1); };  return (
     <AppLayout>
-      <div className="flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10">
-        {/* Premium Header - Scaled Down */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-               <div className="w-1.5 h-7 bg-indigo-600 rounded-full" />
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight">إدارة الفصول الدراسية</h1>
-            </div>
-            <p className="text-slate-500 font-medium text-sm pr-4">تنظيم الكثافة الطلابية وتوزيع الهيئة التدريسية</p>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-4">
-             {user?.role === 'admin' && (
-               <Button onClick={() => setShowAdd(true)} className="h-11 px-6 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
-                 <Plus className="w-4.5 h-4.5" /> إنشاء فصل جديد
-               </Button>
-             )}
-          </div>
-        </header>
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
+        <PageHeader
+          icon={School}
+          title="إدارة الفصول الدراسية"
+          subtitle="تنظيم الكثافة الطلابية وتوزيع الهيئة التدريسية"
+          action={
+            user?.role === 'admin' && (
+              <Button onClick={() => setShowAdd(true)} className="h-12 px-8 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
+                <Plus className="w-5 h-5" /> إنشاء فصل جديد
+              </Button>
+            )
+          }
+        />
 
         {/* Filters and Search - Scaled Down */}
         <div className="flex flex-col lg:flex-row gap-4 items-center">
@@ -109,7 +139,7 @@ export default function ClassesPage() {
             {gradeLevels.map(level => (
               <button 
                 key={level} 
-                onClick={() => setFilterLevel(level)}
+                onClick={() => handleFilterChange(level)}
                 className={cn(
                   "px-6 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border shadow-sm shrink-0",
                   filterLevel === level
@@ -125,12 +155,12 @@ export default function ClassesPage() {
         <QueryStateHandler
           loading={loading}
           error={error}
-          data={rawClasses}
+          data={classesData?.data || []}
           onRetry={refetch}
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات الفصول..."
           errorMessage="فشل تحميل قائمة الفصول."
-          isEmpty={filtered.length === 0}
+          isEmpty={classes.length === 0}
         >
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">
@@ -139,7 +169,7 @@ export default function ClassesPage() {
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {paginated.map(c => (
+              {classes.map(c => (
                 <ClassCard key={c.id} classItem={c as any} onClick={() => navigate(`/classes/${c.id}`)} />
               ))}
             </div>
@@ -171,167 +201,187 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
   const percentage = Math.min((classItem.student_count || 0) / capacity * 100, 100);
 
   return (
-    <div className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" onClick={onClick}>
-      <div className="p-6 space-y-6">
+    <div 
+      className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" 
+      onClick={onClick}
+    >
+      <div className="p-5 md:p-6 space-y-5 md:space-y-6">
          <div className="flex items-start justify-between">
-            <div className="w-12 h-12 rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
-               <School className="w-6 h-6" />
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-[16px] md:rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
+               <School className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <Badge variant="outline" className="rounded-lg px-3 py-1 bg-slate-50 border-slate-100 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            <Badge variant="outline" className="rounded-lg px-2.5 py-0.5 md:px-3 md:py-1 bg-slate-50 border-slate-100 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400">
                {classItem.grade_level || 'مرحلة عامة'}
             </Badge>
          </div>
 
          <div>
-            <h3 className="text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
+            <h3 className="text-base md:text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
             <div className="flex items-center gap-2 text-slate-400">
-               <User className="w-3.5 h-3.5" />
-               <span className="text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
+               <User className="w-3 h-3 md:w-3.5 md:h-3.5" />
+               <span className="text-[9px] md:text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
             </div>
          </div>
 
          <div className="space-y-2">
-            <div className="flex justify-between items-end text-[8px] font-black uppercase tracking-widest">
+            <div className="flex justify-between items-end text-[7px] md:text-[8px] font-black uppercase tracking-widest">
                <span className="text-slate-300">سعة الطلاب</span>
                <span className={cn("font-black", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>{classItem.student_count} / {capacity}</span>
             </div>
-            <Progress value={percentage} className="h-1.5 bg-slate-100" />
+            <Progress value={percentage} className="h-1 md:h-1.5 bg-slate-100" />
          </div>
 
-         <div className="flex gap-4 pt-2 border-t border-slate-50">
-            <Button onClick={onClick} className="flex-1 h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-xs">
+         <div className="flex gap-3 md:gap-4 pt-2 border-t border-slate-50">
+            <div className="flex-1 h-10 md:h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-[10px] md:text-xs">
                استعراض الفصل
-            </Button>
+            </div>
          </div>
       </div>
     </div>
   );
 }
 
-// ─── Modals (Scaled Down) ────────────────────────────────────────────────────
-function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any[]; user: any; onClose: () => void; onSuccess?: () => void }) {
+// ─── Modals ────────────────────────────────────────────────────────────────────
+function ModalShell({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div 
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100001] p-4 text-right animate-in fade-in" 
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white w-full max-w-lg rounded-[48px] shadow-2xl shadow-slate-900/20 animate-in zoom-in-95 duration-300 relative overflow-hidden" 
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Decorative accent */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-50/60 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; user: any; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [teacherId, setTeacherId] = useState('');
   const addMutation = useAddClass();
+  const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    
     try {
-      await addMutation.mutateAsync({
-        name: name.trim(), 
-        grade_level: gradeLevel.trim() || null, 
-        teacher_id: teacherId || null,
-        school_id: user?.schoolId
-      });
+      await addMutation.mutateAsync({ name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null, school_id: user?.schoolId });
       toast({ title: 'تمت الإضافة بنجاح' });
-      if (onSuccess) onSuccess(); 
-      else onClose();
+      if (onSuccess) onSuccess(); else onClose();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message || 'فشل في إضافة الفصل', variant: 'destructive' });
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
-        <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">إنشاء فصل جديد</h2>
-        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+    <ModalShell onClose={onClose}>
+      <div className="p-10 relative z-10">
+        <div className="mb-10">
+          <div className="w-16 h-16 rounded-[24px] bg-indigo-600 flex items-center justify-center mb-6 shadow-xl shadow-indigo-200">
+            <School className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">إنشاء فصل جديد</h2>
+          <p className="text-sm text-slate-400 font-medium mt-1">أدخل بيانات الفصل الدراسي الجديد</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">اسم الفصل *</label>
             <Input value={name} onChange={e => setName(e.target.value)}
-              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: 1أ" />
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" placeholder="مثال: 1أ" required />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المرحلة الدراسية</label>
             <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
-              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: الصف الأول" />
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" placeholder="مثال: الصف الأول الابتدائي" />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المعلم الرئيسي</label>
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
-              <option value="">بدون معلم</option>
-              {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none">
+              <option value="">بدون معلم رئيسي</option>
+              {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
             </select>
           </div>
-          <div className="flex gap-4 pt-6">
+          <div className="flex gap-4 pt-4">
             <Button type="submit" disabled={addMutation.isPending}
-              className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-              {addMutation.isPending ? 'جاري الإضافة...' : 'تأكيد الإضافة'}
+              className="flex-[2] h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-xl shadow-indigo-100 text-sm">
+              {addMutation.isPending ? 'جاري الإضافة...' : 'إنشاء الفصل'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
-              className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+              className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm hover:bg-slate-100">إلغاء</Button>
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
 export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any) {
-    const { toast } = useToast();
-    const [name, setName] = useState(classItem.name);
-    const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
-    const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
-    const updateMutation = useUpdateClass();
-  
-    const handleSave = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!name.trim()) return;
-      
-      try {
-        await updateMutation.mutateAsync({
-          id: classItem.id,
-          name: name.trim(), 
-          grade_level: gradeLevel.trim() || null, 
-          teacher_id: teacherId || null,
-        });
-        toast({ title: 'تم الحفظ بنجاح' });
-        onSuccess();
-      } catch (err: any) {
-        toast({ title: 'خطأ', description: err.message || 'فشل في تحديث الفصل', variant: 'destructive' });
-      }
-    };
-  
-    return (
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
-          <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">تعديل بيانات الفصل</h2>
-          <form onSubmit={handleSave} className="space-y-6 relative z-10">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الفصل *</label>
-              <Input value={name} onChange={e => setName(e.target.value)}
-                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المرحلة الدراسية</label>
-              <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
-                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المعلم المسؤول</label>
-              <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-                className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
-                <option value="">بدون معلم</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-              </select>
-            </div>
-            <div className="flex gap-4 pt-6">
-              <Button type="submit" disabled={updateMutation.isPending}
-                className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
-                {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
-              </Button>
-              <Button type="button" onClick={onClose} variant="ghost"
-                className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
-            </div>
-          </form>
+  const { toast } = useToast();
+  const [name, setName] = useState(classItem.name);
+  const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
+  const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
+  const updateMutation = useUpdateClass();
+  const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    try {
+      await updateMutation.mutateAsync({ id: classItem.id, name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null });
+      toast({ title: 'تم الحفظ بنجاح' });
+      onSuccess();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message || 'فشل في تحديث الفصل', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <ModalShell onClose={onClose}>
+      <div className="p-10 relative z-10">
+        <div className="mb-10">
+          <div className="w-16 h-16 rounded-[24px] bg-slate-900 flex items-center justify-center mb-6 shadow-xl shadow-slate-200">
+            <Edit3 className="w-8 h-8 text-indigo-400" />
+          </div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">تعديل إعدادات الفصل</h2>
+          <p className="text-sm text-slate-400 font-medium mt-1">قم بتحديث بيانات الفصل الدراسي</p>
         </div>
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">اسم الفصل *</label>
+            <Input value={name} onChange={e => setName(e.target.value)}
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المرحلة الدراسية</label>
+            <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
+              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المعلم الرئيسي</label>
+            <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
+              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none">
+              <option value="">بدون معلم رئيسي</option>
+              {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <Button type="submit" disabled={updateMutation.isPending}
+              className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl text-sm hover:bg-slate-800">
+              {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+            </Button>
+            <Button type="button" onClick={onClose} variant="ghost"
+              className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm hover:bg-slate-100">إلغاء</Button>
+          </div>
+        </form>
       </div>
-    );
-  }
+    </ModalShell>
+  );
+}

@@ -13,9 +13,57 @@ export default {
         "2xl": "1400px",
       },
     },
+    // Enhanced breakpoints for better responsive design
+    screens: {
+      'xs': '480px',    // Large phones
+      'sm': '640px',    // Tablets portrait
+      'md': '768px',    // Tablets landscape
+      'lg': '1024px',   // Laptops
+      'xl': '1280px',   // Desktops
+      '2xl': '1536px',  // Large screens
+    },
     extend: {
       fontFamily: {
         cairo: ["Cairo", "sans-serif"],
+      },
+      spacing: {
+        'card-padding': '1.5rem',
+        'section-gap': '2rem',
+        'page-padding': '1rem',        // Mobile
+        'page-padding-md': '1.5rem',   // Tablet
+        'page-padding-lg': '2rem',     // Desktop
+        'card-gap': '1rem',
+      },
+      borderRadius: {
+        'card': '1rem',
+        'modal': '1.5rem',
+        'button': '0.75rem',
+      },
+      // Comprehensive Typography Scale (Mobile-First)
+      fontSize: {
+        'xs': ['0.625rem', { lineHeight: '0.75rem' }],      // 10px - Labels, badges
+        'sm': ['0.75rem', { lineHeight: '1rem' }],           // 12px - Small text, captions
+        'base': ['0.875rem', { lineHeight: '1.25rem' }],     // 14px - Body text (default)
+        'md': ['1rem', { lineHeight: '1.5rem' }],            // 16px - Large body, form labels
+        'lg': ['1.125rem', { lineHeight: '1.75rem' }],       // 18px - Subtitles
+        'xl': ['1.25rem', { lineHeight: '1.75rem' }],        // 20px - Card titles
+        '2xl': ['1.5rem', { lineHeight: '2rem' }],           // 24px - Section titles
+        '3xl': ['1.875rem', { lineHeight: '2.25rem' }],      // 30px - Page titles
+        '4xl': ['2.25rem', { lineHeight: '2.5rem' }],        // 36px - Hero titles
+        // Legacy support
+        'page-title': ['1.875rem', { lineHeight: '1.2', fontWeight: '700' }],
+        'card-title': ['1.25rem', { lineHeight: '1.3', fontWeight: '700' }],
+        'body': ['1rem', { lineHeight: '1.6', fontWeight: '400' }],
+        'small': ['0.875rem', { lineHeight: '1.5', fontWeight: '400' }],
+      },
+      // Enhanced Spacing Scale
+      spacing: {
+        'card-padding': '1.5rem',
+        'section-gap': '2rem',
+        'page-padding': '1rem',        // Mobile
+        'page-padding-md': '1.5rem',   // Tablet
+        'page-padding-lg': '2rem',     // Desktop
+        'card-gap': '1rem',
       },
       colors: {
         border: "#e2e8f0",
@@ -67,6 +115,8 @@ export default {
       boxShadow: {
         premium: "0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05)",
         soft: "0 4px 6px -1px rgb(0 0 0 / 0.02), 0 2px 4px -2px rgb(0 0 0 / 0.02)",
+        'glow-indigo': "0 0 20px rgb(99 102 241 / 0.3)",
+        'glow-emerald': "0 0 20px rgb(16 185 129 / 0.3)",
       },
       keyframes: {
         "accordion-down": {

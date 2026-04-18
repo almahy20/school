@@ -15,7 +15,10 @@ ADD COLUMN IF NOT EXISTS teacher_id UUID REFERENCES auth.users(id) ON DELETE SET
 
 -- 3. Create teachers view for easy querying
 -- The requirements specified using: .select('id, name, teacher:teachers(name)')
-CREATE OR REPLACE VIEW public.teachers AS
+-- FIX: Drop view first to avoid column name conflicts
+DROP VIEW IF EXISTS public.teachers;
+
+CREATE VIEW public.teachers AS
 SELECT 
     p.id, 
     p.full_name as name, 
@@ -36,24 +39,28 @@ VALUES ('school_assets', 'school_assets', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage Policies
--- Allow anyone to read
+-- FIX: Drop policies first if they exist, then recreate
+DROP POLICY IF EXISTS "Public Read Access" ON storage.objects;
 CREATE POLICY "Public Read Access" 
 ON storage.objects FOR SELECT 
 TO public 
 USING ( bucket_id = 'school_assets' );
 
 -- Allow authenticated users to upload (Admin/SuperAdmin usually perform this)
+DROP POLICY IF EXISTS "Authenticated Upload Access" ON storage.objects;
 CREATE POLICY "Authenticated Upload Access" 
 ON storage.objects FOR INSERT 
 TO authenticated 
 WITH CHECK ( bucket_id = 'school_assets' );
 
 -- Allow authenticated users to update/delete
+DROP POLICY IF EXISTS "Authenticated Update Access" ON storage.objects;
 CREATE POLICY "Authenticated Update Access"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING ( bucket_id = 'school_assets' );
 
+DROP POLICY IF EXISTS "Authenticated Delete Access" ON storage.objects;
 CREATE POLICY "Authenticated Delete Access"
 ON storage.objects FOR DELETE
 TO authenticated

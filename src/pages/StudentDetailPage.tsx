@@ -41,7 +41,9 @@ export default function StudentDetailPage() {
   const { data: curriculumSubjects = [], isLoading: curriculumLoading } = useCurriculumSubjects(student?.classes?.curriculum_id || null);
   
   // For Edit Modal
-  const { data: classes = [] } = useClasses();
+  const { data: classesData } = useClasses();
+  const classes = Array.isArray(classesData?.data) ? classesData.data : 
+                  Array.isArray(classesData) ? classesData : [];
   const { data: branding } = useBranding();
 
   // ── Mutations ──
@@ -64,6 +66,67 @@ export default function StudentDetailPage() {
     <AppLayout>
       <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
         
+          {/* Ultra-Premium Hero Banner - Shown Immediately if possible or with skeleton */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
+            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-purple-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
+            
+            <div className="flex items-center gap-6 md:gap-8 relative z-10 text-right w-full lg:w-2/3">
+              <button 
+                onClick={() => navigate(currentUser?.role === 'parent' ? '/' : '/students')}
+                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl shrink-0 backdrop-blur-md"
+              >
+                 <ArrowRight className="w-5 h-5 md:w-7 md:h-7" />
+              </button>
+              
+              {student ? (
+                <>
+                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] bg-gradient-to-tr from-purple-500 to-indigo-500 text-white shadow-2xl shadow-indigo-500/20 flex items-center justify-center font-black text-2xl md:text-4xl group-hover:rotate-3 transition-transform duration-700 shrink-0 border border-white/20">
+                     {student?.name?.trim()[0]}
+                  </div>
+                  
+                  <div className="space-y-2 min-w-0">
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{student?.name}</h1>
+                    <div className="flex flex-wrap items-center gap-3">
+                       <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
+                          {student?.classes?.name || 'غير مسجل بفصل'}
+                       </Badge>
+                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
+                          انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
+                       </Badge>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-4 animate-pulse">
+                   <div className="w-16 h-16 md:w-20 md:h-20 bg-white/5 rounded-3xl" />
+                   <div className="space-y-2">
+                      <div className="h-8 w-48 bg-white/10 rounded-lg" />
+                      <div className="h-4 w-32 bg-white/5 rounded-lg" />
+                   </div>
+                </div>
+              )}
+            </div>
+            
+            {(currentUser?.role === 'admin' && student) && (
+              <div className="flex items-center gap-4 relative z-10 w-full lg:w-auto lg:justify-end mt-4 lg:mt-0">
+                <Button 
+                  onClick={() => setShowEdit(true)} 
+                  className="h-14 md:h-16 px-8 rounded-2xl md:rounded-[24px] bg-white text-slate-900 font-black text-xs md:text-sm hover:bg-slate-50 transition-all shadow-xl gap-3 flex-1 lg:flex-none"
+                >
+                  <Edit2 className="w-4 h-4 md:w-5 md:h-5 text-indigo-600" /> تعديل البيانات
+                </Button>
+                <Button 
+                  onClick={handleDelete} 
+                  disabled={deleteStudentMutation.isPending}
+                  className="h-14 md:h-16 w-14 md:w-16 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 rounded-2xl md:rounded-[24px] flex items-center justify-center transition-all shrink-0"
+                >
+                  {deleteStudentMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
+                </Button>
+              </div>
+            )}
+          </header>
+
         <QueryStateHandler
           loading={studentLoading}
           error={studentError}
@@ -71,56 +134,6 @@ export default function StudentDetailPage() {
           onRetry={refetchStudent}
           loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
         >
-          {/* Header Section */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-14 rounded-[40px] md:rounded-[56px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            
-            <div className="flex items-center gap-4 md:gap-6 relative z-10 text-right">
-              <button 
-                onClick={() => navigate(currentUser?.role === 'parent' ? '/' : '/students')}
-                className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-[22px] bg-white border border-slate-100 text-slate-300 hover:text-slate-900 flex items-center justify-center transition-all hover:scale-110 active:scale-95 shadow-sm shrink-0"
-              >
-                 <ArrowRight className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-              
-              <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-[32px] bg-slate-900 flex items-center justify-center text-white shadow-2xl relative group-hover:rotate-3 transition-transform duration-500 font-black text-xl md:text-3xl shrink-0">
-                 {student?.name?.trim()[0]}
-              </div>
-              
-              <div className="space-y-1 min-w-0">
-                <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 truncate">{student?.name}</h1>
-                <div className="flex flex-wrap items-center gap-2">
-                   <Badge className="bg-indigo-600 text-white border-none font-black text-[8px] md:text-[10px] uppercase px-3 py-1 rounded-full shadow-lg shadow-indigo-100">
-                      {student?.classes?.name || 'غير مسجل بفصل'}
-                   </Badge>
-                   <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full">
-                      <Clock className="w-3 h-3 text-slate-200" />
-                      انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
-                   </div>
-                </div>
-              </div>
-            </div>
-            
-            {currentUser?.role === 'admin' && (
-              <div className="flex items-center gap-3 relative z-10">
-                <Button 
-                  onClick={() => setShowEdit(true)} 
-                  variant="outline" 
-                  className="h-12 md:h-14 px-6 md:px-8 rounded-xl md:rounded-2xl border-slate-100 text-slate-900 font-black text-[10px] md:text-xs hover:bg-slate-50 transition-all gap-2 md:gap-3 shadow-xl shadow-slate-100 flex-1 lg:flex-none"
-                >
-                  <Edit2 className="w-4 h-4 text-indigo-600" /> تعديل البيانات
-                </Button>
-                <Button 
-                  onClick={handleDelete} 
-                  variant="ghost" 
-                  disabled={deleteStudentMutation.isPending}
-                  className="h-12 w-12 md:h-14 md:w-14 text-rose-500 hover:bg-rose-50 rounded-xl md:rounded-2xl flex items-center justify-center transition-all shrink-0"
-                >
-                  {deleteStudentMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
-                </Button>
-              </div>
-            )}
-          </header>
 
           {/* Navigation Tabs */}
           <div className="flex overflow-x-auto hide-scrollbar gap-3 md:gap-4 px-2 pb-2 -mx-2">
