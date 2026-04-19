@@ -104,11 +104,11 @@ export default defineConfig(({ mode }) => ({
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'supabase-vendor': ['@supabase/supabase-js'],
           'query-vendor': ['@tanstack/react-query', '@tanstack/react-query-persist-client'],
-          // Split UI vendor into smaller chunks
-          'ui-dialog': ['@radix-ui/react-dialog'],
-          'ui-toast': ['@radix-ui/react-toast'],
-          'ui-select': ['@radix-ui/react-select'],
-          'ui-others': [
+          // Combine all Radix UI components into single chunk to avoid circular dependencies
+          'ui-vendor': [
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-toast',
+            '@radix-ui/react-select',
             '@radix-ui/react-alert-dialog',
             '@radix-ui/react-avatar',
             '@radix-ui/react-checkbox',
@@ -122,7 +122,7 @@ export default defineConfig(({ mode }) => ({
         }
       }
     },
-    chunkSizeWarningLimit: 600, // Increase warning limit after optimization
+    chunkSizeWarningLimit: 1000, // Increase warning limit for combined UI chunk
   },
   resolve: {
     alias: {
