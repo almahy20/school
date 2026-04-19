@@ -37,7 +37,10 @@ export default function PwaManager() {
         } else if (data) {
           const school = data as any;
           name = school.name;
-          shortName = school.name.split(' ')[0];
+          // Use full school name as short_name (remove "مدرسة" or "مدرسه" if present)
+          let cleanName = school.name;
+          cleanName = cleanName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          shortName = cleanName || school.name;
           icon = school.logo_url || "/icons/icon-192.png";
           slug = school.slug;
           themeColor = "#1e293b";
@@ -68,7 +71,10 @@ export default function PwaManager() {
           } else if (data) {
             const school = data as any;
             name = school.name;
-            shortName = school.name.split(' ')[0];
+            // Use full school name as short_name (remove "مدرسة" or "مدرسه" if present)
+            let cleanName = school.name;
+            cleanName = cleanName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+            shortName = cleanName || school.name;
             icon = school.logo_url || "/icons/icon-192.png";
             slug = school.slug;
             themeColor = "#1e293b";
