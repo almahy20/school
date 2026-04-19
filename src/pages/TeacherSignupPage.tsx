@@ -40,6 +40,11 @@ export default function TeacherSignupPage() {
     if (err) {
       setError(err);
     } else {
+      // ✅ Store signup time to trigger PWA install prompt
+      const signupTime = Date.now().toString();
+      sessionStorage.setItem('user_signup_time', signupTime);
+      console.log('✅ Teacher signup - stored signup time:', signupTime);
+      
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة الانتظار لحين موافقة الإدارة...');
       setTimeout(() => navigate('/'), 3000);
     }

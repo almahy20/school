@@ -13,14 +13,23 @@ export default function PwaManager() {
     let icon = defaultIcon;
     let slug = "";
     let themeColor = "#1e293b";
+    let schoolId = user?.schoolId;
+
+    // For new users waiting approval, try to get school_id from user metadata
+    if (!schoolId && user?.email) {
+      const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+      if (supabaseUser?.user_metadata?.school_id) {
+        schoolId = supabaseUser.user_metadata.school_id;
+      }
+    }
 
     // 1. Determine school context
-    if (user?.schoolId) {
+    if (schoolId) {
       try {
         const { data, error } = await supabase
           .from('schools')
           .select('name, slug, logo_url')
-          .eq('id', user.schoolId)
+          .eq('id', schoolId)
           .maybeSingle();
         
         if (error) {
@@ -157,7 +166,7 @@ export default function PwaManager() {
     return () => {
       unsubscribe();
     };
-  }, [user?.schoolId, updateManifest]);
+  }, [user?.schoolId, user?.email, updateManifest]);
 
   return null;
 }

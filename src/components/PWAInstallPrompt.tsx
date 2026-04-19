@@ -41,17 +41,57 @@ export default function PWAInstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredPrompt = e;
+      console.log('✅ beforeinstallprompt event captured');
       
-      // Show the modal immediately when prompt is available
-      setIsVisible(true);
+      // Only auto-show for new users who just signed up
+      const signupTime = sessionStorage.getItem('user_signup_time');
+      if (signupTime) {
+        const timeSinceSignup = Date.now() - parseInt(signupTime);
+        // If user signed up in the last 30 seconds, show the prompt
+        if (timeSinceSignup < 30000) {
+          console.log('🚀 Showing PWA prompt (from event listener)');
+          setIsVisible(true);
+        }
+      }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Check if prompt is already available
+    // Check if prompt is already available (captured earlier)
     if ((window as any).deferredPrompt) {
-      setDeferredPrompt((window as any).deferredPrompt);
-      setIsVisible(true);
+      console.log('✅ deferredPrompt already available');
+      // Only show for new users who just signed up
+      const signupTime = sessionStorage.getItem('user_signup_time');
+      if (signupTime) {
+        const timeSinceSignup = Date.now() - parseInt(signupTime);
+        // If user signed up in the last 30 seconds, show the prompt
+        if (timeSinceSignup < 30000) {
+          console.log('🚀 Showing PWA prompt (from existing deferredPrompt)');
+          setDeferredPrompt((window as any).deferredPrompt);
+          setIsVisible(true);
+        }
+      }
+    }
+
+    // FORCE SHOW: For new users who just signed up, always show the prompt
+    // even if beforeinstallprompt event hasn't fired yet
+    const signupTime = sessionStorage.getItem('user_signup_time');
+    if (signupTime) {
+      const timeSinceSignup = Date.now() - parseInt(signupTime);
+      if (timeSinceSignup < 30000) {
+        console.log('🚀 FORCE SHOWING PWA prompt for new user');
+        // Wait a bit for user to be fully authenticated
+        setTimeout(() => {
+          // If we have the deferred prompt, use it
+          if ((window as any).deferredPrompt) {
+            console.log('✅ Using existing deferredPrompt');
+            setDeferredPrompt((window as any).deferredPrompt);
+          } else {
+            console.log('⚠️ No deferredPrompt available yet, showing modal anyway');
+          }
+          setIsVisible(true);
+        }, 500);
+      }
     }
 
     // Listen for successful installation
@@ -62,6 +102,9 @@ export default function PWAInstallPrompt() {
       setIsStandalone(true);
       setIsVisible(false);
       setIsInstalling(false);
+      
+      // Clean up signup time
+      sessionStorage.removeItem('user_signup_time');
       
       // Reload to open in PWA mode
       setTimeout(() => {
@@ -75,7 +118,46 @@ export default function PWAInstallPrompt() {
   }, [user?.id]);
 
   const handleInstall = async () => {
-    if (!deferredPrompt) {
+    console.log('🔵 handleInstall called');
+    console.log('deferredPrompt exists:', !!deferredPrompt);
+    console.log('window.deferredPrompt exists:', !!(window as any).deferredPrompt);
+    
+    // Try MULTIPLE times to get deferredPrompt
+    let promptToUse = deferredPrompt;
+    
+    // Attempt 1: From state
+    if (!promptToUse) {
+      console.log('⚠️ No deferredPrompt in state, checking window...');
+      
+      // Attempt 2: From window
+      if ((window as any).deferredPrompt) {
+        console.log('✅ Getting deferredPrompt from window');
+        promptToUse = (window as any).deferredPrompt;
+        setDeferredPrompt(promptToUse);
+      } else {
+        console.log('❌ No deferredPrompt in window either');
+        
+        // Attempt 3: Wait a bit and check again (sometimes it's delayed)
+        console.log('⏳ Waiting 1 second to check again...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        if ((window as any).deferredPrompt) {
+          console.log('✅ deferredPrompt appeared after waiting!');
+          promptToUse = (window as any).deferredPrompt;
+          setDeferredPrompt(promptToUse);
+        }
+      }
+    }
+    
+    if (!promptToUse) {
+      console.log('❌ No deferredPrompt available after all attempts - showing manual instructions');
+      console.log('This means beforeinstallprompt event never fired');
+      console.log('Possible reasons:');
+      console.log('  1. First visit to site (need 2 visits)');
+      console.log('  2. Not on HTTPS (or localhost)');
+      console.log('  3. Service Worker not activated yet');
+      console.log('  4. Browser does not support PWA (Firefox, Safari)');
+      
       // Manual instructions if native prompt not available
       alert(
         'لتثبيت التطبيق:\n\n' +
@@ -91,18 +173,22 @@ export default function PWAInstallPrompt() {
     }
 
     try {
+      console.log('🚀 Triggering native install prompt');
       setIsInstalling(true);
       
       // Trigger native install prompt
-      deferredPrompt.prompt();
+      promptToUse.prompt();
       
-      const { outcome } = await deferredPrompt.userChoice;
+      const { outcome } = await promptToUse.userChoice;
+      
+      console.log('User choice outcome:', outcome);
       
       if (outcome === 'accepted') {
         // User accepted - mark as installed
         const storageKey = `pwa_install_${user?.id}`;
         localStorage.setItem(storageKey, 'installed');
         setDeferredPrompt(null);
+        (window as any).deferredPrompt = null;
         setIsInstalling(false);
         // The appinstalled event will handle the reload
       } else {
@@ -126,6 +212,8 @@ export default function PWAInstallPrompt() {
 
   // Don't show if not visible, already in PWA mode, or no user
   if (!isVisible || isStandalone || !user) return null;
+
+  console.log('🎉 PWAInstallPrompt is rendering!');
 
   return (
     <>

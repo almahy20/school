@@ -27,7 +27,13 @@ export default function SignupPage() {
     const err = await signup(phone.trim(), password, fullName.trim());
     setLoading(false);
     if (err) setError(err);
-    else navigate('/onboarding');
+    else {
+      // ✅ Store signup time to trigger PWA install prompt
+      const signupTime = Date.now().toString();
+      sessionStorage.setItem('user_signup_time', signupTime);
+      console.log('✅ General signup - stored signup time:', signupTime);
+      navigate('/onboarding');
+    }
   };
 
   return (

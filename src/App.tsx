@@ -51,6 +51,7 @@ const StudentCurriculumPage = lazy(() => import("./pages/StudentDetailPages").th
 const StudentDataPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentDataPage })));
 import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
+import PwaManager from './components/PwaManager';
 import { queryClient } from "./lib/queryClient";
 
 // القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
@@ -172,6 +173,7 @@ export default function App() {
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <GlobalErrorBoundary>
               <AppRoutes />
+              <PwaManager />
               <PWAInstallPrompt />
             </GlobalErrorBoundary>
             <Toaster />

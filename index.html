@@ -43,29 +43,18 @@
       (function() {
         const cleanup = async () => {
           try {
-            // 1. Unregister all Service Workers
-            if ('serviceWorker' in navigator) {
-              const regs = await navigator.serviceWorker.getRegistrations();
-              for (const reg of regs) await reg.unregister();
-            }
-            // 2. Delete ALL IndexedDB databases
-            if (window.indexedDB) {
-              // Try modern API
-              if (window.indexedDB.databases) {
-                const dbs = await window.indexedDB.databases();
-                for (const db of dbs) if (db.name) window.indexedDB.deleteDatabase(db.name);
-              }
-              // Force delete known names
-              ['school-react-query-db', 'school-query-db-v5', 'school-offline-queue', 'SCHOOL-react-query-db'].forEach(name => {
-                window.indexedDB.deleteDatabase(name);
-              });
-            }
-            // 3. Clear all Cache storage
+            // 1. DON'T unregister Service Workers - they're needed for PWA!
+            // Only delete old/unused caches
             if ('caches' in window) {
               const names = await caches.keys();
-              for (const name of names) await caches.delete(name);
+              for (const name of names) {
+                // Keep the current PWA cache, delete old ones
+                if (name !== 'school-v1' && !name.startsWith('school-v')) {
+                  await caches.delete(name);
+                }
+              }
             }
-            console.log('✨ Environment Sanitized: Live-Only Mode Active');
+            console.log('✨ Environment Ready: PWA Enabled');
           } catch (e) { console.error('Cleanup failed', e); }
         };
         cleanup();

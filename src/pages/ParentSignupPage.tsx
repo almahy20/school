@@ -57,8 +57,10 @@ export default function ParentSignupPage() {
     if (err) {
       setError(err);
     } else {
-      // ✅ Store signup time to trigger PWA onboarding
-      sessionStorage.setItem('user_signup_time', Date.now().toString());
+      // ✅ Store signup time to trigger PWA install prompt
+      const signupTime = Date.now().toString();
+      sessionStorage.setItem('user_signup_time', signupTime);
+      console.log('✅ Parent signup - stored signup time:', signupTime);
       
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة الانتظار...');
       setTimeout(() => navigate('/waiting-approval'), 2000);
