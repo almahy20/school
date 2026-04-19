@@ -7,8 +7,9 @@ import { logger } from "./utils/logger";
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 
 if ("serviceWorker" in navigator) {
-  // Only register PWA service worker in production to avoid HMR interference in dev
-  if (import.meta.env.PROD && window.location.hostname !== 'localhost') {
+  // تسجيل Service Worker على localhost و production
+  // هذا ضروري عشان PWA install prompt يشتغل
+  if (!isSWDisabled) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("/sw.js").then(
         (registration) => {

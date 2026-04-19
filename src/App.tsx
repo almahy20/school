@@ -50,6 +50,7 @@ const StudentFinancialPage = lazy(() => import("./pages/StudentDetailPages").the
 const StudentCurriculumPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentCurriculumPage })));
 const StudentDataPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentDataPage })));
 import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
+import PWAInstallPrompt from './components/PWAInstallPrompt';
 import { queryClient } from "./lib/queryClient";
 
 // القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
@@ -93,10 +94,10 @@ function AppRoutes() {
   // Show loading screen while auth is being checked
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0f1e] flex items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-500 font-bold">جاري التحميل...</p>
+          <div className="w-16 h-16 border-4 border-white/10 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white/60 font-bold">جاري التحميل...</p>
         </div>
       </div>
     );
@@ -115,7 +116,18 @@ function AppRoutes() {
           <Route path="/dev-secret-portal" element={<DeveloperSecretLogin />} />
 
           {/* ── Root: Landing for guests, Dashboard for logged in ── */}
-          <Route path="/" element={user ? <ProtectedRoute><DashboardPage /></ProtectedRoute> : <LandingPage />} />
+          <Route 
+            path="/" 
+            element={
+              user ? (
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              ) : (
+                <Navigate to="/home" replace />
+              )
+            } 
+          />
 
           {/* ── Protected Routes ── */}
           <Route path="/waiting-approval" element={<ProtectedRoute><WaitingApprovalPage /></ProtectedRoute>} />
@@ -160,6 +172,7 @@ export default function App() {
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <GlobalErrorBoundary>
               <AppRoutes />
+              <PWAInstallPrompt />
             </GlobalErrorBoundary>
             <Toaster />
             <RealtimeNotificationsManager />

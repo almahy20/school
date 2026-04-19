@@ -314,21 +314,21 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
-        <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">إضافة طالب جديد</h2>
-        <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-3 sm:p-4 text-right animate-in fade-in" onClick={onClose}>
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 sm:p-8 rounded-2xl sm:rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-indigo-50/50 rounded-bl-[80px] sm:rounded-bl-[100px]" />
+        <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-6 sm:mb-8 tracking-tight relative z-10">إضافة طالب جديد</h2>
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 relative z-10">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الطالب بالكامل *</label>
             <Input value={name} onChange={e => setName(e.target.value)} required
-              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: أحمد محمد علي" />
+              className="h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner transition-all" placeholder="مثال: أحمد محمد علي" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
               <select value={classId} onChange={e => setClassId(e.target.value)}
-                className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
+                className="w-full h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                 <option value="">بدون فصل</option>
                 {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
               </select>
@@ -336,17 +336,17 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>
               <Input value={parentPhone} onChange={e => setParentPhone(e.target.value)}
-                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm shadow-inner"
+                className="h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm shadow-inner"
                 placeholder="05xxxxxxxx" dir="ltr" />
             </div>
           </div>
-          <div className="flex gap-4 pt-6">
+          <div className="flex gap-3 sm:gap-4 pt-4 sm:pt-6">
             <Button type="submit" disabled={addMutation.isPending}
-              className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
+              className="flex-[2] h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
               {addMutation.isPending ? 'جاري الحفظ...' : 'تأكيد الحفظ'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost"
-              className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+              className="flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
           </div>
         </form>
       </div>
@@ -385,22 +385,22 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
     };
   
     return (
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-10 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100px]" />
-          <h2 className="text-2xl font-black text-slate-900 mb-10 tracking-tight relative z-10">تعديل بيانات الطالب</h2>
-          <form onSubmit={handleSave} className="space-y-6 relative z-10">
+      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-3 sm:p-4 text-right animate-in fade-in" onClick={onClose}>
+        <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 sm:p-8 rounded-2xl sm:rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="absolute top-0 right-0 w-24 h-24 sm:w-32 sm:h-32 bg-indigo-50/50 rounded-bl-[80px] sm:rounded-bl-[100px]" />
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 mb-6 sm:mb-8 tracking-tight relative z-10">تعديل بيانات الطالب</h2>
+          <form onSubmit={handleSave} className="space-y-4 sm:space-y-6 relative z-10">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الطالب بالكامل *</label>
               <Input value={name} onChange={e => setName(e.target.value)} required
-                className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner" />
+                className="h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-primary/10 font-bold text-sm shadow-inner" />
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
                 <select value={classId} onChange={e => setClassId(e.target.value)}
-                  className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
+                  className="w-full h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                   <option value="">بدون فصل</option>
                   {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
                 </select>
@@ -408,18 +408,18 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>
                 <Input value={parentPhone} onChange={e => setParentPhone(e.target.value)}
-                  className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm shadow-inner"
+                  className="h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm shadow-inner"
                   placeholder="05xxxxxxxx" dir="ltr" />
               </div>
             </div>
 
-            <div className="flex gap-4 pt-6">
+            <div className="flex gap-3 sm:gap-4 pt-4 sm:pt-6">
               <Button type="submit" disabled={updateMutation.isPending}
-                className="flex-[2] h-14 rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
+                className="flex-[2] h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-slate-900 text-white font-black shadow-xl hover:bg-primary transition-all text-sm">
                 {updateMutation.isPending ? 'جاري الحفظ...' : 'حفظ التغييرات'}
               </Button>
               <Button type="button" onClick={onClose} variant="ghost"
-                className="flex-1 h-14 rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
+                className="flex-1 h-12 sm:h-14 rounded-xl sm:rounded-2xl bg-slate-50 text-slate-500 font-black text-sm">إلغاء</Button>
             </div>
           </form>
         </div>
