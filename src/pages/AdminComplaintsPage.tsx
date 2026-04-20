@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useComplaints, useUpsertComplaint } from '@/hooks/queries';
+import { useComplaints, useUpsertComplaint, useMarkComplaintsAsRead } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import DataPagination from '@/components/ui/DataPagination';
 import PageHeader from '@/components/layout/PageHeader';
@@ -20,6 +20,12 @@ const PAGE_SIZE = 10;
 
 export default function AdminComplaintsPage() {
   const { toast } = useToast();
+  const { mutate: markAsRead } = useMarkComplaintsAsRead();
+
+  useEffect(() => {
+    markAsRead();
+  }, [markAsRead]);
+
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');

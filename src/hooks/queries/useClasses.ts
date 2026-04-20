@@ -60,7 +60,10 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'Ø
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
-    retry: 2,
+    staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
+    refetchOnMount: true, // Always check for fresh data when a component mounts
+    retry: 1,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
@@ -81,7 +84,8 @@ export function useAllClasses() {
       return data || [];
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 }
 
@@ -96,14 +100,15 @@ export function useClass(id: string | undefined | null) {
       const { data, error } = await supabase
         .from('classes')
         .select('*')
-        .eq('id', id);
+        .eq('id', id)
+        .maybeSingle();
       
       if (error) throw error;
-      return (data && data.length > 0) ? data[0] as Class : null;
+      return data;
     },
     enabled: !!id,
-    staleTime: 30 * 1000,
-    refetchInterval: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }
 

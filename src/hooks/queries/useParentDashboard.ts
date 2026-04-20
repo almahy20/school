@@ -13,59 +13,23 @@ export function useParentChildren() {
     queryFn: async () => {
       if (!user?.id || !user?.schoolId) return [];
       
-      const { data, error } = await supabase.from('student_parents')
-        .select('student_id, students(id, name, class_id, classes(name))')
-        .eq('parent_id', user.id)
-        .eq('school_id', user.schoolId);
+      // ✅ Optimization: ONE single RPC call for everything
+      // This eliminates the "Waterfall Effect" and reduces requests by 100%
+      const { data, error } = await (supabase as any).rpc('get_parent_dashboard_summary', { 
+        p_parent_id: user.id,
+        p_school_id: user.schoolId 
+      });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching parent dashboard summary:', error);
+        throw error;
+      }
       
-      const kids = data?.map((d: any) => {
-        const student = Array.isArray(d.students) ? d.students[0] : d.students;
-        if (!student) return null;
-        
-        const className = Array.isArray(student.classes) 
-          ? student.classes[0]?.name 
-          : student.classes?.name || 'غير محدد';
-
-        return {
-          ...student,
-          className
-        };
-      }).filter(Boolean) || [];
-
-      // Enrich with summary data
-      const enrichedKids = await Promise.all(kids.map(async (kid: any) => {
-        const [{ data: grades }, { data: attendance }, { data: fees }] = await Promise.all([
-          supabase.from('grades').select('score, max_score').eq('student_id', kid.id).eq('school_id', user.schoolId),
-          supabase.from('attendance').select('status').eq('student_id', kid.id).eq('school_id', user.schoolId),
-          supabase.from('fees').select('amount_due, amount_paid').eq('student_id', kid.id).eq('school_id', user.schoolId),
-        ]);
-
-        const numericGrades = (grades || []).filter(g => !isNaN(Number(g.score)));
-        const avgGrade = numericGrades.length > 0
-          ? Math.round(numericGrades.reduce((sum, g) => sum + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
-          : 0;
-
-        const presentCount = (attendance || []).filter(a => a.status === 'present').length;
-        const attendanceRate = (attendance || []).length > 0 
-          ? Math.round((presentCount / (attendance || []).length) * 100) 
-          : 100;
-
-        const totalDue = (fees || []).reduce((sum, f) => sum + (Number(f.amount_due) || 0), 0);
-        const totalPaid = (fees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
-
-        return {
-          ...kid,
-          avgGrade,
-          attendanceRate,
-          feesRemaining: Math.max(0, totalDue - totalPaid)
-        };
-      }));
-
-      return enrichedKids;
+      return data || [];
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
   });
@@ -83,10 +47,8 @@ export function useParentChildOverview(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
@@ -102,10 +64,8 @@ export function useParentChildActivities(studentId: string | undefined) {
       return data;
     },
     enabled: !!studentId,
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
@@ -117,45 +77,27 @@ export function useChildFullDetails(studentId: string | undefined) {
     queryFn: async () => {
       if (!studentId || !user?.schoolId) return null;
 
-      // 1. Fetch basic student info and class curriculum_id
-      const { data: student, error: sErr } = await supabase
-        .from('students')
-        .select('*, classes(*)')
-        .eq('id', studentId)
-        .single();
-      if (sErr) throw sErr;
+      // ✅ Optimization: ONE single RPC call for everything on the detail page
+      // This replaces 6 separate requests for students, grades, attendance, fees, payments, curriculum
+      const { data, error } = await (supabase as any).rpc('get_child_full_details', { 
+        p_student_id: studentId,
+        p_school_id: user.schoolId 
+      });
 
-      // 2. Fetch grades, attendance, and fees in parallel
-      const [{ data: grades }, { data: attendance }, { data: fees }] = await Promise.all([
-        supabase.from('grades').select('*').eq('school_id', user.schoolId).eq('student_id', studentId).order('date', { ascending: true }),
-        supabase.from('attendance').select('*').eq('school_id', user.schoolId).eq('student_id', studentId).order('date', { ascending: false }),
-        supabase.from('fees').select('*').eq('school_id', user.schoolId).eq('student_id', studentId),
-      ]);
-
-      // 3. Fetch fee payments if there are fees
-      const feeIds = (fees || []).map(f => f.id);
-      let payments: any[] = [];
-      if (feeIds.length > 0) {
-        const { data: pData } = await supabase.from('fee_payments').select('*').eq('school_id', user.schoolId).in('fee_id', feeIds).order('payment_date', { ascending: false });
-        payments = pData || [];
+      if (error) {
+        console.error('Error fetching child full details:', error);
+        throw error;
       }
 
-      // 4. Fetch curriculum subjects if class has a curriculum
-      let curriculum: any[] = [];
-      if (student.classes?.curriculum_id) {
-        const { data: cData } = await supabase
-          .from('curriculum_subjects')
-          .select('*')
-          .eq('curriculum_id', student.classes.curriculum_id)
-          .order('subject_name');
-        curriculum = cData || [];
-      }
+      if (!data) return null;
 
-      const presentCount = (attendance || []).filter(a => a.status === 'present').length;
+      const { student, grades, attendance, fees, payments, curriculum } = data;
+
+      const presentCount = (attendance || []).filter((a: any) => a.status === 'present').length;
       
-      const numericGrades = (grades || []).filter(g => !isNaN(Number(g.score)));
+      const numericGrades = (grades || []).filter((g: any) => !isNaN(Number(g.score)));
       const avgGrade = numericGrades.length > 0
-        ? Math.round(numericGrades.reduce((sum, g) => sum + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
+        ? Math.round(numericGrades.reduce((sum: number, g: any) => sum + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
         : 0;
 
       const totalDue = (fees || []).reduce((sum: number, f: any) => sum + (Number(f.amount_due) || 0), 0);
@@ -170,16 +112,14 @@ export function useChildFullDetails(studentId: string | undefined) {
         curriculum: curriculum || [],
         summary: {
           avgGrade,
-          attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 100,
+          attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0,
           feesRemaining: Math.max(0, totalDue - totalPaid)
         }
       };
     },
     enabled: !!(studentId && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 

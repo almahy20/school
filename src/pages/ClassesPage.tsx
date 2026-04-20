@@ -57,46 +57,42 @@ export default function ClassesPage() {
     isRefetching 
   } = useClasses(page, PAGE_SIZE, debouncedSearch, filterLevel);
 
-  // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي فقط)
-  // يفضل مستقبلاً استخدام joins من الخادم مباشرة لكل ما هو ممكن
+  // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي)
   const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
   const teachers = useMemo(() => teachersData?.data || [], [teachersData]);
   
-  // For student count, we need ALL students in the school (not just teacher's classes)
-  // So we fetch directly from Supabase instead of using useStudents hook
+  // For student count, we fetch only the necessary columns to be fast
   const [students, setStudents] = useState<any[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(true);
   
   useEffect(() => {
-    const fetchAllStudents = async () => {
+    const fetchStudentCounts = async () => {
       if (!user?.schoolId) {
         setStudents([]);
         setStudentsLoading(false);
         return;
       }
       
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('students')
-        .select('id, name, class_id')
+        .select('id, class_id')
         .eq('school_id', user.schoolId);
       
-      if (data) {
-        setStudents(data);
-      }
+      if (data) setStudents(data);
       setStudentsLoading(false);
     };
     
-    fetchAllStudents();
+    fetchStudentCounts();
   }, [user?.schoolId]);
 
   const addMutation = useAddClass();
   const deleteMutation = useDeleteClass();
 
-  // Enrich classes with teacher name and student count
+  // Enrich classes manually (since join failed due to missing DB foreign keys)
   const classes = useMemo(() => {
     return (classesData?.data || []).map(c => ({
       ...c,
-      teacher_name: (c as any).profiles?.full_name || teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
+      teacher_name: teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
       student_count: students.filter(s => s.class_id === c.id).length
     }));
   }, [classesData, teachers, students]);

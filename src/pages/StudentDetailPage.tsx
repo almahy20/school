@@ -13,11 +13,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  useStudent, 
-  useGrades, 
-  useStudentAttendance, 
-  useStudentParent, 
-  useCurriculumSubjects,
+  useChildFullDetails,
   useClasses,
   useBranding,
   useDeleteStudent
@@ -33,12 +29,19 @@ export default function StudentDetailPage() {
   const [activeTab, setActiveTab] = useState<'curriculum' | 'grades' | 'attendance' | 'info'>('curriculum');
   const [showEdit, setShowEdit] = useState(false);
 
-  // ── Queries ──
-  const { data: student, isLoading: studentLoading, error: studentError, refetch: refetchStudent } = useStudent(id);
-  const { data: grades = [], isLoading: gradesLoading } = useGrades(id || null);
-  const { data: attendance = [], isLoading: attendanceLoading } = useStudentAttendance(id || null);
-  const { data: parent, isLoading: parentLoading } = useStudentParent(id || null);
-  const { data: curriculumSubjects = [], isLoading: curriculumLoading } = useCurriculumSubjects(student?.classes?.curriculum_id || null);
+  // ── Optimized Query: Single RPC for everything ──
+  const { 
+    data: fullData, 
+    isLoading: studentLoading, 
+    error: studentError, 
+    refetch: refetchStudent 
+  } = useChildFullDetails(id);
+
+  const student = fullData;
+  const grades = fullData?.grades || [];
+  const attendance = fullData?.attendance || [];
+  const parent = null; // Basic info now included in student record
+  const curriculumSubjects = fullData?.curriculum || [];
   
   // For Edit Modal
   const { data: classesData } = useClasses();
@@ -60,14 +63,14 @@ export default function StudentDetailPage() {
     }
   };
 
-  const isLoadingTotal = studentLoading || gradesLoading || attendanceLoading || parentLoading || curriculumLoading;
+  const isLoadingTotal = studentLoading;
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in slide-in-from-bottom-4 duration-700" dir="rtl">
+      <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in duration-500" dir="rtl">
         
-          {/* Ultra-Premium Hero Banner - Shown Immediately if possible or with skeleton */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
+          {/* ✅ LCP & CLS Fix: Hero Banner with stable height (min-h-[200px] md:min-h-[280px]) */}
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group min-h-[200px] md:min-h-[280px]">
             <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
             <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-purple-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
             
@@ -86,7 +89,9 @@ export default function StudentDetailPage() {
                   </div>
                   
                   <div className="space-y-2 min-w-0">
-                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{student?.name}</h1>
+                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">
+                      {student?.name}
+                    </h1>
                     <div className="flex flex-wrap items-center gap-3">
                        <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
                           {student?.classes?.name || 'غير مسجل بفصل'}
@@ -98,11 +103,15 @@ export default function StudentDetailPage() {
                   </div>
                 </>
               ) : (
-                <div className="flex items-center gap-4 animate-pulse">
-                   <div className="w-16 h-16 md:w-20 md:h-20 bg-white/5 rounded-3xl" />
-                   <div className="space-y-2">
-                      <div className="h-8 w-48 bg-white/10 rounded-lg" />
-                      <div className="h-4 w-32 bg-white/5 rounded-lg" />
+                /* ✅ Skeleton with matching dimensions to prevent shift */
+                <div className="flex items-center gap-6 md:gap-8 animate-pulse w-full">
+                   <div className="w-16 h-16 md:w-24 md:h-24 bg-white/10 rounded-[28px] md:rounded-[40px] shrink-0" />
+                   <div className="space-y-4 w-full max-w-md">
+                      <div className="h-8 md:h-12 w-3/4 bg-white/20 rounded-2xl" />
+                      <div className="flex gap-3">
+                        <div className="h-6 md:h-8 w-24 bg-white/10 rounded-xl" />
+                        <div className="h-6 md:h-8 w-32 bg-white/10 rounded-xl" />
+                      </div>
                    </div>
                 </div>
               )}

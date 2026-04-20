@@ -7,6 +7,7 @@ import { playNotificationSound, sendLocalNotification } from '@/utils/notificati
 import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/utils/logger';
+import { useNavigate } from 'react-router-dom';
 
 const getTypeConfig = (type: string) => {
   switch (type) {
@@ -27,6 +28,7 @@ const getTypeConfig = (type: string) => {
 export default function RealtimeNotificationsManager() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const handleNewNotification = useCallback((payload: any) => {
     const newNotification = payload.new;
@@ -46,7 +48,7 @@ export default function RealtimeNotificationsManager() {
       duration: 10000,
       action: {
         label: 'عرض التنبيهات',
-        onClick: () => { window.location.href = '/notifications'; }
+        onClick: () => { navigate('/notifications'); }
       }
     });
 
@@ -55,23 +57,40 @@ export default function RealtimeNotificationsManager() {
 
     // 4. Cache Invalidation
     if (user?.id) {
+      // Invalidate both lists and unread counts
       queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user.id] });
     }
-    queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
-  }, [user?.id, queryClient]);
+    
+    // ✅ Optimization: Only invalidate admin stats if user is an admin
+    if (user?.role === 'admin') {
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    }
+  }, [user?.id, user?.role, queryClient, navigate]);
 
   useEffect(() => {
     if (!user?.id) return;
 
-    // 1. Channel for personal notifications
-    const notificationsChannel = supabase.channel('realtime-notifications')
+    // 1. Channel for personal notifications (Handle INSERT for toast, and all changes for sync)
+    const notificationsChannel = supabase.channel(`notifications-${user.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${user.id}`
       }, handleNewNotification)
+      .on('postgres_changes', {
+        event: '*', // Listen for updates (read status) and deletes too
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        // Just invalidate for non-INSERT events to keep UI in sync
+        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user.id] });
+      })
       .subscribe();
 
     // 2. Channel for global school branding updates

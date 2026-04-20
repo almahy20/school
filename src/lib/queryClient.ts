@@ -1,101 +1,84 @@
 import { QueryClient, QueryCache, MutationCache, focusManager, onlineManager } from "@tanstack/react-query";
-
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { del, get, set } from 'idb-keyval';
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/utils/logger";
 
 // إعداد مستمعات أحداث النافذة (Visibility & Focus) لدعم التحديث الفوري على الأجهزة المحمولة والويب
 if (typeof window !== 'undefined') {
-  // Setup online manager to use browser's navigator.onLine
   onlineManager.setEventListener((setOnline) => {
     const onlineHandler = () => setOnline(true);
     const offlineHandler = () => setOnline(false);
-    
     window.addEventListener('online', onlineHandler);
     window.addEventListener('offline', offlineHandler);
-    
     return () => {
       window.removeEventListener('online', onlineHandler);
       window.removeEventListener('offline', offlineHandler);
     };
   });
-
-  // Let React Query handle its own visibility and focus mapping natively
 }
 
-
-
 export const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onError: (error: any, query) => {
-      // Suppress 403/404 errors (expected during development)
-      const isForbidden = error?.status === 403 || error?.message?.includes('403');
-      const isNotFound = error?.status === 404 || error?.message?.includes('404');
-      
-      if (isForbidden || isNotFound) {
-        return; // Silently ignore
-      }
-      
-      // Only show toast for actual data fetching queries that have failed multiple times
-      if (query.state.fetchStatus === 'fetching' && query.state.status === 'error') {
-        logger.error(`[Global Query Error] ${query.queryKey}:`, error);
-        
-        // Don't spam toasts for network issues (HealthMonitor handles those)
-        if (window.navigator.onLine) {
-          toast.error("فشل تحديث البيانات", {
-            description: "حدث خطأ أثناء جلب أحدث البيانات. سنحاول مرة أخرى تلقائياً.",
-            id: `query-error-${JSON.stringify(query.queryKey)}`, // Prevent duplicates
-          });
-        }
-      }
-    },
-  }),
-  mutationCache: new MutationCache({
-    onError: (error: any, _variables, _context, mutation) => {
-      // Suppress 403/404 errors in development (handled by RLS)
-      const isForbidden = error?.status === 403 || error?.message?.includes('403');
-      const isNotFound = error?.status === 404 || error?.message?.includes('404');
-      
-      if (isForbidden || isNotFound) {
-        // Silently ignore - these are expected during development
-        return;
-      }
-      
-      logger.error(`[Global Mutation Error]:`, error);
-      
-      // Don't show error toast if we're offline - mutation will retry when back online
-      if (!window.navigator.onLine) {
-        logger.warn('[Mutation] Offline - mutation paused, will retry when online');
-        return;
-      }
-      
-      toast.error("فشل تنفيذ العملية", {
-        description: error.message || "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
-      });
-    },
-    onSuccess: (data: any, _variables, _context, mutation) => {
-      // Log successful mutations for debugging
-      logger.log('[Mutation] Successfully executed:', mutation.options.mutationKey);
-    },
-  }),
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5,             // 5 دقائق - تقليل إعادة الجلب
-      gcTime: 1000 * 60 * 30,               // 30 دقيقة
-      refetchOnWindowFocus: false,          // معطل - نعتمد على Realtime Sync
-      refetchOnMount: false,                // معطل - البيانات من الكاش كافية حتى تنتهي صلاحيتها
-      refetchOnReconnect: true,             // تحديث عند عودة الإنترنت
-      retry: 2,                             // محاولتين فقط عند الفشل
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      networkMode: 'always',                // السماح ببدء الطلبات بمجرد العودة للاتصال
-      // Request deduplication - prevent duplicate requests within 1 second window
-      maxPages: 1,                          // Prevent pagination issues
-      structuralSharing: true,              // Enable structural sharing to reduce re-renders
+      // ✅ Optimization: "Fast Start, Fresh Data" Pattern
+      // We set staleTime to a low value (30s) so that the app REFRESHS data frequently,
+      // but we keep gcTime high so that IndexedDB can show "old" data while loading.
+      staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+      gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
+      refetchOnWindowFocus: false,
+      refetchOnMount: true, // Always check for fresh data when a component mounts
+      retry: 1,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },
     mutations: {
-      retry: 1,
-      networkMode: 'always',
-    },
+      onSuccess: () => {
+        // Clear specific related caches or all if needed
+        queryClient.invalidateQueries({ refetchType: 'all' });
+      },
+    }
   },
+  queryCache: new QueryCache({
+    onError: (error) => logger.error('Global Query Error:', error),
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => logger.error('Global Mutation Error:', error),
+  }),
 });
+
+// ✅ Optimization: IndexedDB Query Persistence with Versioning
+if (typeof window !== 'undefined') {
+  // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
+  const CACHE_VERSION = 'v1.1'; 
+
+  const idbPersister = {
+    persistClient: async (client: any) => {
+      await set('SCHOOL_APP_CACHE', client);
+    },
+    restoreClient: async () => {
+      return await get('SCHOOL_APP_CACHE');
+    },
+    removeClient: async () => {
+      await del('SCHOOL_APP_CACHE');
+    },
+  };
+
+  persistQueryClient({
+    queryClient,
+    persister: idbPersister,
+    maxAge: 12 * 60 * 60 * 1000, // 12 hours
+    buster: CACHE_VERSION, // ✅ Forces cache clear when version changes
+    shouldPersistQuery: (query) => {
+      // Don't persist errors or temporary states
+      if (query.state.status === 'error') return false;
+      
+      // ✅ Don't persist queries that are marked as 'no-persist' in their meta
+      if (query.meta?.persist === false) return false;
+
+      return true;
+    },
+  });
+}
 

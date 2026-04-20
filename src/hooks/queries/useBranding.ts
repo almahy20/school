@@ -31,15 +31,41 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 export function useBranding() {
   const { user } = useAuth();
   const queryKey = useMemo(() => ['school-branding', user?.schoolId], [user?.schoolId]);
+  const queryClient = useQueryClient();
+
+  // ✅ Optimization: Load branding from localStorage immediately if available
+  // This prevents the "flicker" where the logo disappears and comes back on refresh
+  useEffect(() => {
+    if (user?.schoolId) {
+      const cached = localStorage.getItem(`branding_${user.schoolId}`);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          const existing = queryClient.getQueryData(queryKey);
+          if (!existing) {
+            queryClient.setQueryData(queryKey, parsed);
+          }
+        } catch (e) {
+          console.error('Failed to parse cached branding');
+        }
+      }
+    }
+  }, [user?.schoolId, queryKey, queryClient]);
 
   return useQuery({
     queryKey,
-    queryFn: () => fetchBranding(user?.schoolId || null),
+    queryFn: async () => {
+      const data = await fetchBranding(user?.schoolId || null);
+      if (data && user?.schoolId) {
+        localStorage.setItem(`branding_${user.schoolId}`, JSON.stringify(data));
+      }
+      return data;
+    },
     enabled: !!user?.schoolId,
     placeholderData: (previousData: any) => previousData,
     retry: 1,
     retryDelay: 1000,
-    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
+    staleTime: Infinity, 
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {

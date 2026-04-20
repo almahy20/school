@@ -20,38 +20,62 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
  * دالة بسيطة لجلب بيانات المستخدم الإضافية (الرتبة والمدرسة)
+ * ✅ تحسين: منع الطلبات المتكررة نهائياً عبر Singleton Pattern صارم
  */
+let userFetchPromise: Promise<AppUser | null> | null = null;
+let currentFetchingId: string | null = null;
+
 async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
-  try {
-    // جلب البيانات عبر RPC واحد بسيط
-    const { data: userData, error } = await supabase.rpc('get_complete_user_data', { 
-      p_user_id: supaUser.id 
-    });
-
-
-    if (error || !userData) {
-      logger.error('Error fetching app user data:', error);
-      return null;
-    }
-
-    const { profile, role, school } = userData as any;
-    
-    return {
-      id: supaUser.id,
-      email: supaUser.email || '',
-      phone: profile?.phone || '',
-      fullName: profile?.full_name || '',
-      role: (role?.role || 'parent') as AppRole,
-      isSuperAdmin: role?.is_super_admin || false,
-      schoolId: profile?.school_id,
-      schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || 'approved',
-      subscriptionExpired: false, // يتم التحقق منه في الحسابات المالية
-    };
-  } catch (err) {
-    logger.error('Unexpected error in getAppUserData:', err);
-    return null;
+  // 1. If we are already fetching for THIS user, return the same promise
+  if (userFetchPromise && currentFetchingId === supaUser.id) {
+    logger.log('[Auth] Reusing existing fetch promise for:', supaUser.id);
+    return userFetchPromise;
   }
+
+  // 2. Start a new fetch
+  logger.log('[Auth] Starting fresh singleton fetch for:', supaUser.id);
+  currentFetchingId = supaUser.id;
+  
+  userFetchPromise = (async () => {
+    try {
+      const { data: userData, error } = await supabase.rpc('get_complete_user_data', { 
+        p_user_id: supaUser.id 
+      });
+
+      if (error || !userData) {
+        logger.error('Error fetching app user data:', error);
+        return null;
+      }
+
+      const { profile, role, school } = userData as any;
+      
+      return {
+        id: supaUser.id,
+        email: supaUser.email || '',
+        phone: profile?.phone || '',
+        fullName: profile?.full_name || '',
+        role: (role?.role || 'parent') as AppRole,
+        isSuperAdmin: role?.is_super_admin || false,
+        schoolId: profile?.school_id,
+        schoolStatus: school?.status || 'active',
+        approvalStatus: role?.approval_status || 'approved',
+        subscriptionExpired: false,
+      };
+    } catch (err) {
+      logger.error('Unexpected error in getAppUserData:', err);
+      return null;
+    } finally {
+      // ✅ Keep the promise cached for 10 seconds to swallow all initial events (SESSION, SIGNED_IN, etc)
+      setTimeout(() => {
+        if (currentFetchingId === supaUser.id) {
+          userFetchPromise = null;
+          currentFetchingId = null;
+        }
+      }, 10000); 
+    }
+  })();
+
+  return userFetchPromise;
 }
 
 /**
@@ -73,8 +97,8 @@ async function prefetchCommonQueries(appUser: AppUser) {
       staleTime: 5 * 60 * 1000,
     });
 
-    // Prefetch all profiles for messaging (IDs only)
-    if (appUser.schoolId) {
+    // Prefetch all profiles for messaging (IDs only) - ONLY FOR ADMINS/TEACHERS
+    if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
       queryClient.prefetchQuery({
         queryKey: ['all-profiles', appUser.schoolId],
         queryFn: async () => {
@@ -109,10 +133,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Prefetch common queries in background after user is set
       if (appUser) {
-        // Use setTimeout to not block the auth flow
-        setTimeout(() => {
-          prefetchCommonQueries(appUser);
-        }, 100);
+        // ✅ Optimization: Defer prefetching until the main thread is completely free
+        // This significantly reduces the initial "Load" time and TBT (Total Blocking Time)
+        const deferPrefetch = () => {
+          if ('requestIdleCallback' in window) {
+            (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
+          } else {
+            setTimeout(() => prefetchCommonQueries(appUser), 1000);
+          }
+        };
+        deferPrefetch();
       }
     } else {
       setUser(null);

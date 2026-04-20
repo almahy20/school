@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
+import { getOptimizedImageUrl } from '@/lib/utils';
 
 export default function TeacherSignupPage() {
   const { school_slug } = useParams();
@@ -65,7 +66,7 @@ export default function TeacherSignupPage() {
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group overflow-hidden">
             {school?.logo_url ? (
-              <img src={school.logo_url} alt="School Logo" className="w-full h-full object-contain" />
+              <img src={getOptimizedImageUrl(school.logo_url, { width: 160, quality: 80 })} alt="School Logo" className="w-full h-full object-contain" />
             ) : (
               <BookOpen className="w-10 h-10 text-primary" />
             )}

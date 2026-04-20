@@ -112,8 +112,15 @@ export default function ClassDetailPage() {
   // ── Queries ──
   const { data: classItem, isLoading: classLoading, error: classError, refetch: refetchClass } = useClass(id);
   const { data: students = [], isLoading: studentsLoading } = useClassStudents(id);
-  const { data: allTeachers = [], isLoading: teachersLoading } = useTeachers();
   
+  // Teachers query for display and selection
+  const { data: allTeachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
+  const allTeachers = useMemo(() => Array.isArray(allTeachersData?.data) ? allTeachersData.data : [], [allTeachersData]);
+
+  const teacher = useMemo(() => {
+    return allTeachers.find((t: any) => t.id === classItem?.teacher_id);
+  }, [allTeachers, classItem?.teacher_id]);
+
   // Curriculum queries
   const { data: curriculums = [], isLoading: curriculumsLoading, error: curriculumsError, refetch: refetchCurriculums } = useCurriculums();
   const { data: curriculumSubjects = [], isLoading: subjectsLoading, error: subjectsError, refetch: refetchSubjects } = useCurriculumSubjects(classItem?.curriculum_id || null);
@@ -126,12 +133,7 @@ export default function ClassDetailPage() {
   const deleteSubjectMutation = useDeleteSubject();
   const assignCurriculumMutation = useAssignCurriculumToClass();
 
-  const teacher = useMemo(() => {
-    const teachersArray: any[] = Array.isArray(allTeachers) ? allTeachers : (allTeachers as any)?.data || [];
-    return teachersArray.find((t: any) => t.id === classItem?.teacher_id);
-  }, [allTeachers, classItem?.teacher_id]);
-
-  const handleDelete = async () => {
+   const handleDelete = async () => {
     if (!id || !confirm('هل أنت متأكد من حذف هذا الفصل الدراسي نهائياً؟ سيؤدي هذا لإزالة ارتباط الطلاب به.')) return;
     try {
       await deleteClassMutation.mutateAsync(id);

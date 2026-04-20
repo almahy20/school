@@ -13,6 +13,9 @@ export function usePushNotifications() {
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY; // We'll assume the user will set this
 
   const checkSubscription = useCallback(async () => {
+    // ✅ Optimization: Skip in dev mode to prevent hanging on serviceWorker.ready
+    if (import.meta.env.DEV) return;
+
     if ('serviceWorker' in navigator && 'PushManager' in window && user?.id) {
       try {
         const registration = await navigator.serviceWorker.ready;

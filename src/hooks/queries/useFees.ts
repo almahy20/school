@@ -76,6 +76,7 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
     },
     enabled: !!user?.schoolId,
     placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -121,51 +122,57 @@ export function useUpsertFee() {
         if (error) throw error;
       }
     },
-    onSuccess: (_, variables) => {
-      toast.success('تم حفظ الرسوم بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    onSuccess: () => {
+      toast.success('تم تحديث بيانات الرسوم بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
     },
   });
 }
-
 
 export function useGenerateFees() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ students, term, amount }: { students: any[], term: string, amount: number }) => {
-      if (!user?.schoolId) throw new Error('No school ID');
+    mutationFn: async ({ term, classId, amount }: { term: string; classId: string; amount: number }) => {
+      if (!user?.schoolId) return;
+
+      // 1. Get all students in the class (or all students in school if classId is 'all')
+      let q = supabase.from('students').select('id').eq('school_id', user.schoolId);
+      if (classId !== 'all') {
+        q = q.eq('class_id', classId);
+      }
       
-      // 1. Fetch existing records for this term to avoid duplicates
-      const { data: existingRecords } = await supabase
-        .from('fees')
-        .select('student_id')
-        .eq('term', term)
-        .eq('school_id', user.schoolId);
+      const { data: students, error: sErr } = await q;
+      if (sErr) throw sErr;
+      if (!students || students.length === 0) return;
 
-      const existingStudentIds = new Set(existingRecords?.map(r => r.student_id) || []);
-      
-      // 2. Only create records for students who don't have one
-      const recordsToInsert = students
-        .filter(s => !existingStudentIds.has(s.id))
-        .map(s => ({
-          student_id: s.id,
-          school_id: user.schoolId,
-          term,
-          amount_due: amount,
-          amount_paid: 0,
-          status: 'unpaid'
-        }));
+      // 2. For each student, insert a fee record if it doesn't exist for this term
+      const operations = students.map(async (s) => {
+        const { data: existing } = await supabase
+          .from('fees')
+          .select('id')
+          .eq('student_id', s.id)
+          .eq('term', term)
+          .maybeSingle();
 
-      if (recordsToInsert.length === 0) return;
+        if (!existing) {
+          return supabase.from('fees').insert({
+            student_id: s.id,
+            term: term,
+            amount_due: amount,
+            amount_paid: 0,
+            status: 'unpaid',
+            school_id: user.schoolId
+          });
+        }
+      });
 
-      const { error } = await supabase.from('fees').insert(recordsToInsert);
-      if (error) throw error;
+      await Promise.all(operations);
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+    onSuccess: () => {
+      toast.success('تم توليد الرسوم بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
     },
   });
 }

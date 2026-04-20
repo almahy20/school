@@ -1,10 +1,13 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { AdminDashboard } from '@/components/dashboard/AdminDashboard';
-import { TeacherDashboard } from '@/components/dashboard/TeacherDashboard';
-import { ParentDashboard } from '@/components/dashboard/ParentDashboard';
+
+// ✅ Optimization: Lazy load sub-dashboards to reduce initial bundle size
+// This prevents Parents from downloading Admin/Teacher dashboard code.
+const AdminDashboard = lazy(() => import('@/components/dashboard/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const TeacherDashboard = lazy(() => import('@/components/dashboard/TeacherDashboard').then(m => ({ default: m.TeacherDashboard })));
+const ParentDashboard = lazy(() => import('@/components/dashboard/ParentDashboard').then(m => ({ default: m.ParentDashboard })));
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -19,10 +22,12 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {user?.role === 'parent' ? <ParentDashboard />
-          : user?.role === 'teacher' ? <TeacherDashboard />
-          : user?.role === 'admin' ? <AdminDashboard />
-          : <div className="min-h-[400px] flex items-center justify-center p-6"><div className="w-12 h-12 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin" /></div>}
+        <Suspense fallback={null}>
+          {user?.role === 'parent' ? <ParentDashboard />
+            : user?.role === 'teacher' ? <TeacherDashboard />
+            : user?.role === 'admin' ? <AdminDashboard />
+            : null}
+        </Suspense>
       </div>
     </AppLayout>
   );

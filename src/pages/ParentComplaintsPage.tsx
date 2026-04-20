@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils';
 import { 
   useParentComplaints, 
   useUpsertComplaint, 
-  useParentChildren 
+  useParentChildren,
+  useMarkComplaintsAsRead
 } from '@/hooks/queries';
 import { formatDisplayDate } from '@/lib/date-utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
@@ -24,6 +25,11 @@ const PAGE_SIZE = 5;
 export default function ParentComplaintsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { mutate: markAsRead } = useMarkComplaintsAsRead();
+
+  useEffect(() => {
+    markAsRead();
+  }, [markAsRead]);
   
   // UI State
   const [childId, setChildId] = useState<string>('');

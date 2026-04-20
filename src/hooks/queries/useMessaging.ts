@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
+import { useEffect } from 'react';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user } = useAuth();
@@ -33,7 +34,8 @@ export function useProfiles(search = '', page = 1, pageSize = 20) {
       return { data: data || [], count: count || 0 };
     },
     enabled: !!user?.schoolId,
-    staleTime: 30 * 1000,
+    staleTime: 10 * 60 * 1000, // 10 minutes - profiles don't change often
+    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 }
@@ -121,9 +123,43 @@ export function useSendMessage() {
 
 export function useMessages() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   
   // نعيد بناء queryKey ليكون بسيطاً لكن مع ربطه بـ user?.id لتأمين البيانات
   const queryKey = ['messages', user?.id];
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // تفعيل التزامن الفوري للرسائل الخاصة بالمستخدم فقط
+    // هذا يمنع الـ "Refetch Storm" الذي يحدث عند جلب رسائل المدرسة كلها
+    const channel = supabase
+      .channel(`user-messages-${user.id}`)
+      // 1. الرسائل المرسلة من المستخدم
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `sender_id=eq.${user.id}`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey });
+      })
+      // 2. الرسائل المستلمة من المستخدم
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `receiver_id=eq.${user.id}`
+      }, () => {
+        logger.log('📩 New message detected, refreshing...');
+        queryClient.invalidateQueries({ queryKey });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
       
   return useQuery({
     queryKey,

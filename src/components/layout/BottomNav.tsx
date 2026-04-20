@@ -3,12 +3,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Home, MessageSquare, Calendar, CreditCard, User, CheckSquare, Settings, ShieldAlert, Users, School, BookOpen, Send, CalendarCheck } from 'lucide-react';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { useUnreadNotificationsCount } from '@/hooks/queries';
+import { useUnreadCounts } from '@/hooks/queries';
 
 export default function BottomNav() {
   const { user } = useAuth();
   const { isSubscribed } = usePushNotifications();
-  const { data: unreadCount = 0 } = useUnreadNotificationsCount();
+  const { data: unreadCounts } = useUnreadCounts();
+  const unreadCount = unreadCounts?.unread || 0;
+  const unreadComplaintsCount = unreadCounts?.complaints || 0;
 
   if (!user) {
     return null;
@@ -59,7 +61,9 @@ export default function BottomNav() {
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-200/50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[90] safe-area-bottom" dir="rtl">
         <div className="flex items-center justify-around px-1 py-1.5 max-w-lg mx-auto">
           {links.map((link) => {
-            const hasBadge = (link.label === 'الشكاوى' || link.to === '/manage-complaints') && unreadCount > 0;
+            const isComplaints = link.label === 'الشكاوى' || link.to === '/manage-complaints' || link.to === '/complaints';
+            const badgeCount = isComplaints ? unreadComplaintsCount : 0;
+            const hasBadge = badgeCount > 0;
             
             return (
               <NavLink
@@ -83,7 +87,7 @@ export default function BottomNav() {
                       </div>
                       {hasBadge && (
                         <div className="absolute -top-1 -right-1 min-w-[14px] h-3.5 px-0.5 bg-red-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center shadow-sm">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                          {badgeCount > 9 ? '9+' : badgeCount}
                         </div>
                       )}
                     </div>

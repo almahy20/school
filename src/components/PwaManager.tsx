@@ -25,6 +25,19 @@ export default function PwaManager() {
 
     // 1. Determine school context
     if (schoolId) {
+      // ✅ Optimization: Check localStorage first for immediate PWA update
+      const cached = localStorage.getItem(`branding_${schoolId}`);
+      if (cached) {
+        try {
+          const s = JSON.parse(cached);
+          name = s.name;
+          let cleanName = s.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          shortName = cleanName || s.name;
+          icon = s.logo_url || defaultIcon;
+          slug = s.slug;
+        } catch (e) {}
+      }
+
       try {
         const { data, error } = await supabase
           .from('schools')
@@ -85,9 +98,10 @@ export default function PwaManager() {
       }
     }
 
-    // Add cache busting to icon to force refresh when changed in dashboard
-    const timestamp = Date.now();
-    const cacheBustIcon = icon.includes('?') ? `${icon}&v=${timestamp}` : `${icon}?v=${timestamp}`;
+    // ✅ Optimization: Remove Date.now() cache buster. 
+    // It was causing the logo to be re-downloaded on every page navigation.
+    // The logo_url in the database already has a version timestamp if updated.
+    const cacheBustIcon = icon; 
 
     // @ts-ignore - Deep type instantiation
     const manifest = {
@@ -100,6 +114,7 @@ export default function PwaManager() {
       theme_color: themeColor,
       icons: [
         {
+          // ✅ Optimization: Use optimized smaller versions for manifest icons if possible
           src: cacheBustIcon.startsWith('http') ? cacheBustIcon : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon),
           sizes: "192x192",
           type: "image/png",

@@ -66,6 +66,8 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
     },
     // Only fetch for admin users
     enabled: user?.role === 'admin' || user?.isSuperAdmin === true,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }
 

@@ -71,8 +71,8 @@ export function useUsers() {
       return merged;
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 60 * 1000, // 1 minute instead of 0
+    refetchInterval: 60 * 1000, // 1 minute instead of 15s
   });
 }
 

@@ -28,7 +28,7 @@ export default function StudentAttendancePage() {
           loadingMessage="جاري تحميل سجل الحضور..."
         >
           {/* Header */}
-          <header className="flex items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
             <div className="flex items-center gap-4">
               <button
                 onClick={() => navigate(`/parent/children/${id}`)}
@@ -36,7 +36,7 @@ export default function StudentAttendancePage() {
               >
                 <ArrowRight className="w-5 h-5" />
               </button>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
+              <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
                 <Calendar className="w-6 h-6" />
               </div>
               <div>
@@ -48,23 +48,23 @@ export default function StudentAttendancePage() {
 
           {/* Stats Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="premium-card p-6 text-center hover:scale-[1.02] transition-transform">
+            <div className="bg-white border border-slate-100 rounded-[28px] p-6 text-center shadow-sm hover:shadow-md transition-all">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto mb-3" />
-              <p className="text-3xl font-black text-emerald-600 mb-1">{present}</p>
+              <p className="text-3xl font-black text-slate-900 mb-1">{present}</p>
               <p className="text-xs text-slate-400 font-black uppercase tracking-widest">حاضر</p>
             </div>
-            <div className="premium-card p-6 text-center hover:scale-[1.02] transition-transform">
+            <div className="bg-white border border-slate-100 rounded-[28px] p-6 text-center shadow-sm hover:shadow-md transition-all">
               <XCircle className="w-8 h-8 text-rose-600 mx-auto mb-3" />
-              <p className="text-3xl font-black text-rose-600 mb-1">{absent}</p>
+              <p className="text-3xl font-black text-slate-900 mb-1">{absent}</p>
               <p className="text-xs text-slate-400 font-black uppercase tracking-widest">غائب</p>
             </div>
-            <div className="premium-card p-6 text-center hover:scale-[1.02] transition-transform">
+            <div className="bg-white border border-slate-100 rounded-[28px] p-6 text-center shadow-sm hover:shadow-md transition-all">
               <Clock className="w-8 h-8 text-amber-600 mx-auto mb-3" />
-              <p className="text-3xl font-black text-amber-600 mb-1">{late}</p>
+              <p className="text-3xl font-black text-slate-900 mb-1">{late}</p>
               <p className="text-xs text-slate-400 font-black uppercase tracking-widest">متأخر</p>
             </div>
-            <div className="premium-card p-6 text-center bg-slate-900 text-white hover:scale-[1.02] transition-transform">
-              <Calendar className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
+            <div className="bg-slate-900 border border-slate-800 rounded-[28px] p-6 text-center shadow-lg hover:shadow-xl transition-all text-white">
+              <Calendar className="w-8 h-8 text-white/40 mx-auto mb-3" />
               <p className="text-3xl font-black text-white mb-1">{total}</p>
               <p className="text-xs text-white/40 font-black uppercase tracking-widest">الإجمالي</p>
             </div>
@@ -72,18 +72,18 @@ export default function StudentAttendancePage() {
 
           {/* Attendance Calendar Grid */}
           {child?.attendance?.length > 0 ? (
-            <div className="premium-card p-8">
-              <h2 className="text-xl font-black text-slate-900 mb-6">السجل الزمني</h2>
+            <div className="bg-white border border-slate-100 rounded-[32px] p-8 shadow-sm">
+              <h2 className="text-xl font-black text-slate-900 mb-8">السجل الزمني</h2>
               
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-3">
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-4">
                 {child.attendance
                   .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((a: any) => {
                     const date = new Date(a.date);
                     const statusConfig = {
-                      present: { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-600', label: 'حاضر' },
-                      absent: { bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-600', label: 'غائب' },
-                      late: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-600', label: 'متأخر' }
+                      present: { bg: 'bg-white', border: 'border-emerald-100', text: 'text-emerald-600', label: 'حاضر' },
+                      absent: { bg: 'bg-white', border: 'border-rose-100', text: 'text-rose-600', label: 'غائب' },
+                      late: { bg: 'bg-white', border: 'border-amber-100', text: 'text-amber-600', label: 'متأخر' }
                     };
                     const config = statusConfig[a.status as keyof typeof statusConfig];
 
@@ -91,16 +91,16 @@ export default function StudentAttendancePage() {
                       <div
                         key={a.id}
                         className={cn(
-                          "aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all hover:scale-105 cursor-default",
+                          "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all hover:scale-105 hover:shadow-md cursor-default",
                           config.bg,
                           config.border
                         )}
                         title={`${date.toLocaleDateString('ar-EG')} - ${config.label}`}
                       >
-                        <span className={cn("text-lg font-black", config.text)}>
+                        <span className={cn("text-xl font-black", config.text)}>
                           {date.getDate()}
                         </span>
-                        <span className={cn("text-[8px] font-bold", config.text)}>
+                        <span className={cn("text-[9px] font-black uppercase tracking-widest", config.text)}>
                           {date.toLocaleDateString('ar-EG', { month: 'short' })}
                         </span>
                       </div>

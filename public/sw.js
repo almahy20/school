@@ -1,21 +1,31 @@
-const CACHE_NAME = 'school-v1';
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'school-cache-v1';
+const MAX_CACHE_ITEMS = 100; // ✅ Optimization: Limit cache size to prevent 95MB bloat
+
+// Assets to cache immediately
+const PRECACHE_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json'
+  '/manifest.json',
+  '/favicon.ico'
 ];
 
-// تثبيت عامل الخدمة والكاش الأولي
+// ✅ Optimization: Helper to limit cache size
+async function limitCacheSize(cacheName, maxItems) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxItems) {
+    await cache.delete(keys[0]);
+    limitCacheSize(cacheName, maxItems);
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
   );
   self.skipWaiting();
 });
 
-// تنظيف الكاش القديم
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -28,30 +38,45 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
-  return self.clients.claim();
+  self.clients.claim();
 });
 
-// استراتيجية Stale-While-Revalidate لفتح التطبيق فجأة وبرق
 self.addEventListener('fetch', (event) => {
-  // لا تقم بعمل كاش لطلبات Supabase أو الـ API
-  if (event.request.url.includes('supabase.co')) {
+  const url = new URL(event.request.url);
+
+  // ✅ Optimization: DO NOT cache Vite development files or HMR updates
+  // This is the main reason for the 95MB cache bloat during development
+  if (
+    url.pathname.includes('@vite') || 
+    url.pathname.includes('@react-refresh') || 
+    url.search.includes('t=') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx')
+  ) {
     return;
   }
 
+  // API calls - Network First
+  if (url.origin.includes('supabase.co')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Static Assets - Stale While Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // تحديث الكاش بالنسخة الجديدة في الخلفية
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
+            limitCacheSize(CACHE_NAME, MAX_CACHE_ITEMS); // Keep it clean
           });
         }
         return networkResponse;
       });
-
-      // ارجع النسخة المخبأة فوراً لو وجدت، وإلا انتظر الشبكة
       return cachedResponse || fetchPromise;
     })
   );

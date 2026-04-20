@@ -79,44 +79,74 @@ export function useDatabaseStats() {
   return useQuery({
     queryKey: ['database-stats'],
     queryFn: async () => {
-      // Get row counts for all major tables
-      const tables = [
-        'students', 'teachers', 'parents', 'classes', 
-        'attendance', 'grades', 'fees', 'messages',
-        'notifications', 'complaints', 'schools',
-        'student_parents', 'exam_templates', 'curriculums'
-      ];
-
-      const stats: Record<string, { count: number; size_estimate: string }> = {};
-      let totalRows = 0;
-
-      for (const table of tables) {
-        try {
-          const { count, error } = await (supabase as any)
-            .from(table)
-            .select('*', { count: 'exact', head: true });
-          
-          if (!error && count !== null) {
-            stats[table] = {
-              count,
-              size_estimate: estimateTableSize(table, count)
+      try {
+        // ⚡ تحسين: استخدام RPC واحد لجلب كافة الإحصائيات بدلاً من 14 طلب منفصل
+        const { data, error } = await (supabase as any).rpc('get_database_row_counts');
+        if (error) throw error;
+        
+        const stats: Record<string, { count: number; size_estimate: string }> = {};
+        let totalRows = 0;
+        
+        if (data && Array.isArray(data)) {
+          data.forEach((row: any) => {
+            stats[row.table_name] = {
+              count: row.row_count,
+              size_estimate: row.size_estimate || '0 B'
             };
-            totalRows += count;
-          }
-        } catch (err) {
-          logger.error(`Error fetching stats for ${table}:`, err);
+            totalRows += row.row_count;
+          });
         }
+        
+        return { 
+          tables: stats, 
+          totalRows,
+          lastUpdated: new Date().toISOString()
+        };
+      } catch (err) {
+        logger.warn('Error fetching database stats via RPC, using fallback:', err);
+        return await fetchDatabaseStatsFallback();
       }
-
-      return {
-        tables: stats,
-        totalRows,
-        totalTables: tables.length,
-        lastUpdated: new Date().toISOString()
-      };
     },
     enabled: !!user?.isSuperAdmin,
+    staleTime: 60 * 60 * 1000, // ساعة كاملة
   });
+}
+
+async function fetchDatabaseStatsFallback() {
+  // Get row counts for all major tables
+  const tables = [
+    'students', 'user_roles', 'profiles', 'classes', 
+    'attendance', 'grades', 'fees', 'messages',
+    'notifications', 'complaints', 'schools',
+    'student_parents', 'exam_templates', 'curriculums'
+  ];
+
+  const stats: Record<string, { count: number; size_estimate: string }> = {};
+  let totalRows = 0;
+
+  // ⚡ تحسين: جلب كل الطلبات بالتوازي
+  const results = await Promise.all(
+    tables.map(table => 
+      supabase.from(table).select('*', { count: 'exact', head: true })
+    )
+  );
+
+  results.forEach((res, index) => {
+    const table = tables[index];
+    if (!res.error && res.count !== null) {
+      stats[table] = {
+        count: res.count,
+        size_estimate: estimateTableSize(table, res.count)
+      };
+      totalRows += res.count;
+    }
+  });
+
+  return { 
+    tables: stats, 
+    totalRows,
+    lastUpdated: new Date().toISOString()
+  };
 }
 
 /**

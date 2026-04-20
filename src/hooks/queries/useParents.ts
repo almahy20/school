@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -98,9 +98,11 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryKey,
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!user?.schoolId,
-    placeholderData: (previousData: any) => previousData,
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
+    refetchOnMount: true, // Always check for fresh data when a component mounts
     retry: 1,
-    retryDelay: 1000,
   });
 }
 

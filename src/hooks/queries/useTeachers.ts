@@ -87,10 +87,10 @@ export function useTeachers(page = 1, pageSize = 15, search = '', status = 'ال
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000, // 5 دقائق - تقليل إعادة الجلب
-    gcTime: 15 * 60 * 1000, // 15 دقيقة
-    refetchOnMount: false, // معطل - نعتمد على staleTime و Realtime Sync
-    retry: 2, // ⚡ Faster failure
+    staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
+    refetchOnMount: true, // Always check for fresh data when a component mounts
+    retry: 2, 
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
@@ -117,6 +117,8 @@ export function useTeacher(id: string | undefined | null) {
     },
     enabled: !!id,
     placeholderData: keepPreviousData,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 

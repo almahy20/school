@@ -1,8 +1,9 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { useUnreadNotificationsCount, useBranding } from '@/hooks/queries';
+import { useUnreadCounts, useBranding } from '@/hooks/queries';
 import { logger } from '@/utils/logger';
 import { 
   LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
@@ -10,26 +11,26 @@ import {
   Settings, X, MessageSquare, ChevronLeft, ShieldAlert, 
   Bell, Layers, CreditCard, Send, Home, Database
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useMemo } from 'react';
+import { cn, getOptimizedImageUrl } from '@/lib/utils';
 
 interface SidebarLink {
   to: string;
   label: string;
   icon: LucideIcon;
-  badge?: 'notifications';
+  badge?: 'notifications' | 'complaints';
+  queryKey?: string[];
 }
 
 const adminLinks: SidebarLink[] = [
-  { to: '/', label: 'الرئيسية', icon: Home },
+  { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['admin-stats'] },
   { to: '/messages', label: 'بث الرسائل', icon: Send },
-  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'notifications' },
-  { to: '/students', label: 'إدارة الطلاب', icon: Users },
-  { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap },
-  { to: '/parents', label: 'أولياء الأمور', icon: UserCheck },
-  { to: '/classes', label: 'الفصول الدراسية', icon: School },
+  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'complaints' },
+  { to: '/students', label: 'إدارة الطلاب', icon: Users, queryKey: ['students'] },
+  { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap, queryKey: ['teachers'] },
+  { to: '/parents', label: 'أولياء الأمور', icon: UserCheck, queryKey: ['parents'] },
+  { to: '/classes', label: 'الفصول الدراسية', icon: School, queryKey: ['classes'] },
   { to: '/attendance', label: 'سجل حضور المعلمين', icon: CalendarCheck },
-  { to: '/fees', label: 'المصروفات', icon: CreditCard },
+  { to: '/fees', label: 'المصروفات', icon: CreditCard, queryKey: ['fees'] },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
 ];
 
@@ -41,14 +42,14 @@ const superAdminLinks: SidebarLink[] = [
 ];
 
 const teacherLinks: SidebarLink[] = [
-  { to: '/', label: 'الرئيسية', icon: Home },
-  { to: '/classes', label: 'فصولي', icon: School },
+  { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['teacher-stats'] },
+  { to: '/classes', label: 'فصولي', icon: School, queryKey: ['classes'] },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
 const parentLinks: SidebarLink[] = [
-  { to: '/', label: 'الرئيسية', icon: Home },
-  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare, badge: 'notifications' },
+  { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['parent-child-overview'] },
+  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare, badge: 'complaints' },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
@@ -60,22 +61,34 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { data: initialUnreadCount = 0 } = useUnreadNotificationsCount();
+  const queryClient = useQueryClient();
+  const { data: unreadCounts } = useUnreadCounts();
+  const initialUnreadCount = unreadCounts?.unread || 0;
+  const unreadComplaintsCount = unreadCounts?.complaints || 0;
   const { data: branding } = useBranding();
   const [unreadCount, setUnreadCount] = useState(0);
   const [logoError, setLogoError] = useState(false);
 
-  const schoolBranding = useMemo(() => {
-    let logo = branding?.logo_url || '';
-    
-    // ✅ نشيل cache buster من اللوجو عشان المتصفح يخزنه
-    if (logo) {
-      logo = logo.split('?')[0]; // نشيل أي query parameters
+  // ✅ Optimization: Prefetch on Hover
+  // Starts loading data the moment user hovers over a menu item
+  const handlePrefetch = useCallback((queryKey?: string[]) => {
+    if (queryKey) {
+      queryClient.prefetchQuery({
+        queryKey: [...queryKey],
+        staleTime: 5 * 60 * 1000,
+      });
     }
+  }, [queryClient]);
+
+  const schoolBranding = useMemo(() => {
+    let rawLogo = branding?.logo_url || '';
+    
+    // ✅ تحسين موحد: نستخدم نفس الحجم (120) لضمان استخدام الكاش في كل مكان
+    const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
     
     return {
       name: branding?.name || 'المدرسة الذكية',
-      logo: logo,
+      logo: optimizedLogo,
     };
   }, [branding]);
 
@@ -173,6 +186,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             key={link.to} 
             to={link.to} 
             end={link.to === '/'}
+            onMouseEnter={() => handlePrefetch(link.queryKey)}
             onClick={onClose}
             className={({ isActive }) => cn(
               "flex items-center justify-between px-4 h-12 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
@@ -198,6 +212,12 @@ export default function Sidebar({ onClose }: SidebarProps) {
                 {link.badge === 'notifications' && unreadCount > 0 && (
                   <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[8px] font-black shadow-lg shadow-rose-500/20 relative z-10">
                     {unreadCount}
+                  </span>
+                )}
+                
+                {link.badge === 'complaints' && unreadComplaintsCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[8px] font-black shadow-lg shadow-rose-500/20 relative z-10">
+                    {unreadComplaintsCount}
                   </span>
                 )}
               </>

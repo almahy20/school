@@ -1,6 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { useClasses, useTeacherStats } from '@/hooks/queries';
+import { useTeacherClasses, useTeacherStats } from '@/hooks/queries';
 import { formatDisplayDate } from '@/lib/date-utils';
 import { 
   GraduationCap, School, Users, LayoutGrid, Calendar, Filter,
@@ -14,8 +14,9 @@ import { StatsCard } from './StatsCard';
 export function TeacherDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: classesData } = useClasses();
-  const myClasses = classesData?.data || [];
+  
+  // ✅ Optimization: Use teacher-specific classes hook
+  const { data: myClasses = [] } = useTeacherClasses(user?.id);
   const { data: stats = { classes: 0, students: 0 } } = useTeacherStats();
 
   return (

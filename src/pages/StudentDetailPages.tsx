@@ -17,11 +17,11 @@ export function StudentFinancialPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-6 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
             <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
               <ArrowRight className="w-5 h-5" />
             </button>
-            <div className="w-11 h-11 rounded-2xl bg-amber-600 flex items-center justify-center text-white shadow-lg shadow-amber-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
+            <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
               <CreditCard className="w-5 h-5" />
             </div>
             <div>
@@ -34,33 +34,33 @@ export function StudentFinancialPage() {
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {child.fees.sort((a: any, b: any) => (b.year * 12 + b.month) - (a.year * 12 + a.month)).map((f: any) => (
-                  <div key={f.id} className="premium-card p-6 hover:translate-y-[-3px] transition-all duration-300">
+                  <div key={f.id} className="bg-white border border-slate-100 rounded-[28px] p-6 shadow-sm hover:shadow-md transition-all duration-300">
                     <div className="flex items-center justify-between mb-5">
                       <div className="flex items-center gap-3">
-                        <div className={cn("w-11 h-11 rounded-2xl flex items-center justify-center",
-                          f.status === 'paid' ? "bg-emerald-50 text-emerald-600" : f.status === 'partial' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center",
+                          f.status === 'paid' ? "bg-emerald-50 text-emerald-700" : f.status === 'partial' ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
                         )}>
-                          <CreditCard className="w-5 h-5" />
+                          <CreditCard className="w-6 h-6" />
                         </div>
                         <div>
                           <p className="font-black text-slate-900">شهر {MONTHS_AR[f.month - 1]} {f.year}</p>
                           <p className="text-xs text-slate-400 font-bold">{f.term}</p>
                         </div>
                       </div>
-                      <Badge className={cn("border-none font-black text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-xl",
-                        f.status === 'paid' ? "bg-emerald-50 text-emerald-600" : f.status === 'partial' ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"
+                      <Badge className={cn("border border-slate-100 font-black text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-xl shadow-sm",
+                        f.status === 'paid' ? "bg-emerald-50 text-emerald-700" : f.status === 'partial' ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"
                       )}>
                         {f.status === 'paid' ? 'تم السداد' : f.status === 'partial' ? 'سداد جزئي' : 'غير مسدد'}
                       </Badge>
                     </div>
-                    <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center justify-between p-5 rounded-[24px] bg-slate-50/50 border border-slate-100">
                       <div>
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">المطلوب</p>
-                        <p className="text-xl font-black text-slate-900">{f.amount_due} <span className="text-xs">ج.م</span></p>
+                        <p className="text-xl font-black text-slate-900">{f.amount_due} <span className="text-xs text-slate-400">ج.م</span></p>
                       </div>
                       <div className="text-left">
                         <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">المسدد</p>
-                        <p className="text-xl font-black text-indigo-600">{f.amount_paid} <span className="text-xs">ج.م</span></p>
+                        <p className="text-xl font-black text-indigo-600">{f.amount_paid} <span className="text-xs opacity-60">ج.م</span></p>
                       </div>
                     </div>
                   </div>
@@ -68,15 +68,17 @@ export function StudentFinancialPage() {
               </div>
 
               {child.feesRemaining > 0 && (
-                <div className="bg-slate-900 rounded-2xl p-8 text-white flex items-center justify-between">
+                <div className="bg-slate-900 rounded-[32px] p-8 text-white flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl">
                   <div className="flex items-center gap-4">
-                    <AlertCircle className="w-10 h-10 text-rose-400" />
+                    <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center shrink-0">
+                      <AlertCircle className="w-8 h-8 text-rose-400" />
+                    </div>
                     <div>
                       <h3 className="text-xl font-black">إجمالي الرسوم المتبقية</h3>
-                      <p className="text-white/60 text-sm">المبلغ الإجمالي لكافة الأشهر غير المسددة</p>
+                      <p className="text-white/40 text-sm font-medium">المبلغ الإجمالي لكافة الأشهر غير المسددة</p>
                     </div>
                   </div>
-                  <p className="text-3xl font-black">{child.feesRemaining.toLocaleString()} <span className="text-sm opacity-40">ج.م</span></p>
+                  <p className="text-4xl font-black">{child.feesRemaining.toLocaleString()} <span className="text-sm opacity-30">ج.م</span></p>
                 </div>
               )}
             </div>
@@ -104,11 +106,11 @@ export function StudentCurriculumPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-6 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
             <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
               <ArrowRight className="w-5 h-5" />
             </button>
-            <div className="w-11 h-11 rounded-2xl bg-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-200 shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
+            <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
               <Layers className="w-5 h-5" />
             </div>
             <div>
@@ -120,14 +122,14 @@ export function StudentCurriculumPage() {
           {child?.curriculum?.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {child.curriculum.map((sub: any) => (
-                <div key={sub.id} className="premium-card p-6 hover:translate-y-[-3px] transition-all duration-300">
-                  <div className="flex items-center gap-4 mb-5">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-sm">
-                      <BookOpen className="w-6 h-6" />
+                <div key={sub.id} className="bg-white border border-slate-100 rounded-[28px] p-8 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center gap-5 mb-6">
+                    <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center shadow-sm">
+                      <BookOpen className="w-7 h-7" />
                     </div>
-                    <h3 className="text-lg font-black text-slate-900">{sub.subject_name}</h3>
+                    <h3 className="text-xl font-black text-slate-900">{sub.subject_name}</h3>
                   </div>
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 text-slate-600 font-medium leading-relaxed text-sm">
+                  <div className="p-6 rounded-[24px] bg-slate-50/50 border border-slate-100 text-slate-600 font-medium leading-relaxed text-sm">
                     {sub.content || 'لا توجد تفاصيل متاحة لهذا المنهج حالياً.'}
                   </div>
                 </div>
@@ -166,7 +168,7 @@ export function StudentDataPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white/40 backdrop-blur-md p-6 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
             <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
               <ArrowRight className="w-5 h-5" />
             </button>
@@ -181,13 +183,13 @@ export function StudentDataPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {infoItems.map((item, idx) => (
-              <div key={idx} className="premium-card p-6 flex items-center gap-5 hover:translate-y-[-3px] transition-all duration-300">
-                <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-                  <item.icon className="w-5 h-5" />
+              <div key={idx} className="bg-white border border-slate-100 rounded-[28px] p-7 flex items-center gap-6 hover:shadow-md transition-all duration-300">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-900 border border-slate-100 flex items-center justify-center shrink-0">
+                  <item.icon className="w-6 h-6" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{item.label}</p>
-                  <p className="text-base font-black text-slate-900 truncate">{item.value || 'غير محدد'}</p>
+                  <p className="text-lg font-black text-slate-900 truncate">{item.value || 'غير محدد'}</p>
                 </div>
               </div>
             ))}

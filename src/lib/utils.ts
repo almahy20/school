@@ -29,3 +29,32 @@ export function safeInFilter(
   
   return query.in(column, values);
 }
+
+/**
+ * Optimizes Supabase image URLs for faster loading and better compression.
+ * Note: Requires Supabase Image Transformation to be enabled (standard on some plans).
+ * 
+ * @param url - The original public URL
+ * @param options - Transformation options (width, height, quality)
+ * @returns The optimized URL
+ */
+export function getOptimizedImageUrl(url: string | null | undefined, options: { width?: number; height?: number; quality?: number } = {}) {
+  if (!url) return '';
+  if (!url.includes('supabase.co/storage/v1/object/public/')) return url;
+
+  const { width = 100, height, quality = 70 } = options;
+  
+  // Transform the URL from /object/public/ to /render/image/public/
+  let optimizedUrl = url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+  
+  // Append transformation parameters
+  const params = new URLSearchParams();
+  params.append('width', width.toString());
+  if (height) params.append('height', height.toString());
+  params.append('quality', quality.toString());
+  params.append('resize', 'contain');
+  
+  // Keep original query params (like cache buster v=...) but append new ones
+  const separator = optimizedUrl.includes('?') ? '&' : '?';
+  return `${optimizedUrl}${separator}${params.toString()}`;
+}

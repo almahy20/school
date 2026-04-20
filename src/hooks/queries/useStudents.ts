@@ -136,6 +136,8 @@ export function useStudent(id: string | undefined) {
 
     enabled: !!id,
     placeholderData: keepPreviousData,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
@@ -149,11 +151,40 @@ export function useDeleteStudent() {
       const { error } = await supabase.from('students').delete().eq('id', studentId);
       if (error) throw error;
     },
+    // ✅ Optimization: Optimistic Update
+    onMutate: async (studentId) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['students'] });
+
+      // Snapshot previous value
+      const previousStudents = queryClient.getQueryData(['students']);
+
+      // Optimistically update
+      queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
+        if (!old || !old.data) return old;
+        return {
+          ...old,
+          data: old.data.filter((s: any) => s.id !== studentId),
+          count: Math.max(0, (old.count || 0) - 1)
+        };
+      });
+
+      return { previousStudents };
+    },
+    onError: (err, studentId, context) => {
+      if (context?.previousStudents) {
+        queryClient.setQueryData(['students'], context.previousStudents);
+      }
+      toast.error('فشل حذف الطالب');
+    },
     onSuccess: () => {
       toast.success('تم حذف الطالب بنجاح');
-      // Invalidate ALL student queries with any parameters
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['student'], exact: false });
+      // Also invalidate stats since student count changed
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }

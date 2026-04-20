@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock, ArrowLeft } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
+import { getOptimizedImageUrl } from '@/lib/utils';
 
 export default function ParentSignupPage() {
   const { school_slug } = useParams();
@@ -21,16 +22,12 @@ export default function ParentSignupPage() {
   const schoolBranding = useMemo(() => {
     if (!school) return { name: 'المدرسة الذكية', logo: '' };
     
-    let logo = school.logo_url || '';
-    
-    // ✅ نشيل cache buster من اللوجو
-    if (logo) {
-      logo = logo.split('?')[0];
-    }
+    // ✅ تحسين: ضغط وتصغير الشعار لسرعة التحميل
+    const optimizedLogo = getOptimizedImageUrl(school.logo_url, { width: 160, quality: 80 });
     
     return {
       name: school.name,
-      logo: logo
+      logo: optimizedLogo
     };
   }, [school]);
 

@@ -14,6 +14,34 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
   useEffect(() => {
     if (!tables.length) return;
 
+    // لتجنب تكرار الريكويستات في وقت قصير (Debounce)
+    const pendingInvalidations = new Set<string>();
+    let debounceTimer: any = null;
+
+    const processInvalidations = () => {
+      if (pendingInvalidations.size === 0) return;
+      
+      const uniqueKeys = Array.from(pendingInvalidations);
+      pendingInvalidations.clear();
+      
+      uniqueKeys.forEach(keyStr => {
+        const queryKey = JSON.parse(keyStr);
+        logger.log(`🔄 [RealtimeSync] Invalidating ACTIVE queries for: ${queryKey[0]}`);
+        queryClient.invalidateQueries({
+          queryKey,
+          exact: false,
+          // ⚡ Optimization: Only refetch ACTIVE queries on screen
+          refetchType: 'active' 
+        });
+      });
+    };
+
+    const invalidateTable = (queryKey: string[]) => {
+      pendingInvalidations.add(JSON.stringify(queryKey));
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(processInvalidations, 500);
+    };
+
     // Tables that are known NOT to have a school_id column
     const globalTables = ['profiles', 'schools'];
 
@@ -35,78 +63,37 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
           filter: (schoolId && !isGlobal) ? `school_id=eq.${schoolId}` : undefined,
         },
         () => {
-          // DEBUG: Log when realtime event is received
-          logger.log(`🔄 [RealtimeSync] Change detected in table: ${table}`);
-          
-          // Fix: Use findAll to get ALL matching queries, not just the first one
-          const matchingQueries = queryClient.getQueryCache().findAll({
-            queryKey: [table],
-            exact: false
-          });
-          
-          if (matchingQueries.length > 0) {
-            logger.log(`   → Found ${matchingQueries.length} matching queries for table: ${table}`);
-            logger.log(`   → Invalidating queries for table: ${table}`);
-            queryClient.invalidateQueries({
-               queryKey: [table],
-               exact: false
-            });
-          }
+          // 1. Invalidate the table itself
+          invalidateTable([table]);
 
-          // Special mappings - only invalidate if those queries exist
-          const mappings: Record<string, string[]> = {
-            'schools': ['school-branding'],
-            'exam_templates': ['exam-templates'],
-            'grades': ['student-grades', 'parent-child-overview', 'child-full-details'],
-            'curriculum_subjects': ['curriculum-subjects'],
-            'school_orders': ['school-orders'],
-            'user_profiles': ['admin-users'],
-            'complaints': ['parent-complaints', 'admin-stats'],
-            'student_parents': ['parent-children', 'admin-parent-children'],
-            'attendance': ['parent-child-overview', 'parent-child-activities', 'child-full-details'],
-            'fees': ['fees', 'parent-child-overview', 'child-full-details'],
-            'profiles': ['admin-stats', 'students', 'teachers', 'parents', 'parent-detail'],
-            'user_roles': ['admin-stats', 'students', 'teachers', 'parents', 'parent-detail'],
-            'students': ['students', 'student-detail', 'class-students'],
-            'teachers': ['teachers', 'teacher-detail'],
-            'classes': ['classes', 'class-detail', 'class-students']
+          // 2. Special mappings (Cross-table relationships)
+          const mappings: Record<string, string[][]> = {
+            'schools': [['school-branding']],
+            'exam_templates': [['exam-templates']],
+            'grades': [['student-grades'], ['parent-child-overview'], ['child-full-details'], ['stats']],
+            'curriculum_subjects': [['curriculum-subjects']],
+            'school_orders': [['school-orders']],
+            'user_profiles': [['admin-users']],
+            'complaints': [['parent-complaints'], ['admin-stats'], ['admin-activities']],
+            'student_parents': [['parent-children'], ['admin-parent-children'], ['parents'], ['students']],
+            'attendance': [['parent-child-overview'], ['parent-child-activities'], ['child-full-details'], ['stats']],
+            'fees': [['fees'], ['parent-child-overview'], ['child-full-details'], ['stats'], ['admin-activities']],
+            'fee_payments': [['fees'], ['parent-child-overview'], ['child-full-details'], ['stats'], ['admin-activities']],
+            'profiles': [['admin-stats'], ['students'], ['teachers'], ['parents'], ['parent-detail'], ['admin-activities']],
+            'user_roles': [['admin-stats'], ['students'], ['teachers'], ['parents'], ['parent-detail'], ['admin-activities']],
+            'students': [['students'], ['student-detail'], ['class-students'], ['stats'], ['parent-children']],
+            'teachers': [['teachers'], ['teacher-detail'], ['stats']],
+            'classes': [['classes'], ['class-detail'], ['class-students'], ['stats']]
           };
 
           if (mappings[table]) {
-            mappings[table].forEach(key => {
-              // Fix: Use findAll to check if ANY queries exist for this key
-              const mappedQueries = queryClient.getQueryCache().findAll({ queryKey: [key], exact: false });
-              if (mappedQueries.length > 0) {
-                logger.log(`   → Found ${mappedQueries.length} mapped queries for: ${key}`);
-                logger.log(`   → Invalidating mapped query: ${key}`);
-                queryClient.invalidateQueries({ queryKey: [key], exact: false });
-              }
-            });
+            mappings[table].forEach(key => invalidateTable(key));
           }
           
-          // Invalidate ALL parent queries (with any pagination/status params)
+          // Force refresh parents/students lists on any related change
           if (table === 'user_roles' || table === 'profiles' || table === 'student_parents') {
-            logger.log(`   → Invalidating ALL parents queries`);
-            // Invalidate with partial match - will catch all pagination variants
-            queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-          }
-          
-          // Invalidate ALL student queries
-          if (table === 'students' || table === 'student_parents') {
-            logger.log(`   → Invalidating ALL students queries`);
-            queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-          }
-          
-          // Invalidate ALL teacher queries  
-          if (table === 'teachers') {
-            logger.log(`   → Invalidating ALL teachers queries`);
-            queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
-          }
-          
-          // Invalidate ALL class queries
-          if (table === 'classes') {
-            logger.log(`   → Invalidating ALL classes queries`);
-            queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+            invalidateTable(['parents']);
+            invalidateTable(['students']);
           }
         }
       );
@@ -119,6 +106,7 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
     });
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
 

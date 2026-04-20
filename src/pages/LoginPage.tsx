@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Eye, EyeOff, Lock, Phone, ArrowLeft } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
+import { getOptimizedImageUrl } from '@/lib/utils';
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -24,16 +25,12 @@ export default function LoginPage() {
   const schoolBranding = useMemo(() => {
     if (!schoolData) return { name: 'المدرسة الذكية', logo: '' };
     
-    let logo = schoolData.logo_url || '';
-    
-    // ✅ نشيل cache buster من اللوجو
-    if (logo) {
-      logo = logo.split('?')[0];
-    }
+    // ✅ تحسين: ضغط وتصغير الشعار لسرعة التحميل
+    const optimizedLogo = getOptimizedImageUrl(schoolData.logo_url, { width: 160, quality: 80 });
     
     return {
       name: schoolData.name,
-      logo: logo
+      logo: optimizedLogo
     };
   }, [schoolData]);
 

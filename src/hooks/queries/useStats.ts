@@ -44,9 +44,9 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 10 * 60 * 1000, // 10 دقائق - تقليل إعادة الجلب
-    gcTime: 30 * 60 * 1000, // 30 دقيقة
-    refetchOnMount: false, // معطل - نعتمد على staleTime
+    staleTime: 10 * 1000, // 10 seconds - keep it very fresh
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours persistence
+    refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -99,41 +99,25 @@ async function fetchStatsFallback(user: any) {
 
 export function useTeacherStats() {
   const { user } = useAuth();
-  const queryKey = ['teacher-stats', user?.id, user?.schoolId];
+  const queryKey = useMemo(() => ['teacher-stats', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
-    
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.id || !user?.schoolId) return { classes: 0, students: 0 };
+      const emptyStats = { students: 0, classes: 0, attendanceRate: 0 };
+      if (!user?.id || !user?.schoolId) return emptyStats;
 
-      const { data: classes } = await supabase
-        .from('classes')
-        .select('id')
-        .eq('school_id', user.schoolId)
-        .eq('teacher_id', user.id);
-      
-      const myClasses = classes || [];
-      if (myClasses.length === 0) return { classes: 0, students: 0 };
+      const { data, error } = await (supabase as any).rpc('get_teacher_dashboard_stats', {
+        p_teacher_id: user.id,
+        p_school_id: user.schoolId
+      });
 
-      const classIds = myClasses.map(c => c.id);
-      const { count } = await supabase
-        .from('students')
-        .select('id', { count: 'exact', head: true })
-        .eq('school_id', user.schoolId)
-        .in('class_id', classIds);
-      
-      return {
-        classes: myClasses.length,
-        students: count || 0
-      };
+      if (error) throw error;
+      return data || emptyStats;
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
-    staleTime: 5 * 60 * 1000, // 5 دقائق - تقليل إعادة الجلب
-    gcTime: 15 * 60 * 1000, // 15 دقيقة
-    refetchOnMount: false, // معطل - نعتمد على staleTime
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
   });
 }
 
@@ -144,65 +128,18 @@ export function useAdminActivities() {
     queryFn: async () => {
       if (!user?.schoolId) return [];
       
-      // Optimized: Fetch pending registrations without invalid JOIN
-      const [complaints, rolesRawRes, payments] = await Promise.all([
-        supabase.from('complaints').select('id, content, created_at, status').eq('school_id', user.schoolId).order('created_at', { ascending: false }).limit(5),
-        supabase.from('user_roles').select('id, created_at, approval_status, user_id').eq('school_id', user.schoolId).eq('approval_status', 'pending').order('created_at', { ascending: false }).limit(5),
-        supabase.from('fee_payments').select('id, amount, payment_date, fees(student_id, students(name))').eq('school_id', user.schoolId).order('payment_date', { ascending: false }).limit(5),
-      ]);
-
-      const activities: any[] = [];
-
-      (complaints.data || []).forEach((c: any) => {
-        activities.push({
-          id: c.id,
-          type: 'complaint',
-          title: 'شكوى جديدة',
-          description: c.content.length > 60 ? c.content.substring(0, 60) + '...' : c.content,
-          date: c.created_at,
-          status: c.status
-        });
+      // ✅ Optimization: ONE single RPC call for all dashboard activities
+      // This replaces multiple parallel queries for complaints, registrations, and payments
+      const { data, error } = await (supabase as any).rpc('get_admin_dashboard_activities', {
+        p_school_id: user.schoolId
       });
 
-      // Handle roles join manually to fix 400 error
-      const rolesData = rolesRawRes.data || [];
-      if (rolesData.length > 0) {
-        const userIds = rolesData.map(r => r.user_id);
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', userIds);
-
-        rolesData.forEach((r: any) => {
-          const profile = (profiles || []).find(p => p.id === r.user_id);
-          const fullName = profile?.full_name || 'غير معروف';
-          activities.push({
-            id: r.id,
-            type: 'registration',
-            title: 'طلب انضمام جديد',
-            description: `المستخدم: ${fullName}`,
-            date: r.created_at,
-            status: r.approval_status
-          });
-        });
+      if (error) {
+        logger.error('Error fetching admin activities via RPC:', error);
+        return [];
       }
 
-      (payments.data || []).forEach((p: any) => {
-        const fee = Array.isArray(p.fees) ? p.fees[0] : p.fees;
-        const studentName = fee?.students?.name || 'غير معروف';
-        
-        activities.push({
-          id: p.id,
-          type: 'payment',
-          title: 'تم دفع رسوم',
-          description: `المبلغ: ${p.amount} ج.م للطالب ${studentName}`,
-          date: p.payment_date,
-          status: 'success'
-        });
-      });
-
-      return activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
-
+      return data || [];
     },
     enabled: !!user?.schoolId && user?.role === 'admin',
     staleTime: 3 * 60 * 1000, // 3 دقائق - تقليل إعادة الجلب

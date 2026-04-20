@@ -54,7 +54,9 @@ export function useExamTemplates(classId: string | null, subject: string | null,
       return { data: (data as ExamTemplate[]) || [], count: count || 0 };
     },
     enabled: !!(user?.schoolId && classId),
-    placeholderData: (previousData: any) => previousData,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
   });
@@ -103,13 +105,8 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
       }) as StudentGrade[];
     },
     enabled: !!(user?.schoolId && classId && templateId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    placeholderData: (previousData: any) => previousData,
-    retry: 1,
-    retryDelay: 1000,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

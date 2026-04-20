@@ -49,25 +49,22 @@ const StudentAttendancePage = lazy(() => import("./pages/StudentAttendancePage")
 const StudentFinancialPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentFinancialPage })));
 const StudentCurriculumPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentCurriculumPage })));
 const StudentDataPage = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentDataPage })));
-import RealtimeNotificationsManager from './components/RealtimeNotificationsManager';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
-import PwaManager from './components/PwaManager';
+const RealtimeNotificationsManager = lazy(() => import('./components/RealtimeNotificationsManager'));
+const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
+const PwaManager = lazy(() => import('./components/PwaManager'));
 import { queryClient } from "./lib/queryClient";
 
 // القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
-// تم تقليلها للجداول الحرجة فقط - الباقي يستخدم staleTime بدلاً من realtime
+// تم إزالة messages و notifications لأنها تدار الآن بشكل أكثر كفاءة عبر user_id
 const GLOBAL_SYNC_TABLES = [
-  'messages',        // رسائل جديدة - يحتاج تحديث فوري
-  'notifications',   // تنبيهات جديدة - يحتاج تحديث فوري
-  // ✅ إزالة: profiles, user_roles, schools, complaints
-  // هذه الجداول تتغير نادراً، staleTime 5-10 دقائق كافٍ
+  // ✅ تم إزالة messages و notifications من هنا
+  // سيتم التعامل معهم في هوكس مخصصة بفلتر user_id لتقليل الضغط
 ];
 
 import { PageLoader } from "./components/PageLoader";
 
 function AppRoutes() {
   const { user, loading } = useAuth();
-  const [appReady, setAppReady] = useState(false);
   
   // Update favicon with school logo
   useSchoolFavicon();
@@ -75,34 +72,29 @@ function AppRoutes() {
   // تفعيل التزامن الفوري للجداول الأساسية فقط
   useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
-  // Signal that the app is ready and loader can be hidden
+  // ✅ Unified Loader Control
   useEffect(() => {
-    if (!loading) {
-      setAppReady(true);
-      // Hide the initial loader
-      const loader = document.querySelector('.initial-loader');
-      if (loader && !loader.classList.contains('fade-out')) {
-        requestAnimationFrame(() => {
-          loader.classList.add('fade-out');
-          setTimeout(() => {
-            loader.classList.add('hidden');
-          }, 300);
-        });
+    // 1. If auth is determined, or if 10 seconds pass (failsafe)
+    const hideLoader = () => {
+      const loader = document.getElementById('unified-loader');
+      if (loader) {
+        loader.classList.add('fade-out');
+        setTimeout(() => loader.remove(), 500);
       }
+    };
+
+    if (!loading) {
+      hideLoader();
     }
+
+    // Failsafe: hide loader after 10s regardless of auth status
+    const failsafe = setTimeout(hideLoader, 10000);
+    return () => clearTimeout(failsafe);
   }, [loading]);
 
-  // Show loading screen while auth is being checked
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#0a0f1e] flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-white/10 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white/60 font-bold">جاري التحميل...</p>
-        </div>
-      </div>
-    );
-  }
+  // ✅ Optimization: Return null while loading auth or lazy components.
+  // The HTML loader in index.html is already visible and will be removed by the useEffect above.
+  if (loading) return null;
 
   return (
     <Suspense fallback={null}>

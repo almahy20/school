@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -43,6 +43,9 @@ export function useNotifications(page = 1, pageSize = 15) {
       return { data: data || [], count: count || 0 };
     },
     enabled: !!user?.id,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
     retry: 1,
     retryDelay: 1000,
   });
@@ -86,6 +89,7 @@ export function useNotificationsRealtime() {
 export function useMarkAllAsRead() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  
   return useMutation({
     mutationFn: async () => {
       if (!user?.id) return;
@@ -96,10 +100,58 @@ export function useMarkAllAsRead() {
         .eq('is_read', false);
       if (error) throw error;
     },
+    // ✅ Optimization: Optimistic Update
+    onMutate: async () => {
+      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
+      await queryClient.cancelQueries({ queryKey: ['notifications-unread-counts', user?.id] });
+
+      // Snapshot the previous value
+      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(['notifications-unread-counts', user?.id], {
+        unread: 0,
+        complaints: 0
+      });
+
+      // Return a context object with the snapshotted value
+      return { previousCounts };
+    },
+    onError: (err, newTodo, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousCounts) {
+        queryClient.setQueryData(['notifications-unread-counts', user?.id], context.previousCounts);
+      }
+    },
     onSuccess: () => {
       toast.success('تم تحديد الكل كمقروء');
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure we are in sync with the server
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
+    },
+  });
+}
+
+export function useMarkComplaintsAsRead() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async () => {
+      if (!user?.id) return;
+      const { error } = await db
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('type', 'complaint')
+        .eq('is_read', false);
+      if (error) throw error;
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user?.id] });
     },
   });
 }
@@ -119,30 +171,50 @@ export function useDeleteNotification() {
       toast.success('تم حذف التنبيه');
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user?.id] });
     },
   });
 }
 
-export function useUnreadNotificationsCount() {
+export function useUnreadCounts() {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['notifications-unread-count', user?.id], [user?.id]);
-  // useRealtimeSync is disabled here because RealtimeNotificationsManager handles the logic globally
-  // 
-  return useQuery<number>({
+  const queryKey = useMemo(() => ['notifications-unread-counts', user?.id], [user?.id]);
+  
+  return useQuery<{ unread: number; complaints: number }>({
     queryKey,
     queryFn: async () => {
-      if (!user?.id) return 0;
-      const { count, error } = await db
+      if (!user?.id) return { unread: 0, complaints: 0 };
+      
+      // ✅ Optimization: One single query for both counts
+      const { data, error } = await db
         .from('notifications')
-        .select('*', { count: 'exact', head: true })
+        .select('type, is_read')
         .eq('user_id', user.id)
         .eq('is_read', false);
       
       if (error) throw error;
-      return count || 0;
+      
+      const counts = {
+        unread: (data || []).length,
+        complaints: (data || []).filter((n: any) => n.type === 'complaint').length
+      };
+      
+      return counts;
     },
     enabled: !!user?.id,
-    staleTime: 1000 * 60 * 2, // 2 دقيقة - نقلل الـ refetch
-    refetchOnWindowFocus: false, // ❌ منع الـ refetch غير الضروري
+    staleTime: 0, // ✅ Always check for fresh counts on mount
+    gcTime: 1000 * 60 * 60, // Keep in cache for an hour
+    refetchOnWindowFocus: true, // Check when user comes back to tab
   });
+}
+
+// Keep the old ones for compatibility but mark them for deprecation or wrap the new one
+export function useUnreadNotificationsCount() {
+  const { data } = useUnreadCounts();
+  return { data: data?.unread || 0, isLoading: false };
+}
+
+export function useUnreadComplaintsCount() {
+  const { data } = useUnreadCounts();
+  return { data: data?.complaints || 0, isLoading: false };
 }

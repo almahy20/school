@@ -34,7 +34,9 @@ export function useCurriculums() {
       return data as Curriculum[];
     },
     enabled: !!user?.schoolId,
-    placeholderData: (previousData: any) => previousData,
+    staleTime: 60 * 60 * 1000, // 1 hour - curriculums are static
+    gcTime: 2 * 60 * 60 * 1000,
+    placeholderData: keepPreviousData,
     retry: 1,
     retryDelay: 1000,
   });
@@ -60,7 +62,7 @@ export function useCurriculumSubjects(curriculumId: string | null) {
     gcTime: 1000 * 60 * 60 * 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    placeholderData: (previousData: any) => previousData,
+    placeholderData: keepPreviousData,
     retry: 1,
     retryDelay: 1000,
   });

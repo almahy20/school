@@ -68,6 +68,8 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
   });
@@ -97,10 +99,8 @@ export function useParentComplaints(page = 1, pageSize = 10) {
       return { data: (data || []) as Complaint[], count: count || 0 };
     },
     enabled: !!(user?.id && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
 }
@@ -195,7 +195,7 @@ export function useCreateComplaint() {
     onSuccess: () => {
       toast.success('تم إرسال الشكوى بنجاح');
       queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-complaints', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['parent-complaints'] });
     },
   });
 }

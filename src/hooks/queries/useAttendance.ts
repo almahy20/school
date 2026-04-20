@@ -76,11 +76,41 @@ export function useUpsertAttendance() {
       const { error } = await supabase.from('attendance').insert(records);
       if (error) throw error;
     },
-    onSuccess: (_, variables) => {
+    // ✅ Optimization: Optimistic Update
+    onMutate: async (newRecords) => {
+      if (newRecords.length === 0) return;
+      const { class_id, date } = newRecords[0];
+      const queryKey = ['attendance', 'class', class_id, date];
+
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey });
+
+      // Snapshot previous value
+      const previousData = queryClient.getQueryData(queryKey);
+
+      // Optimistically update
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return old.map((s: any) => {
+          const record = newRecords.find(r => r.student_id === s.studentId);
+          return record ? { ...s, status: record.status } : s;
+        });
+      });
+
+      return { previousData, queryKey };
+    },
+    onError: (err, newRecords, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(context.queryKey, context.previousData);
+      }
+    },
+    onSettled: (data, error, variables) => {
       if (variables.length > 0) {
         queryClient.invalidateQueries({ 
           queryKey: ['attendance', 'class', variables[0].class_id, variables[0].date] 
         });
+        // Also invalidate stats
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }
     },
   });
@@ -104,5 +134,7 @@ export function useStudentAttendance(studentId: string | null) {
     },
     enabled: !!studentId,
     placeholderData: keepPreviousData,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 }

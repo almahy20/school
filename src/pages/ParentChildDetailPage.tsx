@@ -25,49 +25,49 @@ function InteractiveCard({
 }: { 
   title: string; 
   icon: any; 
-  value?: string;
-  subtitle?: string;
-  color: string;
-  onClick: () => void;
-  badge?: string;
+  value?: string; 
+  subtitle?: string; 
+  color: string; 
+  onClick: () => void; 
+  badge?: string; 
 }) {
   return (
     <button
       onClick={onClick}
-      className="group premium-card p-6 hover:translate-y-[-4px] transition-all duration-300 text-right w-full"
+      className="group bg-white border border-slate-100 p-7 rounded-[32px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 text-right w-full relative overflow-hidden"
     >
-      <div className="flex items-start justify-between mb-5">
-        <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500", color)}>
-          <Icon className="w-6 h-6" />
+      <div className="flex items-start justify-between mb-6">
+        <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-500 group-hover:scale-110", color)}>
+          <Icon className="w-7 h-7" />
         </div>
         {badge && (
-          <Badge className="bg-slate-50 text-slate-500 border-none text-[9px] font-black uppercase tracking-widest">
+          <Badge className="bg-slate-50 text-slate-500 border border-slate-100 text-[10px] font-black uppercase tracking-widest px-3 py-1">
             {badge}
           </Badge>
         )}
       </div>
       
-      <h3 className="font-black text-slate-900 text-base mb-1">{title}</h3>
+      <h3 className="font-black text-slate-900 text-lg mb-1">{title}</h3>
       {value && (
-        <p className="text-2xl font-black text-slate-900 mb-1">{value}</p>
+        <p className="text-3xl font-black text-slate-900 mb-1">{value}</p>
       )}
       {subtitle && (
-        <p className="text-xs text-slate-400 font-medium">{subtitle}</p>
+        <p className="text-sm text-slate-400 font-bold">{subtitle}</p>
       )}
       
-      <div className="mt-5 pt-4 border-t border-slate-50 flex items-center justify-between text-xs text-slate-300 group-hover:text-indigo-600 transition-colors">
-        <span className="font-black uppercase tracking-widest">عرض التفاصيل</span>
-        <ArrowRight className="w-4 h-4"/>
+      <div className="mt-6 pt-5 border-t border-slate-50 flex items-center justify-between text-xs text-slate-300 group-hover:text-indigo-600 transition-colors">
+        <span className="font-black uppercase tracking-widest">عرض التفاصيل والتقارير</span>
+        <ArrowRight className="w-4 h-4 group-hover:translate-x-[-4px] transition-transform"/>
       </div>
     </button>
   );
 }
 
 function gradeInfo(pct: number) {
-  if (pct >= 90) return { color: 'text-emerald-600', bg: 'bg-emerald-50', bar: 'bg-emerald-500', label: 'ممتاز' };
-  if (pct >= 75) return { color: 'text-primary', bg: 'bg-primary/5', bar: 'bg-primary', label: 'جيد جداً' };
-  if (pct >= 60) return { color: 'text-amber-600', bg: 'bg-amber-50', bar: 'bg-amber-500', label: 'جيد' };
-  return { color: 'text-rose-600', bg: 'bg-rose-50', bar: 'bg-rose-500', label: 'يحتاج تحسين' };
+  if (pct >= 90) return { color: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500', label: 'ممتاز' };
+  if (pct >= 75) return { color: 'text-indigo-700', bg: 'bg-indigo-50', bar: 'bg-indigo-500', label: 'جيد جداً' };
+  if (pct >= 60) return { color: 'text-amber-700', bg: 'bg-amber-50', bar: 'bg-amber-500', label: 'جيد' };
+  return { color: 'text-rose-700', bg: 'bg-rose-50', bar: 'bg-rose-500', label: 'يحتاج تحسين' };
 }
 
 export default function ParentChildDetailPage() {
@@ -110,12 +110,12 @@ export default function ParentChildDetailPage() {
           loadingMessage="جاري مزامنة بيانات الطالب بالكامل..."
         >
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-6 md:p-8 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             <div className="flex items-center gap-4 md:gap-6 text-right relative z-10">
               <button
                 onClick={() => navigate('/')}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-white/80 text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
+                className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
               >
                 <ArrowRight className="w-5 h-5" />
               </button>
@@ -126,7 +126,7 @@ export default function ParentChildDetailPage() {
                  <div className="min-w-0">
                    <h1 className="text-xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight mb-1 truncate">{child?.name}</h1>
                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] md:text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
+                      <Badge variant="outline" className="bg-slate-50 border-slate-100 text-slate-500 font-black text-[9px] md:text-[10px] py-0.5">{child?.className || 'بدون فصل'}</Badge>
                       <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">{child?.academic_year || '2025/2026'}</span>
                    </div>
                  </div>
@@ -135,7 +135,7 @@ export default function ParentChildDetailPage() {
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 relative z-10">
               <div className="px-5 md:px-8 py-3.5 md:py-5 rounded-[24px] bg-white border border-slate-100 shadow-sm relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
-                 <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
+                 <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-colors shrink-0">
                    <Calendar className="w-5 h-5 md:w-7 md:h-7" />
                  </div>
                  <div className="min-w-0">
@@ -149,14 +149,14 @@ export default function ParentChildDetailPage() {
           {/* Interactive Cards Grid */}
           <section>
             <h2 className="text-2xl font-black text-slate-900 mb-6">التفاصيل الكاملة</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Grades Card */}
               <InteractiveCard
-                title="الدرجات"
+                title="النتائج والدرجات"
                 icon={BookOpen}
                 value={child?.avgGrade ? `${child.avgGrade}%` : '—'}
                 subtitle={child?.grades?.length ? `${child.grades.length} درجة مسجلة` : 'لا توجد درجات'}
-                color="bg-indigo-50 text-indigo-600"
+                color="bg-indigo-50 text-indigo-700"
                 badge={gi.label}
                 onClick={() => navigate(`/parent/children/${id}/grades`)}
               />
@@ -167,19 +167,19 @@ export default function ParentChildDetailPage() {
                 icon={Calendar}
                 value={child?.attendanceRate ? `${child.attendanceRate}%` : '—'}
                 subtitle={child?.attendance?.length ? `${child.attendance.length} يوم مسجل` : 'لا يوجد سجل'}
-                color="bg-emerald-50 text-emerald-600"
-                badge="منتظم"
+                color="bg-emerald-50 text-emerald-700"
+                badge="سجل منتظم"
                 onClick={() => navigate(`/parent/children/${id}/attendance`)}
               />
 
               {/* Financial Card */}
               <InteractiveCard
-                title="المصروفات"
+                title="المصروفات والرسوم"
                 icon={CreditCard}
                 value={child?.feesRemaining ? `${child.feesRemaining} ج.م` : '—'}
-                subtitle={child?.fees?.length ? `${child.fees.length} قسط` : 'لا توجد مصروفات'}
-                color="bg-amber-50 text-amber-600"
-                badge="مستحق"
+                subtitle={child?.fees?.length ? `${child.fees.length} قسط مستحق` : 'لا توجد مصروفات'}
+                color="bg-amber-50 text-amber-700"
+                badge="الحالة المالية"
                 onClick={() => navigate(`/parent/children/${id}/financial`)}
               />
 
@@ -188,8 +188,8 @@ export default function ParentChildDetailPage() {
                 title="المنهج الدراسي"
                 icon={Layers}
                 value={child?.curriculum?.length ? `${child.curriculum.length} مواد` : '—'}
-                subtitle="المواد والمناهج"
-                color="bg-purple-50 text-purple-600"
+                subtitle="تفاصيل المواد والمناهج"
+                color="bg-purple-50 text-purple-700"
                 onClick={() => navigate(`/parent/children/${id}/curriculum`)}
               />
 
@@ -197,8 +197,8 @@ export default function ParentChildDetailPage() {
               <InteractiveCard
                 title="بيانات الطالب"
                 icon={User}
-                subtitle="المعلومات الشخصية"
-                color="bg-slate-50 text-slate-600"
+                subtitle="المعلومات الشخصية والبيانات"
+                color="bg-slate-50 text-slate-700"
                 onClick={() => navigate(`/parent/children/${id}/data`)}
               />
             </div>
@@ -207,7 +207,7 @@ export default function ParentChildDetailPage() {
           {/* Contact Form */}
           <section className="bg-white border border-slate-100 rounded-[32px] p-8 space-y-6 shadow-sm">
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white">
                  <MessageSquare className="w-5 h-5" />
               </div>
               تواصل مع الإدارة
@@ -216,7 +216,7 @@ export default function ParentChildDetailPage() {
               <textarea
                 value={comment}
                 onChange={e => setComment(e.target.value)}
-                className="w-full h-32 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-indigo-500/5 focus:bg-white focus:border-indigo-500/20 transition-all resize-none"
+                className="w-full h-32 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-slate-900/5 focus:bg-white focus:border-slate-900/20 transition-all resize-none"
                 placeholder="اكتب استفسارك أو شكواك هنا..."
               />
               <button

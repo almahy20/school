@@ -34,88 +34,44 @@
     <!-- Preconnect for performance -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
 
   <body>
-    <!-- ☢️ SUPER NUKE: FORCE LIVE-ONLY DATA ☢️ -->
-    <script>
-      (function() {
-        const cleanup = async () => {
-          try {
-            // 1. DON'T unregister Service Workers - they're needed for PWA!
-            // Only delete old/unused caches
-            if ('caches' in window) {
-              const names = await caches.keys();
-              for (const name of names) {
-                // Keep the current PWA cache, delete old ones
-                if (name !== 'school-v1' && !name.startsWith('school-v')) {
-                  await caches.delete(name);
-                }
-              }
-            }
-            console.log('✨ Environment Ready: PWA Enabled');
-          } catch (e) { console.error('Cleanup failed', e); }
-        };
-        cleanup();
-      })();
-    </script>
-
-    <div id="root">
-      <style>
-        .initial-loader {
-          position: fixed;
-          top: 0; left: 0; right: 0; bottom: 0;
-          display: flex; flex-direction: column;
-          align-items: center; justify-content: center;
-          background-color: #0a0f1e;
-          z-index: 9999;
-          font-family: 'Cairo', sans-serif;
-          transition: opacity 0.3s ease-out;
-        }
-        .initial-loader.fade-out {
-          opacity: 0;
-          pointer-events: none;
-        }
-        .initial-loader.hidden {
-          display: none;
-        }
-        .initial-icon {
-          width: 80px; height: 80px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 25px;
-          display: flex; align-items: center; justify-content: center;
-          margin-bottom: 20px;
-          animation: pulse 2s infinite ease-in-out;
-        }
-        .initial-bar {
-          width: 150px; height: 3px;
-          background: rgba(255, 255, 255, 0.05);
-          border-radius: 10px;
-          overflow: hidden;
-        }
-        .initial-progress {
-          width: 40%; height: 100%;
-          background: linear-gradient(90deg, #6366f1, #8b5cf6);
-          animation: move 2s infinite linear;
-        }
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.05); opacity: 1; }
-        }
-        @keyframes move {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(250%); }
-        }
-      </style>
-      <div class="initial-loader">
-        <div class="initial-icon">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+    <!-- ✅ Unified Global Loader (Silent & Professional) -->
+    <div id="unified-loader" class="unified-loader">
+      <div class="loader-content">
+        <div class="loader-icon-box">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="loader-svg"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
         </div>
-        <div class="initial-bar"><div class="initial-progress"></div></div>
+        <div class="loader-bar"><div class="loader-progress"></div></div>
       </div>
+
+      <style>
+        .unified-loader {
+          position: fixed; inset: 0; z-index: 9999;
+          display: flex; align-items: center; justify-content: center;
+          background-color: #0a0f1e; font-family: 'Cairo', sans-serif;
+          transition: opacity 0.4s ease-out;
+        }
+        .unified-loader.fade-out { opacity: 0; pointer-events: none; }
+        .loader-content { display: flex; flex-direction: column; align-items: center; gap: 20px; }
+        .loader-icon-box { 
+          width: 64px; height: 64px; 
+          background: rgba(99, 102, 241, 0.1); 
+          border-radius: 20px; 
+          display: flex; align-items: center; justify-content: center;
+          border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+        .loader-svg { animation: pulse 2s infinite ease-in-out; }
+        .loader-bar { width: 120px; height: 3px; background: rgba(255, 255, 255, 0.05); border-radius: 10px; overflow: hidden; }
+        .loader-progress { height: 100%; width: 40%; background: #6366f1; animation: move 2s infinite linear; }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } }
+        @keyframes move { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+      </style>
     </div>
+
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

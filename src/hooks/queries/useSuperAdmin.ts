@@ -32,7 +32,7 @@ export function useSchools() {
       return data as School[];
     },
     enabled: !!user?.isSuperAdmin,
-    staleTime: 0,
+    staleTime: 5 * 60 * 1000, // 5 دقائق بدلاً من 0
   });
 }
 
@@ -51,7 +51,7 @@ export function useSchoolOrders() {
       return data as SchoolOrder[];
     },
     enabled: !!user?.isSuperAdmin,
-    staleTime: 0,
+    staleTime: 5 * 60 * 1000, // 5 دقائق بدلاً من 0
   });
 }
 
