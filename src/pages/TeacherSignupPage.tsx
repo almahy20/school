@@ -73,7 +73,9 @@ export default function TeacherSignupPage() {
           </div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">تسجيل كمعلم جديد</h1>
           <p className="text-sm font-medium text-slate-400">
-            الانضمام إلى مدرسة: <span className="font-bold text-slate-800">{school?.name}</span>
+            الانضمام إلى مدرسة: <span className="font-bold text-slate-800">
+              {school?.name?.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim()}
+            </span>
           </p>
         </div>
 

@@ -30,8 +30,8 @@ export default function PwaManager() {
       if (cached) {
         try {
           const s = JSON.parse(cached);
-          name = s.name;
           let cleanName = s.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          name = cleanName || s.name;
           shortName = cleanName || s.name;
           icon = s.logo_url || defaultIcon;
           slug = s.slug;
@@ -49,10 +49,8 @@ export default function PwaManager() {
           console.error('Error fetching PWA school data:', error);
         } else if (data) {
           const school = data as any;
-          name = school.name;
-          // Use full school name as short_name (remove "مدرسة" or "مدرسه" if present)
-          let cleanName = school.name;
-          cleanName = cleanName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          let cleanName = school.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          name = cleanName || school.name;
           shortName = cleanName || school.name;
           icon = school.logo_url || "/icons/icon-192.png";
           slug = school.slug;
@@ -83,10 +81,8 @@ export default function PwaManager() {
             console.error('Error fetching PWA school data by slug:', error);
           } else if (data) {
             const school = data as any;
-            name = school.name;
-            // Use full school name as short_name (remove "مدرسة" or "مدرسه" if present)
-            let cleanName = school.name;
-            cleanName = cleanName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+            let cleanName = school.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+            name = cleanName || school.name;
             shortName = cleanName || school.name;
             icon = school.logo_url || "/icons/icon-192.png";
             slug = school.slug;

@@ -45,7 +45,8 @@ export function useBranding() {
           
           // ✅ Sync Title IMMEDIATELY from cache before even setting query data
           if (parsed.name) {
-            const cleanName = parsed.name.split(' — ')[0];
+            let cleanName = parsed.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+            cleanName = cleanName.split(' — ')[0];
             if (document.title !== cleanName) {
               document.title = cleanName;
             }
@@ -69,7 +70,8 @@ export function useBranding() {
         localStorage.setItem(`branding_${user.schoolId}`, JSON.stringify(data));
         // ✅ Sync Title when data arrives
         if (data.name) {
-          const cleanName = data.name.split(' — ')[0];
+          let cleanName = data.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          cleanName = cleanName.split(' — ')[0];
           if (document.title !== cleanName) {
             document.title = cleanName;
           }

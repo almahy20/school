@@ -86,8 +86,11 @@ export default function Sidebar({ onClose }: SidebarProps) {
     // ✅ تحسين موحد: نستخدم نفس الحجم (120) لضمان استخدام الكاش في كل مكان
     const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
     
+    let rawName = branding?.name || 'الجيل الجديد';
+    const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+
     return {
-      name: branding?.name || 'مدرسة الجيل الجديد',
+      name: cleanName || rawName,
       logo: optimizedLogo,
     };
   }, [branding]);

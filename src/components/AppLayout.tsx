@@ -39,8 +39,11 @@ export default function AppLayout({ children }: Props) {
     // ده بيخلي الصورة أخف بكتير وبيقلل استهلاك الـ Network
     const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
 
+    let rawName = branding?.name || 'الجيل الجديد';
+    const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+
     return {
-      name: branding?.name || 'مدرسة الجيل الجديد',
+      name: cleanName || rawName,
       logo: optimizedLogo,
       themeColor: '#1A3C8F'
     };

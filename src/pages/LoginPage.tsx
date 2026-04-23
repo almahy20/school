@@ -37,7 +37,8 @@ export default function LoginPage() {
   // Update document title
   useEffect(() => {
     if (schoolBranding.name) {
-      document.title = `${schoolBranding.name} — تسجيل الدخول`;
+      let cleanName = schoolBranding.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+      document.title = `${cleanName} — تسجيل الدخول`;
     } else {
       document.title = "النظام الذكي — تسجيل الدخول";
     }
@@ -85,7 +86,9 @@ export default function LoginPage() {
               <BookOpen className="w-10 h-10 text-indigo-400 group-hover:rotate-6 transition-transform" />
             )}
           </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">{schoolBranding.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
+            {schoolBranding.name?.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim()}
+          </h1>
           <p className="text-sm font-bold text-white/40 tracking-wider">نظام الإدارة المدرسية الذكي</p>
         </div>
 
