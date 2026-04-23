@@ -51,7 +51,7 @@ export const queryClient = new QueryClient({
 // ✅ Optimization: IndexedDB Query Persistence with Versioning
 if (typeof window !== 'undefined') {
   // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v1.1'; 
+  const CACHE_VERSION = 'v1.2'; 
 
   const idbPersister = {
     persistClient: async (client: any) => {

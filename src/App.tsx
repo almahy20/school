@@ -74,12 +74,12 @@ function AppRoutes() {
 
   // ✅ Unified Loader Control
   useEffect(() => {
-    // 1. If auth is determined, or if 10 seconds pass (failsafe)
+    // 1. If auth is determined, or if 5 seconds pass (failsafe)
     const hideLoader = () => {
       const loader = document.getElementById('unified-loader');
       if (loader) {
         loader.classList.add('fade-out');
-        setTimeout(() => loader.remove(), 500);
+        setTimeout(() => loader.remove(), 400);
       }
     };
 
@@ -87,8 +87,8 @@ function AppRoutes() {
       hideLoader();
     }
 
-    // Failsafe: hide loader after 10s regardless of auth status
-    const failsafe = setTimeout(hideLoader, 10000);
+    // Failsafe: hide loader after 5s regardless of auth status
+    const failsafe = setTimeout(hideLoader, 5000);
     return () => clearTimeout(failsafe);
   }, [loading]);
 

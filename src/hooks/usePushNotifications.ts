@@ -54,20 +54,37 @@ export function usePushNotifications() {
   };
 
   const subscribeToNotifications = async (): Promise<boolean> => {
-    if (!user?.id || !VAPID_PUBLIC_KEY) return false;
+    if (!user?.id) return false;
+
+    // ✅ التحقق من وجود المفتاح قبل البدء
+    if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'your_vapid_public_key_here') {
+      logger.error('Push notification failed: VAPID_PUBLIC_KEY is missing or invalid in .env');
+      toast({ 
+        title: 'خطأ في الإعدادات', 
+        description: 'مفتاح الإشعارات (VAPID) غير مضبوط في ملف .env', 
+        variant: 'destructive' 
+      });
+      return false;
+    }
 
     try {
+      // ✅ التحقق من دعم المتصفح للإشعارات قبل طلب الإذن
+      if (!('Notification' in window)) {
+        throw new Error('متصفحك لا يدعم نظام الإشعارات.');
+      }
+
       const perm = await Notification.requestPermission();
       setPermission(perm);
 
       if (perm === 'granted') {
         const registration = await navigator.serviceWorker.ready;
         
+        // تنظيف أي اشتراك قديم
         try {
           const existing = await registration.pushManager.getSubscription();
           if (existing) await existing.unsubscribe();
         } catch (e) {
-          // ignore cleanup errors
+          logger.warn('Failed to unsubscribe existing push:', e);
         }
 
         const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
@@ -93,15 +110,21 @@ export function usePushNotifications() {
         toast({ title: 'تم تفعيل الإشعارات بنجاح!' });
         return true;
       } else {
-        toast({ title: 'لم يتم السماح', description: 'يرجى السماح بالإشعارات من إعدادات المتصفح.', variant: 'destructive' });
+        toast({ title: 'لم يتم السماح', description: 'يرجى السماح بالإشعارات من إعدادات المتصفح لتلقي التنبيهات.', variant: 'destructive' });
         return false;
       }
     } catch (error: any) {
       logger.error('Push notification setup error:', error);
       
       let errorMsg = `فشل الاشتراك: ${error.message}`;
+      
+      // ✅ معالجة أخطاء محددة للمستخدم
       if (error.name === 'AbortError') {
-        errorMsg = 'خدمة الإشعارات غير متاحة حالياً في متصفحك.';
+        errorMsg = 'فشل الاتصال بخدمة إشعارات المتصفح. تأكد من عدم استخدام وضع "التصفح المتخفي" (Incognito) ومن جودة اتصالك بالإنترنت.';
+      } else if (error.name === 'NotAllowedError') {
+        errorMsg = 'تم حظر الإشعارات من قبل المتصفح. يرجى تفعيلها من إعدادات الموقع.';
+      } else if (error.message?.includes('VAPID')) {
+        errorMsg = 'مفتاح VAPID غير صالح. يرجى التأكد من المفاتيح في ملف .env';
       }
 
       toast({ 
