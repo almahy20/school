@@ -34,6 +34,15 @@ export default function LoginPage() {
     };
   }, [schoolData]);
 
+  // Update document title
+  useEffect(() => {
+    if (schoolBranding.name) {
+      document.title = `${schoolBranding.name} — تسجيل الدخول`;
+    } else {
+      document.title = "النظام الذكي — تسجيل الدخول";
+    }
+  }, [schoolBranding.name]);
+
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
 

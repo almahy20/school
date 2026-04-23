@@ -25,48 +25,83 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
     queryFn: async () => {
       if (!user?.schoolId) return { data: [], count: 0, stats: { total_due: 0, total_paid: 0 } };
 
-      // ─── جلب الإحصائيات (الكل لهذا الترم والمدرسة) ───
-      let statsQ = supabase
-        .from('fees')
-        .select('amount_due, amount_paid')
-        .eq('school_id', user.schoolId);
-      if (term) statsQ = statsQ.eq('term', term); // ✅ إعادة تعيين النتيجة
-      const { data: allFees } = await statsQ;
-      
-      const total_due  = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_due)  || 0), 0);
-      const total_paid = (allFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
-
-      // ─── جلب القائمة (مجزأة) ───
-      // نستخدم الطلاب كنقطة انطلاق ثم ننضم مع الرسوم لهذا الترم
-      let q = supabase
+      // 1. Get all students with their fixed monthly fee
+      let studentsQ = supabase
         .from('students')
-        .select('*, classes(id, name), fees!left(*)', { count: 'exact' })
+        .select('id, name, monthly_fee, class_id, classes(id, name)', { count: 'exact' })
         .eq('school_id', user.schoolId);
 
-      if (term) {
-        q = q.eq('fees.term', term);
-      }
-      if (search) {
-        q = q.ilike('name', `%${search}%`);
-      }
-      if (classId !== 'all') {
-        q = q.eq('class_id', classId);
-      }
+      if (search) studentsQ = studentsQ.ilike('name', `%${search}%`);
+      if (classId !== 'all') studentsQ = studentsQ.eq('class_id', classId);
 
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      const { data, error, count } = await q
+      const { data: students, error: sErr, count } = await studentsQ
         .order('name')
         .range(from, to);
 
-      if (error) throw error;
+      if (sErr) throw sErr;
 
-      // ننسق البيانات لتشبه الهيكل المتوقع في الواجهة
-      const enrichedData = (data || []).map((s: any) => ({
-        ...s,
-        fee: Array.isArray(s.fees) ? s.fees[0] : s.fees
-      }));
+      // 2. Get fee payments for the selected term
+      const studentIds = (students || []).map(s => s.id);
+      const { data: monthFees, error: fErr } = await supabase
+        .from('fees')
+        .select('*')
+        .eq('school_id', user.schoolId)
+        .eq('term', term)
+        .in('student_id', studentIds);
+
+      if (fErr) throw fErr;
+
+      // 3. Calculate Global Stats for this term (for all students in school/class)
+      // Note: We need another query to get total due/paid for ALL students, not just current page
+      let allStudentsQ = supabase
+        .from('students')
+        .select('id, monthly_fee')
+        .eq('school_id', user.schoolId);
+      if (classId !== 'all') allStudentsQ = allStudentsQ.eq('class_id', classId);
+      const { data: allStudents } = await allStudentsQ;
+
+      let allFeesQ = supabase
+        .from('fees')
+        .select('amount_paid')
+        .eq('school_id', user.schoolId)
+        .eq('term', term);
+      // If we want stats for a specific class, we'd need a join or a list of IDs
+      // For simplicity and performance, let's use the allStudents list if classId is not 'all'
+      if (classId !== 'all' && allStudents) {
+        allFeesQ = allFeesQ.in('student_id', allStudents.map(s => s.id));
+      }
+      const { data: allTermFees } = await allFeesQ;
+
+      const total_due = (allStudents || []).reduce((sum, s) => sum + (Number(s.monthly_fee) || 0), 0);
+      const total_paid = (allTermFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+
+      // 4. Enrich student data
+      const enrichedData = (students || []).map((s: any) => {
+        const feeRecord = (monthFees || []).find(f => f.student_id === s.id);
+        
+        const amount_due = Number(s.monthly_fee) || 0;
+        const amount_paid = Number(feeRecord?.amount_paid) || 0;
+        
+        let status = 'unpaid';
+        if (amount_due > 0) {
+          if (amount_paid >= amount_due) status = 'paid';
+          else if (amount_paid > 0) status = 'partial';
+        }
+
+        return {
+          ...s,
+          fee: {
+            id: feeRecord?.id,
+            amount_due,
+            amount_paid,
+            status,
+            term
+          }
+        };
+      });
 
       return { 
         data: enrichedData, 
@@ -77,6 +112,24 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
     enabled: !!user?.schoolId,
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdateStudentMonthlyFee() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ studentId, amount }: { studentId: string; amount: number }) => {
+      const { error } = await supabase
+        .from('students')
+        .update({ monthly_fee: amount })
+        .eq('id', studentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('تم تحديث المطالبة المالية الثابتة للطالب');
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+    },
   });
 }
 
@@ -99,10 +152,8 @@ export function useUpsertFee() {
         const { error } = await supabase
           .from('fees')
           .update({
-            amount_due: record.amount_due,
             amount_paid: record.amount_paid,
             status: record.status,
-            term: record.term,
             school_id: record.school_id || user?.schoolId
           })
           .eq('id', existing.id);
@@ -114,7 +165,7 @@ export function useUpsertFee() {
           .insert({
             student_id: record.student_id,
             term: record.term,
-            amount_due: record.amount_due || 0,
+            amount_due: record.amount_due || 0, // This will be the snapshot of monthly_fee
             amount_paid: record.amount_paid || 0,
             status: record.status || 'unpaid',
             school_id: record.school_id || user?.schoolId
@@ -123,7 +174,7 @@ export function useUpsertFee() {
       }
     },
     onSuccess: () => {
-      toast.success('تم تحديث بيانات الرسوم بنجاح');
+      toast.success('تم تسجيل الدفعة بنجاح');
       queryClient.invalidateQueries({ queryKey: ['fees'] });
     },
   });
@@ -134,44 +185,47 @@ export function useGenerateFees() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ term, classId, amount }: { term: string; classId: string; amount: number }) => {
+    mutationFn: async ({ amount, classId }: { amount: number; classId: string; term?: string }) => {
       if (!user?.schoolId) return;
 
-      // 1. Get all students in the class (or all students in school if classId is 'all')
-      let q = supabase.from('students').select('id').eq('school_id', user.schoolId);
+      // Update monthly_fee for all students in class (or school)
+      let q = supabase
+        .from('students')
+        .update({ monthly_fee: amount })
+        .eq('school_id', user.schoolId);
+
       if (classId !== 'all') {
         q = q.eq('class_id', classId);
       }
       
-      const { data: students, error: sErr } = await q;
-      if (sErr) throw sErr;
-      if (!students || students.length === 0) return;
-
-      // 2. For each student, insert a fee record if it doesn't exist for this term
-      const operations = students.map(async (s) => {
-        const { data: existing } = await supabase
-          .from('fees')
-          .select('id')
-          .eq('student_id', s.id)
-          .eq('term', term)
-          .maybeSingle();
-
-        if (!existing) {
-          return supabase.from('fees').insert({
-            student_id: s.id,
-            term: term,
-            amount_due: amount,
-            amount_paid: 0,
-            status: 'unpaid',
-            school_id: user.schoolId
-          });
-        }
-      });
-
-      await Promise.all(operations);
+      const { error } = await q;
+      if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('تم توليد الرسوم بنجاح');
+      toast.success('تم تحديث المطالبة الثابتة لجميع الطلاب بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+    },
+  });
+}
+
+export function useClearTermFees() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (term: string) => {
+      if (!user?.schoolId || !term) return;
+
+      const { error } = await supabase
+        .from('fees')
+        .delete()
+        .eq('school_id', user.schoolId)
+        .eq('term', term);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('تم تصفير سجلات هذا الشهر بنجاح');
       queryClient.invalidateQueries({ queryKey: ['fees'] });
     },
   });

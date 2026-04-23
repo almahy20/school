@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>النظام الذكي — نظام إدارة المدارس المتكامل</title>
-    <meta name="description" content="منصة إدارة المدارس الذكية — إدارة الطلاب والمعلمين والحضور والرسائل في مكان واحد." />
-    <meta name="author" content="عبدالرحمن سيد فوزي" />
+    <title>النظام الذكي لإدارة المدارس</title>
+    <meta name="description" content="المنصة المتكاملة لإدارة المدارس والتحصيل العلمي." />
+    <meta name="author" content="النظام الذكي" />
     <meta name="keywords" content="إدارة مدرسة, نظام مدرسي, SaaS, تعليم, حضور, معلمين, أولياء أمور" />
 
     <!-- PWA -->
@@ -16,12 +16,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="المدرسة" />
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- Favicon (Suppressed default request) -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="النظام الذكي — نظام إدارة المدارس المتكامل" />
+    <meta property="og:title" content="النظام الذكي — إدارة مدارس متكاملة" />
     <meta property="og:description" content="منصة احترافية لإدارة المدارس والتحصيل العلمي." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ar_EG" />
@@ -37,20 +36,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   </head>
 
-  <body>
-    <!-- ✅ Unified Global Loader (Silent & Professional) -->
-    <div id="unified-loader" class="unified-loader">
-      <style>
-        .unified-loader {
-          position: fixed; inset: 0; z-index: 9999;
-          display: flex; align-items: center; justify-content: center;
-          background-color: #0a0f1e; font-family: 'Cairo', sans-serif;
-          transition: opacity 0.4s ease-out;
-        }
-        .unified-loader.fade-out { opacity: 0; pointer-events: none; }
-      </style>
-    </div>
-
+  <body style="background-color: #f8fafc;">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

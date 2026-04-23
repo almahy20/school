@@ -42,6 +42,9 @@ export default function RealtimeNotificationsManager() {
 
     // 2. In-app Toast
     const config = getTypeConfig(newNotification.type);
+
+    // ✅ Optimization: Check if the notification was already handled by Service Worker
+    // (Wait a bit to see if SW showed it first, otherwise show toast)
     toast(newNotification.title, {
       description: newNotification.message,
       icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),

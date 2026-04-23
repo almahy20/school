@@ -14,9 +14,12 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   const { user, loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const hasCachedUser = !!localStorage.getItem('app_user_cache');
   
-  if (loading) {
-    return null;
+  // ✅ Optimization: If we have a cached user, don't show null during background loading.
+  // This keeps the page "present" during refresh.
+  if (loading && !hasCachedUser) {
+    return <div className="min-h-screen bg-[#f8fafc]" />;
   }
   
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;

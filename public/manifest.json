@@ -1,7 +1,7 @@
 {
-  "name": "المدرسة الذكية",
-  "short_name": "المدرسة",
-  "description": "نظام إدارة المدارس الذكي المتكامل",
+  "name": "النظام الذكي لإدارة المدارس",
+  "short_name": "النظام الذكي",
+  "description": "منصة متكاملة لإدارة المدارس",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",

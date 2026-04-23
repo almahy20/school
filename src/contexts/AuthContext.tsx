@@ -122,7 +122,21 @@ async function prefetchCommonQueries(appUser: AppUser) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<AppUser | null>(null);
+  
+  // ✅ Optimization: Initialize user from localStorage for instant "App Shell" rendering
+  // This prevents the full-page white/loading flicker on refresh
+  const [user, setUser] = useState<AppUser | null>(() => {
+    const cached = localStorage.getItem('app_user_cache');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
   const [isLoading, setIsLoading] = useState(true);
 
   const syncUser = async (currentSession: Session | null) => {
@@ -131,10 +145,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const appUser = await getAppUserData(currentSession.user);
       setUser(appUser);
       
-      // Prefetch common queries in background after user is set
+      // ✅ Cache user data for next refresh
       if (appUser) {
+        localStorage.setItem('app_user_cache', JSON.stringify(appUser));
+        
         // ✅ Optimization: Defer prefetching until the main thread is completely free
-        // This significantly reduces the initial "Load" time and TBT (Total Blocking Time)
         const deferPrefetch = () => {
           if ('requestIdleCallback' in window) {
             (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
@@ -146,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } else {
       setUser(null);
+      localStorage.removeItem('app_user_cache');
     }
     setIsLoading(false);
   };

@@ -75,6 +75,13 @@ export function useUpsertAttendance() {
       // 2. Insert new records
       const { error } = await supabase.from('attendance').insert(records);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'MARK_STUDENT_ATTENDANCE',
+        p_entity_type: 'attendance',
+        p_details: `رصد حضور لعدد ${records.length} طلاب لتاريخ ${date}`
+      });
     },
     // ✅ Optimization: Optimistic Update
     onMutate: async (newRecords) => {

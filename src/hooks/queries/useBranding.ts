@@ -42,6 +42,15 @@ export function useBranding() {
         try {
           const parsed = JSON.parse(cached);
           const existing = queryClient.getQueryData(queryKey);
+          
+          // ✅ Sync Title IMMEDIATELY from cache before even setting query data
+          if (parsed.name) {
+            const cleanName = parsed.name.split(' — ')[0];
+            if (document.title !== cleanName) {
+              document.title = cleanName;
+            }
+          }
+
           if (!existing) {
             queryClient.setQueryData(queryKey, parsed);
           }
@@ -58,6 +67,13 @@ export function useBranding() {
       const data = await fetchBranding(user?.schoolId || null);
       if (data && user?.schoolId) {
         localStorage.setItem(`branding_${user.schoolId}`, JSON.stringify(data));
+        // ✅ Sync Title when data arrives
+        if (data.name) {
+          const cleanName = data.name.split(' — ')[0];
+          if (document.title !== cleanName) {
+            document.title = cleanName;
+          }
+        }
       }
       return data;
     },

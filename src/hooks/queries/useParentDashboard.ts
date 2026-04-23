@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
 
+const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
 export function useParentChildren() {
   const { user } = useAuth();
   const queryKey = useMemo(() => ['parent-children', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
@@ -91,7 +93,7 @@ export function useChildFullDetails(studentId: string | undefined) {
 
       if (!data) return null;
 
-      const { student, grades, attendance, fees, payments, curriculum } = data;
+      const { student, grades, attendance, fees, payments, curriculum, current_term } = data;
 
       const presentCount = (attendance || []).filter((a: any) => a.status === 'present').length;
       
@@ -100,20 +102,54 @@ export function useChildFullDetails(studentId: string | undefined) {
         ? Math.round(numericGrades.reduce((sum: number, g: any) => sum + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
         : 0;
 
-      const totalDue = (fees || []).reduce((sum: number, f: any) => sum + (Number(f.amount_due) || 0), 0);
-      const totalPaid = (fees || []).reduce((sum: number, f: any) => sum + (Number(f.amount_paid) || 0), 0);
+      // ✅ New Monthly logic for parents:
+      // If the current month doesn't have a fee record yet, create a virtual one with 0 paid
+      let processedFees = [...(fees || [])];
+      const currentMonthFee = processedFees.find((f: any) => f.term === current_term);
+      
+      if (!currentMonthFee && student?.monthly_fee > 0) {
+        const now = new Date();
+        processedFees.push({
+          id: `virtual-${current_term}`,
+          term: current_term,
+          month: now.getMonth() + 1,
+          year: now.getFullYear(),
+          amount_due: student.monthly_fee,
+          amount_paid: 0,
+          status: 'unpaid',
+          created_at: now.toISOString()
+        });
+      }
+
+      // Calculate TOTAL remaining: (sum of all unpaid fees from database) + (remaining for current month)
+      // We use the original 'fees' for past ones and calculate current separately to be safe
+      const pastFeesRemaining = (fees || [])
+        .filter((f: any) => f.term !== current_term)
+        .reduce((sum: number, f: any) => sum + (Number(f.amount_due) - Number(f.amount_paid)), 0);
+
+      const currentMonthAmountDue = Number(student?.monthly_fee) || 0;
+      const currentMonthAmountPaid = currentMonthFee ? Number(currentMonthFee.amount_paid) : 0;
+      const currentMonthRemaining = Math.max(0, currentMonthAmountDue - currentMonthAmountPaid);
+
+      const totalFeesRemaining = Math.max(0, pastFeesRemaining + currentMonthRemaining);
+      const attendanceRate = (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0;
 
       return {
         ...student,
         grades: grades || [],
         attendance: attendance || [],
-        fees: fees || [],
+        fees: processedFees,
         payments: payments || [],
         curriculum: curriculum || [],
+        avgGrade,
+        attendanceRate,
+        feesRemaining: totalFeesRemaining,
+        currentTerm: current_term,
         summary: {
           avgGrade,
-          attendanceRate: (attendance || []).length > 0 ? Math.round((presentCount / (attendance || []).length) * 100) : 0,
-          feesRemaining: Math.max(0, totalDue - totalPaid)
+          attendanceRate,
+          feesRemaining: totalFeesRemaining,
+          currentTerm: current_term
         }
       };
     },

@@ -5,13 +5,13 @@ import { useToast } from '@/hooks/use-toast';
 import { 
   CreditCard, Search, Plus, TrendingUp, Wallet, Clock, User,
   CheckCircle, AlertCircle, Download, MoreHorizontal, Calendar,
-  Users
+  Users, Trash2, Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useClasses } from '@/hooks/queries';
+import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useClasses, useClearTermFees, useUpdateStudentMonthlyFee } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
@@ -21,6 +21,7 @@ const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'ما
 export default function FeesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const clearTermMutation = useClearTermFees();
   
   // Monthly system
   const currentMonthIdx = new Date().getMonth();
@@ -36,8 +37,9 @@ export default function FeesPage() {
   
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showAddFeeModal, setShowAddFeeModal] = useState(false);
+  const [showFeeModal, setShowFeeModal] = useState(false);
   const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [isEditingFee, setIsEditingFee] = useState(false);
 
   // ── Debounce Search ──
   useEffect(() => {
@@ -82,6 +84,16 @@ export default function FeesPage() {
   const handleTermChange = (val: string) => { setSelectedTerm(val); setPage(1); };
   const handleStatusChange = (val: string) => { setFilterStatus(val); setPage(1); };
 
+  const handleClearTerm = async () => {
+    if (window.confirm(`هل أنت متأكد من تصفير جميع سجلات ${selectedTerm}؟ لا يمكن التراجع عن هذه الخطوة.`)) {
+      try {
+        await clearTermMutation.mutateAsync(selectedTerm);
+      } catch (err: any) {
+        toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+      }
+    }
+  };
+
   // ملاحظة: فلترة الحالة "الكل/مدفوع/متأخر" ما زالت تحتاج لفلترة خادم إذا زادت البيانات، 
   // ولكن حالياً نقوم بفلترة الصفحة الحالية فقط إذا كان filterStatus غير "الكل"
   // أو الأفضل إضافتها لـ useFees كبارامتر.
@@ -116,7 +128,7 @@ export default function FeesPage() {
           title="إدارة الرسوم المالية"
           subtitle="متابعة الأقساط المدرسية وسجلات التحصيل للفترات الدراسية"
           action={
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4 justify-end">
               <div className="relative group">
                 <Users className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <select value={selectedClassId} onChange={e => handleClassChange(e.target.value)}
@@ -127,6 +139,14 @@ export default function FeesPage() {
               </div>
               <Button onClick={() => setShowGenerateModal(true)} className="h-12 px-6 rounded-2xl bg-slate-900 text-white font-black text-xs shadow-xl gap-3">
                 <TrendingUp className="w-4 h-4" /> توليد رسوم جماعية
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleClearTerm} 
+                disabled={clearTermMutation.isPending}
+                className="h-12 px-6 rounded-2xl font-black text-xs shadow-xl gap-3"
+              >
+                <Trash2 className="w-4 h-4" /> تصفير الشهر
               </Button>
             </div>
           }
@@ -197,7 +217,8 @@ export default function FeesPage() {
                     student={s} 
                     term={selectedTerm}
                     onAddPayment={() => { setSelectedStudent(s); setShowPaymentModal(true); }}
-                    onAddFee={() => { setSelectedStudent(s); setShowAddFeeModal(true); }}
+                    onAddFee={() => { setSelectedStudent(s); setShowFeeModal(true); setIsEditingFee(false); }}
+                    onEditFee={() => { setSelectedStudent(s); setShowFeeModal(true); setIsEditingFee(true); }}
                   />
                 ))}
             </div>
@@ -217,19 +238,23 @@ export default function FeesPage() {
       {showPaymentModal && selectedStudent && (
         <PaymentModal 
           fee={selectedStudent.fee} 
+          studentId={selectedStudent.id}
           studentName={selectedStudent.name}
+          selectedTerm={selectedTerm}
           onClose={() => setShowPaymentModal(false)}
           onSuccess={onUpdateSuccess}
         />
       )}
 
-      {showAddFeeModal && selectedStudent && (
-        <AddFeeModal 
+      {showFeeModal && selectedStudent && (
+        <FeeModal 
           studentId={selectedStudent.id}
           studentName={selectedStudent.name}
+          fee={selectedStudent.fee}
+          isEditing={isEditingFee}
           user={user}
           selectedTerm={selectedTerm}
-          onClose={() => setShowAddFeeModal(false)}
+          onClose={() => setShowFeeModal(false)}
           onSuccess={onUpdateSuccess}
         />
       )}
@@ -247,7 +272,7 @@ export default function FeesPage() {
   );
 }
 
-function StudentFeeCard({ student, onAddPayment, onAddFee, term }: any) {
+function StudentFeeCard({ student, onAddPayment, onAddFee, term, onEditFee }: any) {
   const fee = student.fee;
   const status = !fee ? 'unpaid' : fee.status;
   
@@ -265,7 +290,9 @@ function StudentFeeCard({ student, onAddPayment, onAddFee, term }: any) {
              <Badge className={cn("px-3 py-1 rounded-lg font-black text-[9px] border-none", config.color)}>
                 {config.label}
              </Badge>
-             <span className="text-[9px] font-black text-slate-300 uppercase">{student.classes?.name || 'فصل عام'}</span>
+             <div className="flex items-center gap-2">
+                <span className="text-[9px] font-black text-slate-300 uppercase">{student.classes?.name || 'فصل عام'}</span>
+             </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -299,16 +326,22 @@ function StudentFeeCard({ student, onAddPayment, onAddFee, term }: any) {
                   <CreditCard className="w-4 h-4" /> إنشاء مطالبة مالية
                </Button>
              )}
-             <Button variant="ghost" className="h-11 px-4 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-900 transition-all">
-                <MoreHorizontal className="w-5 h-5" />
-             </Button>
+             {fee ? (
+               <Button onClick={onEditFee} variant="ghost" className="h-11 px-4 rounded-xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all">
+                  <Edit2 className="w-5 h-5" />
+               </Button>
+             ) : (
+               <Button variant="ghost" className="h-11 px-4 rounded-xl bg-slate-50 text-slate-400 hover:text-slate-900 transition-all">
+                  <MoreHorizontal className="w-5 h-5" />
+               </Button>
+             )}
           </div>
        </div>
     </div>
   );
 }
 
-function PaymentModal({ fee, studentName, onClose, onSuccess }: any) {
+function PaymentModal({ fee, studentId, studentName, selectedTerm, onClose, onSuccess }: any) {
   const { toast } = useToast();
   const [paid, setPaid] = useState('');
   const upsertMutation = useUpsertFee();
@@ -319,15 +352,18 @@ function PaymentModal({ fee, studentName, onClose, onSuccess }: any) {
     if (numPaid <= 0) return;
     
     try {
-      const newPaid = Number(fee.amount_paid) + numPaid;
-      const status = newPaid >= Number(fee.amount_due) ? 'paid' : 'partial';
+      const currentPaid = Number(fee?.amount_paid || 0);
+      const amountDue = Number(fee?.amount_due || 0);
+      const newPaid = currentPaid + numPaid;
+      const status = newPaid >= amountDue ? 'paid' : 'partial';
 
       await upsertMutation.mutateAsync({
-        id: fee.id,
+        id: fee?.id,
+        amount_due: amountDue,
         amount_paid: newPaid,
         status,
-        term: fee.term,
-        student_id: fee.student_id
+        term: selectedTerm,
+        student_id: studentId
       });
 
       toast({ title: 'تم تسجيل الدفعة بنجاح' });
@@ -364,23 +400,18 @@ function PaymentModal({ fee, studentName, onClose, onSuccess }: any) {
   );
 }
 
-function AddFeeModal({ studentId, studentName, user, selectedTerm, onClose, onSuccess }: any) {
+function FeeModal({ studentId, studentName, fee, isEditing, user, selectedTerm, onClose, onSuccess }: any) {
   const { toast } = useToast();
-  const [due, setDue] = useState('3000');
-  const upsertMutation = useUpsertFee();
+  const [due, setDue] = useState(fee?.amount_due?.toString() || '3000');
+  const updateMonthlyFeeMutation = useUpdateStudentMonthlyFee();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await upsertMutation.mutateAsync({
-        student_id: studentId,
-        amount_due: Number(due),
-        amount_paid: 0,
-        term: selectedTerm,
-        status: 'unpaid',
-        school_id: user?.schoolId,
+      await updateMonthlyFeeMutation.mutateAsync({
+        studentId,
+        amount: Number(due),
       });
-      toast({ title: 'تم إنشاء المطالبة المالية' });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -391,20 +422,22 @@ function AddFeeModal({ studentId, studentName, user, selectedTerm, onClose, onSu
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
       <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-8 rounded-[40px] animate-in zoom-in-95 relative" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-black text-slate-900 mb-6">إنشاء مطالبة مالية جديدة</h2>
+        <h2 className="text-xl font-black text-slate-900 mb-2">ضبط المطالبة المالية الثابتة</h2>
+        <p className="text-[10px] font-bold text-indigo-500 mb-6 uppercase tracking-widest">هذا المبلغ سيطبق كقيمة مطلوبة في كل الشهور</p>
+        
         <div className="p-4 bg-slate-50 rounded-2xl mb-6">
            <p className="text-[10px] font-black text-slate-400 uppercase mb-1">اسم الطالب</p>
            <p className="text-sm font-black text-slate-900">{studentName}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">إجمالي المبلغ المطلوب</label>
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">إجمالي المبلغ المطلوب (شهرياً)</label>
             <Input type="number" value={due} onChange={e => setDue(e.target.value)} required
               className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold" />
           </div>
           <div className="flex gap-3 pt-4">
-            <Button type="submit" disabled={upsertMutation.isPending} className="flex-1 h-12 rounded-xl bg-indigo-600 text-white font-black">
-              {upsertMutation.isPending ? 'جاري الإنشاء...' : 'حفظ البيانات'}
+            <Button type="submit" disabled={updateMonthlyFeeMutation.isPending} className="flex-1 h-12 rounded-xl bg-indigo-600 text-white font-black">
+              {updateMonthlyFeeMutation.isPending ? 'جاري الحفظ...' : 'حفظ المطالبة الثابتة'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost" className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-400">إلغاء</Button>
           </div>
@@ -424,10 +457,9 @@ function GenerateTermFeesModal({ user, term, students, onClose, onSuccess }: any
     try {
       await generateMutation.mutateAsync({
         students,
-        term,
-        amount: Number(amount)
+        amount: Number(amount),
+        classId: 'all' // You can refine this to use selectedClassId if needed
       });
-      toast({ title: `تم توليد رسوم ${term} لجميع الطلاب` });
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -438,19 +470,19 @@ function GenerateTermFeesModal({ user, term, students, onClose, onSuccess }: any
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
       <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-8 rounded-[40px] animate-in zoom-in-95 relative" onClick={e => e.stopPropagation()}>
-        <h2 className="text-xl font-black text-slate-900 mb-6">توليد رسوم جماعية</h2>
+        <h2 className="text-xl font-black text-slate-900 mb-6">ضبط مطالبات جماعية</h2>
         <div className="p-5 rounded-2xl bg-indigo-50 border border-indigo-100 mb-6">
-           <p className="text-xs font-bold text-indigo-600 leading-relaxed">سيتم إنشاء مطالبة مالية لجميع الطلاب المسجلين في مدرستك لـ {term}.</p>
+           <p className="text-xs font-bold text-indigo-600 leading-relaxed">سيتم تحديث "المطالبة المالية الثابتة" لجميع الطلاب المسجلين. هذا المبلغ سيظهر كقيمة مطلوبة في كل الشهور.</p>
         </div>
         <form onSubmit={handleGenerate} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">المبلغ الموحد لكل طالب</label>
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase">المبلغ الموحد (شهرياً)</label>
             <Input type="number" value={amount} onChange={e => setAmount(e.target.value)} required
               className="h-12 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold" />
           </div>
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={generateMutation.isPending} className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg shadow-slate-900/20">
-              {generateMutation.isPending ? 'جاري التوليد...' : 'بدء التوليد الآن'}
+              {generateMutation.isPending ? 'جاري التحديث...' : 'تحديث جميع الطلاب'}
             </Button>
             <Button type="button" onClick={onClose} variant="ghost" className="flex-1 h-12 rounded-xl bg-slate-50 text-slate-400">إلغاء</Button>
           </div>

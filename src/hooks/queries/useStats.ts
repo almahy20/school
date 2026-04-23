@@ -14,7 +14,7 @@ export function useAdminStats() {
     queryFn: async () => {
       const emptyStats = { 
         students: 0, teachers: 0, parents: 0, classes: 0, 
-        totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0 
+        totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 
       };
       
       if (!user?.isSuperAdmin && !user?.schoolId) return emptyStats;
@@ -56,7 +56,7 @@ export function useAdminStats() {
 async function fetchStatsFallback(user: any) {
   const emptyStats = { 
     students: 0, teachers: 0, parents: 0, classes: 0, 
-    totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0 
+    totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 
   };
 
   const baseQuery = (table: string) => {
@@ -73,7 +73,7 @@ async function fetchStatsFallback(user: any) {
     supabase.from('user_roles').select('id', { count: 'exact', head: true }).eq('school_id', user.schoolId).eq('role', 'parent'),
     baseQuery('classes'),
     supabase.from('fees').select('amount_due, amount_paid').eq('school_id', user.schoolId),
-    supabase.from('attendance').select('status').eq('school_id', user.schoolId).eq('date', new Date().toISOString().split('T')[0]),
+    supabase.from('attendance').select('status, student_id').eq('school_id', user.schoolId).eq('date', new Date().toLocaleDateString('en-CA')),
   ]);
 
   // حسابات مباشرة بدون hooks — useMemo لا يعمل خارج React components
@@ -82,18 +82,25 @@ async function fetchStatsFallback(user: any) {
   const totalPaid = feeData.reduce((sum: number, fee: any) => sum + (Number(fee.amount_paid) || 0), 0);
   
   const attendance = a.data || [];
-  const presentToday = attendance.filter((att: any) => att.status === 'present').length;
-  const attendanceRate = attendance.length > 0 ? Math.round((presentToday / attendance.length) * 100) : 0;
+  // استخدام Set للحصول على معرفات الطلاب الفريدين لتجنب التكرار في حال تم رصد الحضور أكثر من مرة
+  const presentStudentIds = new Set(attendance.filter((att: any) => att.status === 'present' || att.status === 'late').map((att: any) => att.student_id));
+  const absentStudentIds = new Set(attendance.filter((att: any) => att.status === 'absent').map((att: any) => att.student_id));
+  
+  const presentToday = presentStudentIds.size;
+  const absentToday = absentStudentIds.size;
+  const totalStudents = s.count || 0;
+  const attendanceRate = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 0;
 
   return {
-    students: s.count || 0,
+    students: totalStudents,
     teachers: t.count || 0,
     parents: p.count || 0,
     classes: c.count || 0,
     totalDue,
     totalPaid,
     attendanceRate,
-    presentToday
+    presentToday,
+    absentToday
   };
 }
 

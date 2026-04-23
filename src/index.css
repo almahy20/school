@@ -199,21 +199,18 @@
     --popover-foreground: 222 47% 11%;
     --primary: 222 47% 11%;
     --primary-foreground: 210 40% 98%;
-    --secondary: 160 84% 39%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 38 92% 50%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222 47% 11%;
+    --ring: 222 47% 11.2%;
     --radius: 0.75rem;
-    --premium-gradient: linear-gradient(135deg, #1e293b 0%, #334155 100%);
-    --secondary-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    /* Functional colors for better accessibility */
     --success: 142 76% 36%;
     --warning: 38 92% 50%;
     --info: 221 83% 53%;
@@ -221,14 +218,14 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 222 47% 6%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 222 47% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 222 47% 8%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
@@ -239,21 +236,21 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 212.7 26.8% 83.9%;
   }
 }
 
 @layer components {
   .page-header {
-    @apply text-2xl md:text-3xl font-bold text-slate-900 mb-6 md:mb-8 text-right tracking-tight;
+    @apply text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-6 md:mb-8 text-right tracking-tight;
   }
   
   .page-title {
-    @apply text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight;
+    @apply text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight;
   }
 
   .premium-card {
-    @apply bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl p-4 md:p-6 relative overflow-hidden;
+    @apply bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all duration-300 rounded-2xl p-4 md:p-6 relative overflow-hidden;
   }
   
   .premium-card::before {
@@ -280,20 +277,20 @@
   }
 
   .nav-item-inactive {
-    @apply text-slate-400 hover:bg-slate-50 hover:text-slate-900 hover:-translate-x-1;
+    @apply text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white hover:-translate-x-1;
   }
 
   .glass-card {
-    @apply bg-white/70 backdrop-blur-2xl border border-white/50 shadow-2xl;
+    @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/50 dark:border-slate-800 shadow-2xl;
   }
   
   .status-badge {
     @apply px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border transition-all;
   }
   
-  .status-badge-pending { @apply bg-amber-50 text-amber-600 border-amber-100; }
-  .status-badge-resolved { @apply bg-emerald-50 text-emerald-600 border-emerald-100; }
-  .status-badge-replied { @apply bg-indigo-50 text-indigo-600 border-indigo-100; }
+  .status-badge-pending { @apply bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50; }
+  .status-badge-resolved { @apply bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50; }
+  .status-badge-replied { @apply bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50; }
 
   .custom-scrollbar {
     scrollbar-width: thin;
@@ -307,7 +304,7 @@
     @apply bg-transparent;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+    @apply bg-slate-200 dark:bg-slate-800 rounded-full hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors;
   }
   
   /* Smooth overlay scrollbar */
@@ -354,7 +351,7 @@
   }
   
   .input-field {
-    @apply h-12 px-5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all;
+    @apply h-12 px-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/50 transition-all;
   }
   
   /* Utility classes for micro-interactions */
@@ -411,41 +408,4 @@
 /* Ensure all sections don't overflow */
 section {
   @apply max-w-full;
-}
-
-/* Better table responsiveness */
-table {
-  @apply w-full;
-  max-width: 100%;
-}
-
-/* Card components */
-.content-card {
-  @apply bg-white rounded-2xl border border-slate-100 shadow-sm p-4 sm:p-6;
-}
-
-/* Page header improvements */
-.page-title {
-  @apply text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight;
-}
-
-.page-subtitle {
-  @apply text-xs sm:text-sm text-slate-500 font-medium mt-1;
-}
-
-/* Ensure buttons don't overflow */
-button {
-  @apply max-w-full;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Form inputs */
-input, select, textarea {
-  @apply max-w-full;
-}
-
-/* Badge improvements */
-.badge-container {
-  @apply flex flex-wrap gap-2;
 }

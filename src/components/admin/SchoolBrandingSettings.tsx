@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, Palette, Image as ImageIcon, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBranding, useUpdateSchool } from '@/hooks/queries';
+import { compressImage } from '@/lib/utils';
 
 export default function SchoolBrandingSettings() {
   const { user } = useAuth();
@@ -36,14 +37,18 @@ export default function SchoolBrandingSettings() {
       const file = e.target.files[0];
       setUploading(type);
 
-      const fileExt = file.name.split('.').pop();
+      // ✅ Optimization: Compress image before upload
+      const compressedBlob = await compressImage(file, 800, 0.7);
+      const finalFile = new File([compressedBlob], file.name, { type: 'image/jpeg' });
+
+      const fileExt = 'jpg'; // We compress to jpeg
       const timestamp = Date.now();
       const fileName = `${user.schoolId}_${type}_${timestamp}.${fileExt}`;
       const filePath = `${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('school_assets')
-        .upload(filePath, file, {
+        .upload(filePath, finalFile, {
           cacheControl: '3600',
           upsert: true
         });

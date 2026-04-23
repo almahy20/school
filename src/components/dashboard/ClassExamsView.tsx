@@ -48,8 +48,10 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     exam_type: 'monthly',
     max_score: '100',
     term: 'الفصل الأول',
-    score_type: 'numeric' as 'numeric' | 'text', // New field
+    score_type: 'numeric' as 'numeric' | 'text',
+    expected_results: [] as string[],
   });
+  const [newResult, setNewResult] = useState('');
 
   // Queries
   const { 
@@ -96,7 +98,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         max_score: Number(newExam.max_score),
         weight: 1,
         term: newExam.term,
-        score_type: newExam.score_type, // ✅ حفظ نوع الدرجة
+        score_type: newExam.score_type,
+        expected_results: newExam.expected_results,
         teacher_id: '', // Will be overridden by mutation
       } as any);
 
@@ -108,6 +111,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         max_score: '100',
         term: 'الفصل الأول',
         score_type: 'numeric',
+        expected_results: [],
       });
       
       toast({ title: 'تم إنشاء الاختبار بنجاح' });
@@ -236,20 +240,38 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <div className="relative">
-                      <Input
-                        type={(selectedTemplate as any).score_type === 'text' ? 'text' : 'number'}
-                        min={(selectedTemplate as any).score_type === 'numeric' ? "0" : undefined}
-                        max={(selectedTemplate as any).score_type === 'numeric' ? selectedTemplate.max_score : undefined}
-                        value={grade.score}
-                        onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
-                        placeholder={(selectedTemplate as any).score_type === 'text' ? 'أدخل التقدير' : '0'}
-                        className={cn(
-                          "w-16 sm:w-24 h-10 sm:h-12 px-2 rounded-lg sm:rounded-xl border-2 text-center font-black text-sm sm:text-base focus:ring-4 transition-all",
-                          (selectedTemplate as any).score_type === 'text'
-                            ? "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
-                            : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10"
-                        )}
-                      />
+                      {(selectedTemplate as any).score_type === 'text' && (selectedTemplate as any).expected_results?.length > 0 ? (
+                        <Select
+                          value={grade.score}
+                          onValueChange={(value) => handleGradeChange(grade.studentId, value)}
+                        >
+                          <SelectTrigger className="w-32 sm:w-48 h-10 sm:h-12 rounded-lg sm:rounded-xl border-2 font-black text-sm sm:text-base">
+                            <SelectValue placeholder="اختر النتيجة" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {((selectedTemplate as any).expected_results as string[]).map((res) => (
+                              <SelectItem key={res} value={res}>
+                                {res}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          type={(selectedTemplate as any).score_type === 'text' ? 'text' : 'number'}
+                          min={(selectedTemplate as any).score_type === 'numeric' ? "0" : undefined}
+                          max={(selectedTemplate as any).score_type === 'numeric' ? selectedTemplate.max_score : undefined}
+                          value={grade.score}
+                          onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
+                          placeholder={(selectedTemplate as any).score_type === 'text' ? 'أدخل التقدير' : '0'}
+                          className={cn(
+                            "w-16 sm:w-24 h-10 sm:h-12 px-2 rounded-lg sm:rounded-xl border-2 text-center font-black text-sm sm:text-base focus:ring-4 transition-all",
+                            (selectedTemplate as any).score_type === 'text'
+                              ? "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
+                              : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10"
+                          )}
+                        />
+                      )}
                     </div>
                     {(selectedTemplate as any).score_type === 'numeric' && (
                       <span className="text-[10px] sm:text-sm font-bold text-slate-400 whitespace-nowrap">/ {selectedTemplate.max_score}</span>
@@ -446,6 +468,66 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                   className="h-12 rounded-xl text-right"
                   required
                 />
+              </div>
+            )}
+
+            {/* Expected Results (only for text) */}
+            {newExam.score_type === 'text' && (
+              <div className="space-y-3">
+                <label className="text-xs font-bold text-slate-600">النتائج المتوقعة (اختياري)</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newResult}
+                    onChange={(e) => setNewResult(e.target.value)}
+                    placeholder="مثال: جيد جداً"
+                    className="h-12 rounded-xl text-right"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newResult.trim()) {
+                          setNewExam({
+                            ...newExam,
+                            expected_results: [...newExam.expected_results, newResult.trim()]
+                          });
+                          setNewResult('');
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (newResult.trim()) {
+                        setNewExam({
+                          ...newExam,
+                          expected_results: [...newExam.expected_results, newResult.trim()]
+                        });
+                        setNewResult('');
+                      }
+                    }}
+                    className="h-12 w-12 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </Button>
+                </div>
+                
+                {newExam.expected_results.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {newExam.expected_results.map((res, i) => (
+                      <Badge key={i} className="bg-indigo-50 text-indigo-700 border-indigo-100 py-1.5 px-3 gap-2 rounded-lg">
+                        {res}
+                        <X
+                          className="w-3 h-3 cursor-pointer hover:text-rose-500"
+                          onClick={() => setNewExam({
+                            ...newExam,
+                            expected_results: newExam.expected_results.filter((_, idx) => idx !== i)
+                          })}
+                        />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] font-bold text-slate-400">أضف النتائج التي تريد الاختيار منها عند رصد الدرجات (مثلاً: ممتاز، جيد، ضعيف)</p>
               </div>
             )}
 

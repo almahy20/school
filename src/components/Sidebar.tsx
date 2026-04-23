@@ -87,7 +87,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
     const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
     
     return {
-      name: branding?.name || 'المدرسة الذكية',
+      name: branding?.name || 'مدرسة الجيل الجديد',
       logo: optimizedLogo,
     };
   }, [branding]);

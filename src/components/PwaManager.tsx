@@ -138,8 +138,8 @@ export default function PwaManager() {
       link.href = manifestURL;
     }
 
-    // 4. Update Title & Favicon & Theme Color
-    document.title = name;
+    // 4. Update Favicon & Theme Color (Title is handled by useBranding)
+    // document.title = name; // ✅ REMOVED: Do not set title here to avoid flicker
     
     const updateIcon = (rel: string, href: string) => {
       let link = document.querySelector(`link[rel="${rel}"]`) as HTMLLinkElement;

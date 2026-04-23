@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from '@/hooks/use-toast';
 import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
@@ -26,6 +33,8 @@ interface ExamTemplate {
   term: string;
   title: string;
   created_at: string;
+  score_type?: 'numeric' | 'text';
+  expected_results?: string[];
 }
 
 interface StudentGrade {
@@ -111,7 +120,7 @@ export default function GradesPage() {
           teacher_id: user.id,
           school_id: user.schoolId,
           subject: selectedTemplate.subject,
-          score: isNaN(Number(sg.score)) ? 0 : Number(sg.score),
+          score: sg.score,
           max_score: selectedTemplate.max_score,
           term: selectedTemplate.term,
           exam_template_id: selectedTemplate.id,
@@ -336,16 +345,38 @@ export default function GradesPage() {
                              </div>
 
                              <div className="relative group/input w-full sm:w-48">
-                               <input
-                                 type="text"
-                                 value={sg.score}
-                                 onChange={e => handleScoreChange(sg.studentId, e.target.value)}
-                                 placeholder="درجة أو نص..."
-                                 className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
-                               />
-                               <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-200 uppercase pointer-events-none tracking-widest">
-                                 / {selectedTemplate.max_score}
-                               </div>
+                               {selectedTemplate.score_type === 'text' && selectedTemplate.expected_results && selectedTemplate.expected_results.length > 0 ? (
+                                 <Select
+                                   value={sg.score}
+                                   onValueChange={(value) => handleScoreChange(sg.studentId, value)}
+                                 >
+                                   <SelectTrigger className="w-full h-12 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base">
+                                     <SelectValue placeholder="اختر النتيجة" />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                     {selectedTemplate.expected_results.map((res) => (
+                                       <SelectItem key={res} value={res}>
+                                         {res}
+                                       </SelectItem>
+                                     ))}
+                                   </SelectContent>
+                                 </Select>
+                               ) : (
+                                 <>
+                                   <input
+                                     type="text"
+                                     value={sg.score}
+                                     onChange={e => handleScoreChange(sg.studentId, e.target.value)}
+                                     placeholder="درجة أو نص..."
+                                     className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
+                                   />
+                                   {selectedTemplate.score_type !== 'text' && (
+                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-200 uppercase pointer-events-none tracking-widest">
+                                       / {selectedTemplate.max_score}
+                                     </div>
+                                   )}
+                                 </>
+                               )}
                              </div>
                            </div>
                         ))
@@ -383,6 +414,9 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
   const [maxScore, setMaxScore] = useState('100');
   const [weight, setWeight] = useState('1');
   const [term, setTerm] = useState('الفصل الأول');
+  const [scoreType, setScoreType] = useState<'numeric' | 'text'>('numeric');
+  const [expectedResults, setExpectedResults] = useState<string[]>([]);
+  const [newResult, setNewResult] = useState('');
   const createMutation = useCreateExamTemplate();
 
   useEffect(() => {
@@ -403,7 +437,9 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
         weight: Number(weight),
         term,
         title: title.trim() || subject.trim(),
-      });
+        score_type: scoreType,
+        expected_results: expectedResults,
+      } as any);
       onCreated(data);
     } catch (err) {
       // toast handled via mutation? or here
@@ -412,7 +448,7 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
 
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
         <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إعداد اختبار جديد</h2>
         <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -446,18 +482,99 @@ function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCr
                </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-             <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة النهائية</label>
-                <Input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
-                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
-             </div>
-             <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن (%)</label>
-                <Input type="number" value={weight} onChange={e => setWeight(e.target.value)}
-                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
-             </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">نظام الدرجات</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setScoreType('numeric')}
+                className={cn(
+                  "h-11 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
+                  scoreType === 'numeric'
+                    ? "border-indigo-600 bg-indigo-50 text-indigo-600"
+                    : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
+                )}
+              >
+                رقمي
+              </button>
+              <button
+                type="button"
+                onClick={() => setScoreType('text')}
+                className={cn(
+                  "h-11 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
+                  scoreType === 'text'
+                    ? "border-indigo-600 bg-indigo-50 text-indigo-600"
+                    : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
+                )}
+              >
+                نصي
+              </button>
+            </div>
           </div>
+
+          {scoreType === 'numeric' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة النهائية</label>
+                  <Input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
+                    className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن (%)</label>
+                  <Input type="number" value={weight} onChange={e => setWeight(e.target.value)}
+                    className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 pt-2">
+              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">النتائج المتوقعة</label>
+              <div className="flex gap-2">
+                <Input
+                  value={newResult}
+                  onChange={(e) => setNewResult(e.target.value)}
+                  placeholder="مثال: جيد جداً"
+                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (newResult.trim()) {
+                        setExpectedResults([...expectedResults, newResult.trim()]);
+                        setNewResult('');
+                      }
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (newResult.trim()) {
+                      setExpectedResults([...expectedResults, newResult.trim()]);
+                      setNewResult('');
+                    }
+                  }}
+                  className="h-11 w-11 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+              
+              {expectedResults.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {expectedResults.map((res, i) => (
+                    <Badge key={i} className="bg-indigo-50 text-indigo-700 border-indigo-100 py-1.5 px-3 gap-2 rounded-lg">
+                      {res}
+                      <X
+                        className="w-3 h-3 cursor-pointer hover:text-rose-500"
+                        onClick={() => setExpectedResults(expectedResults.filter((_, idx) => idx !== i))}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={createMutation.isPending}
               className="flex-1 h-12 rounded-xl bg-slate-900 text-white font-black shadow-lg hover:bg-indigo-600 transition-all text-sm">

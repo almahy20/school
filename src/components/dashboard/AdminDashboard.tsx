@@ -14,7 +14,7 @@ import { RegistrationLinksCard } from './RegistrationLinksCard';
 
 export const AdminDashboard = memo(function AdminDashboard() {
   const { user } = useAuth();
-  const { data: stats = { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0 } } = useAdminStats();
+  const { data: stats = { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 } } = useAdminStats();
   const { data: activities = [], isLoading: activitiesLoading } = useAdminActivities();
 
   const userName = user?.fullName ? user.fullName.split(' ')[0] : 'أدمن';
@@ -62,9 +62,9 @@ export const AdminDashboard = memo(function AdminDashboard() {
           color="indigo" 
         />
         <StatsCard 
-          title="نسبة الحضور" 
-          value={`${stats.attendanceRate || 0}%`} 
-          subValue={`حضور ${stats.presentToday || 0} طالب`} 
+          title="حضور اليوم" 
+          value={`${stats.presentToday || 0} حاضر`} 
+          subValue={`${stats.absentToday || 0} غائب`} 
           icon={CalendarCheck} 
           color="emerald" 
         />

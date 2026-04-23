@@ -215,6 +215,8 @@ export type Database = {
           term: string
           title: string
           weight: number
+          score_type: string
+          expected_results: string[] | null
         }
         Insert: {
           class_id: string
@@ -228,6 +230,8 @@ export type Database = {
           term?: string
           title?: string
           weight?: number
+          score_type?: string
+          expected_results?: string[] | null
         }
         Update: {
           class_id?: string
@@ -241,6 +245,8 @@ export type Database = {
           term?: string
           title?: string
           weight?: number
+          score_type?: string
+          expected_results?: string[] | null
         }
         Relationships: [
           {

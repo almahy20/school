@@ -7,7 +7,7 @@ import {
   ArrowRight, School, Users, Edit2, Trash2, 
   User, ChevronLeft, Calendar, Shield, Activity, 
   Search, Loader2, Printer, BookOpen, Plus, Edit3, Layers,
-  CalendarCheck, MessageSquare
+  CalendarCheck, MessageSquare, Check, X
 } from 'lucide-react';
 import { EditClassModal } from './ClassesPage';
 import ClassExamsView from '@/components/dashboard/ClassExamsView';
@@ -81,6 +81,16 @@ export default function ClassDetailPage() {
 
   const markAllPresent = () => {
     setLocalAttendance(prev => prev.map(a => ({ ...a, status: 'present' })));
+    toast({ title: 'تم التغيير', description: 'تم تعيين جميع الطلاب حاضر (محلياً)' });
+  };
+
+  const markAllAbsent = () => {
+    setLocalAttendance(prev => prev.map(a => ({ ...a, status: 'absent' })));
+    toast({ title: 'تم التغيير', description: 'تم تعيين جميع الطلاب غائب (محلياً)' });
+  };
+
+  const markSelectedPresent = (selectedIds: string[]) => {
+    setLocalAttendance(prev => prev.map(a => selectedIds.includes(a.studentId) ? { ...a, status: 'present' } : a));
   };
 
   const handleSaveAttendance = async () => {
@@ -484,13 +494,19 @@ export default function ClassDetailPage() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-4">
+                {/* Bulk Actions */}
+                <div className="flex flex-wrap items-center gap-4">
                   <button
                     onClick={markAllPresent}
-                    className="w-full sm:w-auto px-6 h-12 rounded-2xl bg-emerald-500 text-white font-black hover:bg-emerald-600 transition-all shadow-md active:scale-95"
+                    className="flex-1 sm:flex-none px-6 h-12 rounded-2xl bg-emerald-500 text-white font-black hover:bg-emerald-600 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
                   >
                     تحديد الكل حاضر
+                  </button>
+                  <button
+                    onClick={markAllAbsent}
+                    className="flex-1 sm:flex-none px-6 h-12 rounded-2xl bg-rose-500 text-white font-black hover:bg-rose-600 transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    تحديد الكل غائب
                   </button>
                 </div>
 

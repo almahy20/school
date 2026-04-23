@@ -1,10 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from 'next-themes';
 import {
   Bell, Globe, HelpCircle, Shield,
   Users, Database, LogOut, Edit2, Plus, ArrowLeft,
-  Smartphone, CheckCircle2, Info, Settings2, Palette, Lock
+  Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon
 } from 'lucide-react';
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
 import { useToast } from '@/hooks/use-toast';
@@ -46,6 +47,8 @@ export default function SettingsPage() {
       setPref(prev => ({ ...prev, ...(profile.notification_prefs as any) }));
     }
   }, [profile]);
+
+  const { theme, setTheme } = useTheme();
 
   const handleUpdatePref = async (key: keyof typeof pref, val: boolean) => {
     const newPref = { ...pref, [key]: val };
@@ -172,6 +175,43 @@ export default function SettingsPage() {
                     </div>
                  </div>
                  
+                 <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
+                       <div className="flex items-center gap-6">
+                          <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                             <Palette className="w-8 h-8" />
+                          </div>
+                          <div>
+                             <h4 className="text-xl font-black text-slate-900 dark:text-white mb-1">سمة التطبيق (Appearance)</h4>
+                             <p className="text-sm font-medium text-slate-400">اختر المظهر المناسب لك (فاتح أو داكن).</p>
+                          </div>
+                       </div>
+                       
+                       <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                          <button
+                            onClick={() => setTheme('light')}
+                            className={cn(
+                              "flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs transition-all",
+                              theme === 'light' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <Sun className="w-4 h-4" />
+                            فاتح
+                          </button>
+                          <button
+                            onClick={() => setTheme('dark')}
+                            className={cn(
+                              "flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs transition-all",
+                              theme === 'dark' ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <Moon className="w-4 h-4" />
+                            داكن
+                          </button>
+                       </div>
+                    </div>
+                 </div>
+
                  <div className="grid grid-cols-1 gap-6">
                     <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
                        <div className="flex items-center gap-6">

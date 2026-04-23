@@ -93,8 +93,38 @@ export function useUpsertTeacherAttendance() {
       // Insert new records
       const { error } = await db.from('teacher_attendance').insert(records);
       if (error) throw error;
+
+      // Log action to audit logs
+      await db.rpc('log_action', {
+        p_action: 'MARK_TEACHER_ATTENDANCE',
+        p_entity_type: 'teacher_attendance',
+        p_details: `رصد حضور لعدد ${records.length} معلمين لتاريخ ${date}`
+      });
     },
-    onSuccess: (_, variables) => {
+    onMutate: async (newRecords) => {
+      if (newRecords.length === 0) return;
+      const date = newRecords[0].date;
+      const queryKey = ['teacher-attendance', date];
+
+      await queryClient.cancelQueries({ queryKey });
+      const previousData = queryClient.getQueryData(queryKey);
+
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return old.map((t: any) => {
+          const record = newRecords.find(r => r.teacher_id === t.teacherId);
+          return record ? { ...t, status: record.status } : t;
+        });
+      });
+
+      return { previousData, queryKey };
+    },
+    onError: (err, newRecords, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(context.queryKey, context.previousData);
+      }
+    },
+    onSettled: (data, error, variables) => {
       if (variables.length > 0) {
         queryClient.invalidateQueries({ 
           queryKey: ['teacher-attendance', variables[0].date] 

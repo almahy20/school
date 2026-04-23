@@ -15,6 +15,8 @@ export interface ExamTemplate {
   teacher_id: string;
   created_at: string;
   school_id: string;
+  score_type?: 'numeric' | 'text';
+  expected_results?: string[];
 }
 
 export interface StudentGrade {
@@ -177,8 +179,38 @@ export function useUpsertGrades() {
       const { error } = await supabase.from('grades').insert(cleanedGrades);
       if (error) throw error;
 
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPSERT_GRADES',
+        p_entity_type: 'grades',
+        p_details: `رصد درجات لعدد ${grades.length} طلاب في اختبار ${templateId}`
+      });
     },
-    onSuccess: (_, variables) => {
+    onMutate: async (newGrades) => {
+      if (newGrades.length === 0) return;
+      const templateId = newGrades[0].exam_template_id;
+      const classId = newGrades[0].class_id;
+      const queryKey = ['student-grades', templateId, classId];
+
+      await queryClient.cancelQueries({ queryKey });
+      const previousData = queryClient.getQueryData(queryKey);
+
+      queryClient.setQueryData(queryKey, (old: any) => {
+        if (!old) return old;
+        return old.map((s: any) => {
+          const grade = newGrades.find(g => g.student_id === s.studentId);
+          return grade ? { ...s, score: String(grade.score) } : s;
+        });
+      });
+
+      return { previousData, queryKey };
+    },
+    onError: (err, newGrades, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(context.queryKey, context.previousData);
+      }
+    },
+    onSettled: (_, __, variables) => {
       if (variables.length > 0) {
         queryClient.invalidateQueries({ 
           queryKey: ['student-grades', variables[0].exam_template_id] 

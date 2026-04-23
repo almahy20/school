@@ -120,34 +120,41 @@ self.addEventListener('fetch', (event) => {
 
 // ===== الكود الجديد لاستقبال الإشعارات في الخلفية (والتطبيق مغلق) =====
 self.addEventListener('push', function(event) {
+  console.log('[SW] Push Event Received');
+  
+  let data = {};
   if (event.data) {
-    let data = {};
     try {
-      // محاولة تحليل البيانات القادمة من السيرفر بصيغة JSON
       data = event.data.json();
     } catch(e) {
-      // إذا لم تكن JSON نأخذها كنص عادي
       data = { title: 'إشعار جديد', body: event.data.text() };
     }
-    
-    const options = {
-      body: data.body || data.message || 'يوجد تحديث جديد في النظام',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
-      dir: 'rtl',
-      vibrate: [100, 50, 100], // ✅ Added vibration for mobile
-      data: data.url || '/',
-      requireInteraction: true, // ✅ Keeps notification until user acts
-      actions: [
-        { action: 'open', title: 'فتح التطبيق' }
-      ]
-    };
-    
-    // إظهار الإشعار حتى لو كان التطبيق مغلقاً تماماً
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'إشعار من النظام الذكي', options)
-    );
   }
+
+  // ✅ التحقق من وجود عنوان وجسم للإشعار قبل الإظهار
+  const title = data.title || 'إشعار من النظام الذكي';
+  const options = {
+    body: data.body || data.message || 'يوجد تحديث جديد في النظام',
+    icon: data.icon || '/icons/icon-192.png',
+    badge: data.badge || '/icons/icon-192.png',
+    dir: 'rtl',
+    vibrate: [100, 50, 100],
+    tag: data.tag || 'general-notification', // يمنع تكرار نفس الإشعار
+    renotify: true, // يهز الموبايل حتى لو نفس الـ tag
+    data: {
+      url: (data.data && data.data.url) ? data.data.url : (data.url || '/')
+    },
+    requireInteraction: true,
+    actions: [
+      { action: 'open', title: 'فتح التطبيق' }
+    ]
+  };
+  
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+      .then(() => console.log('[SW] Notification shown successfully'))
+      .catch(err => console.error('[SW] Failed to show notification:', err))
+  );
 });
 
 // ===== التعامل مع نقر المستخدم على الإشعار =====

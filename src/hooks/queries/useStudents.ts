@@ -150,6 +150,14 @@ export function useDeleteStudent() {
     mutationFn: async (studentId: string) => {
       const { error } = await supabase.from('students').delete().eq('id', studentId);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'DELETE_STUDENT',
+        p_entity_type: 'students',
+        p_entity_id: studentId,
+        p_details: `حذف الطالب نهائياً من النظام`
+      });
     },
     // ✅ Optimization: Optimistic Update
     onMutate: async (studentId) => {
@@ -214,13 +222,25 @@ export function useUpdateStudent() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, ...data }: Partial<Student> & { id: string }) => {
-      const { error } = await supabase
+    mutationFn: async ({ id, ...updates }: Partial<Student> & { id: string }) => {
+      const { data, error } = await supabase
         .from('students')
-        .update({ ...data })
-        .eq('id', id);
-        
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_STUDENT',
+        p_entity_type: 'students',
+        p_entity_id: id,
+        p_details: `تحديث بيانات الطالب: ${Object.keys(updates).join(', ')}`
+      });
+
+      return data;
     },
     onSuccess: (_, variables) => {
       // Invalidate ALL student queries with any parameters

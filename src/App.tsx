@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,12 +10,11 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useSchoolFavicon } from "./hooks/queries";
+import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
 
-
-// Lazy Load Pages
-const LoginPage = lazy(() => import("./pages/LoginPage"));
+// Lazy Load Pages - Keep the rest lazy to save bundle size
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TeacherSignupPage = lazy(() => import("./pages/TeacherSignupPage"));
 const ParentSignupPage = lazy(() => import("./pages/ParentSignupPage"));
 const DeveloperSecretLogin = lazy(() => import("./pages/DeveloperSecretLogin"));
@@ -53,6 +53,7 @@ const RealtimeNotificationsManager = lazy(() => import('./components/RealtimeNot
 const PWAInstallPrompt = lazy(() => import('./components/PWAInstallPrompt'));
 const PwaManager = lazy(() => import('./components/PwaManager'));
 import { queryClient } from "./lib/queryClient";
+import { ThemeProvider } from "./components/theme-provider";
 
 // القائمة الأساسية للجداول التي نحتاج لمراقبتها عالمياً (Global)
 // تم إزالة messages و notifications لأنها تدار الآن بشكل أكثر كفاءة عبر user_id
@@ -72,32 +73,8 @@ function AppRoutes() {
   // تفعيل التزامن الفوري للجداول الأساسية فقط
   useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
-  // ✅ Unified Loader Control
-  useEffect(() => {
-    // 1. If auth is determined, or if 5 seconds pass (failsafe)
-    const hideLoader = () => {
-      const loader = document.getElementById('unified-loader');
-      if (loader) {
-        loader.classList.add('fade-out');
-        setTimeout(() => loader.remove(), 400);
-      }
-    };
-
-    if (!loading) {
-      hideLoader();
-    }
-
-    // Failsafe: hide loader after 5s regardless of auth status
-    const failsafe = setTimeout(hideLoader, 5000);
-    return () => clearTimeout(failsafe);
-  }, [loading]);
-
-  // ✅ Optimization: Return null while loading auth or lazy components.
-  // The HTML loader in index.html is already visible and will be removed by the useEffect above.
-  if (loading) return null;
-
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="min-h-screen bg-[#f8fafc]" />}>
         <Routes>
           {/* ── Public Routes ── */}
           <Route path="/home" element={<LandingPage />} />
@@ -112,7 +89,9 @@ function AppRoutes() {
           <Route 
             path="/" 
             element={
-              user ? (
+              loading && !user ? (
+                <div className="min-h-screen bg-[#f8fafc]" />
+              ) : user ? (
                 <ProtectedRoute>
                   <DashboardPage />
                 </ProtectedRoute>
@@ -160,20 +139,22 @@ function AppRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <GlobalErrorBoundary>
-              <AppRoutes />
-              <PwaManager />
-              <PWAInstallPrompt />
-            </GlobalErrorBoundary>
-            <Toaster />
-            <RealtimeNotificationsManager />
-            <Sonner position="top-center" dir="rtl" expand={true} richColors />
-          </BrowserRouter>
-        </AuthProvider>
-      </TooltipProvider>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+        <TooltipProvider>
+          <AuthProvider>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <GlobalErrorBoundary>
+                <AppRoutes />
+                <PwaManager />
+                <PWAInstallPrompt />
+              </GlobalErrorBoundary>
+              <Toaster />
+              <RealtimeNotificationsManager />
+              <Sonner position="top-center" dir="rtl" expand={true} richColors />
+            </BrowserRouter>
+          </AuthProvider>
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
