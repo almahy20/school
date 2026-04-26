@@ -21,6 +21,13 @@ export function usePushNotifications() {
         const registration = await navigator.serviceWorker.ready;
         const subscription = await registration.pushManager.getSubscription();
         setIsSubscribed(subscription !== null);
+        
+        // ✅ If subscription exists but permission is denied, clean it up
+        if (subscription && Notification.permission === 'denied') {
+          await subscription.unsubscribe();
+          setIsSubscribed(false);
+          logger.warn('Push subscription cleaned up due to denied permission');
+        }
       } catch (error) {
         logger.error('Error checking push subscription:', error);
       }
@@ -29,9 +36,27 @@ export function usePushNotifications() {
 
   useEffect(() => {
     // ✅ نشيك مرة واحدة فقط - مش كل ما الـ component يتعمل rerender
-    if ('Notification' in window && !permission || permission === 'default') {
+    if ('Notification' in window) {
       setPermission(Notification.permission);
       checkSubscription();
+    }
+    
+    // ✅ Listen for permission changes
+    const handlePermissionChange = () => {
+      setPermission(Notification.permission);
+      checkSubscription();
+    };
+    
+    // Some browsers support permission change events
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'notifications' }).then(permissionStatus => {
+        permissionStatus.addEventListener('change', handlePermissionChange);
+        return () => permissionStatus.removeEventListener('change', handlePermissionChange);
+      }).catch(() => {
+        // Fallback: check on visibility change
+        document.addEventListener('visibilitychange', handlePermissionChange);
+        return () => document.removeEventListener('visibilitychange', handlePermissionChange);
+      });
     }
   }, []); // ❌ شلنا checkSubscription من الـ dependencies
 

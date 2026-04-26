@@ -96,22 +96,36 @@ export function ParentDashboard() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-8">
-                  <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
-                    <Award className="w-6 h-6 text-indigo-600 mx-auto mb-2" />
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الدرجات</p>
-                    <p className="text-xl font-black text-slate-900">{child.avgGrade}%</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
-                    <CalendarCheck className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الحضور</p>
-                    <p className="text-xl font-black text-slate-900">{child.attendanceRate}%</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
-                    <Wallet className="w-6 h-6 text-amber-600 mx-auto mb-2" />
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الرسوم</p>
-                    <p className="text-sm font-black text-slate-900">{child.feesRemaining} ج</p>
-                  </div>
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  {/* الحضور - النسبة الإجمالية */}
+                  {child.attendanceRate > 0 ? (
+                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
+                      <CalendarCheck className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الحضور الإجمالي</p>
+                      <p className="text-xl font-black text-slate-900">{child.attendanceRate}%</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200 opacity-50">
+                      <CalendarCheck className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الحضور الإجمالي</p>
+                      <p className="text-sm font-bold text-slate-400">غير متاح</p>
+                    </div>
+                  )}
+                  
+                  {/* الرسوم */}
+                  {child.feesRemaining > 0 ? (
+                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
+                      <Wallet className="w-6 h-6 text-amber-600 mx-auto mb-2" />
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الرسوم المتبقية</p>
+                      <p className="text-sm font-black text-slate-900">{child.feesRemaining} ج</p>
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200 opacity-50">
+                      <Wallet className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الرسوم المتبقية</p>
+                      <p className="text-sm font-bold text-emerald-600">مسدد ✓</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between pt-6 border-t border-slate-50">

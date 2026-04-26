@@ -9,31 +9,170 @@ export function useParentChildren() {
   const { user } = useAuth();
   const queryKey = useMemo(() => ['parent-children', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
-            
   return useQuery({
     queryKey,
     queryFn: async () => {
-      if (!user?.id || !user?.schoolId) return [];
-      
-      // ✅ Optimization: ONE single RPC call for everything
-      // This eliminates the "Waterfall Effect" and reduces requests by 100%
-      const { data, error } = await (supabase as any).rpc('get_parent_dashboard_summary', { 
-        p_parent_id: user.id,
-        p_school_id: user.schoolId 
-      });
-      
-      if (error) {
-        console.error('Error fetching parent dashboard summary:', error);
-        throw error;
+      if (!user?.id || !user?.schoolId) {
+        console.warn('[useParentChildren] Missing user data:', { userId: user?.id, schoolId: user?.schoolId, role: user?.role });
+        return [];
       }
       
-      return data || [];
+      console.log('[useParentChildren] Starting query for user:', user.id, 'school:', user.schoolId);
+      
+      try {
+        // ✅ Optimization: ONE single RPC call for everything
+        // This eliminates the "Waterfall Effect" and reduces requests by 100%
+        console.log('[useParentChildren] Calling RPC get_parent_dashboard_summary...');
+        const { data, error } = await (supabase as any).rpc('get_parent_dashboard_summary', { 
+          p_parent_id: user.id,
+          p_school_id: user.schoolId 
+        });
+        
+        if (error) {
+          console.error('[useParentChildren] RPC Error:', error);
+          
+          // ✅ Fallback: Try direct query if RPC fails
+          console.log('[useParentChildren] Trying fallback direct query...');
+          
+          // Fetch student-parent links with basic info
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('student_parents')
+            .select(`
+              student_id,
+              students (
+                id,
+                name,
+                class_id,
+                monthly_fee,
+                classes (name)
+              )
+            `)
+            .eq('parent_id', user.id)
+            .eq('school_id', user.schoolId);
+          
+          if (fallbackError) {
+            console.error('[useParentChildren] Fallback Error:', fallbackError);
+            throw fallbackError;
+          }
+          
+          if (!fallbackData || fallbackData.length === 0) {
+            return [];
+          }
+          
+          // Fetch grades, attendance, and fees for all students in parallel
+          const studentIds = fallbackData.map((item: any) => item.students?.id).filter(Boolean);
+          
+          const [gradesResult, attendanceResult, feesResult] = await Promise.all([
+            // Get grades
+            supabase
+              .from('grades')
+              .select('student_id, score, max_score')
+              .eq('school_id', user.schoolId)
+              .in('student_id', studentIds),
+            
+            // Get attendance
+            supabase
+              .from('attendance')
+              .select('student_id, status')
+              .eq('school_id', user.schoolId)
+              .in('student_id', studentIds),
+            
+            // Get fees
+            supabase
+              .from('fees')
+              .select('student_id, amount_due, amount_paid')
+              .eq('school_id', user.schoolId)
+              .in('student_id', studentIds)
+          ]);
+          
+          // Transform fallback data to match expected format with REAL data
+          console.log('[useParentChildren] Fallback data fetched:', fallbackData?.length, 'students');
+          console.log('[useParentChildren] Attendance records:', attendanceResult.data?.length);
+          
+          return fallbackData.map((item: any) => {
+            const studentId = item.students?.id;
+            const monthlyFee = item.students?.monthly_fee || 0;
+            
+            // Calculate average grade
+            const studentGrades = (gradesResult.data || []).filter((g: any) => g.student_id === studentId);
+            let avgGrade = 0;
+            if (studentGrades.length > 0) {
+              const validGrades = studentGrades.filter((g: any) => {
+                const score = parseFloat(g.score);
+                const maxScore = parseFloat(g.max_score);
+                return !isNaN(score) && !isNaN(maxScore) && maxScore > 0;
+              });
+              
+              if (validGrades.length > 0) {
+                avgGrade = Math.round(
+                  validGrades.reduce((sum: number, g: any) => {
+                    return sum + (parseFloat(g.score) / parseFloat(g.max_score)) * 100;
+                  }, 0) / validGrades.length
+                );
+              }
+            }
+            
+            // Calculate attendance rate
+            const studentAttendance = (attendanceResult.data || []).filter((a: any) => a.student_id === studentId);
+            let attendanceRate = 0;
+            
+            console.log(`[useParentChildren] Student ${item.students?.name}:`, {
+              totalAttendanceRecords: studentAttendance.length,
+              attendanceData: studentAttendance
+            });
+            
+            if (studentAttendance.length > 0) {
+              const presentCount = studentAttendance.filter((a: any) => a.status === 'present').length;
+              attendanceRate = Math.round((presentCount / studentAttendance.length) * 100);
+              console.log(`[useParentChildren] Attendance calculation:`, {
+                present: presentCount,
+                total: studentAttendance.length,
+                rate: attendanceRate
+              });
+            }
+            
+            // Calculate fees remaining
+            const studentFees = (feesResult.data || []).filter((f: any) => f.student_id === studentId);
+            const totalDue = studentFees.reduce((sum: number, f: any) => sum + parseFloat(f.amount_due || 0), 0);
+            const totalPaid = studentFees.reduce((sum: number, f: any) => sum + parseFloat(f.amount_paid || 0), 0);
+            const feesRemaining = Math.max(0, totalDue - totalPaid);
+            
+            return {
+              id: studentId,
+              name: item.students?.name,
+              class_id: item.students?.class_id,
+              className: item.students?.classes?.name,
+              avgGrade,
+              attendanceRate,
+              feesRemaining
+            };
+          });
+        }
+        
+        console.log('[useParentChildren] RPC returned data:', data?.length, 'students');
+        if (data && data.length > 0) {
+          console.log('[useParentChildren] First student:', data[0]);
+          
+          // ✅ Check if data has attendanceRate field
+          const firstStudent = data[0];
+          if (firstStudent.attendanceRate === 0 || firstStudent.attendanceRate === undefined) {
+            console.warn('[useParentChildren] RPC returned data with attendanceRate = 0, using fallback...');
+            // If RPC returns empty data, use fallback
+            throw new Error('RPC returned incomplete data');
+          }
+        }
+        
+        return data || [];
+      } catch (err) {
+        console.error('[useParentChildren] Unexpected error:', err);
+        throw err;
+      }
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    retry: 1,
-    retryDelay: 1000,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
 }
 

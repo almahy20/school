@@ -91,6 +91,24 @@ export function QueryStateHandler({
     const isTimeout = showTimeoutError && !error;
     const loadDuration = Date.now() - loadingStartRef.current;
     
+    // Log error for debugging
+    console.error('[QueryStateHandler] Error details:', {
+      error: finalError,
+      isTimeout,
+      loadDuration,
+      errorMessage
+    });
+    
+    // Determine best error message
+    let displayMessage = errorMessage;
+    if (finalError.message) {
+      if (finalError.message.includes('permission') || finalError.message.includes('Unauthorized') || finalError.message.includes('Unauthorized access')) {
+        displayMessage = 'ليس لديك صلاحية للوصول إلى هذه البيانات. يرجى التواصل مع إدارة المدرسة.';
+      } else if (finalError.message.includes('network') || finalError.message.includes('fetch')) {
+        displayMessage = 'حدث خطأ في الاتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.';
+      }
+    }
+    
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-8 p-10 text-center bg-white rounded-[40px] border border-rose-100 shadow-2xl shadow-rose-900/5 animate-in fade-in slide-in-from-bottom-8 duration-700 relative overflow-hidden group">
         <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/0 via-rose-500 to-rose-500/0 opacity-50"></div>
@@ -105,8 +123,22 @@ export function QueryStateHandler({
           <p className="text-slate-500 font-medium leading-relaxed">
             {isTimeout 
               ? `استمرت المحاولة ${Math.round(loadDuration / 1000)} ثانية. قد يكون هناك مشكلة في الشبكة أو ضغط على الخادم.` 
-              : errorMessage}
+              : displayMessage}
           </p>
+          {/* Show technical details in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <details className="text-left text-xs bg-slate-50 p-3 rounded-lg mt-2">
+              <summary className="cursor-pointer text-slate-400 font-mono">Technical Details (Dev Only)</summary>
+              <pre className="mt-2 text-slate-600 overflow-auto whitespace-pre-wrap">
+                {JSON.stringify({
+                  message: finalError.message,
+                  code: finalError.code,
+                  details: finalError.details,
+                  hint: finalError.hint
+                }, null, 2)}
+              </pre>
+            </details>
+          )}
         </div>
         <Button 
           onClick={() => {

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-cache-v1.2'; // ✅ Updated version
+const CACHE_NAME = 'school-cache-v1.3'; // ✅ Updated version - Push notification improvements
 const MAX_CACHE_ITEMS = 200; // ✅ Increased for better offline coverage
 
 // Assets to cache immediately - Critical App Shell
@@ -127,6 +127,7 @@ self.addEventListener('push', function(event) {
     try {
       data = event.data.json();
     } catch(e) {
+      console.error('[SW] Failed to parse push data:', e);
       data = { title: 'إشعار جديد', body: event.data.text() };
     }
   }
@@ -136,7 +137,7 @@ self.addEventListener('push', function(event) {
   const options = {
     body: data.body || data.message || 'يوجد تحديث جديد في النظام',
     icon: data.icon || '/icons/icon-192.png',
-    badge: data.badge || '/icons/icon-192.png',
+    badge: data.badge || '/icons/badge-72.png',
     dir: 'rtl',
     vibrate: [100, 50, 100],
     tag: data.tag || 'general-notification', // يمنع تكرار نفس الإشعار
@@ -144,9 +145,11 @@ self.addEventListener('push', function(event) {
     data: {
       url: (data.data && data.data.url) ? data.data.url : (data.url || '/')
     },
-    requireInteraction: true,
+    requireInteraction: false, // ✅ Changed to false for better mobile UX
+    silent: false, // ✅ Ensure sound plays
     actions: [
-      { action: 'open', title: 'فتح التطبيق' }
+      { action: 'open', title: 'فتح التطبيق' },
+      { action: 'dismiss', title: 'إغلاق' }
     ]
   };
   
@@ -159,9 +162,10 @@ self.addEventListener('push', function(event) {
 
 // ===== التعامل مع نقر المستخدم على الإشعار =====
 self.addEventListener('notificationclick', function(event) {
+  console.log('[SW] Notification clicked:', event.action);
   event.notification.close();
   
-  const targetUrl = event.notification.data || '/';
+  const targetUrl = event.notification.data?.url || '/';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
@@ -180,3 +184,23 @@ self.addEventListener('notificationclick', function(event) {
     })
   );
 });
+
+// ===== التعامل مع إغلاق الإشعار =====
+self.addEventListener('notificationclose', function(event) {
+  console.log('[SW] Notification closed by user');
+  // Optional: Track dismissed notifications for analytics
+});
+
+// ===== Background Sync for offline support =====
+self.addEventListener('sync', function(event) {
+  console.log('[SW] Background sync triggered:', event.tag);
+  if (event.tag === 'sync-data') {
+    event.waitUntil(syncData());
+  }
+});
+
+async function syncData() {
+  // This will sync data when connectivity is restored
+  console.log('[SW] Syncing data in background');
+  // Implementation depends on your app's sync requirements
+}
