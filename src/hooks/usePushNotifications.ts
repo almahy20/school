@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { logger } from '@/utils/logger';
 
 export function usePushNotifications() {
@@ -58,7 +58,7 @@ export function usePushNotifications() {
         return () => document.removeEventListener('visibilitychange', handlePermissionChange);
       });
     }
-  }, []); // ❌ شلنا checkSubscription من الـ dependencies
+  }, [checkSubscription]); // ✅ أضفنا checkSubscription إلى الـ dependencies
 
   const urlBase64ToUint8Array = (base64String: string) => {
     const cleaned = base64String.trim().replace(/^"|"$/g, '');

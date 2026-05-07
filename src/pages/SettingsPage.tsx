@@ -8,7 +8,7 @@ import {
   Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon, Download
 } from 'lucide-react';
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';

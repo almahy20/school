@@ -115,7 +115,7 @@ export default function PWAInstallPrompt() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, [user?.id]);
+  }, [user]);
 
   const handleInstall = async () => {
     console.log('🔵 handleInstall called');

@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { 
   Send, Users, User, Megaphone, CheckCircle2, AlertCircle, Search, ShieldCheck
 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   useProfiles, 
   useSendMessage, 

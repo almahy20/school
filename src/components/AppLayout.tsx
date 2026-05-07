@@ -10,7 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from './ui/button';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
 import { logger } from '@/utils/logger';

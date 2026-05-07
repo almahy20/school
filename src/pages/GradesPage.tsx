@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { sendPushToUser } from '@/utils/pushNotifications';

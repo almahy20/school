@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useTeachers, useDeleteTeacher, useTeacherAction, useBranding, useClasses, useUpdateTeacher, type Teacher } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 

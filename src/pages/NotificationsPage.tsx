@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
@@ -26,7 +26,7 @@ export default function NotificationsPage() {
   const { data, isLoading, error, refetch } = useNotifications(page, PAGE_SIZE);
   const notificationsRealtime = useNotificationsRealtime();
   
-  const notifications = data?.data || [];
+  const notifications = useMemo(() => data?.data || [], [data?.data]);
   const totalItems = data?.count || 0;
 
   // Setup real-time subscription
@@ -52,7 +52,7 @@ export default function NotificationsPage() {
     } else {
       autoMarkedRef.current = true;
     }
-  }, [isLoading, notifications]);
+  }, [isLoading, notifications, markAllAsReadMutation]);
 
   const handleMarkAllAsRead = async () => {
     try {

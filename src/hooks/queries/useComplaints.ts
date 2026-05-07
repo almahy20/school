@@ -35,6 +35,10 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
         q = q.eq('status', status);
       }
 
+      if (search) {
+        q = q.ilike('content', `%${search}%`);
+      }
+
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 

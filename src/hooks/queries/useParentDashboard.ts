@@ -236,14 +236,14 @@ export function useChildFullDetails(studentId: string | undefined) {
 
       const presentCount = (attendance || []).filter((a: any) => a.status === 'present').length;
       
-      const numericGrades = (grades || []).filter((g: any) => !isNaN(Number(g.score)));
+      const numericGrades = (grades || []).filter((g: any) => !isNaN(Number(g.score)) && Number(g.max_score) > 0);
       const avgGrade = numericGrades.length > 0
-        ? Math.round(numericGrades.reduce((sum: number, g: any) => sum + (Number(g.score) / g.max_score) * 100, 0) / numericGrades.length)
+        ? Math.round(numericGrades.reduce((sum: number, g: any) => sum + (Number(g.score) / Number(g.max_score)) * 100, 0) / numericGrades.length)
         : 0;
 
       // ✅ New Monthly logic for parents:
       // If the current month doesn't have a fee record yet, create a virtual one with 0 paid
-      let processedFees = [...(fees || [])];
+      const processedFees = [...(fees || [])];
       const currentMonthFee = processedFees.find((f: any) => f.term === current_term);
       
       if (!currentMonthFee && student?.monthly_fee > 0) {

@@ -19,7 +19,7 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   // ✅ Optimization: If we have a cached user, don't show null during background loading.
   // This keeps the page "present" during refresh.
   if (loading && !hasCachedUser) {
-    return <div className="min-h-screen bg-[#f8fafc]" />;
+    return <div className="fixed inset-0 bg-transparent border-none" />;
   }
   
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
@@ -47,11 +47,11 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   
   if (user.schoolStatus === 'suspended' && !user.isSuperAdmin) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 text-center" dir="rtl">
-         <div className="bg-white p-10 rounded-3xl shadow-xl max-w-md border border-rose-100">
-            <h1 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">الاشتراك موقوف</h1>
-            <p className="text-slate-500 font-bold mb-8">عذراً، تم إيقاف الاشتراك الخاص بمدرستك. يرجى التواصل مع إدارة النظام للمزيد من التفاصيل.</p>
-            <button onClick={() => navigate('/login', { replace: true })} className="h-12 px-8 rounded-xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all">العودة لتسجيل الدخول</button>
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 text-center" dir="rtl">
+         <div className="bg-card p-10 rounded-3xl shadow-xl max-w-md border border-border">
+            <h1 className="text-3xl font-black text-foreground mb-4 tracking-tight">الاشتراك موقوف</h1>
+            <p className="text-muted-foreground font-bold mb-8">عذراً، تم إيقاف الاشتراك الخاص بمدرستك. يرجى التواصل مع إدارة النظام للمزيد من التفاصيل.</p>
+            <button onClick={() => navigate('/login', { replace: true })} className="h-12 px-8 rounded-xl bg-primary text-primary-foreground font-black hover:opacity-90 transition-all">العودة لتسجيل الدخول</button>
          </div>
       </div>
     );

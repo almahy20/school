@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useParents, useParentAction, useBranding, type Parent } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { Phone, User, Eye, X, Search, Users, ArrowLeft, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy, UserCheck } from 'lucide-react';

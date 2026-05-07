@@ -35,8 +35,9 @@ export const queryClient = new QueryClient({
     },
     mutations: {
       onSuccess: () => {
-        // Clear specific related caches or all if needed
-        queryClient.invalidateQueries({ refetchType: 'all' });
+        // ✅ Optimization: Remove global invalidation. 
+        // Mutations should handle their own cache invalidation for better control and performance.
+        // queryClient.invalidateQueries({ refetchType: 'all' });
       },
     }
   },

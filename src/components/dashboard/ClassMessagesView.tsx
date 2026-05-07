@@ -3,7 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useClassStudents, useSendMessage } from '@/hooks/queries';
 import { useProfilesByIds } from '@/hooks/queries/useProfile';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { Search, User, Send, Users, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

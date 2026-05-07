@@ -99,7 +99,7 @@ export function GlobalAnnouncement() {
     if (items.length > 0) {
       setIsOpen(true);
     }
-  }, [unreadMessages]);
+  }, [unreadMessages, senderProfiles]);
 
   const addToQueue = useCallback((msg: AnnouncementMessage) => {
     setQueue(prev => {

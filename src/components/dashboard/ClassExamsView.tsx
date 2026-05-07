@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   BookOpen, Plus, Trash2, Edit3, Users, 
   Save, X, Award, Calendar, Type, Hash

@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
+import ScrollToTop from "./components/ScrollToTop";
 import { useRealtimeSync } from "./hooks/useRealtimeSync";
 import { useSchoolFavicon } from "./hooks/queries";
 import DashboardPage from "./pages/DashboardPage";
@@ -63,7 +64,7 @@ const GLOBAL_SYNC_TABLES = [
   // سيتم التعامل معهم في هوكس مخصصة بفلتر user_id لتقليل الضغط
 ];
 
-import { PageLoader } from "./components/PageLoader";
+import { PageLoader } from "./components/ui/PageLoader";
 
 function AppRoutes() {
   const { user, loading } = useAuth();
@@ -75,7 +76,7 @@ function AppRoutes() {
   useRealtimeSync(GLOBAL_SYNC_TABLES, user?.schoolId);
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#f8fafc]" />}>
+    <Suspense fallback={<div className="fixed inset-0 bg-transparent border-none" />}>
         <Routes>
           {/* ── Public Routes ── */}
           <Route path="/home" element={<LandingPage />} />
@@ -91,7 +92,7 @@ function AppRoutes() {
             path="/" 
             element={
               loading && !user ? (
-                <div className="min-h-screen bg-[#f8fafc]" />
+                <div className="fixed inset-0 bg-transparent border-none" />
               ) : user ? (
                 <ProtectedRoute>
                   <DashboardPage />
@@ -145,6 +146,7 @@ export default function App() {
         <TooltipProvider>
           <AuthProvider>
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              <ScrollToTop />
               <GlobalErrorBoundary>
                 <AppRoutes />
                 <PwaManager />

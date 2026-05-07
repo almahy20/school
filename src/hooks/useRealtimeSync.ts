@@ -8,11 +8,12 @@ import { logger } from '@/utils/logger';
  * يضمن تحديث الكاش فورياً عند حدوث أي تغيير في الجداول المحددة
  * يغني عن الـ polling ويمنع ظهور الـ Loaders المتكررة
  */
-export function useRealtimeSync(tables: string[], schoolId?: string | null) {
+export function useRealtimeSync(tables: string[] | string, schoolId?: string | null) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!tables.length) return;
+    const tableList = Array.isArray(tables) ? tables : [tables];
+    if (!tableList.length) return;
 
     // لتجنب تكرار الريكويستات في وقت قصير (Debounce)
     const pendingInvalidations = new Set<string>();
@@ -45,13 +46,13 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
     // Tables that are known NOT to have a school_id column
     const globalTables = ['profiles', 'schools'];
 
-    const sortedTables = [...tables].sort();
+    const sortedTables = [...tableList].sort();
     const channelId = `sync-${sortedTables.join('-')}-${schoolId || 'global'}`;
     
     logger.log(`🔗 [RealtimeSync] Initializing channel: ${channelId}`);
     const channel = supabase.channel(channelId);
 
-    tables.forEach(table => {
+    tableList.forEach(table => {
       const isGlobal = globalTables.includes(table);
       
       channel.on(
@@ -110,5 +111,5 @@ export function useRealtimeSync(tables: string[], schoolId?: string | null) {
       supabase.removeChannel(channel);
     };
 
-  }, [tables, schoolId, queryClient]);
+  }, [JSON.stringify(tables), schoolId, queryClient]);
 }

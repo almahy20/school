@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   BookOpen, Plus, Edit3, Trash2, Layers, Search, 
   ArrowRight, ChevronDown, CheckCircle2

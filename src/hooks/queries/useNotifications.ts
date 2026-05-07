@@ -126,7 +126,10 @@ export function useMarkAllAsRead() {
     onSuccess: () => {
       toast.success('تم تحديد الكل كمقروء');
       // ✅ Don't refetch unread counts here — the optimistic update already set it to 0
-      // The debounced realtime handler will confirm from DB after 1.5s
+      // We'll do a delayed refetch to confirm with DB
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
+      }, 3000);
     },
     onSettled: () => {
       // Only refresh the notifications list, NOT the unread count
@@ -146,15 +149,37 @@ export function useMarkComplaintsAsRead() {
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
-        .eq('type', 'complaint')
+        .ilike('type', 'complaint%')
         .eq('is_read', false);
       if (error) throw error;
     },
+    // ✅ Optimistic Update for complaints
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications-unread-counts', user?.id] });
+      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as any;
+      
+      if (previousCounts) {
+        queryClient.setQueryData(['notifications-unread-counts', user?.id], {
+          unread: Math.max(0, (previousCounts.unread || 0) - (previousCounts.complaints || 0)),
+          complaints: 0
+        });
+      }
+      
+      return { previousCounts };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousCounts) {
+        queryClient.setQueryData(['notifications-unread-counts', user?.id], context.previousCounts);
+      }
+    },
     onSuccess: () => {
+      // ✅ 1. Update the list immediately
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-      queryClient.refetchQueries({ 
-        queryKey: ['notifications-unread-counts', user?.id] 
-      });
+      
+      // ✅ 2. Force invalidate unread counts after a delay to confirm with DB
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
+      }, 3000); // 3 seconds delay to ensure DB transaction is fully propagated
     },
   });
 }
@@ -199,17 +224,17 @@ export function useUnreadCounts() {
       
       const counts = {
         unread: (data || []).length,
-        complaints: (data || []).filter((n: any) => n.type === 'complaint').length
+        complaints: (data || []).filter((n: any) => n.type?.startsWith('complaint')).length
       };
       
       return counts;
     },
     enabled: !!user?.id,
-    staleTime: 30 * 1000, // 30 seconds — short enough for freshness, long enough to prevent flashing
+    staleTime: 60 * 1000, // 60 seconds — Increase to prevent immediate refetch on page change
     gcTime: 1000 * 60 * 60,
-    refetchOnWindowFocus: false, // ✅ Prevent refetch on focus (causes flashing)
-    refetchOnMount: false, // ✅ Don't refetch on mount — trust optimistic updates
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: false, // ✅ Disable to prevent flickering
+    refetchOnMount: false, // ✅ Disable to trust optimistic updates when navigating
+    refetchOnReconnect: true,
   });
 }
 

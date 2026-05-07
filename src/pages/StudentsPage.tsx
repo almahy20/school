@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useClasses, useBranding } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 

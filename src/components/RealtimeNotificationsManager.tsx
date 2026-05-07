@@ -64,7 +64,7 @@ export default function RealtimeNotificationsManager() {
       // ✅ Optimistic: Increment unread count immediately
       queryClient.setQueryData(['notifications-unread-counts', user.id], (old: any) => ({
         unread: (old?.unread || 0) + 1,
-        complaints: old?.complaints || 0
+        complaints: (old?.complaints || 0) + (newNotification.type?.startsWith('complaint') ? 1 : 0)
       }));
     }
     
@@ -112,7 +112,7 @@ export default function RealtimeNotificationsManager() {
         // 4. Optimistic increment for unread count
         queryClient.setQueryData(['notifications-unread-counts', user.id], (old: any) => ({
           unread: (old?.unread || 0) + 1,
-          complaints: old?.complaints || 0
+          complaints: (old?.complaints || 0) + (newNotification.type?.startsWith('complaint') ? 1 : 0)
         }));
 
         // 5. Invalidate list to refetch
@@ -128,9 +128,19 @@ export default function RealtimeNotificationsManager() {
         schema: 'public',
         table: 'notifications',
         filter: `user_id=eq.${user.id}`
-      }, () => {
-        // ✅ Don't manipulate cache here — let markAllAsRead's optimistic update handle it.
-        // Schedule a delayed direct DB fetch to get the final accurate count.
+      }, (payload) => {
+        // ✅ Optimization: If this was a read status update, we don't want to refetch immediately
+        // because our optimistic updates already handled it. 
+        // We only care about updates that might change content or if we missed an event.
+        const { old: oldRow, new: newRow } = payload;
+        if (oldRow.is_read === false && newRow.is_read === true) {
+          // This is a "mark as read" event, likely triggered by our own UI.
+          // We trust our optimistic updates, but we'll do a silent refresh of the list.
+          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+          return; 
+        }
+
+        // For other updates, schedule a debounced sync
         if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
         (window as any).__notifUpdateTimer = setTimeout(async () => {
           try {
@@ -142,14 +152,16 @@ export default function RealtimeNotificationsManager() {
             if (!error) {
               queryClient.setQueryData(['notifications-unread-counts', user.id], {
                 unread: (data || []).length,
-                complaints: (data || []).filter((n: any) => n.type === 'complaint').length
+                complaints: (data || []).filter((n: any) => n.type?.startsWith('complaint')).length
               });
+              // Force update to make sure everyone sees the new data
+              queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
             }
           } catch (e) {
             logger.warn('Failed to sync unread counts:', e);
           }
           queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-        }, 2000);
+        }, 4000); // 4 seconds delay for background sync
       })
       .subscribe();
 

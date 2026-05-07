@@ -45,7 +45,7 @@ export function getOptimizedImageUrl(url: string | null | undefined, options: { 
   const { width = 100, height, quality = 70 } = options;
   
   // Transform the URL from /object/public/ to /render/image/public/
-  let optimizedUrl = url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+  const optimizedUrl = url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
   
   // Append transformation parameters
   const params = new URLSearchParams();

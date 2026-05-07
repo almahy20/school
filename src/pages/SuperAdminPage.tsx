@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   ShieldAlert, Plus, Search, Building2, CheckCircle2, 
   XCircle, Users, Activity, Clock, Eye, 

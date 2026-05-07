@@ -8,9 +8,9 @@ export default function PwaManager() {
   const { user } = useAuth();
 
   const updateManifest = useCallback(async () => {
-    let name = "المدرسة الذكية";
-    let shortName = "المدرسة";
-    const defaultIcon = "/icons/icon-192.png";
+    let name = document.title || "المدرسة الذكية";
+    let shortName = document.title || "المدرسة";
+    const defaultIcon = (document.querySelector('link[rel~="icon"]') as HTMLLinkElement)?.href || "/icons/icon-192.png";
     let icon = defaultIcon;
     let slug = "";
     let themeColor = "#1e293b";
@@ -36,7 +36,9 @@ export default function PwaManager() {
           shortName = cleaned.cleanName;
           icon = cleaned.logo || defaultIcon;
           slug = s.slug;
-        } catch (e) {}
+        } catch (e) {
+          console.error('Error parsing cached branding:', e);
+        }
       }
 
       try {
@@ -100,7 +102,7 @@ export default function PwaManager() {
     // The logo_url in the database already has a version timestamp if updated.
     const cacheBustIcon = icon; 
 
-    // @ts-ignore - Deep type instantiation
+    // @ts-expect-error - Deep type instantiation
     const manifest = {
       name: name,
       short_name: shortName,
@@ -163,7 +165,7 @@ export default function PwaManager() {
       document.head.appendChild(metaTheme);
     }
     metaTheme.content = themeColor;
-  }, [user?.schoolId]);
+  }, [user?.schoolId, user?.email]);
 
   useEffect(() => {
     updateManifest();

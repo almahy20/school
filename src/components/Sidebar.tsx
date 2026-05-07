@@ -64,30 +64,18 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { data: unreadCounts } = useUnreadCounts();
-  const initialUnreadCount = unreadCounts?.unread || 0;
+  const unreadCount = unreadCounts?.unread || 0;
   const unreadComplaintsCount = unreadCounts?.complaints || 0;
   const { data: branding } = useBranding();
-  const [unreadCount, setUnreadCount] = useState(0);
   const [logoError, setLogoError] = useState(false);
 
-  // ✅ Optimization: Prefetch on Hover
-  // Starts loading data the moment user hovers over a menu item
-  const handlePrefetch = useCallback((queryKey?: string[]) => {
-    if (queryKey) {
-      queryClient.prefetchQuery({
-        queryKey: [...queryKey],
-        staleTime: 5 * 60 * 1000,
-      });
-    }
-  }, [queryClient]);
-
   const schoolBranding = useMemo(() => {
-    let rawLogo = branding?.logo_url || '';
+    const rawLogo = branding?.logo_url || '';
     
     // ✅ تحسين موحد: نستخدم نفس الحجم (120) لضمان استخدام الكاش في كل مكان
     const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
     
-    let rawName = branding?.name || 'الجيل الجديد';
+    const rawName = branding?.name || 'الجيل الجديد';
     const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
 
     return {
@@ -99,10 +87,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
   useEffect(() => {
     setLogoError(false); // Reset error when branding changes
   }, [branding]);
-
-  useEffect(() => {
-    setUnreadCount(initialUnreadCount);
-  }, [initialUnreadCount]);
 
   const getLinks = () => {
     if (user?.isSuperAdmin) return superAdminLinks;
@@ -190,7 +174,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
             key={link.to} 
             to={link.to} 
             end={link.to === '/'}
-            onMouseEnter={() => handlePrefetch(link.queryKey)}
             onClick={onClose}
             className={({ isActive }) => cn(
               "flex items-center justify-between px-4 h-12 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",

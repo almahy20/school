@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { Upload, Palette, Image as ImageIcon, Loader2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBranding, useUpdateSchool } from '@/hooks/queries';

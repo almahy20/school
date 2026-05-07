@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { useBranding, useTeacherAttendance, useUpsertTeacherAttendance } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';

@@ -38,5 +38,5 @@ export function cleanBrandingData(rawBranding: { name?: string; logo_url?: strin
  * Centralizes the logic for name cleaning and image optimization.
  */
 export function useCleanBranding(rawBranding: { name?: string; logo_url?: string } | null | undefined): BrandingData {
-  return useMemo(() => cleanBrandingData(rawBranding), [rawBranding?.name, rawBranding?.logo_url]);
+  return useMemo(() => cleanBrandingData(rawBranding), [rawBranding]);
 }

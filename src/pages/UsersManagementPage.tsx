@@ -9,7 +9,7 @@ import {
   Key, Eye, EyeOff
 } from 'lucide-react';
 import { logger } from '@/utils/logger';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   useUsers, 
   useCreateUser, 

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user } = useAuth();
@@ -126,7 +126,7 @@ export function useMessages() {
   const queryClient = useQueryClient();
   
   // نعيد بناء queryKey ليكون بسيطاً لكن مع ربطه بـ user?.id لتأمين البيانات
-  const queryKey = ['messages', user?.id];
+  const queryKey = useMemo(() => ['messages', user?.id], [user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -159,7 +159,7 @@ export function useMessages() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, queryClient]);
+  }, [user?.id, queryClient, queryKey]);
       
   return useQuery({
     queryKey,

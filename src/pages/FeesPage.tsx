@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   CreditCard, Search, Plus, TrendingUp, Wallet, Clock, User,
   CheckCircle, AlertCircle, Download, MoreHorizontal, Calendar,
