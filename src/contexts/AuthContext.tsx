@@ -1,0 +1,247 @@
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+import { AppUser, AppRole } from '@/types/auth';
+import { logger } from '@/utils/logger';
+import { queryClient } from '@/lib/queryClient';
+
+interface AuthContextType {
+  session: Session | null;
+  user: AppUser | null;
+  loading: boolean;
+  isLoading: boolean;
+  signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  login: (phone: string, password: string) => Promise<string | null>;
+  signup: (phone: string, password: string, fullName: string, role: string, schoolId: string) => Promise<string | null>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * دالة بسيطة لجلب بيانات المستخدم الإضافية (الرتبة والمدرسة)
+ * ✅ تحسين: منع الطلبات المتكررة نهائياً عبر Singleton Pattern صارم
+ */
+let userFetchPromise: Promise<AppUser | null> | null = null;
+let currentFetchingId: string | null = null;
+
+async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
+  // 1. If we are already fetching for THIS user, return the same promise
+  if (userFetchPromise && currentFetchingId === supaUser.id) {
+    logger.log('[Auth] Reusing existing fetch promise for:', supaUser.id);
+    return userFetchPromise;
+  }
+
+  // 2. Start a new fetch
+  logger.log('[Auth] Starting fresh singleton fetch for:', supaUser.id);
+  currentFetchingId = supaUser.id;
+  
+  userFetchPromise = (async () => {
+    try {
+      const { data: userData, error } = await supabase.rpc('get_complete_user_data', { 
+        p_user_id: supaUser.id 
+      });
+
+      if (error || !userData) {
+        logger.error('Error fetching app user data:', error);
+        return null;
+      }
+
+      const { profile, role, school } = userData as any;
+      
+      return {
+        id: supaUser.id,
+        email: supaUser.email || '',
+        phone: profile?.phone || '',
+        fullName: profile?.full_name || '',
+        role: (role?.role || 'parent') as AppRole,
+        isSuperAdmin: role?.is_super_admin || false,
+        schoolId: profile?.school_id,
+        schoolStatus: school?.status || 'active',
+        approvalStatus: role?.approval_status || 'approved',
+        subscriptionExpired: false,
+      };
+    } catch (err) {
+      logger.error('Unexpected error in getAppUserData:', err);
+      return null;
+    } finally {
+      // ✅ Keep the promise cached for 10 seconds to swallow all initial events (SESSION, SIGNED_IN, etc)
+      setTimeout(() => {
+        if (currentFetchingId === supaUser.id) {
+          userFetchPromise = null;
+          currentFetchingId = null;
+        }
+      }, 10000); 
+    }
+  })();
+
+  return userFetchPromise;
+}
+
+/**
+ * Prefetch common queries when user logs in to improve initial load performance
+ */
+async function prefetchCommonQueries(appUser: AppUser) {
+  try {
+    // Prefetch user's own profile
+    queryClient.prefetchQuery({
+      queryKey: ['profile', appUser.id],
+      queryFn: async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', appUser.id)
+          .maybeSingle();
+        return data;
+      },
+      staleTime: 5 * 60 * 1000,
+    });
+
+    // Prefetch all profiles for messaging (IDs only) - ONLY FOR ADMINS/TEACHERS
+    if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
+      queryClient.prefetchQuery({
+        queryKey: ['all-profiles', appUser.schoolId],
+        queryFn: async () => {
+          const { data } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('school_id', appUser.schoolId)
+            .neq('id', appUser.id);
+          
+          return (data || []).map((p: any) => p.id);
+        },
+        staleTime: 5 * 60 * 1000,
+      });
+    }
+
+    logger.log('[Prefetch] Common queries prefetched for user:', appUser.id);
+  } catch (err) {
+    logger.error('[Prefetch] Error prefetching queries:', err);
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null);
+  
+  // ✅ Optimization: Initialize user from localStorage for instant "App Shell" rendering
+  // This prevents the full-page white/loading flicker on refresh
+  const [user, setUser] = useState<AppUser | null>(() => {
+    const cached = localStorage.getItem('app_user_cache');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  const syncUser = async (currentSession: Session | null) => {
+    setSession(currentSession);
+    if (currentSession?.user) {
+      const appUser = await getAppUserData(currentSession.user);
+      setUser(appUser);
+      
+      // ✅ Cache user data for next refresh
+      if (appUser) {
+        localStorage.setItem('app_user_cache', JSON.stringify(appUser));
+        
+        // ✅ Optimization: Defer prefetching until the main thread is completely free
+        const deferPrefetch = () => {
+          if ('requestIdleCallback' in window) {
+            (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
+          } else {
+            setTimeout(() => prefetchCommonQueries(appUser), 1000);
+          }
+        };
+        deferPrefetch();
+      }
+    } else {
+      setUser(null);
+      localStorage.removeItem('app_user_cache');
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    // 1. جلب الجلسة الحالية عند التشغيل
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      syncUser(session);
+    });
+
+    // 2. الاستماع لتغييرات التوثيق (Refresh, SignOut, SignIn)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        syncUser(session);
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+  };
+
+  const login = async (phone: string, password: string): Promise<string | null> => {
+    try {
+      const email = `${phone}@edara.com`;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          return 'رقم الهاتف أو كلمة المرور غير صحيحة';
+        }
+        return error.message;
+      }
+      return null;
+    } catch (err: any) {
+      return err.message;
+    }
+  };
+
+  const signup = async (phone: string, password: string, fullName: string, role: string, schoolId: string): Promise<string | null> => {
+    try {
+      const email = `${phone}@edara.com`;
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone: phone, // ✅ إضافة رقم الهاتف
+            role: role,
+            school_id: schoolId
+          }
+        }
+      });
+      if (error) return error.message;
+      return null;
+    } catch (err: any) {
+      return err.message;
+    }
+  };
+
+  const refreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    await syncUser(session);
+  };
+
+  return (
+    <AuthContext.Provider value={{ session, user, loading: isLoading, isLoading, signOut, refreshUser, login, signup }}>
+      {children}
+    </AuthContext.Provider>
+  );
+
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};
