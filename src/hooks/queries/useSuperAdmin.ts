@@ -64,6 +64,15 @@ export function useUpdateSchool() {
         .update(updates)
         .eq('id', id);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_SCHOOL_BY_SUPERADMIN',
+        p_entity_type: 'schools',
+        p_entity_id: id,
+        p_details: `تعديل بيانات المدرسة ${updates.name || id} بواسطة السوبر إدمن`
+      });
+
       return { id, ...updates };
     },
     onSuccess: () => {

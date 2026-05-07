@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { useState, useEffect, useRef } from 'react';
-=======
-import { useState, useEffect } from 'react';
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
@@ -43,7 +39,6 @@ export default function NotificationsPage() {
   const markAllAsReadMutation = useMarkAllAsRead();
   const deleteNotificationMutation = useDeleteNotification();
 
-<<<<<<< HEAD
   // ✅ تعليم الإشعارات كمقروءة تلقائياً عند فتح الصفحة
   const autoMarkedRef = useRef(false);
   useEffect(() => {
@@ -62,12 +57,6 @@ export default function NotificationsPage() {
   const handleMarkAllAsRead = async () => {
     try {
       await markAllAsReadMutation.mutateAsync();
-=======
-  const handleMarkAllAsRead = async () => {
-    try {
-      await markAllAsReadMutation.mutateAsync();
-      refetch();
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     } catch (err) {
       logger.error('Error marking all as read:', err);
     }

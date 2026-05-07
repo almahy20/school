@@ -2,7 +2,7 @@ import { useState, ReactNode, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
-import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap } from 'lucide-react';
+import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap, Layers } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
 import { cn, getOptimizedImageUrl } from '@/lib/utils';
@@ -12,10 +12,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from './ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
-<<<<<<< HEAD
 import { useCleanBranding } from '@/hooks/useCleanBranding';
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 import { logger } from '@/utils/logger';
 
 interface Props {
@@ -26,39 +23,17 @@ export default function AppLayout({ children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
-  const queryClient = useQueryClient(); // ✅ إضافة هذا السطر
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
 
   const { data: unreadCounts } = useUnreadCounts();
   const unreadCount = unreadCounts?.unread || 0;
   const { data: branding } = useBranding();
-<<<<<<< HEAD
+  
   const schoolBranding = useCleanBranding(branding);
   const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
   
   const [logoError, setLogoError] = useState(false);
-=======
-  const [logoError, setLogoError] = useState(false);
-  const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
-
-  // ✅ تحسين: نخزن الـ branding في cache عشان ميتحملش كل مرة
-  const schoolBranding = useMemo(() => {
-    let rawLogo = branding?.logo_url || '';
-    
-    // ✅ تحسين: ضغط وتصغير الصورة لسرعة التحميل
-    // ده بيخلي الصورة أخف بكتير وبيقلل استهلاك الـ Network
-    const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
-
-    let rawName = branding?.name || 'الجيل الجديد';
-    const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
-
-    return {
-      name: cleanName || rawName,
-      logo: optimizedLogo,
-      themeColor: '#1A3C8F'
-    };
-  }, [branding]);
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
   useEffect(() => {
     setLogoError(false);
@@ -69,15 +44,12 @@ export default function AppLayout({ children }: Props) {
   const { permission } = usePushNotifications();
 
   // 🚀 تحسين السرعة عبر جلب البيانات في الخلفية (Prefetching)
-  // ✅ نقلل الـ prefetching عشان ميبقاش في تأثير سلبي على الصفحات الخفيفة
   useEffect(() => {
     if (user?.schoolId) {
       const commonOptions = { staleTime: 5 * 60 * 1000 };
       
-      // التوقع المسبق للبيانات الأكثر استخداماً
       const prefetch = async () => {
         try {
-          // ✅ Optimization: Wait for idle before prefetching
           const doPrefetch = async () => {
             const key = ['classes', 'all', user.schoolId, user.isSuperAdmin, user.role, user.id];
             const existing = queryClient.getQueryData(key);
@@ -120,15 +92,11 @@ export default function AppLayout({ children }: Props) {
     }
   }, [user, isPWA]);
 
-
   // Quick navigation search
   const allLinks = useMemo(() => {
     const links = [
       { to: '/', label: 'لوحة التحكم' },
-<<<<<<< HEAD
       { to: '/admin-reports', label: 'مركز التقارير والتحليلات' },
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       { to: '/students', label: 'الطلاب' },
       { to: '/teachers', label: 'المعلمون' },
       { to: '/parents', label: 'أولياء الأمور' },
@@ -152,12 +120,8 @@ export default function AppLayout({ children }: Props) {
         <GlobalAnnouncement />
       </div>
 
-      {/* Mobile Glass Header - ✅ Fixed height to prevent CLS */}
-<<<<<<< HEAD
+      {/* Mobile Glass Header */}
       <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 no-print">
-=======
-      <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900 shrink-0">
             {schoolBranding.logo && !logoError ? (
@@ -171,11 +135,7 @@ export default function AppLayout({ children }: Props) {
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
           </div>
-<<<<<<< HEAD
           <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.cleanName}</span>
-=======
-          <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.name}</span>
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         </div>
         
         <div className="flex items-center gap-2">
@@ -212,21 +172,17 @@ export default function AppLayout({ children }: Props) {
         />
       )}
 
-      {/* Fixed Desktop Sidebar Container - ✅ Optimized for layout stability */}
+      {/* Fixed Desktop Sidebar Container */}
       <aside className={cn(
-<<<<<<< HEAD
         "fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-500 ease-in-out transform shadow-2xl lg:translate-x-0 bg-slate-900 no-print",
-=======
-        "fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-500 ease-in-out transform shadow-2xl lg:translate-x-0 bg-slate-900",
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       )}>
         <Sidebar onClose={() => setSidebarOpen(false)} />
       </aside>
 
-      {/* Main Content Area - ✅ Stable margin to prevent shift */}
+      {/* Main Content Area */}
       <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-none relative">
-        {/* Abstract Background Gradients (Enhanced for better visual consistency) */}
+        {/* Abstract Background Gradients */}
         <div 
           style={{ animationDuration: '10s' }} 
           className="absolute top-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none animate-pulse" 
@@ -236,18 +192,11 @@ export default function AppLayout({ children }: Props) {
           className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" 
         />
 
-        {/* Desktop Header Navigation - ✅ Fixed height to prevent CLS */}
-<<<<<<< HEAD
+        {/* Desktop Header Navigation */}
         <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
               نظام الإدارة الذكي — {schoolBranding.cleanName}
-=======
-        <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
-              نظام الإدارة الذكي — {schoolBranding.name}
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
             </div>
           </div>
 
@@ -305,18 +254,14 @@ export default function AppLayout({ children }: Props) {
           </div>
         </div>
 
-        {/* Content Section - Flex-1 to push footer down */}
+        {/* Content Section */}
         <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
           {children}
         </div>
 
         {/* Sticky Footer */}
         <footer className={cn(
-<<<<<<< HEAD
           "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto no-print",
-=======
-          "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto",
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
         )}>
           <div className="flex mb-20 md:mb-0  flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
@@ -329,11 +274,7 @@ export default function AppLayout({ children }: Props) {
                 )}
               </div>
               <div>
-<<<<<<< HEAD
                 <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.cleanName}</p>
-=======
-                <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.name}</p>
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">منصة التعليم المتكاملة</p>
               </div>
             </div>
@@ -350,4 +291,3 @@ export default function AppLayout({ children }: Props) {
     </div>
   );
 }
-

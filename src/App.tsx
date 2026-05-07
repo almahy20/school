@@ -38,10 +38,7 @@ const MessagingPage = lazy(() => import("./pages/MessagingPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ParentComplaintsPage = lazy(() => import("./pages/ParentComplaintsPage"));
 const AdminComplaintsPage = lazy(() => import("./pages/AdminComplaintsPage"));
-<<<<<<< HEAD
 const AdminReportsPage = lazy(() => import("./pages/AdminReportsPage"));
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage"));
@@ -132,10 +129,7 @@ function AppRoutes() {
           <Route path="/messages" element={<ProtectedRoute allowedRoles={['admin']}><MessagingPage /></ProtectedRoute>} />
           <Route path="/complaints" element={<ProtectedRoute allowedRoles={['parent']}><ParentComplaintsPage /></ProtectedRoute>} />
           <Route path="/manage-complaints" element={<ProtectedRoute allowedRoles={['admin']}><AdminComplaintsPage /></ProtectedRoute>} />
-<<<<<<< HEAD
           <Route path="/admin-reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReportsPage /></ProtectedRoute>} />
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/expired" element={<ProtectedRoute><SubscriptionExpiredPage /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />

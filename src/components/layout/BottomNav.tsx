@@ -58,11 +58,7 @@ export default function BottomNav() {
   return (
     <>
       {/* Bottom Navigation */}
-<<<<<<< HEAD
       <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-200/50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[90] safe-area-bottom no-print" dir="rtl">
-=======
-      <div className="fixed bottom-0 left-0 right-0 md:hidden bg-white/95 backdrop-blur-xl border-t border-slate-200/50 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-[90] safe-area-bottom" dir="rtl">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         <div className="flex items-center justify-around px-1 py-1.5 max-w-lg mx-auto">
           {links.map((link) => {
             const isComplaints = link.label === 'الشكاوى' || link.to === '/manage-complaints' || link.to === '/complaints';

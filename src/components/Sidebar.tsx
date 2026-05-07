@@ -23,10 +23,7 @@ interface SidebarLink {
 
 const adminLinks: SidebarLink[] = [
   { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['admin-stats'] },
-<<<<<<< HEAD
   { to: '/admin-reports', label: 'مركز التقارير', icon: Layers },
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
   { to: '/messages', label: 'بث الرسائل', icon: Send },
   { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'complaints' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users, queryKey: ['students'] },

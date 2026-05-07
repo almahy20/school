@@ -125,6 +125,14 @@ export function useUpdateStudentMonthlyFee() {
         .update({ monthly_fee: amount })
         .eq('id', studentId);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_STUDENT_MONTHLY_FEE',
+        p_entity_type: 'students',
+        p_entity_id: studentId,
+        p_details: `تحديث المطالبة المالية الثابتة للطالب إلى ${amount} ج.م`
+      });
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة المالية الثابتة للطالب');
@@ -172,6 +180,14 @@ export function useUpsertFee() {
           });
         if (error) throw error;
       }
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPSERT_FEE_PAYMENT',
+        p_entity_type: 'fees',
+        p_entity_id: record.student_id,
+        p_details: `تسجيل دفعة مالية بقيمة ${record.amount_paid} ج.م لشهر ${record.term}`
+      });
     },
     onSuccess: () => {
       toast.success('تم تسجيل الدفعة بنجاح');
@@ -200,6 +216,13 @@ export function useGenerateFees() {
       
       const { error } = await q;
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'GENERATE_FEES_BULK',
+        p_entity_type: 'fees',
+        p_details: `تحديث المطالبة الثابتة لجميع طلاب ${classId === 'all' ? 'المدرسة' : 'الفصل'} إلى ${amount} ج.م`
+      });
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة الثابتة لجميع الطلاب بنجاح');
@@ -223,6 +246,13 @@ export function useClearTermFees() {
         .eq('term', term);
 
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'CLEAR_TERM_FEES',
+        p_entity_type: 'fees',
+        p_details: `تصفير سجلات الرسوم المالية لشهر ${term}`
+      });
     },
     onSuccess: () => {
       toast.success('تم تصفير سجلات هذا الشهر بنجاح');

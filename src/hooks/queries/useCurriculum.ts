@@ -80,6 +80,15 @@ export function useUpsertCurriculum() {
         .select()
         .single();
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPSERT_CURRICULUM',
+        p_entity_type: 'curriculums',
+        p_entity_id: data.id,
+        p_details: `إضافة/تحديث منهج دراسي باسم: ${curriculum.name}`
+      });
+
       return data;
     },
     onSuccess: () => {
@@ -96,6 +105,14 @@ export function useDeleteCurriculum() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('curriculums').delete().eq('id', id);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'DELETE_CURRICULUM',
+        p_entity_type: 'curriculums',
+        p_entity_id: id,
+        p_details: `حذف منهج دراسي نهائياً`
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['curriculums', user?.schoolId] });
@@ -113,6 +130,15 @@ export function useUpsertSubject() {
         .select()
         .single();
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPSERT_CURRICULUM_SUBJECT',
+        p_entity_type: 'curriculum_subjects',
+        p_entity_id: data.id,
+        p_details: `إضافة/تحديث مادة دراسية باسم: ${subject.subject_name}`
+      });
+
       return data;
     },
     onSuccess: (data) => {
@@ -127,6 +153,15 @@ export function useDeleteSubject() {
     mutationFn: async ({ id, curriculumId }: { id: string, curriculumId: string }) => {
       const { error } = await supabase.from('curriculum_subjects').delete().eq('id', id);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'DELETE_CURRICULUM_SUBJECT',
+        p_entity_type: 'curriculum_subjects',
+        p_entity_id: id,
+        p_details: `حذف مادة دراسية نهائياً`
+      });
+
       return { curriculumId };
     },
     onSuccess: (data) => {
@@ -146,6 +181,14 @@ export function useAssignCurriculumToClass() {
         .update({ curriculum_id: curriculumId })
         .eq('id', classId);
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'ASSIGN_CURRICULUM_TO_CLASS',
+        p_entity_type: 'classes',
+        p_entity_id: classId,
+        p_details: `تعيين المنهج الدراسي ${curriculumId || 'لا يوجد'} للفصل`
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['classes', user?.schoolId] });

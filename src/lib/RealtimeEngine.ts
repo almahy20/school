@@ -76,17 +76,11 @@ class RealtimeEngine {
       
       // Add similar automatic synced responses for messages, notifications etc. if generic
       if (table === 'notifications') {
-<<<<<<< HEAD
           // ✅ Only invalidate the list — unread counts are handled by RealtimeNotificationsManager
           if ((window as any).__realtimeEngineNotifTimer) clearTimeout((window as any).__realtimeEngineNotifTimer);
           (window as any).__realtimeEngineNotifTimer = setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
           }, 2000);
-=======
-          // just force invalidate in background to be safe
-          queryClient.invalidateQueries({ queryKey: ['notifications'] });
-          queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       }
 
     } catch (e) {

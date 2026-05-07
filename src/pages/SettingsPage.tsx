@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes';
 import {
   Bell, Globe, HelpCircle, Shield,
   Users, Database, LogOut, Edit2, Plus, ArrowLeft,
-  Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon
+  Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon, Download
 } from 'lucide-react';
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
 import { useToast } from '@/hooks/use-toast';
@@ -23,10 +23,6 @@ import { logger } from '@/utils/logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-<<<<<<< HEAD
-import { Download } from 'lucide-react';
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
 export default function SettingsPage() {
   const { signOut, user } = useAuth();
@@ -74,7 +70,7 @@ export default function SettingsPage() {
   };
 
   const roleLabel = profile?.role === 'admin' ? 'مدير النظام' : profile?.role === 'teacher' ? 'معلم' : 'ولي أمر';
-<<<<<<< HEAD
+  
   const [isPWA, setIsPWA] = useState(false);
 
   useEffect(() => {
@@ -104,9 +100,6 @@ export default function SettingsPage() {
       console.warn('Native install prompt is not available.');
     }
   };
-=======
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
   return (
     <AppLayout>
@@ -123,13 +116,8 @@ export default function SettingsPage() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-<<<<<<< HEAD
-          {/* Left Column (Profile & Actions) - order-1 on mobile, lg:order-2 to appear on left in RTL */}
+          {/* Left Column (Profile & Actions) */}
           <div className="lg:col-span-4 space-y-8 order-1 lg:order-2">
-=======
-          {/* Left Column */}
-          <div className="lg:col-span-4 space-y-8 order-2 lg:order-1">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
              <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col items-center gap-6 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                 <div className="relative">
@@ -165,13 +153,8 @@ export default function SettingsPage() {
              </button>
           </div>
 
-<<<<<<< HEAD
-          {/* Right Column (Settings) - order-2 on mobile, lg:order-1 to appear on right in RTL */}
+          {/* Right Column (Settings) */}
           <div className="lg:col-span-8 space-y-12 order-2 lg:order-1">
-=======
-          {/* Right Column */}
-          <div className="lg:col-span-8 space-y-12 order-1 lg:order-2">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
               {(user?.role === 'admin' || user?.isSuperAdmin) && (
                 <div className="space-y-10">
                    <div className="flex items-center justify-between pr-2">
@@ -221,33 +204,30 @@ export default function SettingsPage() {
                     </div>
                  </div>
                  
-<<<<<<< HEAD
-               {/* PWA Install App (Hidden if already installed) */}
-               {!isPWA && (
-                 <div className="grid grid-cols-1 gap-6 pt-2">
-                    <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-10 rounded-[48px] shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
-                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
-                       <div className="flex items-center gap-6 relative z-10">
-                          <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shrink-0 shadow-xl">
-                             <Smartphone className="w-8 h-8" />
-                          </div>
-                          <div>
-                             <h4 className="text-xl font-black text-white mb-1">تثبيت التطبيق على الجهاز</h4>
-                             <p className="text-sm font-medium text-white/80">احصل على تجربة أسرع وأفضل عبر تثبيت النظام كتطبيق.</p>
-                          </div>
-                       </div>
-                       
-                       <Button onClick={handleInstallApp} className="relative z-10 h-14 px-10 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center gap-2 w-full md:w-auto">
-                          <Download className="w-5 h-5" />
-                          تثبيت الآن
-                       </Button>
-                    </div>
-                 </div>
-               )}
+                 {/* PWA Install App (Hidden if already installed) */}
+                 {!isPWA && (
+                   <div className="grid grid-cols-1 gap-6 pt-2">
+                      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-10 rounded-[48px] shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
+                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
+                         <div className="flex items-center gap-6 relative z-10">
+                            <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shrink-0 shadow-xl">
+                               <Smartphone className="w-8 h-8" />
+                            </div>
+                            <div>
+                               <h4 className="text-xl font-black text-white mb-1">تثبيت التطبيق على الجهاز</h4>
+                               <p className="text-sm font-medium text-white/80">احصل على تجربة أسرع وأفضل عبر تثبيت النظام كتطبيق.</p>
+                            </div>
+                         </div>
+                         
+                         <Button onClick={handleInstallApp} className="relative z-10 h-14 px-10 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center gap-2 w-full md:w-auto">
+                            <Download className="w-5 h-5" />
+                            تثبيت الآن
+                         </Button>
+                      </div>
+                   </div>
+                 )}
 
                  <div className="grid grid-cols-1 gap-6 pt-2">
-=======
-                 <div className="grid grid-cols-1 gap-6">
                     <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
                        <div className="flex items-center gap-6">
                           <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
@@ -284,8 +264,7 @@ export default function SettingsPage() {
                     </div>
                  </div>
 
-                 <div className="grid grid-cols-1 gap-6">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
+                 <div className="grid grid-cols-1 gap-6 pt-2">
                     <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
                        <div className="flex items-center gap-6">
                           <div className="w-16 h-16 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">

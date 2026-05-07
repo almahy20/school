@@ -5,10 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BookOpen, Eye, EyeOff, Lock, Phone, ArrowLeft } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
 import { getOptimizedImageUrl } from '@/lib/utils';
-<<<<<<< HEAD
 import { useCleanBranding } from '@/hooks/useCleanBranding';
-=======
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
@@ -25,37 +22,16 @@ export default function LoginPage() {
   const params = new URLSearchParams(location.search);
   const slug = params.get('school');
   const { data: schoolData } = useSchoolBySlug(slug);
-<<<<<<< HEAD
   const schoolBranding = useCleanBranding(schoolData);
 
   // Update document title
   useEffect(() => {
     if (schoolBranding.cleanName) {
       document.title = `${schoolBranding.cleanName} — تسجيل الدخول`;
-=======
-
-  const schoolBranding = useMemo(() => {
-    if (!schoolData) return { name: 'المدرسة الذكية', logo: '' };
-    
-    // ✅ تحسين: ضغط وتصغير الشعار لسرعة التحميل
-    const optimizedLogo = getOptimizedImageUrl(schoolData.logo_url, { width: 160, quality: 80 });
-    
-    return {
-      name: schoolData.name,
-      logo: optimizedLogo
-    };
-  }, [schoolData]);
-
-  // Update document title
-  useEffect(() => {
-    if (schoolBranding.name) {
-      let cleanName = schoolBranding.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
-      document.title = `${cleanName} — تسجيل الدخول`;
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     } else {
       document.title = "النظام الذكي — تسجيل الدخول";
     }
-  }, [schoolBranding.name]);
+  }, [schoolBranding.cleanName]);
 
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
@@ -100,11 +76,7 @@ export default function LoginPage() {
             )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-<<<<<<< HEAD
             {schoolBranding.cleanName}
-=======
-            {schoolBranding.name?.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim()}
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           </h1>
           <p className="text-sm font-bold text-white/40 tracking-wider">نظام الإدارة المدرسية الذكي</p>
         </div>
@@ -116,13 +88,13 @@ export default function LoginPage() {
           <div className="mb-10 text-center sm:text-right">
              {isDeveloperLogin ? (
                 <>
-                  <h2 className="text-xl sm:text-2xl font-black text-orange-400 mb-2">بوابة المطورين (Super Admin)</h2>
-                  <p className="text-sm font-bold text-white/40">يرجى تسجيل الدخول للوصول للوحة التحكم المركزية</p>
+                   <h2 className="text-xl sm:text-2xl font-black text-orange-400 mb-2">بوابة المطورين (Super Admin)</h2>
+                   <p className="text-sm font-bold text-white/40">يرجى تسجيل الدخول للوصول للوحة التحكم المركزية</p>
                 </>
              ) : (
                 <>
-                  <h2 className="text-xl sm:text-2xl font-black text-white mb-2">تسجيل الدخول</h2>
-                  <p className="text-sm font-bold text-white/40">أهلاً بك مجدداً، يرجى إدخال بياناتك</p>
+                   <h2 className="text-xl sm:text-2xl font-black text-white mb-2">تسجيل الدخول</h2>
+                   <p className="text-sm font-bold text-white/40">أهلاً بك مجدداً، يرجى إدخال بياناتك</p>
                 </>
              )}
           </div>

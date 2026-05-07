@@ -86,6 +86,15 @@ export function useCreateUser() {
         .single();
 
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'CREATE_USER',
+        p_entity_type: 'profiles',
+        p_entity_id: data.id,
+        p_details: `إنشاء مستخدم جديد: ${userData.full_name}`
+      });
+
       return data as UserProfile;
     },
     onSuccess: () => {
@@ -126,6 +135,15 @@ export function useDeleteUser() {
       }
       
       console.log('[Delete User] Success!');
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'DELETE_USER',
+        p_entity_type: 'profiles',
+        p_entity_id: userId,
+        p_details: `حذف مستخدم نهائياً من النظام`
+      });
+
       return userId;
     },
     onSuccess: (userId) => {
@@ -160,6 +178,14 @@ export function useUpdateUserRole() {
       if (error) throw new Error(error.message || 'فشل في تحديث الرتبة');
       if (!data?.success) throw new Error('فشل في تحديث الرتبة');
       
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_USER_ROLE',
+        p_entity_type: 'user_roles',
+        p_entity_id: userId,
+        p_details: `تحديث رتبة المستخدم إلى: ${role}`
+      });
+
       return data;
     },
     onSuccess: () => {
@@ -182,6 +208,15 @@ export function useUpdateUserStatus() {
         .eq('user_id', userId);
 
       if (error) throw error;
+
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_USER_STATUS',
+        p_entity_type: 'user_roles',
+        p_entity_id: userId,
+        p_details: `تحديث حالة الحساب إلى: ${status === 'approved' ? 'مفعل' : 'مرفوض'}`
+      });
+
       return { userId, status };
     },
     onSuccess: () => {
@@ -208,6 +243,14 @@ export function useUpdateUserProfile() {
       if (error) throw new Error(error.message || 'فشل في تحديث البيانات');
       if (!data?.success) throw new Error('فشل في تحديث البيانات');
       
+      // Log action to audit logs
+      await (supabase as any).rpc('log_action', {
+        p_action: 'UPDATE_USER_PROFILE',
+        p_entity_type: 'profiles',
+        p_entity_id: userId,
+        p_details: `تحديث بيانات الملف الشخصي للمستخدم`
+      });
+
       return data;
     },
     onSuccess: () => {

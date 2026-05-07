@@ -29,11 +29,7 @@ export function ParentDashboard() {
         errorMessage="عذراً، فشل تحميل بيانات الأبناء. يرجى التأكد من اتصال الإنترنت والمحاولة مرة أخرى."
         emptyMessage="لم يتم العثور على أبناء مرتبطين بحسابك. يرجى مراجعة إدارة المدرسة."
       >
-<<<<<<< HEAD
         <header className="bg-slate-900 p-8 md:p-12 lg:p-16 rounded-[40px] md:rounded-[56px] text-white shadow-2xl relative overflow-hidden group animate-fade-in">
-=======
-        <header className="bg-slate-900 p-8 md:p-12 lg:p-16 rounded-[40px] md:rounded-[56px] text-white shadow-2xl relative overflow-hidden group">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.2),transparent)] pointer-events-none" />
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
           
@@ -49,11 +45,7 @@ export function ParentDashboard() {
             </div>
 
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
-<<<<<<< HEAD
               <div className="px-8 py-5 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 flex items-center gap-4 group hover:scale-[1.05] hover:bg-white/10 transition-all duration-500">
-=======
-              <div className="px-8 py-5 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white/40 group-hover:text-white transition-colors shrink-0">
                    <LayoutGrid className="w-6 h-6" />
                  </div>
@@ -63,11 +55,7 @@ export function ParentDashboard() {
                  </div>
               </div>
 
-<<<<<<< HEAD
               <div className="px-8 py-5 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 flex items-center gap-4 group hover:scale-[1.05] hover:bg-white/10 transition-all duration-500">
-=======
-              <div className="px-8 py-5 rounded-[32px] bg-white/5 border border-white/10 backdrop-blur-xl relative z-10 flex items-center gap-4 group hover:scale-[1.02] transition-all">
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                  <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-white/40 group-hover:text-white transition-colors shrink-0">
                    <Calendar className="w-6 h-6" />
                  </div>
@@ -88,7 +76,6 @@ export function ParentDashboard() {
               <button 
                 key={child.id}
                 onClick={() => navigate(`/parent/children/${child.id}`)}
-<<<<<<< HEAD
                 className="stagger-item group relative w-full rounded-[40px] bg-white border border-slate-100 p-8 md:p-10 shadow-sm transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-2 active:scale-95 text-right overflow-hidden"
               >
                 {/* Decorative background element */}
@@ -150,68 +137,6 @@ export function ParentDashboard() {
                   <span className="text-[11px] font-black text-indigo-600 flex items-center gap-1 group-hover:gap-3 transition-all duration-500">
                     استكشاف الملف الشخصي 
                     <ChevronLeft className="w-4 h-4" />
-=======
-                className="group relative w-full rounded-[32px] bg-white border border-slate-100 p-8 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 active:scale-95 text-right overflow-hidden"
-              >
-                <div className="flex items-start justify-between mb-8">
-                  <div className="flex items-center gap-6">
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-[28px] bg-slate-50 flex items-center justify-center text-slate-900 font-black text-3xl md:text-4xl transition-all duration-500 group-hover:bg-slate-900 group-hover:text-white shrink-0">
-                      {child.name.trim()[0]}
-                    </div>
-                    <div className="space-y-2">
-                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 leading-tight">{child.name}</h2>
-                      <div className="inline-flex items-center gap-2 px-3 py-1 bg-slate-50 rounded-full border border-slate-100">
-                        <User className="w-3.5 h-3.5 text-slate-400" />
-                        <p className="text-slate-500 font-bold text-[10px] md:text-xs uppercase tracking-widest">{child.className || 'بدون فصل'}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-slate-900 group-hover:text-white transition-all duration-300">
-                    <ArrowLeft className="w-6 h-6 group-hover:-translate-x-1 transition-transform" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  {/* الحضور - النسبة الإجمالية */}
-                  {child.attendanceRate > 0 ? (
-                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
-                      <CalendarCheck className="w-6 h-6 text-emerald-600 mx-auto mb-2" />
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الحضور الإجمالي</p>
-                      <p className="text-xl font-black text-slate-900">{child.attendanceRate}%</p>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200 opacity-50">
-                      <CalendarCheck className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الحضور الإجمالي</p>
-                      <p className="text-sm font-bold text-slate-400">غير متاح</p>
-                    </div>
-                  )}
-                  
-                  {/* الرسوم */}
-                  {child.feesRemaining > 0 ? (
-                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200">
-                      <Wallet className="w-6 h-6 text-amber-600 mx-auto mb-2" />
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الرسوم المتبقية</p>
-                      <p className="text-sm font-black text-slate-900">{child.feesRemaining} ج</p>
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-2xl bg-slate-50/50 border border-slate-100 text-center transition-colors group-hover:bg-white group-hover:border-slate-200 opacity-50">
-                      <Wallet className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">الرسوم المتبقية</p>
-                      <p className="text-sm font-bold text-emerald-600">مسدد ✓</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-6 border-t border-slate-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-indigo-600" />
-                    <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">عرض التقارير الكاملة</span>
-                  </div>
-                  <span className="text-[10px] font-black text-indigo-600 flex items-center gap-1 group-hover:gap-2 transition-all">
-                    دخول الآن 
-                    <ChevronLeft className="w-3 h-3" />
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                   </span>
                 </div>
               </button>

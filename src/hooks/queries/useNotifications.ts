@@ -62,7 +62,6 @@ export function useNotificationsRealtime() {
 
       const channel = supabase
         .channel('notifications-changes')
-<<<<<<< HEAD
          .on(
            'postgres_changes',
            {
@@ -77,22 +76,6 @@ export function useNotificationsRealtime() {
              queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
            }
          )
-=======
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            // Invalidate queries to refetch
-            queryClient.invalidateQueries({ queryKey: ['notifications'], exact: false });
-            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'], exact: false });
-          }
-        )
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         .subscribe();
 
       // Return cleanup function
@@ -117,7 +100,6 @@ export function useMarkAllAsRead() {
         .eq('is_read', false);
       if (error) throw error;
     },
-<<<<<<< HEAD
     // ✅ Optimistic Update — trust this, don't refetch immediately
     onMutate: async () => {
       // Cancel ALL in-flight queries to prevent stale data from overwriting
@@ -128,41 +110,21 @@ export function useMarkAllAsRead() {
       const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as { unread: number; complaints: number } | undefined;
 
       // Optimistically update to zero
-=======
-    // ✅ Optimization: Optimistic Update
-    onMutate: async () => {
-      // Cancel any outgoing refetches (so they don't overwrite our optimistic update)
-      await queryClient.cancelQueries({ queryKey: ['notifications-unread-counts', user?.id] });
-
-      // Snapshot the previous value
-      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]);
-
-      // Optimistically update to the new value
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       queryClient.setQueryData(['notifications-unread-counts', user?.id], {
         unread: 0,
         complaints: 0
       });
 
-<<<<<<< HEAD
       return { previousCounts };
     },
     onError: (_err, _vars, context) => {
       // If the mutation fails, roll back
-=======
-      // Return a context object with the snapshotted value
-      return { previousCounts };
-    },
-    onError: (err, newTodo, context) => {
-      // If the mutation fails, use the context returned from onMutate to roll back
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       if (context?.previousCounts) {
         queryClient.setQueryData(['notifications-unread-counts', user?.id], context.previousCounts);
       }
     },
     onSuccess: () => {
       toast.success('تم تحديد الكل كمقروء');
-<<<<<<< HEAD
       // ✅ Don't refetch unread counts here — the optimistic update already set it to 0
       // The debounced realtime handler will confirm from DB after 1.5s
     },
@@ -170,13 +132,6 @@ export function useMarkAllAsRead() {
       // Only refresh the notifications list, NOT the unread count
       // The unread count is already 0 from optimistic update
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-=======
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure we are in sync with the server
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     },
   });
 }
@@ -197,14 +152,9 @@ export function useMarkComplaintsAsRead() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-<<<<<<< HEAD
       queryClient.refetchQueries({ 
         queryKey: ['notifications-unread-counts', user?.id] 
       });
-=======
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user?.id] });
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     },
   });
 }
@@ -223,14 +173,9 @@ export function useDeleteNotification() {
     onSuccess: () => {
       toast.success('تم حذف التنبيه');
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-<<<<<<< HEAD
       queryClient.refetchQueries({ 
         queryKey: ['notifications-unread-counts', user?.id] 
       });
-=======
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user?.id] });
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     },
   });
 }
@@ -244,10 +189,6 @@ export function useUnreadCounts() {
     queryFn: async () => {
       if (!user?.id) return { unread: 0, complaints: 0 };
       
-<<<<<<< HEAD
-=======
-      // ✅ Optimization: One single query for both counts
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       const { data, error } = await db
         .from('notifications')
         .select('type, is_read')
@@ -264,17 +205,11 @@ export function useUnreadCounts() {
       return counts;
     },
     enabled: !!user?.id,
-<<<<<<< HEAD
     staleTime: 30 * 1000, // 30 seconds — short enough for freshness, long enough to prevent flashing
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false, // ✅ Prevent refetch on focus (causes flashing)
     refetchOnMount: false, // ✅ Don't refetch on mount — trust optimistic updates
     refetchOnReconnect: false,
-=======
-    staleTime: 0, // ✅ Always check for fresh counts on mount
-    gcTime: 1000 * 60 * 60, // Keep in cache for an hour
-    refetchOnWindowFocus: true, // Check when user comes back to tab
->>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
   });
 }
 

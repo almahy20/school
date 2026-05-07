@@ -289,7 +289,7 @@
   }
   
   .status-badge-pending { @apply bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/50; }
-  .status-badge-resolved { @apply bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/50; }
+  .status-badge-resolved { @apply bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-amber-400 border-emerald-100 dark:border-emerald-900/50; }
   .status-badge-replied { @apply bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/50; }
 
   .custom-scrollbar {
@@ -391,9 +391,31 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .animate-fade-in {
   animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+.animate-slide-up {
+  animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered Animations */
+.stagger-item {
+  opacity: 0;
+  animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.stagger-item:nth-child(1) { animation-delay: 0.1s; }
+.stagger-item:nth-child(2) { animation-delay: 0.2s; }
+.stagger-item:nth-child(3) { animation-delay: 0.3s; }
+.stagger-item:nth-child(4) { animation-delay: 0.4s; }
+.stagger-item:nth-child(5) { animation-delay: 0.5s; }
+.stagger-item:nth-child(6) { animation-delay: 0.6s; }
 
 /* RTL Specifics */
 [dir="rtl"] .nav-item-active {
@@ -404,6 +426,115 @@
 .page-container {
   @apply w-full max-w-[1400px] xl:max-w-[1500px] mx-auto;
 }
+
+/* Print Styles for Professional Reports */
+@media print {
+  @page {
+    size: A4;
+    margin: 0; /* Let the container handle margins for better cross-browser consistency */
+  }
+
+  html, body, #root, main {
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  /* Center the report on the page with proper margins */
+  .page-container, main {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+    padding: 1cm !important; /* This acts as the page margin */
+  }
+
+  /* Hide EVERYTHING except the main content */
+  .no-print, 
+  nav, 
+  aside, 
+  button, 
+  footer,
+  header,
+  .lg\:hidden,
+  .lg\:flex,
+  [role="dialog"],
+  .fixed {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important; /* Remove fixed positioning during print */
+  }
+
+  /* Reset layout constraints */
+  main {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .page-container {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force display of the report */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Professional card adjustments for print */
+  .bg-white,
+  .premium-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Prevent elements from being cut off */
+  h1, h2, h3, h4, .badge, table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  /* Ensure text is dark and sharp */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: black !important;
+  }
+
+  /* Animations must be disabled */
+  .animate-in, .stagger-item, .animate-pulse {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
 }
 
-
+/* Ensure all sections don't overflow */
+section {
+  @apply max-w-full;
+}
