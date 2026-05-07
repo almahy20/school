@@ -2,7 +2,10 @@ import { useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
+<<<<<<< HEAD
 import { cleanBrandingData } from '@/hooks/useCleanBranding';
+=======
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
 export default function PwaManager() {
   const { user } = useAuth();
@@ -31,10 +34,17 @@ export default function PwaManager() {
       if (cached) {
         try {
           const s = JSON.parse(cached);
+<<<<<<< HEAD
           const cleaned = cleanBrandingData(s);
           name = cleaned.cleanName;
           shortName = cleaned.cleanName;
           icon = cleaned.logo || defaultIcon;
+=======
+          let cleanName = s.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          name = cleanName || s.name;
+          shortName = cleanName || s.name;
+          icon = s.logo_url || defaultIcon;
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           slug = s.slug;
         } catch (e) {}
       }
@@ -50,10 +60,17 @@ export default function PwaManager() {
           console.error('Error fetching PWA school data:', error);
         } else if (data) {
           const school = data as any;
+<<<<<<< HEAD
           const cleaned = cleanBrandingData(school);
           name = cleaned.cleanName;
           shortName = cleaned.cleanName;
           icon = cleaned.logo || "/icons/icon-192.png";
+=======
+          let cleanName = school.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          name = cleanName || school.name;
+          shortName = cleanName || school.name;
+          icon = school.logo_url || "/icons/icon-192.png";
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           slug = school.slug;
           themeColor = "#1e293b";
         }
@@ -82,10 +99,17 @@ export default function PwaManager() {
             console.error('Error fetching PWA school data by slug:', error);
           } else if (data) {
             const school = data as any;
+<<<<<<< HEAD
             const cleaned = cleanBrandingData(school);
             name = cleaned.cleanName;
             shortName = cleaned.cleanName;
             icon = cleaned.logo || "/icons/icon-192.png";
+=======
+            let cleanName = school.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+            name = cleanName || school.name;
+            shortName = cleanName || school.name;
+            icon = school.logo_url || "/icons/icon-192.png";
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
             slug = school.slug;
             themeColor = "#1e293b";
           }

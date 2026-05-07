@@ -240,6 +240,7 @@ export function useGrades(studentId: string | null) {
   });
 }
 
+<<<<<<< HEAD
 export function useStudentDetailedGrades(studentId: string | null) {
   const queryKey = useMemo(() => ['grades', 'detailed', studentId], [studentId]);
   
@@ -266,3 +267,5 @@ export function useStudentDetailedGrades(studentId: string | null) {
   });
 }
 
+=======
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271

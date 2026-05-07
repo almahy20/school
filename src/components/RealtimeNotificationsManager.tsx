@@ -43,6 +43,11 @@ export default function RealtimeNotificationsManager() {
     // 2. In-app Toast
     const config = getTypeConfig(newNotification.type);
 
+<<<<<<< HEAD
+=======
+    // ✅ Optimization: Check if the notification was already handled by Service Worker
+    // (Wait a bit to see if SW showed it first, otherwise show toast)
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     toast(newNotification.title, {
       description: newNotification.message,
       icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),
@@ -56,6 +61,7 @@ export default function RealtimeNotificationsManager() {
     // 3. Play sound
     playNotificationSound();
 
+<<<<<<< HEAD
     // 4. Cache Invalidation + Optimistic Update
     if (user?.id) {
       // Invalidate lists
@@ -66,6 +72,14 @@ export default function RealtimeNotificationsManager() {
         unread: (old?.unread || 0) + 1,
         complaints: old?.complaints || 0
       }));
+=======
+    // 4. Cache Invalidation
+    if (user?.id) {
+      // Invalidate both lists and unread counts
+      queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user.id] });
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
     }
     
     // ✅ Optimization: Only invalidate admin stats if user is an admin
@@ -74,6 +88,7 @@ export default function RealtimeNotificationsManager() {
     }
   }, [user?.id, user?.role, queryClient, navigate]);
 
+<<<<<<< HEAD
    useEffect(() => {
      if (!user?.id) return;
 
@@ -154,6 +169,31 @@ export default function RealtimeNotificationsManager() {
        .subscribe();
 
      // ... rest unchanged ...
+=======
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // 1. Channel for personal notifications (Handle INSERT for toast, and all changes for sync)
+    const notificationsChannel = supabase.channel(`notifications-${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, handleNewNotification)
+      .on('postgres_changes', {
+        event: '*', // Listen for updates (read status) and deletes too
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        // Just invalidate for non-INSERT events to keep UI in sync
+        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-count', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications-complaints-count', user.id] });
+      })
+      .subscribe();
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
     // 2. Channel for global school branding updates
     let brandingChannel: any = null;

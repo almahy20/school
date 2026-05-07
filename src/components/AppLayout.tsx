@@ -12,7 +12,10 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from './ui/button';
 import { useToast } from "@/hooks/use-toast";
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
+<<<<<<< HEAD
 import { useCleanBranding } from '@/hooks/useCleanBranding';
+=======
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 import { logger } from '@/utils/logger';
 
 interface Props {
@@ -29,10 +32,33 @@ export default function AppLayout({ children }: Props) {
   const { data: unreadCounts } = useUnreadCounts();
   const unreadCount = unreadCounts?.unread || 0;
   const { data: branding } = useBranding();
+<<<<<<< HEAD
   const schoolBranding = useCleanBranding(branding);
   const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
   
   const [logoError, setLogoError] = useState(false);
+=======
+  const [logoError, setLogoError] = useState(false);
+  const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
+
+  // ✅ تحسين: نخزن الـ branding في cache عشان ميتحملش كل مرة
+  const schoolBranding = useMemo(() => {
+    let rawLogo = branding?.logo_url || '';
+    
+    // ✅ تحسين: ضغط وتصغير الصورة لسرعة التحميل
+    // ده بيخلي الصورة أخف بكتير وبيقلل استهلاك الـ Network
+    const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
+
+    let rawName = branding?.name || 'الجيل الجديد';
+    const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+
+    return {
+      name: cleanName || rawName,
+      logo: optimizedLogo,
+      themeColor: '#1A3C8F'
+    };
+  }, [branding]);
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
   useEffect(() => {
     setLogoError(false);
@@ -99,7 +125,10 @@ export default function AppLayout({ children }: Props) {
   const allLinks = useMemo(() => {
     const links = [
       { to: '/', label: 'لوحة التحكم' },
+<<<<<<< HEAD
       { to: '/admin-reports', label: 'مركز التقارير والتحليلات' },
+=======
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
       { to: '/students', label: 'الطلاب' },
       { to: '/teachers', label: 'المعلمون' },
       { to: '/parents', label: 'أولياء الأمور' },
@@ -124,7 +153,11 @@ export default function AppLayout({ children }: Props) {
       </div>
 
       {/* Mobile Glass Header - ✅ Fixed height to prevent CLS */}
+<<<<<<< HEAD
       <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 no-print">
+=======
+      <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4">
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900 shrink-0">
             {schoolBranding.logo && !logoError ? (
@@ -138,7 +171,11 @@ export default function AppLayout({ children }: Props) {
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
             )}
           </div>
+<<<<<<< HEAD
           <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.cleanName}</span>
+=======
+          <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.name}</span>
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         </div>
         
         <div className="flex items-center gap-2">
@@ -177,7 +214,11 @@ export default function AppLayout({ children }: Props) {
 
       {/* Fixed Desktop Sidebar Container - ✅ Optimized for layout stability */}
       <aside className={cn(
+<<<<<<< HEAD
         "fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-500 ease-in-out transform shadow-2xl lg:translate-x-0 bg-slate-900 no-print",
+=======
+        "fixed inset-y-0 right-0 w-72 z-[80] transition-all duration-500 ease-in-out transform shadow-2xl lg:translate-x-0 bg-slate-900",
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
         sidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
       )}>
         <Sidebar onClose={() => setSidebarOpen(false)} />
@@ -196,10 +237,17 @@ export default function AppLayout({ children }: Props) {
         />
 
         {/* Desktop Header Navigation - ✅ Fixed height to prevent CLS */}
+<<<<<<< HEAD
         <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
               نظام الإدارة الذكي — {schoolBranding.cleanName}
+=======
+        <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
+              نظام الإدارة الذكي — {schoolBranding.name}
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
             </div>
           </div>
 
@@ -264,7 +312,11 @@ export default function AppLayout({ children }: Props) {
 
         {/* Sticky Footer */}
         <footer className={cn(
+<<<<<<< HEAD
           "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto no-print",
+=======
+          "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto",
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
           hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
         )}>
           <div className="flex mb-20 md:mb-0  flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
@@ -277,7 +329,11 @@ export default function AppLayout({ children }: Props) {
                 )}
               </div>
               <div>
+<<<<<<< HEAD
                 <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.cleanName}</p>
+=======
+                <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.name}</p>
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">منصة التعليم المتكاملة</p>
               </div>
             </div>

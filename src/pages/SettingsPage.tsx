@@ -23,7 +23,10 @@ import { logger } from '@/utils/logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+<<<<<<< HEAD
 import { Download } from 'lucide-react';
+=======
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
 export default function SettingsPage() {
   const { signOut, user } = useAuth();
@@ -71,6 +74,7 @@ export default function SettingsPage() {
   };
 
   const roleLabel = profile?.role === 'admin' ? 'مدير النظام' : profile?.role === 'teacher' ? 'معلم' : 'ولي أمر';
+<<<<<<< HEAD
   const [isPWA, setIsPWA] = useState(false);
 
   useEffect(() => {
@@ -100,6 +104,9 @@ export default function SettingsPage() {
       console.warn('Native install prompt is not available.');
     }
   };
+=======
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
 
   return (
     <AppLayout>
@@ -116,8 +123,13 @@ export default function SettingsPage() {
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+<<<<<<< HEAD
           {/* Left Column (Profile & Actions) - order-1 on mobile, lg:order-2 to appear on left in RTL */}
           <div className="lg:col-span-4 space-y-8 order-1 lg:order-2">
+=======
+          {/* Left Column */}
+          <div className="lg:col-span-4 space-y-8 order-2 lg:order-1">
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
              <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col items-center gap-6 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                 <div className="relative">
@@ -153,8 +165,13 @@ export default function SettingsPage() {
              </button>
           </div>
 
+<<<<<<< HEAD
           {/* Right Column (Settings) - order-2 on mobile, lg:order-1 to appear on right in RTL */}
           <div className="lg:col-span-8 space-y-12 order-2 lg:order-1">
+=======
+          {/* Right Column */}
+          <div className="lg:col-span-8 space-y-12 order-1 lg:order-2">
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
               {(user?.role === 'admin' || user?.isSuperAdmin) && (
                 <div className="space-y-10">
                    <div className="flex items-center justify-between pr-2">
@@ -204,6 +221,7 @@ export default function SettingsPage() {
                     </div>
                  </div>
                  
+<<<<<<< HEAD
                {/* PWA Install App (Hidden if already installed) */}
                {!isPWA && (
                  <div className="grid grid-cols-1 gap-6 pt-2">
@@ -228,6 +246,46 @@ export default function SettingsPage() {
                )}
 
                  <div className="grid grid-cols-1 gap-6 pt-2">
+=======
+                 <div className="grid grid-cols-1 gap-6">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
+                       <div className="flex items-center gap-6">
+                          <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                             <Palette className="w-8 h-8" />
+                          </div>
+                          <div>
+                             <h4 className="text-xl font-black text-slate-900 dark:text-white mb-1">سمة التطبيق (Appearance)</h4>
+                             <p className="text-sm font-medium text-slate-400">اختر المظهر المناسب لك (فاتح أو داكن).</p>
+                          </div>
+                       </div>
+                       
+                       <div className="flex items-center gap-2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                          <button
+                            onClick={() => setTheme('light')}
+                            className={cn(
+                              "flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs transition-all",
+                              theme === 'light' ? "bg-white text-slate-900 shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <Sun className="w-4 h-4" />
+                            فاتح
+                          </button>
+                          <button
+                            onClick={() => setTheme('dark')}
+                            className={cn(
+                              "flex items-center gap-2 px-6 py-3 rounded-xl font-black text-xs transition-all",
+                              theme === 'dark' ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+                            )}
+                          >
+                            <Moon className="w-4 h-4" />
+                            داكن
+                          </button>
+                       </div>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 gap-6">
+>>>>>>> 2ff4d7dda438455eea20890093927bceb1b1c271
                     <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
                        <div className="flex items-center gap-6">
                           <div className="w-16 h-16 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
