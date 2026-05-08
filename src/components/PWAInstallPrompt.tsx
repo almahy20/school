@@ -29,11 +29,21 @@ export default function PWAInstallPrompt() {
     // Check if already shown/installed/dismissed for THIS user
     const storageKey = `pwa_install_${user.id}`;
     const installStatus = localStorage.getItem(storageKey);
+    const lastDismissed = localStorage.getItem(`${storageKey}_dismissed_at`);
     
-    // If already shown, installed, or dismissed - don't show again
-    if (installStatus === 'shown' || installStatus === 'installed' || installStatus === 'dismissed') {
+    // If already installed, don't show
+    if (installStatus === 'installed') {
       setIsVisible(false);
       return;
+    }
+
+    // If dismissed recently (less than 7 days ago), don't show
+    if (lastDismissed) {
+      const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
+      if (Date.now() - parseInt(lastDismissed) < sevenDaysInMs) {
+        setIsVisible(false);
+        return;
+      }
     }
 
     // Listen for the beforeinstallprompt event
@@ -42,17 +52,7 @@ export default function PWAInstallPrompt() {
       setDeferredPrompt(e);
       (window as any).deferredPrompt = e;
       console.log('✅ beforeinstallprompt event captured');
-      
-      // Only auto-show for new users who just signed up
-      const signupTime = sessionStorage.getItem('user_signup_time');
-      if (signupTime) {
-        const timeSinceSignup = Date.now() - parseInt(signupTime);
-        // If user signed up in the last 30 seconds, show the prompt
-        if (timeSinceSignup < 30000) {
-          console.log('🚀 Showing PWA prompt (from event listener)');
-          setIsVisible(true);
-        }
-      }
+      setIsVisible(true); // Show whenever the event is captured
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -60,38 +60,21 @@ export default function PWAInstallPrompt() {
     // Check if prompt is already available (captured earlier)
     if ((window as any).deferredPrompt) {
       console.log('✅ deferredPrompt already available');
-      // Only show for new users who just signed up
-      const signupTime = sessionStorage.getItem('user_signup_time');
-      if (signupTime) {
-        const timeSinceSignup = Date.now() - parseInt(signupTime);
-        // If user signed up in the last 30 seconds, show the prompt
-        if (timeSinceSignup < 30000) {
-          console.log('🚀 Showing PWA prompt (from existing deferredPrompt)');
-          setDeferredPrompt((window as any).deferredPrompt);
-          setIsVisible(true);
-        }
-      }
+      setDeferredPrompt((window as any).deferredPrompt);
+      setIsVisible(true);
     }
 
-    // FORCE SHOW: For new users who just signed up, always show the prompt
-    // even if beforeinstallprompt event hasn't fired yet
-    const signupTime = sessionStorage.getItem('user_signup_time');
-    if (signupTime) {
-      const timeSinceSignup = Date.now() - parseInt(signupTime);
-      if (timeSinceSignup < 30000) {
-        console.log('🚀 FORCE SHOWING PWA prompt for new user');
-        // Wait a bit for user to be fully authenticated
-        setTimeout(() => {
-          // If we have the deferred prompt, use it
-          if ((window as any).deferredPrompt) {
-            console.log('✅ Using existing deferredPrompt');
-            setDeferredPrompt((window as any).deferredPrompt);
-          } else {
-            console.log('⚠️ No deferredPrompt available yet, showing modal anyway');
-          }
-          setIsVisible(true);
-        }, 500);
-      }
+    // Support for Safari and others (Manual detection)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    
+    if ((isIOS || isSafari) && !isPWA) {
+      // For Safari, we can show the prompt even without the event
+      // but we wait 5 seconds to not annoy the user immediately
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, 5000);
+      return () => clearTimeout(timer);
     }
 
     // Listen for successful installation
@@ -117,58 +100,22 @@ export default function PWAInstallPrompt() {
     };
   }, [user]);
 
+  const [showManual, setShowManual] = useState(false);
+
   const handleInstall = async () => {
     console.log('🔵 handleInstall called');
-    console.log('deferredPrompt exists:', !!deferredPrompt);
-    console.log('window.deferredPrompt exists:', !!(window as any).deferredPrompt);
     
     // Try MULTIPLE times to get deferredPrompt
     let promptToUse = deferredPrompt;
     
-    // Attempt 1: From state
-    if (!promptToUse) {
-      console.log('⚠️ No deferredPrompt in state, checking window...');
-      
-      // Attempt 2: From window
-      if ((window as any).deferredPrompt) {
-        console.log('✅ Getting deferredPrompt from window');
-        promptToUse = (window as any).deferredPrompt;
-        setDeferredPrompt(promptToUse);
-      } else {
-        console.log('❌ No deferredPrompt in window either');
-        
-        // Attempt 3: Wait a bit and check again (sometimes it's delayed)
-        console.log('⏳ Waiting 1 second to check again...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if ((window as any).deferredPrompt) {
-          console.log('✅ deferredPrompt appeared after waiting!');
-          promptToUse = (window as any).deferredPrompt;
-          setDeferredPrompt(promptToUse);
-        }
-      }
+    if (!promptToUse && (window as any).deferredPrompt) {
+      promptToUse = (window as any).deferredPrompt;
+      setDeferredPrompt(promptToUse);
     }
     
     if (!promptToUse) {
-      console.log('❌ No deferredPrompt available after all attempts - showing manual instructions');
-      console.log('This means beforeinstallprompt event never fired');
-      console.log('Possible reasons:');
-      console.log('  1. First visit to site (need 2 visits)');
-      console.log('  2. Not on HTTPS (or localhost)');
-      console.log('  3. Service Worker not activated yet');
-      console.log('  4. Browser does not support PWA (Firefox, Safari)');
-      
-      // Manual instructions if native prompt not available
-      alert(
-        'لتثبيت التطبيق:\n\n' +
-        'على الكمبيوتر:\n' +
-        '1. اضغط على أيقونة التثبيت في شريط العنوان ←\n' +
-        '2. اختر "تثبيت"\n\n' +
-        'على الموبايل:\n' +
-        '1. اضغط على قائمة المتصفح (⋮) أو مشاركة\n' +
-        '2. اختر "Add to Home Screen" أو "إضافة للشاشة الرئيسية"'
-      );
-      handleDismiss();
+      console.log('❌ No deferredPrompt available - showing manual instructions');
+      setShowManual(true);
       return;
     }
 
@@ -206,7 +153,7 @@ export default function PWAInstallPrompt() {
     if (!user) return;
     
     const storageKey = `pwa_install_${user.id}`;
-    localStorage.setItem(storageKey, 'dismissed');
+    localStorage.setItem(`${storageKey}_dismissed_at`, Date.now().toString());
     setIsVisible(false);
   };
 
@@ -257,44 +204,77 @@ export default function PWAInstallPrompt() {
             </div>
           </div>
 
-          {/* Features */}
+          {/* Features or Manual Instructions */}
           <div className="p-6 space-y-4">
-            <div className="space-y-3">
-              {[
-                { icon: CheckCircle2, text: 'فتح سريع بضغطة واحدة من الشاشة الرئيسية' },
-                { icon: CheckCircle2, text: 'إشعارات فورية حتى لو التطبيق مغلق' },
-                { icon: CheckCircle2, text: 'تجربة تطبيق أصيل بدون متصفح' },
-                { icon: CheckCircle2, text: 'أداء أفضل واستهلاك أقل للإنترنت' },
-              ].map((feature, idx) => (
-                <div key={idx} className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <feature.icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  </div>
-                  <p className="text-slate-700 dark:text-slate-300 text-sm font-medium">
-                    {feature.text}
+            {!showManual ? (
+              <>
+                <div className="space-y-3">
+                  {[
+                    { icon: CheckCircle2, text: 'فتح سريع بضغطة واحدة من الشاشة الرئيسية' },
+                    { icon: CheckCircle2, text: 'إشعارات فورية حتى لو التطبيق مغلق' },
+                    { icon: CheckCircle2, text: 'تجربة تطبيق أصيل بدون متصفح' },
+                    { icon: CheckCircle2, text: 'أداء أفضل واستهلاك أقل للإنترنت' },
+                  ].map((feature, idx) => (
+                    <div key={idx} className="flex items-start gap-3">
+                      <div className="w-6 h-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <feature.icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 text-sm font-medium">
+                        {feature.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Install Button */}
+                <button
+                  onClick={handleInstall}
+                  disabled={isInstalling}
+                  className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-base shadow-xl shadow-indigo-600/30 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-6"
+                >
+                  {isInstalling ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>جاري التثبيت...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      <span>تثبيت التطبيق</span>
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <div className="space-y-6 py-2">
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl space-y-4 border border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">1</span>
+                    على أجهزة iPhone / iPad (Safari)
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pr-8">
+                    اضغط على زر <span className="font-bold text-indigo-600">"مشاركة" (Share)</span> في أسفل المتصفح، ثم اختر <span className="font-bold text-indigo-600">"إضافة للشاشة الرئيسية" (Add to Home Screen)</span>.
                   </p>
                 </div>
-              ))}
-            </div>
 
-            {/* Install Button */}
-            <button
-              onClick={handleInstall}
-              disabled={isInstalling}
-              className="w-full h-14 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-bold text-base shadow-xl shadow-indigo-600/30 transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-3 mt-6"
-            >
-              {isInstalling ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>جاري التثبيت...</span>
-                </>
-              ) : (
-                <>
-                  <Download className="w-5 h-5" />
-                  <span>تثبيت التطبيق</span>
-                </>
-              )}
-            </button>
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl space-y-4 border border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">2</span>
+                    على أجهزة Android (Chrome)
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pr-8">
+                    اضغط على زر <span className="font-bold text-indigo-600">القائمة (⋮)</span>، ثم اختر <span className="font-bold text-indigo-600">"تثبيت التطبيق"</span> أو <span className="font-bold text-indigo-600">"Add to Home Screen"</span>.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setShowManual(false)}
+                  className="w-full h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-sm transition-colors mt-2"
+                >
+                  العودة للخلف
+                </button>
+              </div>
+            )}
 
             {/* Maybe Later */}
             <button

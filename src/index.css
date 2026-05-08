@@ -33,11 +33,12 @@
     direction: rtl;
     scroll-behavior: smooth;
     font-size: 87.5%; /* 14px base for better mobile readability */
-    width: 100%;
-    height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    overflow: hidden; /* ✅ Prevent scroll on html to stop double scrollbar/jump */
+    width: 100vw;
+    height: 100vh;
+    background-color: #F8FAFC; /* Match app background to prevent white flicker */
   }
   
   body {
@@ -47,16 +48,29 @@
     -moz-osx-font-smoothing: grayscale;
     -webkit-overflow-scrolling: touch;
     margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
-    min-height: 100vh;
+    padding: 0 !important;
+    width: 100vw;
+    height: 100vh;
     overflow-x: hidden;
     overflow-y: auto;
+    background-color: #F8FAFC;
+    position: fixed; /* ✅ Lock body to prevent elastic scroll/shift */
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     
-    /* Strong scrollbar hiding */
+    /* Strong scrollbar hiding while keeping stable gutter */
     -ms-overflow-style: none; /* IE and Edge */
     scrollbar-width: none; /* Firefox */
+  }
+
+  /* ✅ Prevent Radix UI from adding padding to body */
+  body[data-role="dialog"], 
+  body[style*="padding-right"],
+  body[style*="overflow: hidden"] {
+    padding-right: 0 !important;
+    overflow-y: auto !important; /* Force keep scroll functionality */
   }
 
   /* Universal scrollbar hide utility */
@@ -88,10 +102,13 @@
   
   #root {
     width: 100%;
-    height: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: none !important;
+    outline: none !important;
   }
   
   /* Prevent horizontal scroll on mobile */

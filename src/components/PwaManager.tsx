@@ -134,6 +134,10 @@ export default function PwaManager() {
     // 3. Update DOM
     const link = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
     if (link) {
+      // ✅ Optimization: Revoke old URL to prevent memory leaks
+      if (link.href.startsWith('blob:')) {
+        URL.revokeObjectURL(link.href);
+      }
       link.href = manifestURL;
     }
 

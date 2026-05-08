@@ -3,6 +3,7 @@ import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
 import { logger } from '@/utils/logger';
+import { getCachedUser, setCachedUser } from '@/lib/userCache';
 import { queryClient } from '@/lib/queryClient';
 
 interface AuthContextType {
@@ -123,33 +124,25 @@ async function prefetchCommonQueries(appUser: AppUser) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   
-  // ✅ Optimization: Initialize user from localStorage for instant "App Shell" rendering
-  // This prevents the full-page white/loading flicker on refresh
-  const [user, setUser] = useState<AppUser | null>(() => {
-    const cached = localStorage.getItem('app_user_cache');
-    if (cached) {
-      try {
-        return JSON.parse(cached);
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  });
+  // ✅ Optimization: Initialize user from cache for instant "App Shell" rendering
+  const [user, setUser] = useState<AppUser | null>(() => getCachedUser());
 
   const [isLoading, setIsLoading] = useState(true);
 
-  const syncUser = async (currentSession: Session | null) => {
+  const syncUser = async (currentSession: Session | null, event?: string) => {
+    logger.log(`[Auth] Syncing user for event: ${event || 'initial'}`);
+    
     setSession(currentSession);
+    
     if (currentSession?.user) {
+      // ✅ We have a user in session
       const appUser = await getAppUserData(currentSession.user);
-      setUser(appUser);
       
-      // ✅ Cache user data for next refresh
       if (appUser) {
-        localStorage.setItem('app_user_cache', JSON.stringify(appUser));
+        setUser(appUser);
+        setCachedUser(appUser);
+        localStorage.setItem('last_auth_sync', Date.now().toString());
         
-        // ✅ Optimization: Defer prefetching until the main thread is completely free
         const deferPrefetch = () => {
           if ('requestIdleCallback' in window) {
             (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
@@ -159,27 +152,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         deferPrefetch();
       }
-    } else {
+    } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+      // ✅ ONLY clear user if it's an explicit logout/delete
+      logger.warn('[Auth] Explicit sign out or user delete');
       setUser(null);
-      localStorage.removeItem('app_user_cache');
+      setCachedUser(null);
+      localStorage.removeItem('last_auth_sync');
+    } else if (!currentSession && event === 'INITIAL_SESSION') {
+      // On initial load, if no session, check if we should clear cache
+      // We wait for a bit to see if a token refresh happens
+      logger.log('[Auth] No initial session found');
+      // Don't clear user immediately to prevent flicker if refresh is about to happen
     }
+    
     setIsLoading(false);
   };
 
   useEffect(() => {
-    // 1. جلب الجلسة الحالية عند التشغيل
+    // 1. جلب الجلسة الحالية عند التشغيل مع محاولة التحديث التلقائي
     supabase.auth.getSession().then(({ data: { session } }) => {
-      syncUser(session);
+      syncUser(session, 'INITIAL_SESSION');
     });
 
     // 2. الاستماع لتغييرات التوثيق (Refresh, SignOut, SignIn)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        syncUser(session);
+      (event, session) => {
+        if (event === 'TOKEN_REFRESHED') {
+          logger.log('[Auth] Token refreshed successfully');
+        }
+        
+        if (event === 'SIGNED_OUT') {
+          // Force clear everything on sign out
+          queryClient.clear();
+        }
+
+        syncUser(session, event);
       }
     );
 
-    return () => subscription.unsubscribe();
+    // 3. ✅ إضافة مستمع لإعادة تفعيل الجلسة عند عودة المستخدم للتطبيق (Tab Focus)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        logger.log('[Auth] App focused, checking session...');
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (session) syncUser(session, 'VISIBILITY_CHANGE');
+        });
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
 
@@ -199,9 +224,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return error.message;
       }
+      
+      // ✅ Set signup time to trigger PWA prompt
+      sessionStorage.setItem('user_signup_time', Date.now().toString());
+      
       return null;
-    } catch (err: any) {
-      return err.message;
+    } catch (err) {
+      return 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
     }
   };
 

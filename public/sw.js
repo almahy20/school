@@ -9,10 +9,14 @@ const PRECACHE_ASSETS = [
   '/favicon.ico',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  // Note: Vite assets are usually hashed and handled in the fetch event
+  '/placeholder.svg'
 ];
 
-// ✅ Optimization: Helper to limit cache size using a loop instead of recursion
+// ✅ Optimization: Dynamic cache for school logos and branding
+const BRANDING_CACHE = 'school-branding-v1';
+const MAX_BRANDING_ITEMS = 20;
+
+// ✅ Optimization: Helper to limit cache size
 async function limitCacheSize(cacheName, maxItems) {
   try {
     const cache = await caches.open(cacheName);
@@ -47,7 +51,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== CACHE_NAME && cacheName !== BRANDING_CACHE) {
             console.log('[SW] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
@@ -80,6 +84,31 @@ self.addEventListener('fetch', (event) => {
 
   // 3. API calls (Supabase) - Network First with Cache Fallback
   if (url.origin.includes('supabase.co')) {
+    // Special handling for images/logos stored in Supabase Storage
+    if (url.pathname.includes('/storage/v1/object/public/')) {
+      event.respondWith(
+        caches.match(event.request).then((cached) => {
+          const fetchPromise = fetch(event.request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              const copy = networkResponse.clone();
+              caches.open(BRANDING_CACHE).then(cache => {
+                cache.put(event.request, copy);
+                limitCacheSize(BRANDING_CACHE, MAX_BRANDING_ITEMS);
+              });
+            }
+            return networkResponse;
+          }).catch(() => cached);
+          return cached || fetchPromise;
+        })
+      );
+      return;
+    }
+
+    // Skip auth token requests or sensitive data
+    if (url.pathname.includes('/auth/v1/token')) {
+      return;
+    }
+
     event.respondWith(
       fetch(event.request)
         .then(response => {
@@ -90,7 +119,15 @@ self.addEventListener('fetch', (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          
+          // Return a custom offline JSON if it's a data request
+          return new Response(JSON.stringify({ error: 'offline', message: 'أنت غير متصل بالإنترنت حالياً' }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        })
     );
     return;
   }
@@ -100,7 +137,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cachedResponse) => {
       const fetchPromise = fetch(event.request).then((networkResponse) => {
         // Only cache valid responses
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
@@ -111,6 +148,11 @@ self.addEventListener('fetch', (event) => {
       }).catch(() => {
         // Silent catch for network errors during background fetch
       });
+
+      // Special handling for HTML navigation - if offline and not in cache, return index.html
+      if (!cachedResponse && event.request.mode === 'navigate') {
+        return caches.match('/index.html');
+      }
 
       return cachedResponse || fetchPromise;
     })

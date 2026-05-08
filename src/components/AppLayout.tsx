@@ -115,8 +115,8 @@ export default function AppLayout({ children }: Props) {
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
 
-      {/* ✅ CLS Fix: Reserve space for Announcement */}
-      <div className="min-h-[40px] empty:min-h-0">
+      {/* ✅ CLS Fix: Solid reserved space for Announcement to prevent layout jump */}
+      <div className="h-[40px] w-full bg-[#F8FAFC] overflow-hidden shrink-0 no-print">
         <GlobalAnnouncement />
       </div>
 
@@ -167,7 +167,7 @@ export default function AppLayout({ children }: Props) {
       {/* Sidebar Overlay (Mobile) */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] lg:hidden animate-in fade-in duration-500"
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[70] lg:hidden animate-in fade-in duration-300"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -181,7 +181,7 @@ export default function AppLayout({ children }: Props) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-none relative">
+      <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-none relative w-full lg:w-[calc(100%-18rem)]">
         {/* Abstract Background Gradients */}
         <div 
           style={{ animationDuration: '10s' }} 
@@ -192,8 +192,8 @@ export default function AppLayout({ children }: Props) {
           className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" 
         />
 
-        {/* Desktop Header Navigation */}
-        <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
+      {/* Desktop Header Navigation */}
+      <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
               نظام الإدارة الذكي — {schoolBranding.cleanName}
@@ -255,7 +255,7 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-10">
+        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 relative z-10">
           {children}
         </div>
 

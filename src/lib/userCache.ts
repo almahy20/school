@@ -7,7 +7,7 @@
 
 import type { AppUser } from '@/types/auth';
 
-const CACHE_KEY = 'school-user-v1';
+const CACHE_KEY = 'app_user_cache_v2';
 
 /** قراءة بيانات المستخدم المحفوظة (sync — لا تحتاج await) */
 export function getCachedUser(): AppUser | null {

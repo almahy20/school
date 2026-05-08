@@ -56,9 +56,10 @@ const parentLinks: SidebarLink[] = [
 
 interface SidebarProps {
   onClose?: () => void;
+  className?: string;
 }
 
-export default function Sidebar({ onClose }: SidebarProps) {
+export default function Sidebar({ onClose, className }: SidebarProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,7 +116,10 @@ export default function Sidebar({ onClose }: SidebarProps) {
     : 'ولي أمر معتمد';
 
   return (
-    <aside className="h-full w-72 bg-slate-900 flex flex-col relative z-[90] border-l border-white/5 shadow-2xl overflow-hidden text-right">
+    <aside className={cn(
+      "h-full w-72 bg-slate-900 flex flex-col relative z-[90] border-l border-white/5 shadow-2xl overflow-hidden text-right",
+      className
+    )}>
       {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent)] pointer-events-none" />
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
