@@ -182,16 +182,17 @@ self.addEventListener('push', function(event) {
     badge: data.badge || '/icons/badge-72.png',
     dir: 'rtl',
     vibrate: [100, 50, 100],
-    tag: data.tag || 'general-notification', // يمنع تكرار نفس الإشعار
-    renotify: true, // يهز الموبايل حتى لو نفس الـ tag
+    tag: data.tag || 'general-notification', 
+    renotify: true, 
     data: {
       url: (data.data && data.data.url) ? data.data.url : (data.url || '/')
     },
-    requireInteraction: false, // ✅ Changed to false for better mobile UX
-    silent: false, // ✅ Ensure sound plays
+    requireInteraction: false, 
+    silent: false, 
+    timestamp: Date.now(),
     actions: [
-      { action: 'open', title: 'فتح التطبيق' },
-      { action: 'dismiss', title: 'إغلاق' }
+      { action: 'open', title: 'فتح' },
+      { action: 'dismiss', title: 'تجاهل' }
     ]
   };
   
@@ -207,19 +208,28 @@ self.addEventListener('notificationclick', function(event) {
   console.log('[SW] Notification clicked:', event.action);
   event.notification.close();
   
-  const targetUrl = event.notification.data?.url || '/';
+  if (event.action === 'dismiss') return;
+
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-      // 1. If a window is already open, focus it and navigate
+      // 1. Check if we already have a window open with this URL
       for (var i = 0; i < windowClients.length; i++) {
         var client = windowClients[i];
+        if (client.url === targetUrl && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // 2. If no window matches exactly, but we have any window open, navigate and focus it
+      if (windowClients.length > 0) {
+        const client = windowClients[0];
         if ('focus' in client) {
           client.navigate(targetUrl);
           return client.focus();
         }
       }
-      // 2. If no window is open, open a new one
+      // 3. If no window is open at all, open a new one
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }

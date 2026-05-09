@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
 import { logger } from '@/utils/logger';
+import PushNotificationPrompt from './PushNotificationPrompt';
 
 interface Props {
   children: ReactNode;
@@ -115,11 +116,6 @@ export default function AppLayout({ children }: Props) {
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
 
-      {/* ✅ CLS Fix: Solid reserved space for Announcement to prevent layout jump */}
-      <div className="h-[40px] w-full bg-[#F8FAFC] overflow-hidden shrink-0 no-print">
-        <GlobalAnnouncement />
-      </div>
-
       {/* Mobile Glass Header */}
       <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 no-print">
         <div className="flex items-center gap-3">
@@ -179,6 +175,10 @@ export default function AppLayout({ children }: Props) {
       )}>
         <Sidebar onClose={() => setSidebarOpen(false)} />
       </aside>
+
+      {/* Global Modals & Prompts */}
+      <GlobalAnnouncement />
+      <PushNotificationPrompt />
 
       {/* Main Content Area */}
       <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-none relative w-full lg:w-[calc(100%-18rem)]">

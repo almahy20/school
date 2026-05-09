@@ -10,6 +10,7 @@ import {
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
 import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { sendPushToUser } from '@/utils/pushNotifications';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,25 @@ export default function SettingsPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { isSubscribed, subscribeToNotifications } = usePushNotifications();
+  const [isTestingPush, setIsTestingPush] = useState(false);
+
+  const handleTestPush = async () => {
+    if (!user?.id) return;
+    setIsTestingPush(true);
+    try {
+      await sendPushToUser({
+        userId: user.id,
+        title: 'إشعار تجريبي 🚀',
+        body: 'إذا رأيت هذا، فهذا يعني أن نظام الإشعارات يعمل بنجاح!',
+        url: '/settings'
+      });
+      toast({ title: 'تم إرسال الطلب', description: 'سيعمل الإشعار إذا كنت مفعلاً للتنبيهات والمفاتيح صحيحة.' });
+    } catch (err) {
+      toast({ title: 'فشل الاختبار', variant: 'destructive' });
+    } finally {
+      setIsTestingPush(false);
+    }
+  };
   
   const { data: profile, isLoading, error, refetch } = useProfile();
   const updatePrefsMutation = useUpdateNotificationPrefs();
@@ -276,13 +296,26 @@ export default function SettingsPage() {
                           </div>
                        </div>
                        
-                       {!isSubscribed ? (
-                         <Button onClick={subscribeToNotifications} className="h-14 px-10 rounded-2xl bg-indigo-600 text-white font-black hover:scale-105 transition-all shadow-xl shadow-indigo-100">
-                            تفعيل الآن
-                         </Button>
-                       ) : (
-                         <Badge className="h-12 px-6 rounded-xl bg-emerald-50 text-emerald-600 font-black border-none">قيد التشغيل</Badge>
-                       )}
+                       <div className="flex flex-col md:flex-row items-center gap-3">
+                          {isSubscribed && (
+                            <Button 
+                              onClick={handleTestPush} 
+                              disabled={isTestingPush}
+                              variant="outline" 
+                              className="h-12 px-6 rounded-xl border-indigo-100 text-indigo-600 font-black hover:bg-indigo-50"
+                            >
+                               {isTestingPush ? 'جاري الإرسال...' : 'إرسال إشعار تجريبي'}
+                            </Button>
+                          )}
+
+                          {!isSubscribed ? (
+                            <Button onClick={subscribeToNotifications} className="h-14 px-10 rounded-2xl bg-indigo-600 text-white font-black hover:scale-105 transition-all shadow-xl shadow-indigo-100">
+                               تفعيل الآن
+                            </Button>
+                          ) : (
+                            <Badge className="h-12 px-6 rounded-xl bg-emerald-50 text-emerald-600 font-black border-none">قيد التشغيل</Badge>
+                          )}
+                       </div>
                     </div>
                  </div>
               </div>

@@ -5,11 +5,9 @@ import { logger } from "./utils/logger";
 
 // Service Worker registration logic
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
-const isDev = import.meta.env.DEV;
 
-// ✅ Optimization: Only register Service Worker in production
-// This prevents the cache from bloating with thousands of Vite dev files (95MB issue)
-if ("serviceWorker" in navigator && !isSWDisabled && !isDev) {
+// ✅ Registration: Enabled in all environments but handled carefully in sw.js
+if ("serviceWorker" in navigator && !isSWDisabled) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(
       (registration) => {

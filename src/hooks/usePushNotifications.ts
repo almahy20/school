@@ -13,9 +13,6 @@ export function usePushNotifications() {
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY; // We'll assume the user will set this
 
   const checkSubscription = useCallback(async () => {
-    // ✅ Optimization: Skip in dev mode to prevent hanging on serviceWorker.ready
-    if (import.meta.env.DEV) return;
-
     if ('serviceWorker' in navigator && 'PushManager' in window && user?.id) {
       try {
         const registration = await navigator.serviceWorker.ready;
@@ -102,16 +99,28 @@ export function usePushNotifications() {
       setPermission(perm);
 
       if (perm === 'granted') {
+        logger.log('Push permission granted, preparing subscription...');
         const registration = await navigator.serviceWorker.ready;
         
+        // Ensure Service Worker is active
+        if (!registration.active) {
+          logger.warn('Service worker not active yet, waiting...');
+          // Give it a moment to activate
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
         // تنظيف أي اشتراك قديم
         try {
           const existing = await registration.pushManager.getSubscription();
-          if (existing) await existing.unsubscribe();
+          if (existing) {
+            logger.log('Cleaning up existing subscription');
+            await existing.unsubscribe();
+          }
         } catch (e) {
           logger.warn('Failed to unsubscribe existing push:', e);
         }
 
+        logger.log('Subscribing to push manager with key:', VAPID_PUBLIC_KEY.substring(0, 10) + '...');
         const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
@@ -145,7 +154,7 @@ export function usePushNotifications() {
       
       // ✅ معالجة أخطاء محددة للمستخدم
       if (error.name === 'AbortError') {
-        errorMsg = 'فشل الاتصال بخدمة إشعارات المتصفح. تأكد من عدم استخدام وضع "التصفح المتخفي" (Incognito) ومن جودة اتصالك بالإنترنت.';
+        errorMsg = 'فشل الاتصال بخدمة إشعارات المتصفح. قد يكون ذلك بسبب: 1- استخدام متصفح غير مدعوم (مثل وضع التخفي). 2- وجود جدار حماية أو VPN يمنع الاتصال بخدمات Google/Mozilla. 3- مفتاح VAPID غير متوافق.';
       } else if (error.name === 'NotAllowedError') {
         errorMsg = 'تم حظر الإشعارات من قبل المتصفح. يرجى تفعيلها من إعدادات الموقع.';
       } else if (error.message?.includes('VAPID')) {
