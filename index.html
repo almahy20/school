@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>النظام الذكي لإدارة المدارس</title>
+    <meta name="description" content="المنصة المتكاملة لإدارة المدارس والتحصيل العلمي." />
+    <meta name="author" content="النظام الذكي" />
+    <meta name="keywords" content="إدارة مدرسة, نظام مدرسي, SaaS, تعليم, حضور, معلمين, أولياء أمور" />
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#1e293b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="المدرسة" />
+
+    <!-- Favicon (Suppressed default request) -->
+    <link rel="icon" href="data:;base64,iVBORw0KGgo=" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="النظام الذكي — إدارة مدارس متكاملة" />
+    <meta property="og:description" content="منصة احترافية لإدارة المدارس والتحصيل العلمي." />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="ar_EG" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="النظام الذكي" />
+    <meta name="twitter:description" content="نظام إدارة المدارس الذكي" />
+
+    <!-- Preconnect for performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <style>
+      :root { background-color: #f8fafc; }
+      html.dark { background-color: #0a0f1e; }
+      html.light { background-color: #f8fafc; }
+      body { margin: 0; padding: 0; background-color: inherit; overflow: hidden; }
+      #root:empty + script + script + script { display: none; } /* Hide everything until React kicks in */
+    </style>
+
+    <script>
+      (function() {
+        try {
+          // 1. Theme initialization
+          var theme = localStorage.getItem('theme') || 'light';
+          document.documentElement.classList.add(theme);
+          document.documentElement.style.colorScheme = theme;
+
+          // 2. Immediate Branding Sync (Prevent Flicker)
+          var userCache = localStorage.getItem('app_user_cache');
+          if (userCache) {
+            var user = JSON.parse(userCache);
+            if (user && user.schoolId) {
+              var brandingCache = localStorage.getItem('branding_' + user.schoolId);
+              if (brandingCache) {
+                var branding = JSON.parse(brandingCache);
+                
+                // Update Title
+                if (branding.name) {
+                  var cleanName = branding.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+                  cleanName = cleanName.split(' — ')[0];
+                  document.title = cleanName;
+                }
+
+                // Update Favicon
+                if (branding.logo_url) {
+                  var link = document.querySelector("link[rel~='icon']");
+                  if (link) link.href = branding.logo_url;
+                  
+                  var appleLink = document.querySelector("link[rel~='apple-touch-icon']");
+                  if (appleLink) appleLink.href = branding.logo_url;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Branding pre-sync failed:', e);
+        }
+      })();
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
