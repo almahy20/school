@@ -83,3 +83,16 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/**
+ * ✅ Security: Clear all persisted cache (IndexedDB + in-memory) on logout
+ * Prevents cross-tenant data leakage
+ */
+export async function clearAllCache() {
+  queryClient.clear();
+  try {
+    await del('SCHOOL_APP_CACHE');
+  } catch (e) {
+    logger.error('Failed to clear IndexedDB cache:', e);
+  }
+}
+

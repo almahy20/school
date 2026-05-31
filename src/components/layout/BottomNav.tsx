@@ -33,7 +33,8 @@ export default function BottomNav() {
 
   const parentLinks = [
     { to: '/', icon: Home, label: 'الرئيسية' },
-    { to: '/complaints', icon: MessageSquare, label: 'الشكاوى' },
+    { to: '/messages', icon: MessageSquare, label: 'الرسائل' },
+    { to: '/complaints', icon: Send, label: 'الشكاوى' },
     { to: '/settings', icon: Settings, label: 'الإعدادات' },
   ];
 

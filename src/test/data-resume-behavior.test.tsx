@@ -1,11 +1,13 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, act, cleanup } from "@testing-library/react";
+import { render, screen, act, cleanup, waitFor } from "@testing-library/react";
 import {
   QueryClient,
   QueryClientProvider,
   useMutation,
   useQuery,
+  focusManager,
+  onlineManager,
 } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
@@ -27,10 +29,16 @@ function createClient() {
 describe("React Query resume & persistence behavior", () => {
   beforeEach(() => {
     localStorage.clear();
+    // Reset managers to defaults before each test
+    focusManager.setFocused(true);
+    onlineManager.setOnline(true);
   });
+
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    focusManager.setFocused(true);
+    onlineManager.setOnline(true);
   });
 
   it("refetches queries on window focus when stale", async () => {
@@ -42,6 +50,7 @@ describe("React Query resume & persistence behavior", () => {
         queryKey: ["focus-refetch"],
         queryFn: fetcher,
         staleTime: 0,
+        refetchOnWindowFocus: true,
       });
       return (
         <div>
@@ -58,38 +67,60 @@ describe("React Query resume & persistence behavior", () => {
       </QueryClientProvider>
     );
 
+    // Wait for initial fetch
     await screen.findByText("1");
     expect(fetcher).toHaveBeenCalledTimes(1);
 
+    // Simulate losing focus, then regaining it — React Query uses focusManager internally
     await act(async () => {
-      window.dispatchEvent(new Event("blur"));
-      window.dispatchEvent(new Event("focus"));
+      focusManager.setFocused(false);
     });
 
+    await act(async () => {
+      focusManager.setFocused(true);
+    });
+
+    // Wait for refetch to complete
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2), {
+      timeout: 2000,
+    });
     await screen.findByText("2");
-    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it("persists cache to localStorage and hydrates on remount", async () => {
+  it("persists cache to localStorage and hydrates on remount without refetching", async () => {
     let called = 0;
     const fetcher = vi.fn(async () => {
       called++;
       return { name: "cached" };
     });
 
+    // Use a very long staleTime so hydrated data is treated as fresh
+    const STALE_TIME = 5 * 60 * 1000; // 5 minutes
+
     function TestComponent() {
       const { data } = useQuery({
         queryKey: ["persist-me"],
         queryFn: fetcher,
-        staleTime: 60 * 1000,
+        staleTime: STALE_TIME,
       });
       return <div data-testid="name">{data?.name ?? "none"}</div>;
     }
 
-    const client1 = createClient();
     const persister = createSyncStoragePersister({
       storage: window.localStorage,
       key: "rq-test-persist",
+    });
+
+    // --- First mount: fetch and populate cache ---
+    const client1 = new QueryClient({
+      defaultOptions: {
+        queries: {
+          networkMode: "offlineFirst",
+          staleTime: STALE_TIME,
+          gcTime: 24 * 60 * 60 * 1000,
+          retry: false,
+        },
+      },
     });
 
     render(
@@ -97,6 +128,7 @@ describe("React Query resume & persistence behavior", () => {
         client={client1}
         persistOptions={{
           persister,
+          maxAge: 24 * 60 * 60 * 1000,
           dehydrateOptions: {
             shouldDehydrateQuery: (q) => q.state.status === "success",
           },
@@ -109,14 +141,31 @@ describe("React Query resume & persistence behavior", () => {
     await screen.findByText("cached");
     expect(called).toBe(1);
 
+    // Wait for PersistQueryClientProvider to write asynchronously to localStorage
+    await waitFor(() => {
+      expect(localStorage.getItem("rq-test-persist")).not.toBeNull();
+    }, { timeout: 3000 });
+
     cleanup();
 
-    const client2 = createClient();
+    // --- Second mount: hydrate from localStorage, should NOT refetch ---
+    const client2 = new QueryClient({
+      defaultOptions: {
+        queries: {
+          networkMode: "offlineFirst",
+          staleTime: STALE_TIME, // same staleTime keeps hydrated data "fresh"
+          gcTime: 24 * 60 * 60 * 1000,
+          retry: false,
+        },
+      },
+    });
+
     render(
       <PersistQueryClientProvider
         client={client2}
         persistOptions={{
           persister,
+          maxAge: 24 * 60 * 60 * 1000,
           dehydrateOptions: {
             shouldDehydrateQuery: (q) => q.state.status === "success",
           },
@@ -127,19 +176,31 @@ describe("React Query resume & persistence behavior", () => {
     );
 
     await screen.findByText("cached");
+    // fetcher should NOT have been called again — data came from persisted localStorage
     expect(called).toBe(1);
   });
 
-  it("pauses mutations offline and resumes when back online", async () => {
-    Object.defineProperty(window.navigator, "onLine", { value: false, configurable: true });
-
+  it("pauses mutations when offline and resumes when back online", async () => {
     const fn = vi.fn(async (x: number) => x * 2);
+
     function MutComponent() {
-      const { mutate } = useMutation({ mutationFn: fn, networkMode: "offlineFirst" });
+      // networkMode: "online" causes React Query to pause the mutation when offline
+      const { mutate } = useMutation({
+        mutationFn: fn,
+        networkMode: "online",
+      });
       return <button onClick={() => mutate(21)}>do</button>;
     }
 
-    const client = createClient();
+    // Set offline BEFORE rendering
+    onlineManager.setOnline(false);
+
+    const client = new QueryClient({
+      defaultOptions: {
+        mutations: { networkMode: "online", retry: false },
+      },
+    });
+
     render(
       <QueryClientProvider client={client}>
         <MutComponent />
@@ -149,13 +210,18 @@ describe("React Query resume & persistence behavior", () => {
     await act(async () => {
       screen.getByText("do").click();
     });
+
+    // Mutation should be paused (not executed) while offline
     expect(fn).toHaveBeenCalledTimes(0);
 
-    Object.defineProperty(window.navigator, "onLine", { value: true });
+    // Go back online using React Query's onlineManager
     await act(async () => {
-      window.dispatchEvent(new Event("online"));
+      onlineManager.setOnline(true);
     });
 
-    expect(fn).toHaveBeenCalledTimes(1);
+    // Wait for the resumed mutation to execute
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(1), {
+      timeout: 2000,
+    });
   });
 });

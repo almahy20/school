@@ -75,13 +75,8 @@ class RealtimeEngine {
       }
       
       // Add similar automatic synced responses for messages, notifications etc. if generic
-      if (table === 'notifications') {
-          // ✅ Only invalidate the list — unread counts are handled by RealtimeNotificationsManager
-          if ((window as any).__realtimeEngineNotifTimer) clearTimeout((window as any).__realtimeEngineNotifTimer);
-          (window as any).__realtimeEngineNotifTimer = setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: ['notifications'] });
-          }, 2000);
-      }
+      // ✅ notifications are handled exclusively by RealtimeNotificationsManager
+      // to avoid duplicate subscriptions and conflicting cache updates.
 
     } catch (e) {
       console.warn('[RealtimeEngine] Failed to auto-sync cache', e);

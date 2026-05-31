@@ -13,15 +13,16 @@ const getTypeConfig = (type: string) => {
   switch (type) {
     case 'new_fee':
     case 'fee_payment':
-       return { icon: CreditCard, color: 'text-amber-500' };
+      return { icon: CreditCard, color: 'text-amber-500' };
     case 'new_grade':
-       return { icon: GraduationCap, color: 'text-indigo-500' };
+      return { icon: GraduationCap, color: 'text-indigo-500' };
     case 'attendance_alert':
-       return { icon: AlertCircle, color: 'text-rose-500' };
+      return { icon: AlertCircle, color: 'text-rose-500' };
     case 'broadcast_message':
-       return { icon: MessageSquare, color: 'text-emerald-500' };
+    case 'teacher_message':
+      return { icon: MessageSquare, color: 'text-emerald-500' };
     default:
-       return { icon: Bell, color: 'text-slate-400' };
+      return { icon: Bell, color: 'text-slate-400' };
   }
 };
 
@@ -30,155 +31,142 @@ export default function RealtimeNotificationsManager() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // ✅ Single handler — used for all INSERT events on notifications table
   const handleNewNotification = useCallback((payload: any) => {
     const newNotification = payload.new;
-    logger.log('🔔 Realtime Notifications: New event received', newNotification.type);
+    logger.log('🔔 RealtimeNotifications: New notification', newNotification.type);
 
-    // 1. Browser local notification
+    // 1. Browser / SW local notification (works when app is in background)
     sendLocalNotification(
       newNotification.title || 'تنبيه جديد',
       newNotification.message || 'لديك تحديث جديد في حسابك'
     );
 
-    // 2. In-app Toast
+    // 2. In-app Toast with action button
     const config = getTypeConfig(newNotification.type);
+    const isMessage =
+      newNotification.type === 'broadcast_message' ||
+      newNotification.type === 'teacher_message';
 
     toast(newNotification.title, {
       description: newNotification.message,
       icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),
       duration: 10000,
       action: {
-        label: 'عرض التنبيهات',
-        onClick: () => { navigate('/notifications'); }
-      }
+        label: isMessage ? 'فتح الرسائل' : 'عرض التنبيهات',
+        onClick: () => navigate(isMessage ? '/messages' : '/notifications'),
+      },
     });
 
     // 3. Play sound
     playNotificationSound();
 
-    // 4. Cache Invalidation + Optimistic Update
+    // 4. Optimistic unread count increment
     if (user?.id) {
-      // Invalidate lists
-      queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-      
-      // ✅ Optimistic: Increment unread count immediately
       queryClient.setQueryData(['notifications-unread-counts', user.id], (old: any) => ({
         unread: (old?.unread || 0) + 1,
-        complaints: (old?.complaints || 0) + (newNotification.type?.startsWith('complaint') ? 1 : 0)
+        complaints:
+          (old?.complaints || 0) +
+          (newNotification.type?.startsWith('complaint') ? 1 : 0),
       }));
+
+      // Invalidate list to refetch
+      queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
     }
-    
-    // ✅ Optimization: Only invalidate admin stats if user is an admin
+
+    // 5. Refresh admin stats if relevant
     if (user?.role === 'admin') {
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     }
   }, [user?.id, user?.role, queryClient, navigate]);
 
+  // Handler for UPDATE events (mark-as-read sync)
+  const handleNotificationUpdate = useCallback((payload: any) => {
+    const { old: oldRow, new: newRow } = payload;
+
+    // If this is a "mark as read" event triggered by our own UI,
+    // trust the optimistic update — just silently refresh the list.
+    if (oldRow.is_read === false && newRow.is_read === true) {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      return;
+    }
+
+    // For other content updates, do a debounced sync of unread counts
+    if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
+    (window as any).__notifUpdateTimer = setTimeout(async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('notifications')
+          .select('type, is_read')
+          .eq('user_id', user?.id)
+          .eq('is_read', false);
+
+        if (!error && user?.id) {
+          queryClient.setQueryData(['notifications-unread-counts', user.id], {
+            unread: (data || []).length,
+            complaints: (data || []).filter((n: any) =>
+              n.type?.startsWith('complaint')
+            ).length,
+          });
+        }
+      } catch (e) {
+        logger.warn('Failed to sync unread counts:', e);
+      }
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    }, 4000);
+  }, [user?.id, queryClient]);
+
   useEffect(() => {
     if (!user?.id) return;
 
-    // 1. Channel for personal notifications (Handle INSERT for toast, and all changes for sync)
-    const notificationsChannel = supabase.channel(`notifications-${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        const newNotification = payload.new;
-        logger.log('🔔 Realtime Notifications: New event received', newNotification.type);
-
-        // 1. Browser local notification
-        sendLocalNotification(
-          newNotification.title || 'تنبيه جديد',
-          newNotification.message || 'لديك تحديث جديد في حسابك'
-        );
-
-        // 2. In-app Toast
-        const config = getTypeConfig(newNotification.type);
-        toast(newNotification.title, {
-          description: newNotification.message,
-          icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),
-          duration: 10000,
-          action: {
-            label: 'عرض التنبيهات',
-            onClick: () => { navigate('/notifications'); }
-          }
-        });
-
-        // 3. Play sound
-        playNotificationSound();
-
-        // 4. Optimistic increment for unread count
-        queryClient.setQueryData(['notifications-unread-counts', user.id], (old: any) => ({
-          unread: (old?.unread || 0) + 1,
-          complaints: (old?.complaints || 0) + (newNotification.type?.startsWith('complaint') ? 1 : 0)
-        }));
-
-        // 5. Invalidate list to refetch
-        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-
-        // 6. Admin stats
-        if (user.role === 'admin') {
-          queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
-        }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        // ✅ Optimization: If this was a read status update, we don't want to refetch immediately
-        // because our optimistic updates already handled it. 
-        // We only care about updates that might change content or if we missed an event.
-        const { old: oldRow, new: newRow } = payload;
-        if (oldRow.is_read === false && newRow.is_read === true) {
-          // This is a "mark as read" event, likely triggered by our own UI.
-          // We trust our optimistic updates, but we'll do a silent refresh of the list.
-          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-          return; 
-        }
-
-        // For other updates, schedule a debounced sync
-        if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
-        (window as any).__notifUpdateTimer = setTimeout(async () => {
-          try {
-            const { data, error } = await (supabase as any)
-              .from('notifications')
-              .select('type, is_read')
-              .eq('user_id', user.id)
-              .eq('is_read', false);
-            if (!error) {
-              queryClient.setQueryData(['notifications-unread-counts', user.id], {
-                unread: (data || []).length,
-                complaints: (data || []).filter((n: any) => n.type?.startsWith('complaint')).length
-              });
-              // Force update to make sure everyone sees the new data
-              queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
-            }
-          } catch (e) {
-            logger.warn('Failed to sync unread counts:', e);
-          }
-          queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-        }, 4000); // 4 seconds delay for background sync
-      })
-      .subscribe();
-
-    // 2. Channel for global school branding updates
-    let brandingChannel: any = null;
-    if (user.schoolId) {
-      brandingChannel = supabase.channel('realtime-branding')
-        .on('postgres_changes', {
+    // ✅ Single channel for all notification events (INSERT + UPDATE)
+    // Filtered by user_id so each user only receives their own notifications
+    const notificationsChannel = supabase
+      .channel(`notifications-manager-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        handleNewNotification
+      )
+      .on(
+        'postgres_changes',
+        {
           event: 'UPDATE',
           schema: 'public',
-          table: 'schools',
-          filter: `id=eq.${user.schoolId}`
-        }, () => {
-          logger.log('🔄 School Branding updated! Refreshing UI...');
-          // Invalidate specific cache keys to trigger immediate re-fetch
-          queryClient.invalidateQueries({ queryKey: ['school-branding', user.schoolId] });
-        })
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        handleNotificationUpdate
+      )
+      .subscribe((status) => {
+        logger.log(`[NotificationsManager] Channel status: ${status}`);
+      });
+
+    // ✅ School branding updates channel (separate concern)
+    let brandingChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (user.schoolId) {
+      brandingChannel = supabase
+        .channel(`branding-${user.schoolId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'schools',
+            filter: `id=eq.${user.schoolId}`,
+          },
+          () => {
+            logger.log('🔄 School branding updated, refreshing...');
+            queryClient.invalidateQueries({
+              queryKey: ['school-branding', user.schoolId],
+            });
+          }
+        )
         .subscribe();
     }
 
@@ -186,7 +174,7 @@ export default function RealtimeNotificationsManager() {
       supabase.removeChannel(notificationsChannel);
       if (brandingChannel) supabase.removeChannel(brandingChannel);
     };
-  }, [user?.id, user?.schoolId, user?.role, queryClient, navigate]);
+  }, [user?.id, user?.schoolId, handleNewNotification, handleNotificationUpdate, queryClient]);
 
   return null;
 }

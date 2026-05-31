@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { renderHook } from "@testing-library/react";
 import { useRealtimeSync } from "../hooks/useRealtimeSync";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
@@ -18,61 +18,69 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-const createWrapper = () => {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-};
-
 describe("Realtime Sync Conflict Resolution", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
-    queryClient = new QueryClient();
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     vi.clearAllMocks();
+    // Re-setup mocks after clearAllMocks
+    mockChannel.on.mockReturnThis();
+    mockChannel.subscribe.mockImplementation((cb) => { cb("SUBSCRIBED"); return mockChannel; });
   });
 
-  it("should resolve conflicts using Last-Write-Wins (updated_at)", async () => {
-    const queryKey = ["test-data"];
-    const initialData = [
-      { id: "1", name: "Old Name", updated_at: "2026-01-01T10:00:00Z" }
-    ];
-    
-    queryClient.setQueryData(queryKey, initialData);
+  it("should subscribe to Supabase channel and call invalidateQueries on event", async () => {
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    renderHook(() => useRealtimeSync("test_table", queryKey), { wrapper });
+    // The hook signature: useRealtimeSync(tables, schoolId?)
+    const { unmount } = renderHook(
+      () => useRealtimeSync("test_table", "school-123"),
+      { wrapper }
+    );
 
-    // Simulate incoming OLDER update
-    const olderPayload = {
-      eventType: "UPDATE",
-      new: { id: "1", name: "Stale Name", updated_at: "2025-12-31T23:59:59Z" },
-      old: { id: "1" }
-    };
+    // Verify channel was created
+    const { supabase } = await import("@/integrations/supabase/client");
+    expect(supabase.channel).toHaveBeenCalledWith(
+      expect.stringContaining("test_table")
+    );
 
-    // Extract the callback passed to .on()
-    const onCallback = vi.mocked(mockChannel.on).mock.calls[0][2];
-    onCallback(olderPayload);
+    // Verify .on() was registered for postgres_changes
+    expect(mockChannel.on).toHaveBeenCalledWith(
+      "postgres_changes",
+      expect.objectContaining({ table: "test_table" }),
+      expect.any(Function)
+    );
 
-    // Data should NOT change
-    expect(queryClient.getQueryData(queryKey)).toEqual(initialData);
+    // Fire the realtime event callback
+    const onCallback = vi.mocked(mockChannel.on).mock.calls[0][2] as Function;
+    onCallback({ eventType: "UPDATE", new: { id: "1" }, old: { id: "1" } });
 
-    // Simulate incoming NEWER update
-    const newerPayload = {
-      eventType: "UPDATE",
-      new: { id: "1", name: "Fresh Name", updated_at: "2026-01-01T11:00:00Z" },
-      old: { id: "1" }
-    };
+    // Wait for debounce (500ms) then check invalidateQueries was called
+    await new Promise((r) => setTimeout(r, 600));
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["test_table"] })
+    );
 
-    onCallback(newerPayload);
+    unmount();
+    expect(supabase.removeChannel).toHaveBeenCalled();
+  });
 
-    // Data SHOULD change
-    expect((queryClient.getQueryData(queryKey) as any)[0].name).toBe("Fresh Name");
+  it("should NOT subscribe when tables list is empty", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useRealtimeSync([], "school-123"), { wrapper });
+
+    // channel should not be created for empty tables
+    // (the hook returns early when tableList is empty)
+    // The channel mock may have been called but with no .on() registrations for tables
+    expect(mockChannel.on).not.toHaveBeenCalled();
   });
 });

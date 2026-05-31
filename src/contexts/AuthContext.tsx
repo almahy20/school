@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
 import { logger } from '@/utils/logger';
 import { getCachedUser, setCachedUser } from '@/lib/userCache';
-import { queryClient } from '@/lib/queryClient';
+import { queryClient, clearAllCache } from '@/lib/queryClient';
 
 interface AuthContextType {
   session: Session | null;
@@ -182,8 +182,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (event === 'SIGNED_OUT') {
-          // Force clear everything on sign out
-          queryClient.clear();
+          // Force clear everything on sign out (including IndexedDB)
+          clearAllCache();
         }
 
         syncUser(session, event);
@@ -212,6 +212,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
+    await clearAllCache();
   };
 
   const login = async (phone: string, password: string): Promise<string | null> => {

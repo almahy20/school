@@ -3,28 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { queryClient } from '@/lib/queryClient';
-
-function playChime() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const times = [0, 0.18];
-    const freqs = [880, 1100];
-    times.forEach((t, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type = 'sine';
-      osc.frequency.value = freqs[i];
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + t);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.35);
-      osc.start(ctx.currentTime + t);
-      osc.stop(ctx.currentTime + t + 0.35);
-    });
-  } catch (_) {
-    // silently fail if AudioContext not available
-  }
-}
+import { logger } from '@/utils/logger';
 
 function vibrate() {
   try {
@@ -36,15 +15,32 @@ function vibrate() {
 
 async function showDesktopNotification(senderName: string, content: string) {
   if (!('Notification' in window)) return;
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission();
-  }
   if (Notification.permission === 'granted') {
-    new Notification(`رسالة من ${senderName}`, {
-      body: content,
-      icon: '/favicon.ico',
-      dir: 'rtl',
-    });
+    // ✅ Use Service Worker notification so it works even when app is in background
+    // and supports click-to-open behavior via sw.js notificationclick handler
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(`رسالة من ${senderName}`, {
+        body: content,
+        icon: '/icons/icon-192.png',
+        badge: '/icons/badge-72.png',
+        dir: 'rtl',
+        tag: 'new-message',
+        renotify: true,
+        data: { url: '/messages' },
+        actions: [
+          { action: 'open', title: 'فتح الرسائل' },
+          { action: 'dismiss', title: 'تجاهل' },
+        ],
+      } as NotificationOptions);
+    } else {
+      // Fallback for browsers without SW support
+      new Notification(`رسالة من ${senderName}`, {
+        body: content,
+        icon: '/icons/icon-192.png',
+        dir: 'rtl',
+      });
+    }
   }
 }
 
@@ -65,54 +61,65 @@ export function useMessageNotifications() {
       content: string;
     };
 
-    // Only notify if we are the receiver and NOT on the messages page
+    // ✅ Security fix: filter is now on the server (receiver_id=eq.userId),
+    // but we double-check client-side as a safety net
     if (msg.receiver_id !== user?.id) return;
+
+    // Don't show notification if user is already on the messages page
     if (locationRef.current === '/messages') return;
+
+    // Invalidate messages cache so the badge updates
+    queryClient.invalidateQueries({ queryKey: ['messages', user?.id] });
 
     // Try to get sender name from cache first
     let senderName = 'مستخدم';
-    
-    // Check react-query cache for profile
     const cachedProfile = queryClient.getQueryData(['profile-by-id', msg.sender_id]);
     if (cachedProfile) {
       senderName = (cachedProfile as any)?.full_name || 'مستخدم';
     } else {
-      // Fetch sender name and cache it
       try {
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, full_name')
           .eq('id', msg.sender_id)
           .maybeSingle();
-        
+
         if (profile) {
           senderName = profile.full_name || 'مستخدم';
-          // Cache the profile for future use
           queryClient.setQueryData(['profile-by-id', msg.sender_id], profile);
         }
       } catch (err) {
-        console.error('Failed to fetch sender profile:', err);
+        logger.error('Failed to fetch sender profile:', err);
       }
     }
 
-    // playChime(); // Disabled sound by request
     vibrate();
-    showDesktopNotification(senderName, msg.content);
+    await showDesktopNotification(senderName, msg.content);
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
-    const channel = supabase.channel('messages-notifications')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-      }, handleNewMessage)
-      .subscribe();
+    // ✅ Security fix: filter by receiver_id so each user only receives their own messages
+    // Previously this had NO filter — every user received ALL messages from the entire school
+    const channel = supabase
+      .channel(`messages-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        handleNewMessage
+      )
+      .subscribe((status) => {
+        logger.log(`[MessageNotifications] Channel status: ${status}`);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, handleNewMessage]);
+  }, [user?.id, handleNewMessage]);
 }

@@ -1,7 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "https://edara-arabiya.vercel.app";
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-customer-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
@@ -39,6 +41,15 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403, headers: corsHeaders });
     }
 
+    // Get caller's school_id for tenant isolation
+    const { data: callerProfile } = await adminClient
+      .from("profiles")
+      .select("school_id")
+      .eq("id", caller.id)
+      .single();
+
+    const callerSchoolId = callerProfile?.school_id;
+
     const { action, userId, data } = await req.json();
 
     switch (action) {
@@ -59,6 +70,11 @@ Deno.serve(async (req) => {
           .select("phone, role, school_id")
           .eq("id", userId)
           .single();
+
+        // Verify target user belongs to caller's school
+        if (profileData?.school_id !== callerSchoolId) {
+          return new Response(JSON.stringify({ error: "Forbidden: cross-tenant access denied" }), { status: 403, headers: corsHeaders });
+        }
         
         const userRole = profileData?.role;
         const userPhone = profileData?.phone;
@@ -164,14 +180,17 @@ Deno.serve(async (req) => {
         if (userId === caller.id) {
           return new Response(JSON.stringify({ error: "Cannot change own role" }), { status: 400, headers: corsHeaders });
         }
-        // Get the caller's school_id to preserve tenancy
-        const { data: callerRole } = await adminClient
-          .from("user_roles")
+        // Verify target user belongs to caller's school
+        const { data: targetProfile } = await adminClient
+          .from("profiles")
           .select("school_id")
-          .eq("user_id", caller.id)
+          .eq("id", userId)
           .single();
+        if (targetProfile?.school_id !== callerSchoolId) {
+          return new Response(JSON.stringify({ error: "Forbidden: cross-tenant access denied" }), { status: 403, headers: corsHeaders });
+        }
         await adminClient.from("user_roles").delete().eq("user_id", userId);
-        await adminClient.from("user_roles").insert({ user_id: userId, role: data.role, school_id: callerRole?.school_id });
+        await adminClient.from("user_roles").insert({ user_id: userId, role: data.role, school_id: callerSchoolId });
         return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 

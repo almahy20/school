@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { useEffect, useMemo } from 'react';
+import { sendPushToUser } from '@/utils/pushNotifications';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user } = useAuth();
@@ -96,12 +97,17 @@ export function useSendMessage() {
         throw msgError;
       }
 
+      const notificationTitle = senderName
+        ? `رسالة جديدة من ${senderName}`
+        : 'رسالة جديدة من إدارة المدرسة';
+      const notificationBody = content.trim().substring(0, 100);
+
       const notifications = targets.map(targetId => ({
         user_id: targetId,
         school_id: user.schoolId,
         type: senderName ? 'teacher_message' : 'broadcast_message',
-        title: senderName ? `رسالة جديدة من ${senderName}` : 'رسالة جديدة من إدارة المدرسة',
-        message: content.trim().substring(0, 100),
+        title: notificationTitle,
+        message: notificationBody,
         is_read: false,
         metadata: { sender_id: user.id, full_content: content.trim(), student_id: studentId }
       }));
@@ -111,6 +117,19 @@ export function useSendMessage() {
         logger.error('Notification insert error:', ntError);
         throw ntError;
       }
+
+      // ✅ Send push notifications to all recipients so they get an alert
+      // even when the app is closed. The notification links directly to /messages.
+      await Promise.allSettled(
+        targets.map(targetId =>
+          sendPushToUser({
+            userId: targetId,
+            title: notificationTitle,
+            body: notificationBody,
+            url: '/messages',
+          })
+        )
+      );
 
       return { targets, content };
     },

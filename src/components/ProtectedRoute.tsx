@@ -2,7 +2,6 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
 import { ReactNode } from 'react';
-// import { PageLoader } from '@/components/ui/PageLoader';
 
 interface Props {
   children: ReactNode;

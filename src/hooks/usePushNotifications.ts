@@ -128,14 +128,20 @@ export function usePushNotifications() {
         });
 
         const subJson = subscription.toJSON();
+
+        // ✅ Delete old subscription for this user first, then insert fresh
+        // This avoids unique constraint conflicts on both user_id and endpoint
+        await (supabase as any)
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', user.id);
+
         const { error } = await (supabase as any)
           .from('push_subscriptions')
-          .upsert({
+          .insert({
             user_id: user.id,
             subscription: subJson,
             endpoint: subscription.endpoint
-          }, { 
-            onConflict: 'endpoint'
           });
 
         if (error) throw error;
