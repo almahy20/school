@@ -16,6 +16,23 @@ export interface Teacher {
   user_role_id?: string;
 }
 
+async function getFunctionErrorMessage(error: unknown, fallback: string) {
+  const response = (error as { context?: Response })?.context;
+  if (!response) return (error as Error)?.message || fallback;
+
+  try {
+    const payload = await response.clone().json();
+    return payload?.error || payload?.message || (error as Error)?.message || fallback;
+  } catch {
+    try {
+      const text = await response.clone().text();
+      return text || (error as Error)?.message || fallback;
+    } catch {
+      return (error as Error)?.message || fallback;
+    }
+  }
+}
+
 
 async function fetchTeachers(
   schoolId: string | null, 
@@ -213,14 +230,22 @@ export function useTeacherAction() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
+    mutationFn: async ({ userId, userRoleId, status }: { userId?: string; userRoleId?: string; status: 'approved' | 'rejected' }) => {
+      if (!userId && !userRoleId) {
+        throw new Error('Missing teacher user id');
+      }
+
+      const body = userId
+        ? { action: 'update_status', userId, data: { status } }
+        : { action: 'update_status_by_role_id', data: { userRoleId, status } };
+
       const { data, error } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'update_status_by_role_id', data: { userRoleId, status } },
+        body,
         headers: {
           Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
       });
-      if (error) throw new Error(error.message || 'Failed to update teacher status');
+      if (error) throw new Error(await getFunctionErrorMessage(error, 'Failed to update teacher status'));
       if (!data?.success) throw new Error(data?.error || 'Failed to update teacher status');
     },
     onSuccess: (_, variables) => {

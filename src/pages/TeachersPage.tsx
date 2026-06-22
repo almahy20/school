@@ -100,9 +100,9 @@ export default function TeachersPage() {
     }
   };
 
-  const handleAction = async (userRoleId: string, status: 'approved' | 'rejected') => {
+  const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
     try {
-      await actionMutation.mutateAsync({ userRoleId, status });
+      await actionMutation.mutateAsync({ userId, status });
       toast({ title: 'تم الحفظ', description: status === 'approved' ? 'تمت الموافقة على المعلم' : 'تم رفض الطلب' });
       // إعادة جلب البيانات بعد الموافقة/الرفض
       refetchActive();
@@ -171,15 +171,15 @@ export default function TeachersPage() {
                     <p className="text-xs text-slate-500 mb-4" dir="ltr">{u.phone}</p>
                     <div className="flex gap-2">
                       <Button 
-                        onClick={() => handleAction(u.user_role_id!, 'approved')} 
-                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        onClick={() => handleAction(u.id, 'approved')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userId === u.id} 
                         className="flex-1 h-9 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white font-bold text-xs gap-1.5 p-0"
                       >
                         <ShieldCheck className="w-3.5 h-3.5" /> قبول
                       </Button>
                       <Button 
-                        onClick={() => handleAction(u.user_role_id!, 'rejected')} 
-                        disabled={actionMutation.isPending && actionMutation.variables?.userRoleId === u.user_role_id} 
+                        onClick={() => handleAction(u.id, 'rejected')} 
+                        disabled={actionMutation.isPending && actionMutation.variables?.userId === u.id} 
                         className="flex-1 h-9 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white font-bold text-xs gap-1.5 p-0"
                       >
                         <XCircle className="w-3.5 h-3.5" /> رفض

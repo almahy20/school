@@ -4,13 +4,27 @@ import { useAuth } from '@/contexts/AuthContext';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { cleanBrandingData } from '@/hooks/useCleanBranding';
 
+const FALLBACK_PWA_ICON = "/icons/icon-192.png";
+
+function toValidIconUrl(icon: string | null | undefined) {
+  const value = (icon || "").trim();
+  const fallback = window.location.origin + FALLBACK_PWA_ICON;
+
+  if (!value) return fallback;
+  if (/^data:image\//i.test(value)) return value;
+  if (/^data:/i.test(value) || /^blob:/i.test(value)) return fallback;
+  if (/^https?:\/\//i.test(value)) return value;
+
+  return window.location.origin + (value.startsWith('/') ? value : `/${value}`);
+}
+
 export default function PwaManager() {
   const { user } = useAuth();
 
   const updateManifest = useCallback(async () => {
     let name = document.title || "المدرسة الذكية";
     let shortName = document.title || "المدرسة";
-    const defaultIcon = (document.querySelector('link[rel~="icon"]') as HTMLLinkElement)?.href || "/icons/icon-192.png";
+    const defaultIcon = toValidIconUrl((document.querySelector('link[rel~="icon"]') as HTMLLinkElement)?.href || FALLBACK_PWA_ICON);
     let icon = defaultIcon;
     let slug = "";
     let themeColor = "#1e293b";
@@ -55,7 +69,7 @@ export default function PwaManager() {
           const cleaned = cleanBrandingData(school);
           name = cleaned.cleanName;
           shortName = cleaned.cleanName;
-          icon = cleaned.logo || "/icons/icon-192.png";
+          icon = cleaned.logo || FALLBACK_PWA_ICON;
           slug = school.slug;
           themeColor = "#1e293b";
         }
@@ -87,7 +101,7 @@ export default function PwaManager() {
             const cleaned = cleanBrandingData(school);
             name = cleaned.cleanName;
             shortName = cleaned.cleanName;
-            icon = cleaned.logo || "/icons/icon-192.png";
+            icon = cleaned.logo || FALLBACK_PWA_ICON;
             slug = school.slug;
             themeColor = "#1e293b";
           }
@@ -100,7 +114,7 @@ export default function PwaManager() {
     // ✅ Optimization: Remove Date.now() cache buster. 
     // It was causing the logo to be re-downloaded on every page navigation.
     // The logo_url in the database already has a version timestamp if updated.
-    const cacheBustIcon = icon; 
+    const cacheBustIcon = toValidIconUrl(icon); 
 
     // @ts-expect-error - Deep type instantiation
     const manifest = {
@@ -114,13 +128,13 @@ export default function PwaManager() {
       icons: [
         {
           // ✅ Optimization: Use optimized smaller versions for manifest icons if possible
-          src: cacheBustIcon.startsWith('http') ? cacheBustIcon : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon),
+          src: cacheBustIcon,
           sizes: "192x192",
           type: "image/png",
           purpose: "any maskable"
         },
         {
-          src: cacheBustIcon.startsWith('http') ? cacheBustIcon : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon),
+          src: cacheBustIcon,
           sizes: "512x512",
           type: "image/png"
         }
@@ -154,9 +168,7 @@ export default function PwaManager() {
       link.href = href;
     };
 
-    const finalIcon = cacheBustIcon.startsWith('http') 
-      ? cacheBustIcon 
-      : window.location.origin + (cacheBustIcon.startsWith('/') ? cacheBustIcon : '/' + cacheBustIcon);
+    const finalIcon = cacheBustIcon;
 
     updateIcon('icon', finalIcon);
     updateIcon('apple-touch-icon', finalIcon);

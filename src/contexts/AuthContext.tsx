@@ -170,9 +170,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 1. جلب الجلسة الحالية عند التشغيل مع محاولة التحديث التلقائي
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      syncUser(session, 'INITIAL_SESSION');
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        syncUser(session, 'INITIAL_SESSION');
+      })
+      .catch((error) => {
+        logger.warn('[Auth] Failed to get initial session:', error);
+        syncUser(null, 'INITIAL_SESSION');
+      });
 
     // 2. الاستماع لتغييرات التوثيق (Refresh, SignOut, SignIn)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -194,9 +199,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         logger.log('[Auth] App focused, checking session...');
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (session) syncUser(session, 'VISIBILITY_CHANGE');
-        });
+        supabase.auth.getSession()
+          .then(({ data: { session } }) => {
+            if (session) syncUser(session, 'VISIBILITY_CHANGE');
+          })
+          .catch((error) => {
+            logger.warn('[Auth] Session check failed on focus:', error);
+          });
       }
     };
     window.addEventListener('visibilitychange', handleVisibilityChange);
