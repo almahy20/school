@@ -76,14 +76,19 @@ export function usePushNotifications() {
   };
 
   const subscribeToNotifications = async (): Promise<boolean> => {
-    if (!user?.id) return false;
+    logger.log('--- Start Notification Subscription Process ---');
+    if (!user?.id) {
+      logger.warn('User not logged in, cannot subscribe');
+      return false;
+    }
 
-    // ✅ التحقق من وجود المفتاح قبل البدء
-    if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'your_vapid_public_key_here') {
-      logger.error('Push notification failed: VAPID_PUBLIC_KEY is missing or invalid in .env');
+    // ✅ التحقق من البيئة الآمنة (HTTPS)
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (window.location.protocol !== 'https:' && !isLocalhost) {
+      logger.error('Insecure environment (not HTTPS/localhost)');
       toast({ 
-        title: 'خطأ في الإعدادات', 
-        description: 'مفتاح الإشعارات (VAPID) غير مضبوط في ملف .env', 
+        title: 'بيئة غير آمنة', 
+        description: 'يجب استخدام HTTPS لتفعيل الإشعارات. أنت تتصفح عبر رابط غير آمن حالياً.', 
         variant: 'destructive' 
       });
       return false;
@@ -92,79 +97,113 @@ export function usePushNotifications() {
     try {
       // ✅ التحقق من دعم المتصفح للإشعارات قبل طلب الإذن
       if (!('Notification' in window)) {
-        throw new Error('متصفحك لا يدعم نظام الإشعارات.');
+        logger.error('Notifications API not supported in this browser');
+        throw new Error('متصفحك لا يدعم نظام الإشعارات. جرب استخدام Chrome أو Safari (نسخة حديثة).');
       }
 
-      const perm = await Notification.requestPermission();
+      logger.log('Current permission status:', Notification.permission);
+
+      // ✅ إذا كان المستخدم قد رفض الطلب سابقاً، نوجهه للإعدادات
+      if (Notification.permission === 'denied') {
+        logger.warn('Permission previously denied');
+        toast({ 
+          title: 'الإشعارات محظورة', 
+          description: 'لقد قمت بحظر الإشعارات مسبقاً. يرجى الضغط على أيقونة القفل بجانب شريط العنوان وتفعيل الإشعارات يدوياً.', 
+          variant: 'destructive' 
+        });
+        return false;
+      }
+
+      logger.log('Requesting permission from browser...');
+      
+      // ✅ Some older browsers use a callback instead of a promise
+      let perm: NotificationPermission;
+      try {
+        perm = await Notification.requestPermission();
+      } catch (e) {
+        // Fallback for older browsers
+        perm = await new Promise((resolve) => {
+          Notification.requestPermission((p) => resolve(p));
+        });
+      }
+
+      logger.log('Permission result:', perm);
       setPermission(perm);
 
       if (perm === 'granted') {
-        logger.log('Push permission granted, preparing subscription...');
-        const registration = await navigator.serviceWorker.ready;
+        logger.log('Permission granted! Initializing Service Worker check...');
         
+        if (!('serviceWorker' in navigator)) {
+          logger.error('ServiceWorker API not supported');
+          throw new Error('متصفحك لا يدعم الـ Service Worker.');
+        }
+
+        logger.log('Waiting for Service Worker registration to be ready...');
+        const registration = await navigator.serviceWorker.ready;
+        logger.log('Service Worker registration found:', registration.scope);
+        
+        if (!registration.pushManager) {
+          logger.error('PushManager API not supported');
+          throw new Error('متصفحك يدعم الإشعارات ولكن ليس عبر نظام Push. إذا كنت تستخدم iPhone، يرجى إضافة التطبيق للشاشة الرئيسية (Add to Home Screen) أولاً.');
+        }
+
+        // ✅ التحقق من وجود المفتاح قبل البدء
+        if (!VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY === 'your_vapid_public_key_here') {
+          logger.error('VAPID_PUBLIC_KEY missing or placeholder');
+          throw new Error('مفتاح الإشعارات (VAPID) غير مضبوط في النظام.');
+        }
+
         // Ensure Service Worker is active
         if (!registration.active) {
-          logger.warn('Service worker not active yet, waiting...');
-          // Give it a moment to activate
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          logger.warn('Service worker not active, waiting for activation...');
+          await new Promise(resolve => setTimeout(resolve, 1500));
         }
 
-        // تنظيف أي اشتراك قديم
-        try {
-          const existing = await registration.pushManager.getSubscription();
-          if (existing) {
-            logger.log('Cleaning up existing subscription');
-            await existing.unsubscribe();
-          }
-        } catch (e) {
-          logger.warn('Failed to unsubscribe existing push:', e);
-        }
-
-        logger.log('Subscribing to push manager with key:', VAPID_PUBLIC_KEY.substring(0, 10) + '...');
+        logger.log('Preparing VAPID key and creating subscription...');
         const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        
         const subscription = await registration.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: convertedVapidKey
         });
 
+        logger.log('Subscription created successfully:', subscription.endpoint.substring(0, 30) + '...');
         const subJson = subscription.toJSON();
 
-        // ✅ Delete old subscription for this user first, then insert fresh
-        // This avoids unique constraint conflicts on both user_id and endpoint
-        await (supabase as any)
-          .from('push_subscriptions')
-          .delete()
-          .eq('user_id', user.id);
-
+        logger.log('Saving subscription to Supabase for user:', user.id);
         const { error } = await (supabase as any)
           .from('push_subscriptions')
-          .insert({
+          .upsert({
             user_id: user.id,
             subscription: subJson,
             endpoint: subscription.endpoint
+          }, { 
+            onConflict: 'endpoint' 
           });
 
-        if (error) throw error;
+        if (error) {
+          logger.error('Supabase save error:', error);
+          throw error;
+        }
         
         setIsSubscribed(true);
+        logger.log('--- Subscription Process Completed Successfully ---');
         toast({ title: 'تم تفعيل الإشعارات بنجاح!' });
         return true;
       } else {
+        logger.warn('User dismissed the permission prompt');
         toast({ title: 'لم يتم السماح', description: 'يرجى السماح بالإشعارات من إعدادات المتصفح لتلقي التنبيهات.', variant: 'destructive' });
         return false;
       }
     } catch (error: any) {
-      logger.error('Push notification setup error:', error);
+      logger.error('CRITICAL: Push notification setup failed:', error);
       
       let errorMsg = `فشل الاشتراك: ${error.message}`;
       
-      // ✅ معالجة أخطاء محددة للمستخدم
       if (error.name === 'AbortError') {
-        errorMsg = 'فشل الاتصال بخدمة إشعارات المتصفح. قد يكون ذلك بسبب: 1- استخدام متصفح غير مدعوم (مثل وضع التخفي). 2- وجود جدار حماية أو VPN يمنع الاتصال بخدمات Google/Mozilla. 3- مفتاح VAPID غير متوافق.';
+        errorMsg = 'فشل الاتصال بخدمة إشعارات المتصفح. قد يكون ذلك بسبب استخدام وضع التخفي (Incognito) أو وجود جدار حماية.';
       } else if (error.name === 'NotAllowedError') {
-        errorMsg = 'تم حظر الإشعارات من قبل المتصفح. يرجى تفعيلها من إعدادات الموقع.';
-      } else if (error.message?.includes('VAPID')) {
-        errorMsg = 'مفتاح VAPID غير صالح. يرجى التأكد من المفاتيح في ملف .env';
+        errorMsg = 'تم حظر الإشعارات من قبل المتصفح. يرجى تفعيلها يدوياً من إعدادات الموقع.';
       }
 
       toast({ 

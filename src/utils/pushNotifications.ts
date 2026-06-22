@@ -20,7 +20,7 @@ export async function sendPushToUser({
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return; // Don't even try if not logged in
 
-    const { error } = await supabase.functions.invoke('send-push-notification', {
+    const { data, error } = await supabase.functions.invoke('send-push-notification', {
       body: {
         user_id: userId,
         title,
@@ -30,11 +30,13 @@ export async function sendPushToUser({
     });
 
     if (error) {
-      // Log as info instead of error to keep console clean during dev/missing secrets
-      console.info('Push notification service notice:', error.message);
+      console.error('Push notification error:', error);
+      throw error;
     }
+    return data;
   } catch (err) {
-    // Silent fail for push notifications - they are secondary to data saving
+    console.error('Failed to send push notification:', err);
+    throw err;
   }
 }
 

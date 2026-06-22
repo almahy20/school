@@ -155,9 +155,8 @@ export function useParentChildren() {
           
           // ✅ Check if data has attendanceRate field
           const firstStudent = data[0];
-          if (firstStudent.attendanceRate === 0 || firstStudent.attendanceRate === undefined) {
-            console.warn('[useParentChildren] RPC returned data with attendanceRate = 0, using fallback...');
-            // If RPC returns empty data, use fallback
+          if (!Object.prototype.hasOwnProperty.call(firstStudent, 'attendanceRate')) {
+            console.warn('[useParentChildren] RPC returned data without attendanceRate, using fallback...');
             throw new Error('RPC returned incomplete data');
           }
         }
@@ -297,4 +296,3 @@ export function useChildFullDetails(studentId: string | undefined) {
     gcTime: 30 * 60 * 1000,
   });
 }
-

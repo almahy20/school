@@ -53,12 +53,15 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
         user_id: item.id,
         school_id: item.user_roles?.[0]?.school_id || item.school_id,
         full_name: item.full_name,
+        fullName: item.full_name,
         email: item.email,
         phone: item.phone,
         role: item.user_roles?.[0]?.role || 'parent',
         status: item.user_roles?.[0]?.approval_status || 'pending',
+        approvalStatus: item.user_roles?.[0]?.approval_status || 'pending',
         avatar_url: item.avatar_url || null,
         created_at: item.created_at,
+        createdAt: item.created_at,
         updated_at: item.updated_at,
       }));
       
@@ -79,23 +82,25 @@ export function useCreateUser() {
 
   return useMutation({
     mutationFn: async (userData: Partial<UserProfile>) => {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .insert(userData)
-        .select()
-        .single();
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'create_user', data: userData },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Failed to create user');
+      if (!data?.success) throw new Error(data?.error || 'Failed to create user');
 
       // Log action to audit logs
       await (supabase as any).rpc('log_action', {
         p_action: 'CREATE_USER',
         p_entity_type: 'profiles',
-        p_entity_id: data.id,
+        p_entity_id: data.userId,
         p_details: `إنشاء مستخدم جديد: ${userData.full_name}`
       });
 
-      return data as UserProfile;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
@@ -202,12 +207,15 @@ export function useUpdateUserStatus() {
 
   return useMutation({
     mutationFn: async ({ userId, status }: { userId: string; status: 'approved' | 'rejected' }) => {
-      const { error } = await supabase
-        .from('user_roles')
-        .update({ approval_status: status })
-        .eq('user_id', userId);
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'update_status', userId, data: { status } },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
 
-      if (error) throw error;
+      if (error) throw new Error(error.message || 'Failed to update user status');
+      if (!data?.success) throw new Error(data?.error || 'Failed to update user status');
 
       // Log action to audit logs
       await (supabase as any).rpc('log_action', {

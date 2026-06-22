@@ -36,15 +36,29 @@ export default function SettingsPage() {
     if (!user?.id) return;
     setIsTestingPush(true);
     try {
-      await sendPushToUser({
+      const result = await sendPushToUser({
         userId: user.id,
         title: 'إشعار تجريبي 🚀',
         body: 'إذا رأيت هذا، فهذا يعني أن نظام الإشعارات يعمل بنجاح!',
         url: '/settings'
       });
-      toast({ title: 'تم إرسال الطلب', description: 'سيعمل الإشعار إذا كنت مفعلاً للتنبيهات والمفاتيح صحيحة.' });
-    } catch (err) {
-      toast({ title: 'فشل الاختبار', variant: 'destructive' });
+      
+      if (result?.sent > 0) {
+        toast({ title: 'تم إرسال الإشعار', description: 'يجب أن يظهر على جهازك الآن.' });
+      } else {
+        toast({ 
+          title: 'لم يتم العثور على أجهزة', 
+          description: 'تأكد من تفعيل الإشعارات على هذا المتصفح أولاً.',
+          variant: 'destructive'
+        });
+      }
+    } catch (err: any) {
+      console.error('Test push error:', err);
+      toast({ 
+        title: 'فشل إرسال الإشعار', 
+        description: err.message || 'حدث خطأ غير متوقع في الخادم.',
+        variant: 'destructive' 
+      });
     } finally {
       setIsTestingPush(false);
     }

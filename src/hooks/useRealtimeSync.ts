@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/utils/logger';
@@ -10,9 +10,13 @@ import { logger } from '@/utils/logger';
  */
 export function useRealtimeSync(tables: string[] | string, schoolId?: string | null) {
   const queryClient = useQueryClient();
+  const tablesKey = useMemo(() => {
+    const tableList = Array.isArray(tables) ? tables : [tables];
+    return JSON.stringify(tableList);
+  }, [tables]);
 
   useEffect(() => {
-    const tableList = Array.isArray(tables) ? tables : [tables];
+    const tableList = JSON.parse(tablesKey) as string[];
     if (!tableList.length) return;
 
     // لتجنب تكرار الريكويستات في وقت قصير (Debounce)
@@ -111,5 +115,5 @@ export function useRealtimeSync(tables: string[] | string, schoolId?: string | n
       supabase.removeChannel(channel);
     };
 
-  }, [JSON.stringify(tables), schoolId, queryClient]);
+  }, [tablesKey, schoolId, queryClient]);
 }

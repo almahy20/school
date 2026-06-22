@@ -58,7 +58,11 @@ describe("Realtime Sync Conflict Resolution", () => {
     );
 
     // Fire the realtime event callback
-    const onCallback = vi.mocked(mockChannel.on).mock.calls[0][2] as Function;
+    const onCallback = vi.mocked(mockChannel.on).mock.calls[0][2] as (payload: {
+      eventType: string;
+      new: { id: string };
+      old: { id: string };
+    }) => void;
     onCallback({ eventType: "UPDATE", new: { id: "1" }, old: { id: "1" } });
 
     // Wait for debounce (500ms) then check invalidateQueries was called

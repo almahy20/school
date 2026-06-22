@@ -214,8 +214,14 @@ export function useTeacherAction() {
 
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
-      const { error } = await (supabase.from('user_roles') as any).update({ approval_status: status }).eq('id', userRoleId);
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'update_status_by_role_id', data: { userRoleId, status } },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+      if (error) throw new Error(error.message || 'Failed to update teacher status');
+      if (!data?.success) throw new Error(data?.error || 'Failed to update teacher status');
     },
     onSuccess: (_, variables) => {
       toast.success(`تم ${variables.status === 'approved' ? 'قبول' : 'رفض'} المعلم`);
@@ -230,11 +236,14 @@ export function useUpdateTeacher() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, full_name, phone }: { id: string; full_name: string; phone: string }) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ full_name, phone })
-        .eq('id', id);
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'update_profile', userId: id, data: { full_name, phone } },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+      if (error) throw new Error(error.message || 'Failed to update teacher');
+      if (!data?.success) throw new Error(data?.error || 'Failed to update teacher');
     },
     onSuccess: (_, variables) => {
       toast.success('تم تحديث بيانات المعلم');
@@ -244,4 +253,3 @@ export function useUpdateTeacher() {
     },
   });
 }
-

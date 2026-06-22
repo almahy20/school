@@ -240,10 +240,14 @@ export function useParentAction() {
 
   return useMutation({
     mutationFn: async ({ userRoleId, status }: { userRoleId: string; status: 'approved' | 'rejected' }) => {
-      const { error } = await (supabase.from('user_roles') as any)
-        .update({ approval_status: status })
-        .eq('id', userRoleId);
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'update_status_by_role_id', data: { userRoleId, status } },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+      if (error) throw new Error(error.message || 'Failed to update parent status');
+      if (!data?.success) throw new Error(data?.error || 'Failed to update parent status');
     },
     onSuccess: (_, variables) => {
       toast.success(`تم ${variables.status === 'approved' ? 'قبول' : 'رفض'} ولي الأمر`);
@@ -260,8 +264,14 @@ export function useUpdateParent() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Parent> & { id: string }) => {
-      const { error } = await supabase.from('profiles').update({ ...data }).eq('id', id);
-      if (error) throw error;
+      const { data: result, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'update_profile', userId: id, data },
+        headers: {
+          Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+        },
+      });
+      if (error) throw new Error(error.message || 'Failed to update parent');
+      if (!result?.success) throw new Error(result?.error || 'Failed to update parent');
     },
     onSuccess: (_, variables) => {
       toast.success('تم تحديث بيانات ولي الأمر');
@@ -320,4 +330,3 @@ export function useDeleteParent() {
     },
   });
 }
-
