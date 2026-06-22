@@ -9,11 +9,6 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 3000,
     strictPort: false,
-    hmr: {
-      protocol: 'ws',
-      host: 'localhost',
-      port: 3000,
-    },
   },
   test: {
     globals: true,
