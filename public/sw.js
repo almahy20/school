@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-cache-v1.4';
+const CACHE_NAME = 'school-cache-v1.5';
 const MAX_CACHE_ITEMS = 200;
 
 // Assets to cache immediately - Critical App Shell
@@ -6,7 +6,6 @@ const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/favicon.ico',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/placeholder.svg'
