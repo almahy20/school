@@ -59,6 +59,10 @@ self.addEventListener('fetch', (event) => {
 
   if (event.request.method !== 'GET') return;
 
+  if (event.request.cache === 'only-if-cached' && event.request.mode !== 'same-origin') {
+    return;
+  }
+
   if (
     url.pathname.includes('@vite') ||
     url.pathname.includes('@react-refresh') ||
@@ -133,12 +137,13 @@ self.addEventListener('fetch', (event) => {
       return fetchPromise.then((networkResponse) => {
         if (networkResponse) return networkResponse;
         
-        if (event.request.mode === 'navigate') {
+        const isHtml = event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html');
+        if (event.request.mode === 'navigate' || isHtml) {
           return caches.match('/index.html').then((res) => {
             return res || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
           });
         }
-        return new Response('Network Error', { status: 408, statusText: 'Request Timeout' });
+        return new Response('Network Error', { status: 503, statusText: 'Service Unavailable' });
       });
     })
   );
