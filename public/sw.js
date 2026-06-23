@@ -126,11 +126,20 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       }).catch(() => undefined);
 
-      if (!cachedResponse && event.request.mode === 'navigate') {
-        return caches.match('/index.html');
+      if (cachedResponse) {
+        return cachedResponse;
       }
 
-      return cachedResponse || fetchPromise;
+      return fetchPromise.then((networkResponse) => {
+        if (networkResponse) return networkResponse;
+        
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html').then((res) => {
+            return res || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+          });
+        }
+        return new Response('Network Error', { status: 408, statusText: 'Request Timeout' });
+      });
     })
   );
 });
