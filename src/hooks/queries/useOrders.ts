@@ -33,8 +33,8 @@ export function useOrder(id: string | undefined) {
       return data as SchoolOrder;
     },
     enabled: !!id,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -54,8 +54,8 @@ export function useSchoolOrders() {
       return data as SchoolOrder[];
     },
     enabled: !!user?.isSuperAdmin,
-    staleTime: 0,
-    refetchInterval: 15 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
+    refetchOnWindowFocus: false,
   });
 }
 

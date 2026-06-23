@@ -116,9 +116,9 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!user?.schoolId,
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+    staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
-    refetchOnMount: true, // Always check for fresh data when a component mounts
+    refetchOnMount: false, // نعتمد على Realtime + staleTime
     retry: 1,
   });
 }

@@ -60,9 +60,9 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = '�
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+    staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
-    refetchOnMount: true, // Always check for fresh data when a component mounts
+    refetchOnMount: false, // نعتمد على Realtime + staleTime
     retry: 1,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

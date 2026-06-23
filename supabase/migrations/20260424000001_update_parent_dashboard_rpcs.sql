@@ -43,7 +43,13 @@ BEGIN
       'class_id', s.class_id,
       'className', c.name,
       'avgGrade', (
-        SELECT COALESCE(ROUND(AVG((score::float / max_score::float) * 100)), 0)
+        SELECT COALESCE(ROUND(AVG(
+          CASE 
+            WHEN trim(score::text) ~ '^\d+(\.\d+)?$' AND trim(max_score::text) ~ '^\d+(\.\d+)?$' AND trim(max_score::text)::float > 0
+            THEN (trim(score::text)::float / trim(max_score::text)::float) * 100
+            ELSE NULL
+          END
+        )), 0)
         FROM grades
         WHERE student_id = s.id AND school_id = p_school_id
       ),

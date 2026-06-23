@@ -44,9 +44,9 @@ export function useAdminStats() {
       }
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 10 * 1000, // 10 seconds - keep it very fresh
+    staleTime: 2 * 60 * 1000, // 2 دقائق — Realtime يُحدّث البيانات عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours persistence
-    refetchOnMount: true,
+    refetchOnMount: false, // نعتمد على Realtime + staleTime
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

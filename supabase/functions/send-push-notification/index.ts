@@ -21,9 +21,9 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY") ?? "";
-  const vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY") ?? "";
-  const vapidEmail = Deno.env.get("VAPID_EMAIL") ?? "mailto:support@edara.app";
+  const vapidPublic = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").trim().replace(/=+$/, "");
+  const vapidPrivate = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").trim().replace(/=+$/, "");
+  const vapidEmail = (Deno.env.get("VAPID_EMAIL") ?? "mailto:support@edara.app").trim();
 
   if (!supabaseUrl || !supabaseServiceKey) {
     return jsonResponse({ error: "Supabase server secrets are not configured" }, 500);

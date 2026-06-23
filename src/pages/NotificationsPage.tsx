@@ -3,8 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
   useMarkAllAsRead, 
-  useDeleteNotification,
-  useNotificationsRealtime
+  useDeleteNotification
 } from '@/hooks/queries/useNotifications';
 import { 
   Bell, Check, Trash2, Clock, CreditCard, 
@@ -24,16 +23,8 @@ const PAGE_SIZE = 15;
 export default function NotificationsPage() {
   const [page, setPage] = useState(1);
   const { data, isLoading, error, refetch } = useNotifications(page, PAGE_SIZE);
-  const notificationsRealtime = useNotificationsRealtime();
-  
   const notifications = useMemo(() => data?.data || [], [data?.data]);
   const totalItems = data?.count || 0;
-
-  // Setup real-time subscription
-  useEffect(() => {
-    const cleanup = notificationsRealtime.subscribe();
-    return () => cleanup?.();
-  }, [notificationsRealtime]);
 
   // ── Mutations ──
   const markAllAsReadMutation = useMarkAllAsRead();

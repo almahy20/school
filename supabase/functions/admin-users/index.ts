@@ -122,13 +122,15 @@ Deno.serve(async (req) => {
 
     switch (action) {
       case "list": {
-        const { data: { users }, error } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-        if (error) throw error;
-
         if (callerIsSuperAdmin) {
+          // Super admin: جلب كل المستخدمين
+          const { data: { users }, error } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+          if (error) throw error;
           return jsonResponse(req, { users });
         }
 
+        // Admin عادي: جلب مُعرِّفات مستخدمي مدرسته فقط من قاعدة البيانات أولاً
+        // ثم جلب بيانات Auth لهؤلاء المستخدمين فقط (بدل جلب كل 1000 مستخدم)
         const { data: scopedProfiles, error: profilesError } = await adminClient
           .from("profiles")
           .select("id")
@@ -136,8 +138,20 @@ Deno.serve(async (req) => {
 
         if (profilesError) throw profilesError;
 
-        const scopedUserIds = new Set((scopedProfiles || []).map((profile) => profile.id));
-        return jsonResponse(req, { users: users.filter((user) => scopedUserIds.has(user.id)) });
+        if (!scopedProfiles || scopedProfiles.length === 0) {
+          return jsonResponse(req, { users: [] });
+        }
+
+        // جلب بيانات Auth فقط للمستخدمين المنتمين لهذه المدرسة
+        const userPromises = scopedProfiles.map((p) =>
+          adminClient.auth.admin.getUserById(p.id)
+        );
+        const userResults = await Promise.allSettled(userPromises);
+        const users = userResults
+          .filter((r) => r.status === "fulfilled" && r.value.data.user)
+          .map((r) => (r as PromiseFulfilledResult<any>).value.data.user);
+
+        return jsonResponse(req, { users });
       }
 
       case "delete": {
