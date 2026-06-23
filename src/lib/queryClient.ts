@@ -23,13 +23,11 @@ if (typeof window !== 'undefined') {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ✅ Optimization: "Fast Start, Fresh Data" Pattern
-      // We set staleTime to a low value (30s) so that the app REFRESHS data frequently,
-      // but we keep gcTime high so that IndexedDB can show "old" data while loading.
-      staleTime: 30 * 1000, // 30 seconds - refresh more often to avoid "stale" feeling
+      // ✅ Optimization: Rely on Realtime Sync for updates instead of frequent polling
+      staleTime: 5 * 60 * 1000, // 5 minutes (Realtime WebSockets will automatically invalidate on changes)
       gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
       refetchOnWindowFocus: false,
-      refetchOnMount: true, // Always check for fresh data when a component mounts
+      refetchOnMount: false, // Avoid redundant fetches when navigating if data is fresh
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },

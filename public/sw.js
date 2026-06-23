@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-cache-v1.5';
+const CACHE_NAME = 'school-cache-v1.6';
 const MAX_CACHE_ITEMS = 200;
 
 // Assets to cache immediately - Critical App Shell
@@ -28,11 +28,23 @@ async function limitCacheSize(cacheName, maxItems) {
 }
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install Event');
+  console.log('[SW] Install Event v1.6');
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(PRECACHE_ASSETS))
-      .catch(err => console.error('[SW] Pre-cache failure:', err))
+    caches.open(CACHE_NAME).then((cache) => {
+      return Promise.all(
+        PRECACHE_ASSETS.map((url) => {
+          return fetch(url).then((response) => {
+            if (!response.ok) {
+              console.error(`[SW] Pre-cache failed for ${url} with status ${response.status}`);
+              return;
+            }
+            return cache.put(url, response);
+          }).catch((err) => {
+            console.error(`[SW] Pre-cache network error for ${url}:`, err);
+          });
+        })
+      );
+    })
   );
   self.skipWaiting();
 });
@@ -139,10 +151,10 @@ self.addEventListener('fetch', (event) => {
         const isHtml = event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html');
         if (event.request.mode === 'navigate' || isHtml) {
           return caches.match('/index.html').then((res) => {
-            return res || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+            return res || new Response('Offline Fallback', { status: 503, statusText: 'Offline Fallback' });
           });
         }
-        return new Response('Network Error', { status: 503, statusText: 'Service Unavailable' });
+        return new Response('Network Error', { status: 503, statusText: 'Offline Fallback' });
       });
     })
   );

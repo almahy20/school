@@ -31,6 +31,10 @@ describe("Realtime Sync Conflict Resolution", () => {
     mockChannel.subscribe.mockImplementation((cb) => { cb("SUBSCRIBED"); return mockChannel; });
   });
 
+  afterEach(() => {
+    queryClient.clear();
+  });
+
   it("should subscribe to Supabase channel and call invalidateQueries on event", async () => {
     const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
 

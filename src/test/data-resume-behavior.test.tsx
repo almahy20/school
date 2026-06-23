@@ -85,6 +85,7 @@ describe("React Query resume & persistence behavior", () => {
       timeout: 2000,
     });
     await screen.findByText("2");
+    client.clear();
   });
 
   it("persists cache to localStorage and hydrates on remount without refetching", async () => {
@@ -178,6 +179,9 @@ describe("React Query resume & persistence behavior", () => {
     await screen.findByText("cached");
     // fetcher should NOT have been called again — data came from persisted localStorage
     expect(called).toBe(1);
+
+    client1.clear();
+    client2.clear();
   });
 
   it("pauses mutations when offline and resumes when back online", async () => {
@@ -223,5 +227,6 @@ describe("React Query resume & persistence behavior", () => {
     await waitFor(() => expect(fn).toHaveBeenCalledTimes(1), {
       timeout: 2000,
     });
+    client.clear();
   });
 });
