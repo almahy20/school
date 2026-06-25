@@ -1,29 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://edara-arabiya.vercel.app",
-  "http://localhost:3000",
-  "http://localhost:5173",
-  "http://127.0.0.1:3000",
-  "http://127.0.0.1:5173",
-];
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-customer-id",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
+};
 
 function getCorsHeaders(req: Request) {
-  const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") || Deno.env.get("ALLOWED_ORIGIN") || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  const allowedOrigins = new Set([...DEFAULT_ALLOWED_ORIGINS, ...configuredOrigins]);
-  const requestOrigin = req.headers.get("Origin") || "";
-  const allowOrigin = allowedOrigins.has(requestOrigin) ? requestOrigin : DEFAULT_ALLOWED_ORIGINS[0];
-
-  return {
-    "Access-Control-Allow-Origin": allowOrigin,
-    "Vary": "Origin",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-customer-id",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Max-Age": "86400",
-  };
+  return corsHeaders;
 }
 
 function jsonResponse(req: Request, body: unknown, status = 200) {
