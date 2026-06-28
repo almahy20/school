@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { ArrowRight, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
@@ -16,6 +17,30 @@ export default function StudentAttendancePage() {
   const absent = child?.attendance?.filter((a: any) => a.status === 'absent').length || 0;
   const late = child?.attendance?.filter((a: any) => a.status === 'late').length || 0;
   const total = child?.attendance?.length || 0;
+
+  // Group attendance by month
+  const groupedAttendance = useMemo(() => {
+    if (!child?.attendance) return {};
+    
+    // Sort descending first
+    const sorted = [...child.attendance].sort((a: any, b: any) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    // Group by month-year
+    return sorted.reduce((groups: any, record: any) => {
+      const date = new Date(record.date);
+      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      if (!groups[key]) {
+        groups[key] = {
+          month: date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+          records: []
+        };
+      }
+      groups[key].records.push(record);
+      return groups;
+    }, {});
+  }, [child?.attendance]);
 
   return (
     <AppLayout>
@@ -75,38 +100,48 @@ export default function StudentAttendancePage() {
             <div className="bg-white border border-slate-100 rounded-[32px] p-8 shadow-sm">
               <h2 className="text-xl font-black text-slate-900 mb-8">السجل الزمني</h2>
               
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-4">
-                {child.attendance
-                  .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((a: any) => {
-                    const date = new Date(a.date);
-                    const statusConfig = {
-                      present: { bg: 'bg-white', border: 'border-emerald-100', text: 'text-emerald-600', label: 'حاضر' },
-                      absent: { bg: 'bg-white', border: 'border-rose-100', text: 'text-rose-600', label: 'غائب' },
-                      late: { bg: 'bg-white', border: 'border-amber-100', text: 'text-amber-600', label: 'متأخر' }
-                    };
-                    const config = statusConfig[a.status as keyof typeof statusConfig];
+              {/* Render groups */}
+              {Object.entries(groupedAttendance).map(([key, group]: [string, any]) => (
+                <div key={key} className="mb-10 last:mb-0">
+                  {/* Month Header */}
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                    <h3 className="text-lg font-black text-slate-400">{group.month}</h3>
+                    <div className="h-px flex-1 bg-slate-100"></div>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 gap-4">
+                    {group.records.map((a: any) => {
+                      const date = new Date(a.date);
+                      const statusConfig = {
+                        present: { bg: 'bg-white', border: 'border-emerald-100', text: 'text-emerald-600', label: 'حاضر' },
+                        absent: { bg: 'bg-white', border: 'border-rose-100', text: 'text-rose-600', label: 'غائب' },
+                        late: { bg: 'bg-white', border: 'border-amber-100', text: 'text-amber-600', label: 'متأخر' }
+                      };
+                      const config = statusConfig[a.status as keyof typeof statusConfig];
 
-                    return (
-                      <div
-                        key={a.id}
-                        className={cn(
-                          "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all hover:scale-105 hover:shadow-md cursor-default",
-                          config.bg,
-                          config.border
-                        )}
-                        title={`${date.toLocaleDateString('ar-EG')} - ${config.label}`}
-                      >
-                        <span className={cn("text-xl font-black", config.text)}>
-                          {date.getDate()}
-                        </span>
-                        <span className={cn("text-[9px] font-black uppercase tracking-widest", config.text)}>
-                          {date.toLocaleDateString('ar-EG', { month: 'short' })}
-                        </span>
-                      </div>
-                    );
-                  })}
-              </div>
+                      return (
+                        <div
+                          key={a.id}
+                          className={cn(
+                            "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center transition-all hover:scale-105 hover:shadow-md cursor-default",
+                            config.bg,
+                            config.border
+                          )}
+                          title={`${date.toLocaleDateString('ar-EG')} - ${config.label}`}
+                        >
+                          <span className={cn("text-xl font-black", config.text)}>
+                            {date.getDate()}
+                          </span>
+                          <span className={cn("text-[9px] font-black uppercase tracking-widest", config.text)}>
+                            {date.toLocaleDateString('ar-EG', { month: 'short' })}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="py-20 text-center space-y-4">

@@ -243,22 +243,54 @@ export default function StudentDetailPage() {
                  {attendance.length === 0 ? (
                    <div className="p-12 text-center text-slate-300 font-bold border-2 border-dashed border-slate-50 rounded-[32px]">لا يوجد سجل حضور مسجل حالياً.</div>
                  ) : (
-                   <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 gap-3">
-                      {attendance.map((record: any) => (
-                        <div 
-                          key={record.id} 
-                          title={`${new Date(record.date).toLocaleDateString('ar-EG')} - ${record.status}`}
-                          className={cn(
-                            "aspect-square rounded-xl border-2 flex flex-col items-center justify-center font-black transition-all hover:scale-110",
-                            record.status === 'present' 
-                              ? "bg-emerald-50 border-emerald-100/50 text-emerald-600" 
-                              : record.status === 'late'
-                              ? "bg-amber-50 border-amber-100/50 text-amber-600"
-                              : "bg-rose-50 border-rose-100/50 text-rose-600"
-                          )}
-                        >
-                          <span className="text-[10px] mb-0.5 opacity-40">{new Date(record.date).toLocaleDateString('ar-EG', { month: 'short' })}</span>
-                          <span className="text-sm">{new Date(record.date).getDate()}</span>
+                   <div className="space-y-10">
+                      {/* Group by month */}
+                      {Object.entries(
+                        // Group attendance by month-year
+                        attendance.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                          .reduce((groups: any, record: any) => {
+                            const date = new Date(record.date);
+                            const key = `${date.getFullYear()}-${date.getMonth()}`;
+                            if (!groups[key]) {
+                              groups[key] = {
+                                month: date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+                                records: []
+                              };
+                            }
+                            groups[key].records.push(record);
+                            return groups;
+                          }, {})
+                      ).map(([key, group]: [string, any]) => (
+                        <div key={key} className="last:mb-0">
+                          {/* Month Header */}
+                          <div className="flex items-center gap-4 mb-6">
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                            <h4 className="text-lg font-black text-slate-400">{group.month}</h4>
+                            <div className="h-px flex-1 bg-slate-100"></div>
+                          </div>
+                          
+                          <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 gap-3">
+                            {group.records.map((record: any) => {
+                              const date = new Date(record.date);
+                              return (
+                                <div 
+                                  key={record.id} 
+                                  title={`${date.toLocaleDateString('ar-EG')} - ${record.status}`}
+                                  className={cn(
+                                    "aspect-square rounded-xl border-2 flex flex-col items-center justify-center font-black transition-all hover:scale-110",
+                                    record.status === 'present' 
+                                      ? "bg-emerald-50 border-emerald-100/50 text-emerald-600" 
+                                      : record.status === 'late'
+                                      ? "bg-amber-50 border-amber-100/50 text-amber-600"
+                                      : "bg-rose-50 border-rose-100/50 text-rose-600"
+                                  )}
+                                >
+                                  <span className="text-[10px] mb-0.5 opacity-40">{date.toLocaleDateString('ar-EG', { month: 'short' })}</span>
+                                  <span className="text-sm">{date.getDate()}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       ))}
                    </div>
