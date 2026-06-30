@@ -61,13 +61,12 @@ export function useUpsertAttendance() {
       const classId = records[0].class_id;
       const date = records[0].date;
 
-      await supabase
+      const { error } = await supabase
         .from('attendance')
-        .delete()
-        .eq('class_id', classId)
-        .eq('date', date);
+        .upsert(records, {
+          onConflict: 'student_id,date,school_id'
+        });
 
-      const { error } = await supabase.from('attendance').insert(records);
       if (error) throw error;
 
       await (supabase as any).rpc('log_action', {
@@ -204,12 +203,13 @@ export function useUpsertTeacherAttendance() {
 
       const db = supabase as any;
       const date = records[0].date;
-      await db
-        .from('teacher_attendance')
-        .delete()
-        .eq('date', date);
 
-      const { error } = await db.from('teacher_attendance').insert(records);
+      const { error } = await db
+        .from('teacher_attendance')
+        .upsert(records, {
+          onConflict: 'teacher_id,date,school_id'
+        });
+
       if (error) throw error;
 
       await db.rpc('log_action', {
