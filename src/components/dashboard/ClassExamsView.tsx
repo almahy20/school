@@ -79,6 +79,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
   // Local grades state
   const [localGrades, setLocalGrades] = useState(studentGrades);
+  const [activeSuggestionsStudentId, setActiveSuggestionsStudentId] = useState<string | null>(null);
 
   // Sync with DB
   useEffect(() => {
@@ -226,59 +227,76 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
             </div>
 
             <div className="divide-y divide-slate-50">
-              {localGrades.map((grade, idx) => (
-                <div key={grade.studentId} className="p-4 sm:p-6 flex flex-row items-center justify-between hover:bg-slate-50 transition-colors gap-4">
-                  <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-slate-100 flex items-center justify-center text-[10px] sm:text-sm font-black text-slate-500 shrink-0 shadow-inner">
-                      {idx + 1}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm sm:text-base font-black text-slate-900 truncate">{grade.studentName}</p>
-                      <p className="text-[10px] sm:text-xs text-slate-400 font-bold">طالب</p>
-                    </div>
-                  </div>
+              {localGrades.map((grade, idx) => {
+                const isText = (selectedTemplate as any).score_type === 'text';
+                const suggestions = Array.from(new Set(localGrades.map(g => g.score.trim()).filter(Boolean)));
+                const filteredSuggestions = suggestions.filter(s => 
+                  s.toLowerCase().includes(grade.score.toLowerCase()) && s !== grade.score
+                );
 
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <div className="relative">
-                      {(selectedTemplate as any).score_type === 'text' && (selectedTemplate as any).expected_results?.length > 0 ? (
-                        <Select
-                          value={grade.score}
-                          onValueChange={(value) => handleGradeChange(grade.studentId, value)}
-                        >
-                          <SelectTrigger className="w-32 sm:w-48 h-10 sm:h-12 rounded-lg sm:rounded-xl border-2 font-black text-sm sm:text-base">
-                            <SelectValue placeholder="اختر النتيجة" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {((selectedTemplate as any).expected_results as string[]).map((res) => (
-                              <SelectItem key={res} value={res}>
-                                {res}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          type={(selectedTemplate as any).score_type === 'text' ? 'text' : 'number'}
-                          min={(selectedTemplate as any).score_type === 'numeric' ? "0" : undefined}
-                          max={(selectedTemplate as any).score_type === 'numeric' ? selectedTemplate.max_score : undefined}
-                          value={grade.score}
-                          onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
-                          placeholder={(selectedTemplate as any).score_type === 'text' ? 'أدخل التقدير' : '0'}
-                          className={cn(
-                            "w-16 sm:w-24 h-10 sm:h-12 px-2 rounded-lg sm:rounded-xl border-2 text-center font-black text-sm sm:text-base focus:ring-4 transition-all",
-                            (selectedTemplate as any).score_type === 'text'
-                              ? "border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
-                              : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10"
-                          )}
-                        />
+                return (
+                  <div key={grade.studentId} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-stretch sm:items-center justify-between hover:bg-slate-50 transition-colors gap-3 sm:gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-slate-100 flex items-center justify-center text-[10px] sm:text-sm font-black text-slate-500 shrink-0 shadow-inner">
+                        {idx + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm sm:text-base font-black text-slate-900 truncate">{grade.studentName}</p>
+                        <p className="text-[10px] sm:text-xs text-slate-400 font-bold">طالب</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-end">
+                      <div className="relative w-full sm:w-auto flex-1 sm:flex-initial">
+                        {isText ? (
+                          <div className="relative w-full sm:w-64">
+                            <Input
+                              type="text"
+                              value={grade.score}
+                              onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
+                              onFocus={() => setActiveSuggestionsStudentId(grade.studentId)}
+                              onBlur={() => {
+                                setTimeout(() => setActiveSuggestionsStudentId(null), 200);
+                              }}
+                              placeholder="أدخل التقدير (مثال: ممتاز)"
+                              className="w-full h-11 sm:h-12 px-3 rounded-xl border-2 text-right font-bold text-sm sm:text-base focus:ring-4 transition-all border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10"
+                            />
+                            {activeSuggestionsStudentId === grade.studentId && filteredSuggestions.length > 0 && (
+                              <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
+                                {filteredSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    onMouseDown={() => {
+                                      handleGradeChange(grade.studentId, suggestion);
+                                    }}
+                                    className="w-full text-right px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <Input
+                            type="number"
+                            min="0"
+                            max={selectedTemplate.max_score}
+                            value={grade.score}
+                            onChange={(e) => handleGradeChange(grade.studentId, e.target.value)}
+                            placeholder="0"
+                            className="w-16 sm:w-24 h-11 sm:h-12 px-2 rounded-xl border-2 text-center font-black text-sm sm:text-base focus:ring-4 transition-all border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/10"
+                          />
+                        )}
+                      </div>
+                      {!isText && (
+                        <span className="text-[10px] sm:text-sm font-bold text-slate-400 whitespace-nowrap">/ {selectedTemplate.max_score}</span>
                       )}
                     </div>
-                    {(selectedTemplate as any).score_type === 'numeric' && (
-                      <span className="text-[10px] sm:text-sm font-bold text-slate-400 whitespace-nowrap">/ {selectedTemplate.max_score}</span>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </QueryStateHandler>
@@ -471,65 +489,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
               </div>
             )}
 
-            {/* Expected Results (only for text) */}
-            {newExam.score_type === 'text' && (
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-600">النتائج المتوقعة (اختياري)</label>
-                <div className="flex gap-2">
-                  <Input
-                    value={newResult}
-                    onChange={(e) => setNewResult(e.target.value)}
-                    placeholder="مثال: جيد جداً"
-                    className="h-12 rounded-xl text-right"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (newResult.trim()) {
-                          setNewExam({
-                            ...newExam,
-                            expected_results: [...newExam.expected_results, newResult.trim()]
-                          });
-                          setNewResult('');
-                        }
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      if (newResult.trim()) {
-                        setNewExam({
-                          ...newExam,
-                          expected_results: [...newExam.expected_results, newResult.trim()]
-                        });
-                        setNewResult('');
-                      }
-                    }}
-                    className="h-12 w-12 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </Button>
-                </div>
-                
-                {newExam.expected_results.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {newExam.expected_results.map((res, i) => (
-                      <Badge key={i} className="bg-indigo-50 text-indigo-700 border-indigo-100 py-1.5 px-3 gap-2 rounded-lg">
-                        {res}
-                        <X
-                          className="w-3 h-3 cursor-pointer hover:text-rose-500"
-                          onClick={() => setNewExam({
-                            ...newExam,
-                            expected_results: newExam.expected_results.filter((_, idx) => idx !== i)
-                          })}
-                        />
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[10px] font-bold text-slate-400">أضف النتائج التي تريد الاختيار منها عند رصد الدرجات (مثلاً: ممتاز، جيد، ضعيف)</p>
-              </div>
-            )}
+
 
             {/* Action Buttons */}
             <div className="flex gap-3 pt-4">

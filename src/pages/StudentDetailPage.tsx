@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   useChildFullDetails,
-  useClasses,
+  useAllClasses,
   useBranding,
   useDeleteStudent
 } from '@/hooks/queries';
@@ -44,9 +44,8 @@ export default function StudentDetailPage() {
   const curriculumSubjects = fullData?.curriculum || [];
   
   // For Edit Modal
-  const { data: classesData } = useClasses();
-  const classes = Array.isArray(classesData?.data) ? classesData.data : 
-                  Array.isArray(classesData) ? classesData : [];
+  const { data: classesData } = useAllClasses();
+  const classes = Array.isArray(classesData) ? classesData : [];
   const { data: branding } = useBranding();
 
   // ── Mutations ──

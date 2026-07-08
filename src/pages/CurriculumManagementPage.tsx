@@ -26,7 +26,7 @@ import {
   useUpsertSubject, 
   useDeleteSubject, 
   useAssignCurriculumToClass,
-  useClasses
+  useAllClasses
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
@@ -48,7 +48,7 @@ export default function CurriculumManagementPage() {
 
   // ── Queries ──
   const { data: curriculums = [], isLoading: curriculumsLoading, error: curriculumsError, refetch: refetchCurriculums } = useCurriculums();
-  const { data: classes = [], isLoading: classesLoading } = useClasses();
+  const { data: classes = [], isLoading: classesLoading } = useAllClasses();
   const { data: curriculumSubjects = [], isLoading: subjectsLoading, error: subjectsError, refetch: refetchSubjects } = useCurriculumSubjects(selectedCurriculum?.id || null);
 
   // ── Mutations ──

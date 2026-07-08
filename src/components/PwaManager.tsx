@@ -42,6 +42,7 @@ export default function PwaManager() {
     if (schoolId) {
       // ✅ Optimization: Check localStorage first for immediate PWA update
       const cached = localStorage.getItem(`branding_${schoolId}`);
+      let loadedFromCache = false;
       if (cached) {
         try {
           const s = JSON.parse(cached);
@@ -50,31 +51,34 @@ export default function PwaManager() {
           shortName = cleaned.cleanName;
           icon = cleaned.logo || defaultIcon;
           slug = s.slug;
+          loadedFromCache = true;
         } catch (e) {
           console.error('Error parsing cached branding:', e);
         }
       }
 
-      try {
-        const { data, error } = await supabase
-          .from('schools')
-          .select('name, slug, logo_url')
-          .eq('id', schoolId)
-          .maybeSingle();
-        
-        if (error) {
-          console.error('Error fetching PWA school data:', error);
-        } else if (data) {
-          const school = data as any;
-          const cleaned = cleanBrandingData(school);
-          name = cleaned.cleanName;
-          shortName = cleaned.cleanName;
-          icon = cleaned.logo || FALLBACK_PWA_ICON;
-          slug = school.slug;
-          themeColor = "#1e293b";
+      if (!loadedFromCache) {
+        try {
+          const { data, error } = await supabase
+            .from('schools')
+            .select('name, slug, logo_url')
+            .eq('id', schoolId)
+            .maybeSingle();
+          
+          if (error) {
+            console.error('Error fetching PWA school data:', error);
+          } else if (data) {
+            const school = data as any;
+            const cleaned = cleanBrandingData(school);
+            name = cleaned.cleanName;
+            shortName = cleaned.cleanName;
+            icon = cleaned.logo || FALLBACK_PWA_ICON;
+            slug = school.slug;
+            themeColor = "#1e293b";
+          }
+        } catch (err) {
+          console.error('Fatal error in PwaManager fetch:', err);
         }
-      } catch (err) {
-        console.error('Fatal error in PwaManager fetch:', err);
       }
     } else {
       // Check URL for registration slugs or query params

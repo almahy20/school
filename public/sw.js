@@ -105,23 +105,47 @@ self.addEventListener('fetch', (event) => {
       return;
     }
 
-    if (url.pathname.includes('/auth/v1/token')) return;
+    if (url.pathname.includes('/auth/v1/')) return;
+
+    // 2. REST API queries - strict network-first with AbortController timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { signal: controller.signal })
         .then(response => {
+          clearTimeout(timeoutId);
           if (response.status === 200) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
           }
           return response;
         })
-        .catch(async () => {
+        .catch(async (error) => {
+          clearTimeout(timeoutId);
+          console.warn('[SW] Supabase fetch failed or timed out, trying fallback cache:', error);
+          
           const cached = await caches.match(event.request);
-          if (cached) return cached;
+          if (cached) {
+            // Clone the response to append the custom header
+            const newHeaders = new Headers(cached.headers);
+            newHeaders.set('x-sw-cache', 'true');
+            
+            return new Response(cached.body, {
+              status: cached.status,
+              statusText: cached.statusText,
+              headers: newHeaders
+            });
+          }
+          
           return new Response(
-            JSON.stringify({ error: 'offline', message: 'أنت غير متصل بالإنترنت حالياً' }),
-            { headers: { 'Content-Type': 'application/json' } }
+            JSON.stringify({ 
+              error: 'offline', 
+              message: error.name === 'AbortError' 
+                ? 'انتهت مهلة الاتصال بالخادم، تم تحميل البيانات محلياً' 
+                : 'أنت غير متصل بالإنترنت حالياً' 
+            }),
+            { status: 503, headers: { 'Content-Type': 'application/json' } }
           );
         })
     );

@@ -49,7 +49,21 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
       }
 
       const { profile, role, school } = userData as any;
-      
+
+      // ✅ Seed branding cache from RPC — eliminates separate schools HTTP request
+      if (school && profile?.school_id) {
+        const brandingData = {
+          id: school.id,
+          name: school.name,
+          logo_url: school.logo_url || null,
+          slug: school.slug,
+        };
+        queryClient.setQueryData(['school-branding', profile.school_id], brandingData);
+        try {
+          localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(brandingData));
+        } catch { /* ignore quota errors */ }
+      }
+
       return {
         id: supaUser.id,
         email: supaUser.email || '',

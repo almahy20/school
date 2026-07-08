@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo, useEffect } from 'react';
 import { logger } from '@/utils/logger';
+import { getCachedUser } from '@/lib/userCache';
 
 export interface SchoolBranding {
   id: string;
@@ -30,14 +31,16 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 
 export function useBranding() {
   const { user } = useAuth();
-  const queryKey = useMemo(() => ['school-branding', user?.schoolId], [user?.schoolId]);
+  // ✅ Use cached schoolId immediately for parallel loading
+  const schoolId = user?.schoolId || getCachedUser()?.schoolId || null;
+  const queryKey = useMemo(() => ['school-branding', schoolId], [schoolId]);
   const queryClient = useQueryClient();
 
   // ✅ Optimization: Load branding from localStorage immediately if available
   // This prevents the "flicker" where the logo disappears and comes back on refresh
   useEffect(() => {
-    if (user?.schoolId) {
-      const cached = localStorage.getItem(`branding_${user.schoolId}`);
+    if (schoolId) {
+      const cached = localStorage.getItem(`branding_${schoolId}`);
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
@@ -60,14 +63,14 @@ export function useBranding() {
         }
       }
     }
-  }, [user?.schoolId, queryKey, queryClient]);
+  }, [schoolId, queryKey, queryClient]);
 
   return useQuery({
     queryKey,
     queryFn: async () => {
-      const data = await fetchBranding(user?.schoolId || null);
-      if (data && user?.schoolId) {
-        localStorage.setItem(`branding_${user.schoolId}`, JSON.stringify(data));
+      const data = await fetchBranding(schoolId);
+      if (data && schoolId) {
+        localStorage.setItem(`branding_${schoolId}`, JSON.stringify(data));
         // ✅ Sync Title when data arrives
         if (data.name) {
           let cleanName = data.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
@@ -79,7 +82,7 @@ export function useBranding() {
       }
       return data;
     },
-    enabled: !!user?.schoolId,
+    enabled: !!schoolId,
     placeholderData: (previousData: any) => previousData,
     retry: 1,
     retryDelay: 1000,

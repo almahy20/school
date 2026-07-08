@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useClasses, useClearTermFees, useUpdateStudentMonthlyFee } from '@/hooks/queries';
+import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useAllClasses, useClearTermFees, useUpdateStudentMonthlyFee } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
@@ -49,8 +49,8 @@ export default function FeesPage() {
 
   // ── Queries ──
   const { data: branding } = useBranding();
-  const { data: classesData } = useClasses();
-  const classes = (classesData?.data || []) as Array<{id: string; name: string}>;
+  const { data: classesData } = useAllClasses();
+  const classes = (classesData || []) as Array<{id: string; name: string}>;
   
   // نستخدم useFees المطور الذي يجلب الطلاب ورسومهم لهذا الترم
   const { 

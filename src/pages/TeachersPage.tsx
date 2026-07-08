@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useTeachers, useDeleteTeacher, useTeacherAction, useBranding, useClasses, useUpdateTeacher, type Teacher } from '@/hooks/queries';
+import { useTeachers, useDeleteTeacher, useTeacherAction, useBranding, useAllClasses, useUpdateTeacher, type Teacher } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Phone, User, GraduationCap, Eye, Edit2, Save, X, Search, Users,
@@ -65,8 +65,8 @@ export default function TeachersPage() {
     refetch: refetchPending 
   } = useTeachers(1, 100, '', 'معلق');
 
-  const { data: allClassesData } = useClasses();
-  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = useMemo(() => allClassesData?.data || [], [allClassesData]);
+  const { data: allClassesData } = useAllClasses();
+  const allClasses: Array<{id: string; name: string; teacher_id: string | null}> = useMemo(() => allClassesData || [], [allClassesData]);
   const { data: branding } = useBranding();
   
   const deleteMutation = useDeleteTeacher();

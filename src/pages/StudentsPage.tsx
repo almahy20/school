@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useClasses, useBranding } from '@/hooks/queries';
+import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllClasses, useBranding } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Search, GraduationCap, School, User, 
@@ -54,11 +54,10 @@ export default function StudentsPage() {
   const totalItems = data?.count || 0;
 
   const { data: branding } = useBranding();
-  const { data: classesData } = useClasses();
+  const { data: classesData } = useAllClasses();
   // Normalize classes to always be an array
   const classes: Array<{id: string; name: string; grade_level: string | null}> = useMemo(() => 
-    Array.isArray(classesData?.data) ? classesData.data : 
-    Array.isArray(classesData) ? (classesData as any) : [], [classesData]);
+    Array.isArray(classesData) ? classesData : [], [classesData]);
   const deleteMutation = useDeleteStudent();
 
   // ── Debounce Search ──
