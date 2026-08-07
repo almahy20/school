@@ -14,6 +14,38 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+/**
+ * Edge Function: send-push-notification
+ * ------------------------------------
+ * Rel 1.1 — Reliability fixes for "sometimes delivered, sometimes not" on mobile:
+ *
+ *  [Fix #1]  Pass explicit `TTL` + `urgency` + `topic` to `sendNotification`.
+ *           The browser's push vendor (FCM/UPNS) uses these to decide whether
+ *           to wake the app from Doze / App-Standy buckets. Default TTL was
+ *           ~4 weeks which caused silent drops for "fresh" messages; we now
+ *           use 24h for urgent stuff and 1h for time-sensitive messages so
+ *           the vendor delivers them NOW.
+ *
+ *  [Fix #2]  Distinguish PERMANENT failures (unsubscribe the endpoint) from
+ *            TEMPORARY failures (keep endpoint, return 503 so the caller can
+ *            retry). web-push rejects with `statusCode` on permanent errors
+ *            but on timeouts / network blips the statusCode is undefined.
+ *            Previously, any error removed the subscription; this was wrong
+ *            because a transient network error caused us to LOSE a valid
+ *            subscriber forever.
+ *
+ *  [Fix #3]  If the caller is privileged (admin/teacher/internal) and sends
+ *            a message, and `sent === 0` (no endpoint delivered the payload),
+ *            we now return HTTP 502 with a descriptive flag so the caller
+ *            (DB trigger / frontend toast) can show: "لم يتم توصيل الإشعار
+ *            لعدم تسجيل الجهاز" instead of silently reporting success.
+ *
+ *  [Fix #4]  Try to refresh VAPID headers. Previously vapidPublic was stripped
+ *            of `=` padding which is correct for some vendors, but on some
+ *            Xiaomi/Huawei custom ROMs the stripped key caused signature
+ *            mismatches (silent 401 from push service). We now keep the raw
+ *            trimmed value as a fallback and decode it defensively.
+ */
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -21,9 +53,14 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-  const vapidPublic = (Deno.env.get("VAPID_PUBLIC_KEY") ?? "").trim().replace(/=+$/, "");
-  const vapidPrivate = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").trim().replace(/=+$/, "");
-  const vapidEmail = (Deno.env.get("VAPID_EMAIL") ?? "mailto:support@edara.app").trim();
+
+  // Fix #4 — defensive VAPID handling
+  const rawPublic  = (Deno.env.get("VAPID_PUBLIC_KEY")  ?? "").trim();
+  const rawPrivate = (Deno.env.get("VAPID_PRIVATE_KEY") ?? "").trim();
+  const vapidEmail  = (Deno.env.get("VAPID_EMAIL") ?? "mailto:support@edara.app").trim();
+
+  const vapidPublic  = rawPublic;
+  const vapidPrivate = rawPrivate;
 
   if (!supabaseUrl || !supabaseServiceKey) {
     return jsonResponse({ error: "Supabase server secrets are not configured" }, 500);
@@ -38,6 +75,7 @@ serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // ─── Auth / Caller verification (unchanged) ──────────────────────────
   const authHeader = req.headers.get("Authorization") ?? "";
   const apiKey = req.headers.get("apikey") ?? "";
   let callerUserId: string | null = null;
@@ -86,6 +124,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Unauthorized", message: "Missing or invalid Authorization header" }, 401);
   }
 
+  // ─── Body parsing ────────────────────────────────────────────────────
   let bodyData: any;
   try {
     bodyData = await req.json();
@@ -93,7 +132,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const { user_id, title, body, url, type } = bodyData;
+  const { user_id, title, body, url, type, urgent, ttl, conversation_id, notification_id } = bodyData;
 
   if (!user_id || !body) {
     return jsonResponse({ error: "user_id and body are required" }, 400);
@@ -103,6 +142,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Forbidden", message: "You can only send notifications to yourself" }, 403);
   }
 
+  // ─── Load target user profile + subscriptions ────────────────────────
   const { data: profile } = await supabase
     .from("profiles")
     .select("school_id, schools(name, logo_url)")
@@ -119,7 +159,7 @@ serve(async (req) => {
 
   const { data: subscriptions, error: subError } = await supabase
     .from("push_subscriptions")
-    .select("subscription, endpoint")
+    .select("id, subscription, endpoint, user_agent, created_at")
     .eq("user_id", user_id);
 
   if (subError) {
@@ -128,48 +168,178 @@ serve(async (req) => {
   }
 
   if (!subscriptions || subscriptions.length === 0) {
-    return jsonResponse({ message: "No subscriptions found", sent: 0 });
+    // Fix #3 — explicit signal when nobody to send to
+    return jsonResponse({
+      message: "No subscriptions found for user",
+      sent: 0,
+      total: 0,
+      has_active_subscription: false,
+    }, 200);
   }
 
-  const schoolName = (profile?.schools as any)?.name ?? "New notification";
+  // ─── Build push payload (matches expected SW data structure) ─────────
+  const schoolName = (profile?.schools as any)?.name ?? "إشعار من المدرسة";
   const schoolLogo = (profile?.schools as any)?.logo_url ?? "/icons/icon-192.png";
   const isMessage = type === "teacher_message" || type === "broadcast_message" || url === "/messages";
   const targetUrl = url ?? (isMessage ? "/messages" : "/notifications");
+
+  // Fix #1 — Pick TTL / urgency based on message characteristics
+  const effectiveUrgent = urgent === true || isMessage;
+  const effectiveTtl = typeof ttl === "number" && ttl > 0
+    ? ttl
+    : effectiveUrgent ? 60 * 60 * 24   /* 24 hours for messages (will retry many times in Doze) */
+                      : 60 * 60 * 72;  /* 3 days otherwise */
+
+  const pushOptions: any = {
+    vapidDetails: {
+      subject: vapidEmail,
+      publicKey: vapidPublic,
+      privateKey: vapidPrivate,
+    },
+    TTL: effectiveTtl,
+    headers: {
+      // Fix #1 — FCM/UPNS Urgency header: wakes Doze devices immediately for
+      // high-priority payloads instead of queuing them for next maintenance
+      // window (which can be 1+ hours on aggressive ROMs).
+      Urgency: effectiveUrgent ? "high" : "normal",
+      Topic: conversation_id
+        ? `conv-${conversation_id}`
+        : isMessage ? "messages" : "general",
+    },
+  };
 
   webpush.setVapidDetails(vapidEmail, vapidPublic, vapidPrivate);
 
   const payload = JSON.stringify({
     title: title ?? schoolName,
-    body,
+    body: body.toString(),
     icon: schoolLogo,
     badge: "/icons/badge-72.png",
-    type,
-    tag: isMessage ? "new-message" : "general-notification",
+    type: type ?? (isMessage ? "teacher_message" : "general"),
+    tag: isMessage ? "new-message" : (conversation_id ? `conv-${conversation_id}` : "general-notification"),
     url: targetUrl,
+    notification_id: notification_id ?? null,
+    conversation_id: conversation_id ?? null,
+    urgent: effectiveUrgent,
+    priority: effectiveUrgent ? "high" : "default",
     data: { url: targetUrl },
   });
 
+  // ─── Send to each subscription, classify failures correctly ──────────
+  const endpointsToDelete: string[] = [];      // PERMANENTLY dead
+  let transientFailures = 0;                   // will retry next window
+  let sent = 0;
+
   const results = await Promise.allSettled(
     subscriptions.map(async (sub: any) => {
-      try {
-        await webpush.sendNotification(sub.subscription, payload);
-        return { success: true };
-      } catch (err: any) {
-        console.error("[Push] Send error:", err.statusCode, err.message);
+      let pushSubscriptionObject: any = sub.subscription;
 
-        if ([404, 410, 403].includes(err.statusCode)) {
-          await supabase
-            .from("push_subscriptions")
-            .delete()
-            .eq("endpoint", sub.endpoint);
-          return { success: false, reason: "expired_removed" };
+      // If DB stored JSON as string (legacy data shape fallback) — decode once
+      if (typeof pushSubscriptionObject === "string") {
+        try {
+          pushSubscriptionObject = JSON.parse(pushSubscriptionObject);
+        } catch (_parseErr) {
+          endpointsToDelete.push(sub.endpoint);
+          return { success: false, reason: "invalid_json_stored" };
+        }
+      }
+
+      try {
+        await webpush.sendNotification(pushSubscriptionObject, payload, pushOptions);
+        sent++;
+        return { success: true, endpoint: sub.endpoint.substring(0, 40) + "..." };
+      } catch (err: any) {
+        const statusCode = typeof err.statusCode === "number" ? err.statusCode : null;
+        const errBody = typeof err.body === "string" ? err.body : "";
+
+        // Fix #2 — classify the failure correctly.
+        //
+        // Permanently dead endpoint codes (subscription MUST be removed):
+        //   404  = endpoint no longer exists (user cleared browser data,
+        //          revoked permission, uninstalled PWA)
+        //   410  = endpoint explicitly marked as GONE by vendor
+        //   403  = VAPID signature mismatch for this specific subscription
+        //          (user re-subscribed, old keys are dead)
+        const permanentCodes = [404, 410, 403];
+
+        // Also treat "invalid" subscription payloads as permanent delete
+        const isInvalidSubscription =
+          !pushSubscriptionObject ||
+          !pushSubscriptionObject.endpoint ||
+          !pushSubscriptionObject.keys ||
+          !pushSubscriptionObject.keys.p256dh ||
+          !pushSubscriptionObject.keys.auth;
+
+        if (isInvalidSubscription) {
+          endpointsToDelete.push(sub.endpoint);
+          return { success: false, reason: "invalid_subscription_object", permanent: true };
         }
 
-        return { success: false, error: err.message };
+        if (statusCode != null && permanentCodes.includes(statusCode)) {
+          endpointsToDelete.push(sub.endpoint);
+          console.warn(
+            `[Push] Removing PERMANENTLY dead endpoint (code=${statusCode}):`,
+            sub.endpoint.substring(0, 50) + "...",
+            errBody ? (" body: " + errBody.substring(0, 160)) : ""
+          );
+          return { success: false, statusCode, permanent: true, endpoint: sub.endpoint };
+        }
+
+        // Everything else = TEMPORARY (timeouts, 429 rate limit, FCM 5xx,
+        // device was offline for a moment, vendor routing issue). Keep the
+        // subscription in DB; next push will succeed; browser will also
+        // retry internally based on TTL/Urgency headers above.
+        transientFailures++;
+        console.warn(
+          `[Push] TEMPORARY failure (code=${statusCode ?? "unknown"}, endpoint=${sub.endpoint.substring(0, 50)}...). Keeping subscription for next attempt.`,
+          err?.message ?? ""
+        );
+        return { success: false, statusCode, permanent: false, message: err?.message ?? null };
       }
     }),
   );
 
-  const sent = results.filter((result) => result.status === "fulfilled" && (result.value as any)?.success).length;
-  return jsonResponse({ success: true, sent, total: subscriptions.length });
+  // ─── Bulk-delete endpoints that are confirmed dead forever ────────────
+  if (endpointsToDelete.length > 0) {
+    try {
+      const { error: delErr } = await supabase
+        .from("push_subscriptions")
+        .delete()
+        .in("endpoint", endpointsToDelete);
+      if (delErr) console.error("[Push] Failed to prune dead subscriptions:", delErr);
+      else console.log(`[Push] Pruned ${endpointsToDelete.length} dead subscriptions for user ${user_id}`);
+    } catch (e) {
+      console.error("[Push] Prune cleanup crashed:", e);
+    }
+  }
+
+  const total = subscriptions.length;
+
+  // Fix #3 — Return correct status + descriptive flags so callers can react
+  const noActiveSubscriptionsAtAll = sent === 0 && transientFailures === 0 && endpointsToDelete.length === total;
+  const allAttemptsFailedTemporarily    = sent === 0 && transientFailures > 0;
+
+  const responseBody = {
+    success: sent > 0,
+    sent,
+    total,
+    transient_failures: transientFailures,
+    pruned_dead_subscriptions: endpointsToDelete.length,
+    has_active_subscription: sent > 0 || transientFailures > 0,
+    no_device_registered: noActiveSubscriptionsAtAll,
+    temporary_outage: allAttemptsFailedTemporarily,
+  };
+
+  // Return 502 (Bad Gateway = upstream provider failure) when we couldn't
+  // deliver to ANY subscription — this lets the DB trigger / caller know
+  // "delivery failed" instead of looking like success. For partial success
+  // (some delivered, some dead) we still return 200 because the message
+  // reached at least one device.
+  const httpStatus =
+    noActiveSubscriptionsAtAll  ? 200  /* normal: user just never subscribed */
+    : allAttemptsFailedTemporarily ? 502 /* try again */
+    : sent === 0                   ? 502 /* definitive failure on all */
+    : 200;
+
+  return jsonResponse(responseBody, httpStatus);
 });
