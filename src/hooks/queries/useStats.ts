@@ -46,7 +46,6 @@ export function useAdminStats() {
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 2 * 60 * 1000, // 2 دقائق — Realtime يُحدّث البيانات عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours persistence
-    refetchOnMount: false, // نعتمد على Realtime + staleTime
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -124,7 +123,6 @@ export function useTeacherStats() {
     },
     enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
     staleTime: 5 * 60 * 1000,
-    refetchOnMount: false,
   });
 }
 
@@ -151,6 +149,5 @@ export function useAdminActivities() {
     enabled: !!user?.schoolId && user?.role === 'admin',
     staleTime: 3 * 60 * 1000, // 3 دقائق - تقليل إعادة الجلب
     gcTime: 10 * 60 * 1000, // 10 دقائق
-    refetchOnMount: false, // معطل - نعتمد على staleTime
   });
 }

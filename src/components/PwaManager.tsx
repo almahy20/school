@@ -1,8 +1,8 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { cleanBrandingData } from '@/hooks/useCleanBranding';
+import { useBranding } from '@/hooks/queries/useBranding';
 
 const FALLBACK_PWA_ICON = "/icons/icon-192.png";
 
@@ -20,6 +20,10 @@ function toValidIconUrl(icon: string | null | undefined) {
 
 export default function PwaManager() {
   const { user } = useAuth();
+  const branding = useBranding();
+  const brandingDataRef = useRef(branding.data);
+
+  brandingDataRef.current = branding.data;
 
   const updateManifest = useCallback(async () => {
     let name = document.title || "المدرسة الذكية";
@@ -40,44 +44,55 @@ export default function PwaManager() {
 
     // 1. Determine school context
     if (schoolId) {
-      // ✅ Optimization: Check localStorage first for immediate PWA update
-      const cached = localStorage.getItem(`branding_${schoolId}`);
-      let loadedFromCache = false;
-      if (cached) {
-        try {
-          const s = JSON.parse(cached);
-          const cleaned = cleanBrandingData(s);
-          name = cleaned.cleanName;
-          shortName = cleaned.cleanName;
-          icon = cleaned.logo || defaultIcon;
-          slug = s.slug;
-          loadedFromCache = true;
-        } catch (e) {
-          console.error('Error parsing cached branding:', e);
-        }
-      }
+      const liveBranding = brandingDataRef.current;
 
-      if (!loadedFromCache) {
-        try {
-          const { data, error } = await supabase
-            .from('schools')
-            .select('name, slug, logo_url')
-            .eq('id', schoolId)
-            .maybeSingle();
-          
-          if (error) {
-            console.error('Error fetching PWA school data:', error);
-          } else if (data) {
-            const school = data as any;
-            const cleaned = cleanBrandingData(school);
+      if (liveBranding) {
+        const cleaned = cleanBrandingData(liveBranding);
+        name = cleaned.cleanName;
+        shortName = cleaned.cleanName;
+        icon = cleaned.logo || FALLBACK_PWA_ICON;
+        slug = liveBranding.slug;
+        themeColor = "#1e293b";
+      } else {
+        // ✅ Fallback: Check localStorage first for immediate PWA update
+        const cached = localStorage.getItem(`branding_${schoolId}`);
+        let loadedFromCache = false;
+        if (cached) {
+          try {
+            const s = JSON.parse(cached);
+            const cleaned = cleanBrandingData(s);
             name = cleaned.cleanName;
             shortName = cleaned.cleanName;
-            icon = cleaned.logo || FALLBACK_PWA_ICON;
-            slug = school.slug;
-            themeColor = "#1e293b";
+            icon = cleaned.logo || defaultIcon;
+            slug = s.slug;
+            loadedFromCache = true;
+          } catch (e) {
+            console.error('Error parsing cached branding:', e);
           }
-        } catch (err) {
-          console.error('Fatal error in PwaManager fetch:', err);
+        }
+
+        if (!loadedFromCache) {
+          try {
+            const { data, error } = await supabase
+              .from('schools')
+              .select('name, slug, logo_url')
+              .eq('id', schoolId)
+              .maybeSingle();
+
+            if (error) {
+              console.error('Error fetching PWA school data:', error);
+            } else if (data) {
+              const school = data as any;
+              const cleaned = cleanBrandingData(school);
+              name = cleaned.cleanName;
+              shortName = cleaned.cleanName;
+              icon = cleaned.logo || FALLBACK_PWA_ICON;
+              slug = school.slug;
+              themeColor = "#1e293b";
+            }
+          } catch (err) {
+            console.error('Fatal error in PwaManager fetch:', err);
+          }
         }
       }
     } else {
@@ -187,26 +202,26 @@ export default function PwaManager() {
     metaTheme.content = themeColor;
   }, [user?.schoolId, user?.email]);
 
+  /*
+    💡 ملاحظة حول الاستخدام المختلف للقناتين اللتين كانتا مشتركتا في جدول schools:
+    - القناة في RealtimeNotificationsManager.tsx (سطر 150-171): هدفها تحديث React Query cache لـ ['school-branding'] عند UPDATE في الجدول،
+      فتستخدم supabase.channel مباشرة مع invalidation للـ cache عشان يتحدث في الـ UI.
+    - القناة القديمة هنا في PwaManager (التي تمت إزالتها): هدفها إعادة بناء Web Manifest + تحديث الفافيكون
+      والـ theme-color مباشرة في الـ DOM عند تحديث بيانات المدرسة (اسم/لوجو).
+    
+    تم توحيدهما بالاعتماد على الـ useBranding hook نفسه: عندما يتحدث الـ branding عن طريق
+    القناة في RealtimeNotificationsManager، الـ ref هنا يتحدث وبيحس بالتغير ويعيد بناء الـ Manifest تلقائياً،
+    فبالتالي قللنا عدد قنوات WebSocket بمقدار 1 قناة لجدول schools.
+  */
   useEffect(() => {
     updateManifest();
-
-    // 2. Real-time update listener for school branding using the robust engine
-    const unsubscribe = realtimeEngine.subscribe(
-      'schools',
-      () => {
-        // Re-run the manifest update when school data changes
-        updateManifest();
-      },
-      {
-        event: 'UPDATE',
-        filter: user?.schoolId ? `id=eq.${user.schoolId}` : undefined
-      }
-    );
-
-    return () => {
-      unsubscribe();
-    };
   }, [user?.schoolId, user?.email, updateManifest]);
+
+  useEffect(() => {
+    if (branding.data) {
+      updateManifest();
+    }
+  }, [branding.data, updateManifest]);
 
   return null;
 }

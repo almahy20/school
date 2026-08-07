@@ -25,7 +25,13 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
     queryFn: async () => {
       if (!user?.schoolId && !user?.isSuperAdmin) return { data: [], count: 0 };
       
-      let q = supabase.from('complaints').select('*', { count: 'exact' });
+      let q = supabase
+        .from('complaints')
+        .select(`
+          *,
+          parent:profiles(full_name),
+          student:students(name)
+        `, { count: 'exact' });
 
       if (!user?.isSuperAdmin && user?.schoolId) {
         q = q.eq('school_id', user.schoolId);
@@ -48,24 +54,10 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
 
       if (error) throw error;
 
-      // Get parent names separately
-      const parentIds = (complaintsData || []).map(c => c.parent_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', parentIds);
-
-      // Get student names separately
-      const studentIds = (complaintsData || []).map(c => c.student_id).filter(Boolean);
-      const { data: students } = await supabase
-        .from('students')
-        .select('id, name')
-        .in('id', studentIds);
-
       const data = (complaintsData || []).map((c: any) => ({
         ...c,
-        parent_name: profiles?.find(p => p.id === c.parent_id)?.full_name || 'ولي أمر',
-        student_name: students?.find(s => s.id === c.student_id)?.name || 'غير محدد',
+        parent_name: (c.parent as any)?.full_name || 'ولي أمر',
+        student_name: (c.student as any)?.name || 'غير محدد',
       })) as Complaint[];
 
       return { data, count: count || 0 };

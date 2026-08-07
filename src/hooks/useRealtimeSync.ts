@@ -72,31 +72,53 @@ export function useRealtimeSync(tables: string[] | string, schoolId?: string | n
           invalidateTable([table]);
 
           // 2. Special mappings (Cross-table relationships)
+          /*
+            💡 اقتراح لـ admin-stats (للتطبيق لاحقاً مع RealtimeEngine — لا تنفذه دلوقتي):
+            بدل ما نعمل invalidateQueries كامل لـ admin-stats مع كل تغيير بسيط ونجيب كل البيانات
+            من الأول، ممكن نستخدم setQueryData ونعدّل الأرقام يدوياً حسب نوع الحدث:
+            - INSERT في students: زيادة total_students بـ 1
+            - DELETE في students: نقصان total_students بـ 1
+            - INSERT/DELETE في teachers: زيادة/نقصان total_teachers بـ 1
+            - INSERT في fee_payments: زيادة total_collected بـ newRec.amount
+            - INSERT في complaints: زيادة total_complaints بـ 1
+            هذه الطريقة هتقضي على استعلام كبير كامل مع كل تغيير صغير
+            وستتكامل مع RealtimeEngine اللي فعلاً بيعمل syncToCache لـ students.
+          */
           const mappings: Record<string, string[][]> = {
             'schools': [['school-branding']],
             'exam_templates': [['exam-templates']],
-            'grades': [['student-grades'], ['parent-child-overview'], ['child-full-details'], ['stats']],
+            'grades': [['student-grades']],
             'curriculum_subjects': [['curriculum-subjects']],
             'school_orders': [['school-orders']],
             'user_profiles': [['admin-users']],
-            'complaints': [['parent-complaints'], ['admin-stats'], ['admin-activities']],
-            'student_parents': [['parent-children'], ['admin-parent-children'], ['parents'], ['students']],
-            'attendance': [['parent-child-overview'], ['parent-child-activities'], ['child-full-details'], ['stats']],
-            'fees': [['fees'], ['parent-child-overview'], ['child-full-details'], ['stats'], ['admin-activities']],
-            'fee_payments': [['fees'], ['parent-child-overview'], ['child-full-details'], ['stats'], ['admin-activities']],
-            'profiles': [['admin-stats'], ['students'], ['teachers'], ['parents'], ['parent-detail'], ['admin-activities']],
-            'user_roles': [['admin-stats'], ['students'], ['teachers'], ['parents'], ['parent-detail'], ['admin-activities']],
-            'students': [['students'], ['student-detail'], ['class-students'], ['stats'], ['parent-children']],
-            'teachers': [['teachers'], ['teacher-detail'], ['stats']],
-            'classes': [['classes'], ['class-detail'], ['class-students'], ['stats']]
+            'complaints': [['parent-complaints']],
+            'student_parents': [['parent-children'], ['admin-parent-children']],
+            'attendance': [['parent-child-overview'], ['parent-child-activities'], ['child-full-details']],
+            'fees': [['fees']],
+            'fee_payments': [['fees']],
+            'profiles': [['parent-detail']],
+            'user_roles': [],
+            'students': [['students'], ['student-detail'], ['class-students'], ['parent-children']],
+            'teachers': [['teachers'], ['teacher-detail']],
+            'classes': [['classes'], ['class-detail'], ['class-students']]
           };
 
           if (mappings[table]) {
             mappings[table].forEach(key => invalidateTable(key));
           }
           
-          // Force refresh parents/students lists on any related change
-          if (table === 'user_roles' || table === 'profiles' || table === 'student_parents') {
+          // Direct-dependency list refreshes (only for tables that directly compose those lists)
+          if (table === 'user_roles') {
+            invalidateTable(['parents']);
+            invalidateTable(['teachers']);
+            invalidateTable(['students']);
+          }
+          if (table === 'profiles') {
+            invalidateTable(['parents']);
+            invalidateTable(['teachers']);
+            invalidateTable(['students']);
+          }
+          if (table === 'student_parents') {
             invalidateTable(['parents']);
             invalidateTable(['students']);
           }

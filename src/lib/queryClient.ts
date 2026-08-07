@@ -24,10 +24,10 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       // ✅ Optimization: Rely on Realtime Sync for updates instead of frequent polling
-      staleTime: 5 * 60 * 1000, // 5 minutes (Realtime WebSockets will automatically invalidate on changes)
+      staleTime: 5 * 60 * 1000, // 5 minutes - Navigation stays fast, background refetch only for truly stale data
       gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
-      refetchOnWindowFocus: false,
-      refetchOnMount: false, // Avoid redundant fetches when navigating if data is fresh
+      refetchOnWindowFocus: true, // Silent background refetch when user returns to tab after 5+ min
+      refetchOnMount: true, // Refetch on mount when stale — fixes persisted IndexedDB being served forever old
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },

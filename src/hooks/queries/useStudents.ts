@@ -89,7 +89,6 @@ export function useStudents(page = 1, pageSize = 15, search = '', className = '�
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000, // 5 دقائق - تقليل إعادة الجلب
     gcTime: 15 * 60 * 1000, // 15 دقيقة
-    refetchOnMount: false, // معطل - نعتمد على staleTime و Realtime Sync
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -109,7 +108,8 @@ export function useStudent(id: string | undefined) {
         .select(`
           *,
           classes:classes!students_class_id_fkey (
-            *
+            *,
+            teacher:profiles!classes_teacher_id_fkey(full_name)
           )
         `)
         .eq('id', id)
@@ -117,19 +117,6 @@ export function useStudent(id: string | undefined) {
 
       if (sError) throw sError;
       if (!student) return null;
-
-      // إذا كان هناك معلم مرتبط بالفصل، نجلبه بالتوازي أو لاحقاً
-      if (student.classes?.teacher_id) {
-        const { data: teacher } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', student.classes.teacher_id)
-          .maybeSingle();
-        
-        if (teacher) {
-          student.classes.teacher = { full_name: teacher.full_name };
-        }
-      }
       
       return student as Student & { classes: any };
     },
@@ -210,8 +197,8 @@ export function useAddStudent() {
     },
     onSuccess: () => {
       toast.success('تم إضافة الطالب بنجاح');
-      // Invalidate ALL student queries with any parameters
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -243,9 +230,9 @@ export function useUpdateStudent() {
       return data;
     },
     onSuccess: (_, variables) => {
-      // Invalidate ALL student queries with any parameters
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['student', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       toast.success('تم تحديث الطالب بنجاح');
     },
   });

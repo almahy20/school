@@ -41,45 +41,68 @@ async function fetchParents(
 ): Promise<{ data: Parent[]; count: number }> {
   if (!schoolId) return { data: [], count: 0 };
 
+  // 🐛 BUGFIX (Regression من البند 5): سبب الـ 400 + 17s delay كان افتراض اسم FK غلط
+  //     (`profiles!user_roles_user_id_fkey`) اللي ما كانش موجود فعلاً في الداتابيز.
+  //     الحل: نعود للاستعلامات المنفصلة لكن نطبق الـ SERVER-SIDE pagination من أول خطوة
+  //     على جدول user_roles نفسو باستخدام الـ .range، عشان ما نحفظش كل الرتب كلها.
+  //     ده يحقق نفس هدف البند 5 (pagination على الاستعلام الأول بدلاً من جلب كل الصفوف)،
+  //     بس بدون الـ FK name اللي ما كنا متأكدين منه.
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  // البدء بجلب الرتب (roles) أولاً لتحديد من هم أولياء الأمور
+  // الخطوة 1: جلب user_roles مع pagination + فلتر على الداتابيز (SERVER-SIDE)
   let rolesQuery = supabase
     .from('user_roles')
-    .select('user_id, id, approval_status, role, school_id', { count: 'estimated' }) // ⚡ estimated أسرع
+    .select('user_id, id, approval_status, role, school_id', { count: 'exact' })
     .eq('role', 'parent')
     .eq('school_id', schoolId);
 
   if (status !== 'الكل') {
-    rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
+    rolesQuery = rolesQuery.eq(
+      'approval_status',
+      status === 'معتمد' ? 'approved' : 'pending'
+    );
   }
 
-  const { data: userRoles, error: rolesError, count } = await rolesQuery;
+  const { data: userRoles, error: rolesError, count } = await rolesQuery
+    .order('id')
+    .range(from, to); // ✅ الـ pagination هنا على user_roles نفسها مباشرة من السيرفر
 
   if (rolesError) throw rolesError;
   if (!userRoles || userRoles.length === 0) return { data: [], count: 0 };
 
-  // جلب الملفات الشخصية (profiles) لهؤلاء المستخدمين - ⚡ تحديد الأعمدة فقط
+  // الخطوة 2: جلب الـ profiles لهذا الـ page فقط (pageSize=15 وليس كل أولياء الأمور)
   const userIds = userRoles.map(ur => ur.user_id);
   let profilesQuery = supabase
     .from('profiles')
-    .select('id, full_name, phone, email, school_id, created_at') // ⚡ بدلاً من *
+    .select('id, full_name, phone, email, school_id, created_at')
     .in('id', userIds);
 
   if (search) {
-    profilesQuery = profilesQuery.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
+    profilesQuery = profilesQuery.or(
+      `full_name.ilike.%${search}%,phone.ilike.%${search}%`
+    );
   }
 
-  const { data: profiles, error: profileError } = await profilesQuery
-    .order('full_name')
-    .range(from, to);
+  const { data: profilesRaw, error: profileError } = await profilesQuery
+    .order('full_name');
 
   if (profileError) throw profileError;
-  if (!profiles) return { data: [], count: 0 };
+  if (!profilesRaw) return { data: [], count: 0 };
 
+  const profiles = (profilesRaw as any[]).map((profile) => {
+    const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
+    return {
+      ...profile,
+      __approval_status: roleRecord?.approval_status || 'approved',
+      __user_role_id: roleRecord?.id,
+    };
+  });
 
-  // جلب روابط الأبناء والفصول في خطوة واحدة موازية لتقليل زمن الانتظار
+  const userRolesMap = new Map<string, any>();
+  userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
+
+  // الخطوة 3: جلب روابط الأبناء والفصول في خطوة واحدة موازية لتقليل زمن الانتظار
   const parentIds = profiles.map(p => p.id);
   const [{ data: links }, { data: classes }] = await Promise.all([
     supabase.from('student_parents').select('parent_id, students(id, name, class_id)').in('parent_id', parentIds),
@@ -87,19 +110,19 @@ async function fetchParents(
   ]);
 
   const data = profiles.map((profile: any) => {
-    const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
-    const parentLinks = (links || []).filter(l => l.parent_id === profile.id);
-    
+    const roleRecord = userRolesMap.get(profile.id);
+    const parentLinks = (links || []).filter((l: any) => l.parent_id === profile.id);
+
     return {
       ...profile,
-      approval_status: roleRecord?.approval_status || 'approved',
-      user_role_id: roleRecord?.id,
+      approval_status: roleRecord?.approval_status || profile.__approval_status || 'approved',
+      user_role_id: roleRecord?.id || profile.__user_role_id,
 
       children: parentLinks.map((l: any) => ({
         id: l.students?.id,
         name: l.students?.name,
-        class_name: classes?.find(c => c.id === l.students?.class_id)?.name
-      })).filter(c => c.id)
+        class_name: classes?.find((c: any) => c.id === l.students?.class_id)?.name
+      })).filter((c: any) => c.id)
     };
   }) as Parent[];
 
@@ -119,6 +142,74 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
     refetchOnMount: false, // نعتمد على Realtime + staleTime
+    retry: 1,
+  });
+}
+
+// ─── usePendingParents Hook ─────────────────────────────────────────────────
+// ⚡ LIGHTWEIGHT hook for the "waiting approval" queue on ParentsPage.
+//    Returns only the essential fields (no children / no classes joins),
+//    uses a single lean query instead of the 4 heavy requests triggered by
+//    the regular useParents(1, 100, '', 'معلق') call.
+export interface PendingParent {
+  id: string;        // user_id
+  full_name: string;
+  phone: string;
+  created_at: string;
+  user_role_id?: string;
+  approval_status?: string;
+}
+
+export function usePendingParents(limit = 100) {
+  const { user } = useAuth();
+  const queryKey = ['pending-parents', user?.schoolId, limit];
+
+  return useQuery({
+    queryKey,
+    queryFn: async (): Promise<PendingParent[]> => {
+      if (!user?.schoolId) return [];
+
+      // 🐛 BUGFIX (Regression من البند 7): نفس سبب الـ 400 في useParents —
+      //     كان في FK name مفترض `profiles!user_roles_user_id_fkey` غير صحيح.
+      //     الحل: استعلامين خفيفين منفصلين (user_roles بعدين profiles للـ ids اللي جبتها)
+      //     بدون أي joins ثقيلة — خفيف فعلاً زي ما كان المطلوب في البند 7.
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, id, approval_status')
+        .eq('role', 'parent')
+        .eq('school_id', user.schoolId)
+        .eq('approval_status', 'pending')
+        .limit(limit);
+
+      if (rolesError) throw rolesError;
+      if (!userRoles || userRoles.length === 0) return [];
+
+      const userIds = userRoles.map(ur => ur.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, created_at')
+        .in('id', userIds)
+        .order('created_at', { ascending: false });
+
+      if (profilesError) throw profilesError;
+      if (!profiles) return [];
+
+      const rolesMap = new Map<string, any>();
+      userRoles.forEach(ur => rolesMap.set(ur.user_id, ur));
+
+      return (profiles as any[]).map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name,
+        phone: profile.phone,
+        created_at: profile.created_at,
+        user_role_id: rolesMap.get(profile.id)?.id,
+        approval_status: rolesMap.get(profile.id)?.approval_status,
+      })) as PendingParent[];
+    },
+    enabled: !!user?.schoolId,
+    staleTime: 60 * 1000, // 1 دقيقة — الشاشة بتفتح كثير، فمستنى أقل
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: true, // عند فتح صفحة أولياء الأمور نحدث قائمة الانتظار
     retry: 1,
   });
 }

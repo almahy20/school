@@ -7,6 +7,17 @@ import { queryClient } from './queryClient';
  * هذا المحرك يستمع لقنوات Supabase Realtime بتخفّي، ويقوم عند استلام
  * تحديث جديد أو إضافة لجدول معين، بتعديل نسخة الـ Cache المحلية (React Query)
  * بشكل صامت، دون إجبار التطبيق على عمل Loading Spinners.
+ * 
+ * 💡 ملاحظة حول اشتراكات messages في المشروع (2 اشتراك فقط شغال، وكلاهما مقصود):
+ *   1) useMessages في useMessaging.ts: تحديث قائمة الرسائل + cache عند أي تغيير
+ *   2) GlobalAnnouncement.tsx: عرض رسائل إدارية فورية كمودال منفصل
+ *   (useMessageNotifications كـ export موجود حالياً لكن غير مستخدم في أي مكان)
+ * 
+ * 💡 ملاحظة حول اشتراك schools (تم توحيده في البند الأول):
+ *   - قبل كان فيه اشتراك في RealtimeNotificationsManager + اشتراك في PwaManager
+ *   - الآن اعتمدنا PwaManager على useBranding() hook نفسو، وقناة واحدة فقط في
+ *     RealtimeNotificationsManager مسؤولة عن invalidate branding cache، وPwaManager
+ *     بيسمع بتغيرات الـ cache data عشان يعيد بناء الـ PWA Manifest.
  */
 class RealtimeEngine {
   private activeSubscriptions = new Map<string, any>();
@@ -59,19 +70,47 @@ class RealtimeEngine {
         const queryKey = ['students'];
         
         queryClient.setQueriesData({ queryKey }, (oldData: any) => {
-          if (!Array.isArray(oldData)) return oldData;
-          if (eventType === 'INSERT') {
-            if (oldData.some(d => d.id === newRec.id)) return oldData;
-            return [newRec, ...oldData];
+          if (Array.isArray(oldData)) {
+            // Format A: direct array (e.g. useClassStudents)
+            if (eventType === 'INSERT') {
+              if (oldData.some(d => d.id === newRec.id)) return oldData;
+              return [newRec, ...oldData];
+            }
+            if (eventType === 'UPDATE') {
+              return oldData.map(d => d.id === newRec.id ? { ...d, ...newRec } : d);
+            }
+            if (eventType === 'DELETE') {
+              return oldData.filter(d => d.id !== oldRec.id);
+            }
+            return oldData;
           }
-          if (eventType === 'UPDATE') {
-            return oldData.map(d => d.id === newRec.id ? { ...d, ...newRec } : d);
+
+          if (oldData && Array.isArray(oldData.data)) {
+            // Format B: { data: Student[], count: number } (e.g. useStudents paginated)
+            let newArr = oldData.data;
+
+            if (eventType === 'INSERT') {
+              if (!newArr.some(d => d.id === newRec.id)) {
+                newArr = [newRec, ...newArr];
+              }
+            } else if (eventType === 'UPDATE') {
+              newArr = newArr.map(d => d.id === newRec.id ? { ...d, ...newRec } : d);
+            } else if (eventType === 'DELETE') {
+              newArr = newArr.filter(d => d.id !== oldRec.id);
+            }
+
+            const prevCount = typeof oldData.count === 'number' ? oldData.count : oldData.data.length;
+            let newCount = prevCount;
+            if (eventType === 'INSERT') newCount = prevCount + 1;
+            else if (eventType === 'DELETE') newCount = Math.max(0, prevCount - 1);
+
+            return { ...oldData, data: newArr, count: newCount };
           }
-          if (eventType === 'DELETE') {
-            return oldData.filter(d => d.id !== oldRec.id);
-          }
+
           return oldData;
         });
+
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }
       
       // Add similar automatic synced responses for messages, notifications etc. if generic

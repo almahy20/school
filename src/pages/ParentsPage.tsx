@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useParents, useParentAction, useBranding, type Parent } from '@/hooks/queries';
+import { useParents, usePendingParents, useParentAction, useBranding, type Parent } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { Phone, User, Eye, X, Search, Users, ArrowLeft, ShieldCheck, XCircle, Clock, Link as LinkIcon, Copy, UserCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -42,16 +42,16 @@ export default function ParentsPage() {
   } = useParents(page, PAGE_SIZE, debouncedSearch, 'معتمد');
 
   // جلب طلبات الانتظار (قائمة منفصلة عادة ما تكون صغيرة)
+  // ✅ الآن باستخدام usePendingParents خفيف (بدون جلب الأبناء والفصول)
   const { 
-    data: pendingData, 
+    data: pendingParents = [], 
     refetch: refetchPending 
-  } = useParents(1, 100, '', 'معلق');
+  } = usePendingParents(100);
 
   const { data: branding } = useBranding();
   const actionMutation = useParentAction();
   
   const parents = parentsData?.data || [];
-  const pendingParents = pendingData?.data || [];
   const totalItems = parentsData?.count || 0;
 
   const handleAction = async (userId: string, status: 'approved' | 'rejected') => {

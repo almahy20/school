@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -31,105 +31,124 @@ export default function RealtimeNotificationsManager() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  // ✅ Single handler — used for all INSERT events on notifications table
-  const handleNewNotification = useCallback((payload: any) => {
-    const newNotification = payload.new;
-    logger.log('🔔 RealtimeNotifications: New notification', newNotification.type);
+  // 🐛 BUGFIX (Regression من البند 1): السبب الحقيقي للـ Subscribed/Closed LOOP كان
+  //     في الـ useEffect dependencies اللي كانت بتشتمل على الـ handleNewNotification
+  //     و handleNotificationUpdate (useCallback ب dependencies فيها user object و
+  //     queryClient بيعملوا reference جديد كل render) + StrictMode.
+  //     الحل: نستخدم useRef عشان نحفظ أخر قيمة لـ user.id / user.schoolId / user.role
+  //     ونحط الـ handlers جوه الـ useEffect نفسها عشان ما يبقاش في dependency array،
+  //     ودependency array يكون فقط user.id و user.schoolId كـ primitives (مش بيتغيروا
+  //     كل render لو نفس القيمة).
+  const userIdRef = useRef<string | undefined>(user?.id);
+  const userRoleRef = useRef<string | undefined>(user?.role);
+  const schoolIdRef = useRef<string | undefined>(user?.schoolId);
+  userIdRef.current = user?.id;
+  userRoleRef.current = user?.role;
+  schoolIdRef.current = user?.schoolId;
 
-    // 1. Browser / SW local notification (works when app is in background)
-    sendLocalNotification(
-      newNotification.title || 'تنبيه جديد',
-      newNotification.message || 'لديك تحديث جديد في حسابك'
-    );
+  const queryClientRef = useRef(queryClient);
+  queryClientRef.current = queryClient;
 
-    // 2. In-app Toast with action button
-    const config = getTypeConfig(newNotification.type);
-    const isMessage =
-      newNotification.type === 'broadcast_message' ||
-      newNotification.type === 'teacher_message';
-
-    toast(newNotification.title, {
-      description: newNotification.message,
-      icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),
-      duration: 10000,
-      action: {
-        label: isMessage ? 'فتح الرسائل' : 'عرض التنبيهات',
-        onClick: () => navigate(isMessage ? '/messages' : '/notifications'),
-      },
-    });
-
-    // 3. Play sound
-    playNotificationSound();
-
-    // 4. Optimistic unread count increment
-    if (user?.id) {
-      queryClient.setQueryData(['notifications-unread-counts', user.id], (old: any) => ({
-        unread: (old?.unread || 0) + 1,
-        complaints:
-          (old?.complaints || 0) +
-          (newNotification.type?.startsWith('complaint') ? 1 : 0),
-      }));
-
-      // Invalidate list to refetch
-      queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
-    }
-
-    // 5. Refresh admin stats if relevant
-    if (user?.role === 'admin') {
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
-    }
-  }, [user?.id, user?.role, queryClient, navigate]);
-
-  // Handler for UPDATE events (mark-as-read sync)
-  const handleNotificationUpdate = useCallback((payload: any) => {
-    const { old: oldRow, new: newRow } = payload;
-
-    // If this is a "mark as read" event triggered by our own UI,
-    // trust the optimistic update — just silently refresh the list.
-    if (oldRow.is_read === false && newRow.is_read === true) {
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-      return;
-    }
-
-    // For other content updates, do a debounced sync of unread counts
-    if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
-    (window as any).__notifUpdateTimer = setTimeout(async () => {
-      try {
-        const { data, error } = await (supabase as any)
-          .from('notifications')
-          .select('type, is_read')
-          .eq('user_id', user?.id)
-          .eq('is_read', false);
-
-        if (!error && user?.id) {
-          queryClient.setQueryData(['notifications-unread-counts', user.id], {
-            unread: (data || []).length,
-            complaints: (data || []).filter((n: any) =>
-              n.type?.startsWith('complaint')
-            ).length,
-          });
-        }
-      } catch (e) {
-        logger.warn('Failed to sync unread counts:', e);
-      }
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-    }, 4000);
-  }, [user?.id, queryClient]);
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
-    if (!user?.id) return;
+    const userId = userIdRef.current;
+    const schoolId = schoolIdRef.current;
+    const role = userRoleRef.current;
+
+    if (!userId) return;
+
+    // ✅ Single handler — used for all INSERT events on notifications table
+    const handleNewNotification = (payload: any) => {
+      const qc = queryClientRef.current;
+      const nav = navigateRef.current;
+      const newNotification = payload.new;
+      logger.log('🔔 RealtimeNotifications: New notification', newNotification.type);
+
+      sendLocalNotification(
+        newNotification.title || 'تنبيه جديد',
+        newNotification.message || 'لديك تحديث جديد في حسابك'
+      );
+
+      const config = getTypeConfig(newNotification.type);
+      const isMessage =
+        newNotification.type === 'broadcast_message' ||
+        newNotification.type === 'teacher_message';
+
+      toast(newNotification.title, {
+        description: newNotification.message,
+        icon: React.createElement(config.icon, { className: `w-5 h-5 ${config.color}` }),
+        duration: 10000,
+        action: {
+          label: isMessage ? 'فتح الرسائل' : 'عرض التنبيهات',
+          onClick: () => nav(isMessage ? '/messages' : '/notifications'),
+        },
+      });
+
+      playNotificationSound();
+
+      if (userId) {
+        qc.setQueryData(['notifications-unread-counts', userId], (old: any) => ({
+          unread: (old?.unread || 0) + 1,
+          complaints:
+            (old?.complaints || 0) +
+            (newNotification.type?.startsWith('complaint') ? 1 : 0),
+        }));
+
+        qc.invalidateQueries({ queryKey: ['notifications', userId] });
+      }
+
+      if (role === 'admin') {
+        qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      }
+    };
+
+    // Handler for UPDATE events (mark-as-read sync)
+    const handleNotificationUpdate = (payload: any) => {
+      const qc = queryClientRef.current;
+      const { old: oldRow, new: newRow } = payload;
+
+      if (oldRow.is_read === false && newRow.is_read === true) {
+        qc.invalidateQueries({ queryKey: ['notifications', userId] });
+        return;
+      }
+
+      if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
+      (window as any).__notifUpdateTimer = setTimeout(async () => {
+        try {
+          const { data, error } = await (supabase as any)
+            .from('notifications')
+            .select('type, is_read')
+            .eq('user_id', userId)
+            .eq('is_read', false);
+
+          if (!error && userId) {
+            qc.setQueryData(['notifications-unread-counts', userId], {
+              unread: (data || []).length,
+              complaints: (data || []).filter((n: any) =>
+                n.type?.startsWith('complaint')
+              ).length,
+            });
+          }
+        } catch (e) {
+          logger.warn('Failed to sync unread counts:', e);
+        }
+        qc.invalidateQueries({ queryKey: ['notifications', userId] });
+      }, 4000);
+    };
 
     // ✅ Single channel for all notification events (INSERT + UPDATE)
     // Filtered by user_id so each user only receives their own notifications
     const notificationsChannel = supabase
-      .channel(`notifications-manager-${user.id}`)
+      .channel(`notifications-manager-${userId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${userId}`,
         },
         handleNewNotification
       )
@@ -139,7 +158,7 @@ export default function RealtimeNotificationsManager() {
           event: 'UPDATE',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${user.id}`,
+          filter: `user_id=eq.${userId}`,
         },
         handleNotificationUpdate
       )
@@ -149,21 +168,22 @@ export default function RealtimeNotificationsManager() {
 
     // ✅ School branding updates channel (separate concern)
     let brandingChannel: ReturnType<typeof supabase.channel> | null = null;
-    if (user.schoolId) {
+    if (schoolId) {
       brandingChannel = supabase
-        .channel(`branding-${user.schoolId}`)
+        .channel(`branding-${schoolId}`)
         .on(
           'postgres_changes',
           {
             event: 'UPDATE',
             schema: 'public',
             table: 'schools',
-            filter: `id=eq.${user.schoolId}`,
+            filter: `id=eq.${schoolId}`,
           },
           () => {
+            const qc = queryClientRef.current;
             logger.log('🔄 School branding updated, refreshing...');
-            queryClient.invalidateQueries({
-              queryKey: ['school-branding', user.schoolId],
+            qc.invalidateQueries({
+              queryKey: ['school-branding', schoolId],
             });
           }
         )
@@ -174,7 +194,9 @@ export default function RealtimeNotificationsManager() {
       supabase.removeChannel(notificationsChannel);
       if (brandingChannel) supabase.removeChannel(brandingChannel);
     };
-  }, [user?.id, user?.schoolId, handleNewNotification, handleNotificationUpdate, queryClient]);
+    // 🛡️ مهم جداً: الـ dependency array ده فقط user?.id و user?.schoolId (PRIMITIVES)،
+    //    مش الـ handlers ولا الـ objects، عشان ما يتغيروش كل render ويسببوا unsubscribe/resubscribe LOOP.
+  }, [user?.id, user?.schoolId]);
 
   return null;
 }
