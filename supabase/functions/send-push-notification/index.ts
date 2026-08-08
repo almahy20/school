@@ -159,7 +159,7 @@ serve(async (req) => {
 
   const { data: subscriptions, error: subError } = await supabase
     .from("push_subscriptions")
-    .select("id, subscription, endpoint, user_agent, created_at")
+    .select("id, subscription, endpoint, created_at, failure_count, last_failure_at")
     .eq("user_id", user_id);
 
   if (subError) {
@@ -226,9 +226,15 @@ serve(async (req) => {
   });
 
   // ─── Send to each subscription, classify failures correctly ──────────
-  const endpointsToDelete: string[] = [];      // PERMANENTLY dead
+  const endpointsToDelete: string[] = [];      // Confirmed dead after 3x strikes
+  const subscriptionsToIncrement: { id: string; code: number | null }[] = []; // Need +1 failure_count
+  const subscriptionsToReset: string[] = [];   // Sent OK, reset counter
   let transientFailures = 0;                   // will retry next window
   let sent = 0;
+
+  const PERMANENT_THRESHOLD = 3; // 3 consecutive 403/410 → delete
+  const INSTANT_DELETE_CODES = [404, 410];     // 404/GONE = dead now, no retries
+  const STRIKE_CODES = [403];                   // 403 = might be VAPID temp → 3 strikes
 
   const results = await Promise.allSettled(
     subscriptions.map(async (sub: any) => {
@@ -247,22 +253,14 @@ serve(async (req) => {
       try {
         await webpush.sendNotification(pushSubscriptionObject, payload, pushOptions);
         sent++;
+        // ✅ Success — reset failure counter so we start fresh next time
+        subscriptionsToReset.push(sub.id);
         return { success: true, endpoint: sub.endpoint.substring(0, 40) + "..." };
       } catch (err: any) {
         const statusCode = typeof err.statusCode === "number" ? err.statusCode : null;
         const errBody = typeof err.body === "string" ? err.body : "";
 
-        // Fix #2 — classify the failure correctly.
-        //
-        // Permanently dead endpoint codes (subscription MUST be removed):
-        //   404  = endpoint no longer exists (user cleared browser data,
-        //          revoked permission, uninstalled PWA)
-        //   410  = endpoint explicitly marked as GONE by vendor
-        //   403  = VAPID signature mismatch for this specific subscription
-        //          (user re-subscribed, old keys are dead)
-        const permanentCodes = [404, 410, 403];
-
-        // Also treat "invalid" subscription payloads as permanent delete
+        // Treat "invalid" subscription payloads as permanent delete
         const isInvalidSubscription =
           !pushSubscriptionObject ||
           !pushSubscriptionObject.endpoint ||
@@ -275,20 +273,47 @@ serve(async (req) => {
           return { success: false, reason: "invalid_subscription_object", permanent: true };
         }
 
-        if (statusCode != null && permanentCodes.includes(statusCode)) {
+        // 🚨 404 / 410 = INSTANT delete (user uninstalled / endpoint GONE)
+        if (statusCode != null && INSTANT_DELETE_CODES.includes(statusCode)) {
           endpointsToDelete.push(sub.endpoint);
           console.warn(
-            `[Push] Removing PERMANENTLY dead endpoint (code=${statusCode}):`,
+            `[Push] Removing INSTANTLY dead endpoint (code=${statusCode}):`,
             sub.endpoint.substring(0, 50) + "...",
             errBody ? (" body: " + errBody.substring(0, 160)) : ""
           );
-          return { success: false, statusCode, permanent: true, endpoint: sub.endpoint };
+          return { success: false, statusCode, permanent: true, endpoint: sub.endpoint, reason: "instant_dead" };
+        }
+
+        // ⚡ 403 = 3-strikes rule (might be transient VAPID mismatch, DON'T delete yet)
+        if (statusCode != null && STRIKE_CODES.includes(statusCode)) {
+          const currentFailures = typeof sub.failure_count === "number" ? sub.failure_count : 0;
+          const newCount = currentFailures + 1;
+
+          if (newCount >= PERMANENT_THRESHOLD) {
+            endpointsToDelete.push(sub.endpoint);
+            console.warn(
+              `[Push] Removing endpoint after ${newCount}x consecutive ${statusCode} failures (3-strike rule):`,
+              sub.endpoint.substring(0, 50) + "..."
+            );
+            return { success: false, statusCode, permanent: true, endpoint: sub.endpoint, reason: `strike_${newCount}_delete`, strikes: newCount };
+          } else {
+            // Not enough strikes yet → increment counter, keep subscription
+            subscriptionsToIncrement.push({ id: sub.id, code: statusCode });
+            console.warn(
+              `[Push] ${statusCode} STRIKE ${newCount}/${PERMANENT_THRESHOLD} for endpoint — keeping subscription for retry:`,
+              sub.endpoint.substring(0, 50) + "..."
+            );
+            return { success: false, statusCode, permanent: false, reason: `strike_${newCount}_retry`, strikes: newCount };
+          }
         }
 
         // Everything else = TEMPORARY (timeouts, 429 rate limit, FCM 5xx,
         // device was offline for a moment, vendor routing issue). Keep the
         // subscription in DB; next push will succeed; browser will also
         // retry internally based on TTL/Urgency headers above.
+        // NOTE: We intentionally do NOT bump failure_count for transient
+        // errors (5xx, network blips) because they don't indicate a bad
+        // subscription — just a temporary condition.
         transientFailures++;
         console.warn(
           `[Push] TEMPORARY failure (code=${statusCode ?? "unknown"}, endpoint=${sub.endpoint.substring(0, 50)}...). Keeping subscription for next attempt.`,
@@ -310,6 +335,42 @@ serve(async (req) => {
       else console.log(`[Push] Pruned ${endpointsToDelete.length} dead subscriptions for user ${user_id}`);
     } catch (e) {
       console.error("[Push] Prune cleanup crashed:", e);
+    }
+  }
+
+  // ─── Reset failure_count for subscriptions that delivered OK ──────────
+  if (subscriptionsToReset.length > 0) {
+    try {
+      const { error: rstErr } = await supabase
+        .from("push_subscriptions")
+        .update({ failure_count: 0, last_failure_at: null })
+        .in("id", subscriptionsToReset);
+      if (rstErr) console.error("[Push] Failed to reset failure_count:", rstErr);
+    } catch (e) {
+      console.error("[Push] Reset failure_count crashed:", e);
+    }
+  }
+
+  // ─── Increment failure_count for 403 strike candidates ────────────────
+  if (subscriptionsToIncrement.length > 0) {
+    try {
+      // Do them one at a time because PostgREST doesn't support per-row
+      // increments with different IDs easily via a simple RPC-like call.
+      await Promise.all(
+        subscriptionsToIncrement.map(({ id, code }) =>
+          supabase
+            .from("push_subscriptions")
+            .update({
+              failure_count: (subscriptions.find((s: any) => s.id === id)?.failure_count ?? 0) + 1,
+              last_failure_at: new Date().toISOString(),
+              last_failure_code: code,
+            })
+            .eq("id", id)
+        )
+      );
+      console.log(`[Push] Bumped strike counter on ${subscriptionsToIncrement.length} subscriptions for user ${user_id}`);
+    } catch (e) {
+      console.error("[Push] Strike increment cleanup crashed:", e);
     }
   }
 
