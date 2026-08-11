@@ -18,7 +18,7 @@ export interface CurriculumSubject {
 }
 
 export function useCurriculums() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['curriculums', user?.schoolId];
   
   return useQuery({
@@ -33,7 +33,7 @@ export function useCurriculums() {
       if (error) throw error;
       return data as Curriculum[];
     },
-    enabled: !!user?.schoolId,
+    enabled: session && !!user?.schoolId,
     staleTime: 60 * 60 * 1000, // 1 hour - curriculums are static
     gcTime: 2 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,

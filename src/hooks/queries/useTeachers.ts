@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 export interface Teacher {
   id: string; // This is the user_id (profiles.id)
@@ -96,13 +97,13 @@ async function fetchTeachers(
 }
 
 export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
         
   return useQuery({
     queryKey,
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: session && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
@@ -141,7 +142,7 @@ export function useTeacher(id: string | undefined | null) {
 
 
 export function useTeacherDetailStats(id: string | undefined | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   return useQuery({
     queryKey: ['teacher-stats', id, user?.schoolId],
     queryFn: async () => {
@@ -172,7 +173,7 @@ export function useTeacherDetailStats(id: string | undefined | null) {
         curriculumProgress: avgProgress
       };
     },
-    enabled: !!(id && user?.schoolId),
+    enabled: session && !!(id && user?.schoolId),
 
   });
 }
@@ -185,7 +186,7 @@ export function useDeleteTeacher() {
 
   return useMutation({
     mutationFn: async (teacherId: string) => {
-      console.log('[Delete Teacher] Using Edge Function for:', teacherId);
+      logger.log('[Delete Teacher] Using Edge Function for:', teacherId);
       
       // Use the admin-users edge function for complete deletion
       const { data, error } = await supabase.functions.invoke('admin-users', {
@@ -195,19 +196,19 @@ export function useDeleteTeacher() {
         },
       });
 
-      console.log('[Delete Teacher] Response:', { data, error });
+      logger.log('[Delete Teacher] Response:', { data, error });
 
       if (error) {
-        console.error('[Delete Teacher] Function error:', error);
+        logger.error('[Delete Teacher] Function error:', error);
         throw new Error(error.message || 'فشل في حذف المعلم');
       }
       
       if (!data?.success) {
-        console.error('[Delete Teacher] Unsuccessful:', data);
+        logger.error('[Delete Teacher] Unsuccessful:', data);
         throw new Error(data?.error || 'فشل في حذف المعلم');
       }
       
-      console.log('[Delete Teacher] Success!');
+      logger.log('[Delete Teacher] Success!');
       return teacherId;
     },
     onSuccess: (teacherId) => {

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+import { logger } from '@/utils/logger';
 
 export interface Parent {
   id: string; // user_id
@@ -131,13 +132,13 @@ async function fetchParents(
 
 
 export function useParents(page = 1, pageSize = 15, search = '', status = 'الكل') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['parents', user?.schoolId, page, pageSize, search, status];
     
   return useQuery({
     queryKey,
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
-    enabled: !!user?.schoolId,
+    enabled: session && !!user?.schoolId,
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
     gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
@@ -161,7 +162,7 @@ export interface PendingParent {
 }
 
 export function usePendingParents(limit = 100) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['pending-parents', user?.schoolId, limit];
 
   return useQuery({
@@ -206,7 +207,7 @@ export function usePendingParents(limit = 100) {
         approval_status: rolesMap.get(profile.id)?.approval_status,
       })) as PendingParent[];
     },
-    enabled: !!user?.schoolId,
+    enabled: session && !!user?.schoolId,
     staleTime: 60 * 1000, // 1 دقيقة — الشاشة بتفتح كثير، فمستنى أقل
     gcTime: 10 * 60 * 1000,
     refetchOnMount: true, // عند فتح صفحة أولياء الأمور نحدث قائمة الانتظار
@@ -243,7 +244,7 @@ export function useParent(id: string | undefined | null) {
 }
 
 export function useAdminParentChildren(parentId: string | undefined | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   return useQuery({
     queryKey: ['parent-children', 'admin', parentId, user?.schoolId],
     queryFn: async () => {
@@ -286,7 +287,7 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
           };
         });
     },
-    enabled: !!(parentId && user?.schoolId),
+    enabled: session && !!(parentId && user?.schoolId),
     staleTime: 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60 * 2,
     refetchOnWindowFocus: false,
@@ -296,7 +297,7 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
 
 // ✅ Hook جديد خفيف لصفحة التفاصيل - بيجيب البيانات الأساسية بس
 export function useParentChildrenBasic(parentId: string | undefined | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   return useQuery({
     queryKey: ['parent-children-basic', parentId, user?.schoolId],
     queryFn: async () => {
@@ -334,7 +335,7 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
           class_name: classes.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
         }));
     },
-    enabled: !!(parentId && user?.schoolId),
+    enabled: session && !!(parentId && user?.schoolId),
     staleTime: 1000 * 60 * 10, // 10 دقائق
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
@@ -405,7 +406,7 @@ export function useDeleteParent() {
 
   return useMutation({
     mutationFn: async (parentId: string) => {
-      console.log('[Delete Parent] Using Edge Function for:', parentId);
+      logger.log('[Delete Parent] Using Edge Function for:', parentId);
       
       // Use the admin-users edge function for complete deletion
       const { data, error } = await supabase.functions.invoke('admin-users', {
@@ -415,19 +416,19 @@ export function useDeleteParent() {
         },
       });
 
-      console.log('[Delete Parent] Response:', { data, error });
+      logger.log('[Delete Parent] Response:', { data, error });
 
       if (error) {
-        console.error('[Delete Parent] Function error:', error);
+        logger.error('[Delete Parent] Function error:', error);
         throw new Error(error.message || 'فشل في حذف ولي الأمر');
       }
       
       if (!data?.success) {
-        console.error('[Delete Parent] Unsuccessful:', data);
+        logger.error('[Delete Parent] Unsuccessful:', data);
         throw new Error(data?.error || 'فشل في حذف ولي الأمر');
       }
       
-      console.log('[Delete Parent] Success!');
+      logger.log('[Delete Parent] Success!');
       return parentId;
     },
     onSuccess: (parentId) => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 import { Download, X, Smartphone, CheckCircle2 } from 'lucide-react';
 
 export default function PWAInstallPrompt() {
@@ -51,7 +52,7 @@ export default function PWAInstallPrompt() {
       e.preventDefault();
       setDeferredPrompt(e);
       (window as any).deferredPrompt = e;
-      console.log('✅ beforeinstallprompt event captured');
+      logger.log('✅ beforeinstallprompt event captured');
       setIsVisible(true); // Show whenever the event is captured
     };
 
@@ -59,7 +60,7 @@ export default function PWAInstallPrompt() {
 
     // Check if prompt is already available (captured earlier)
     if ((window as any).deferredPrompt) {
-      console.log('✅ deferredPrompt already available');
+      logger.log('✅ deferredPrompt already available');
       setDeferredPrompt((window as any).deferredPrompt);
       setIsVisible(true);
     }
@@ -103,7 +104,7 @@ export default function PWAInstallPrompt() {
   const [showManual, setShowManual] = useState(false);
 
   const handleInstall = async () => {
-    console.log('🔵 handleInstall called');
+    logger.log('🔵 handleInstall called');
     
     // Try MULTIPLE times to get deferredPrompt
     let promptToUse = deferredPrompt;
@@ -114,13 +115,13 @@ export default function PWAInstallPrompt() {
     }
     
     if (!promptToUse) {
-      console.log('❌ No deferredPrompt available - showing manual instructions');
+      logger.log('❌ No deferredPrompt available - showing manual instructions');
       setShowManual(true);
       return;
     }
 
     try {
-      console.log('🚀 Triggering native install prompt');
+      logger.log('🚀 Triggering native install prompt');
       setIsInstalling(true);
       
       // Trigger native install prompt
@@ -128,7 +129,7 @@ export default function PWAInstallPrompt() {
       
       const { outcome } = await promptToUse.userChoice;
       
-      console.log('User choice outcome:', outcome);
+      logger.log('User choice outcome:', outcome);
       
       if (outcome === 'accepted') {
         // User accepted - mark as installed
@@ -144,7 +145,7 @@ export default function PWAInstallPrompt() {
         setIsInstalling(false);
       }
     } catch (err) {
-      console.error('PWA Install error:', err);
+      logger.error('PWA Install error:', err);
       setIsInstalling(false);
     }
   };
@@ -160,7 +161,7 @@ export default function PWAInstallPrompt() {
   // Don't show if not visible, already in PWA mode, or no user
   if (!isVisible || isStandalone || !user) return null;
 
-  console.log('🎉 PWAInstallPrompt is rendering!');
+  logger.log('🎉 PWAInstallPrompt is rendering!');
 
   return (
     <>

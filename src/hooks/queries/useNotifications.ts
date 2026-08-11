@@ -21,7 +21,7 @@ export interface Notification {
 }
 
 export function useNotifications(page = 1, pageSize = 15) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['notifications', user?.id, page, pageSize];
   
   return useQuery<{ data: Notification[]; count: number }>({
@@ -42,7 +42,7 @@ export function useNotifications(page = 1, pageSize = 15) {
       if (error) throw error;
       return { data: data || [], count: count || 0 };
     },
-    enabled: !!user?.id,
+    enabled: !!(session && user?.id),
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
@@ -51,40 +51,8 @@ export function useNotifications(page = 1, pageSize = 15) {
   });
 }
 
-// Real-time subscription for notifications
-export function useNotificationsRealtime() {
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-
-  return {
-    subscribe: () => {
-      if (!user?.id) return () => {};
-
-      const channel = supabase
-        .channel('notifications-changes')
-         .on(
-           'postgres_changes',
-           {
-             event: 'INSERT',
-             schema: 'public',
-             table: 'notifications',
-             filter: `user_id=eq.${user.id}`,
-           },
-           () => {
-             // Invalidate queries to refetch
-             queryClient.invalidateQueries({ queryKey: ['notifications'], exact: false });
-             queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
-           }
-         )
-        .subscribe();
-
-      // Return cleanup function
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  };
-}
+// Real-time subscription for notifications is handled exclusively by
+// RealtimeNotificationsManager — no hook needed here.
 
 export function useMarkAllAsRead() {
   const queryClient = useQueryClient();
@@ -206,7 +174,7 @@ export function useDeleteNotification() {
 }
 
 export function useUnreadCounts() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['notifications-unread-counts', user?.id], [user?.id]);
   
   return useQuery<{ unread: number; complaints: number }>({
@@ -229,11 +197,11 @@ export function useUnreadCounts() {
       
       return counts;
     },
-    enabled: !!user?.id,
-    staleTime: 60 * 1000, // 60 seconds — Increase to prevent immediate refetch on page change
+    enabled: !!(session && user?.id),
+    staleTime: 60 * 1000,
     gcTime: 1000 * 60 * 60,
-    refetchOnWindowFocus: false, // ✅ Disable to prevent flickering
-    refetchOnMount: false, // ✅ Disable to trust optimistic updates when navigating
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     refetchOnReconnect: true,
   });
 }

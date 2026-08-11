@@ -17,7 +17,7 @@ export interface Complaint {
 }
 
 export function useComplaints(page = 1, pageSize = 15, search = '', status = 'الكل') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['complaints', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
   
   return useQuery({
@@ -62,17 +62,17 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
 
       return { data, count: count || 0 };
     },
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: session && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
+    staleTime: 0,
+    gcTime: 5 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
   });
 }
 
 export function useParentComplaints(page = 1, pageSize = 10) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['parent-complaints', user?.id, user?.schoolId, page, pageSize];
   
   return useQuery({
@@ -94,7 +94,7 @@ export function useParentComplaints(page = 1, pageSize = 10) {
       if (error) throw error;
       return { data: (data || []) as Complaint[], count: count || 0 };
     },
-    enabled: !!(user?.id && user?.schoolId),
+    enabled: session && !!(user?.id && user?.schoolId),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,

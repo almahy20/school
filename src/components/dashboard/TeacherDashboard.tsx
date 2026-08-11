@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useTeacherClasses, useTeacherStats } from '@/hooks/queries';
 import { formatDisplayDate } from '@/lib/date-utils';
 import { 
-  GraduationCap, School, Users, LayoutGrid, Calendar, Filter,
-  ArrowLeft, ChevronLeft, BookOpen
+  GraduationCap, School, Users, LayoutGrid, Calendar,
+  ChevronLeft, BookOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { StatsCard } from './StatsCard';
 
 export function TeacherDashboard() {

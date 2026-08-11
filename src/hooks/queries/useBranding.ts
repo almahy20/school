@@ -12,6 +12,15 @@ export interface SchoolBranding {
   slug: string;
 }
 
+/** Sets document.title to the clean school name (strips "مدرسة" prefix and suffixes). */
+function syncDocumentTitle(name: string) {
+  let cleanName = name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+  cleanName = cleanName.split(' — ')[0];
+  if (document.title !== cleanName) {
+    document.title = cleanName;
+  }
+}
+
 async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | null> {
   if (!schoolId) return null;
   
@@ -48,18 +57,14 @@ export function useBranding() {
           
           // ✅ Sync Title IMMEDIATELY from cache before even setting query data
           if (parsed.name) {
-            let cleanName = parsed.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
-            cleanName = cleanName.split(' — ')[0];
-            if (document.title !== cleanName) {
-              document.title = cleanName;
-            }
+            syncDocumentTitle(parsed.name);
           }
 
           if (!existing) {
             queryClient.setQueryData(queryKey, parsed);
           }
         } catch (e) {
-          console.error('Failed to parse cached branding');
+          logger.error('Failed to parse cached branding');
         }
       }
     }
@@ -73,11 +78,7 @@ export function useBranding() {
         localStorage.setItem(`branding_${schoolId}`, JSON.stringify(data));
         // ✅ Sync Title when data arrives
         if (data.name) {
-          let cleanName = data.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
-          cleanName = cleanName.split(' — ')[0];
-          if (document.title !== cleanName) {
-            document.title = cleanName;
-          }
+          syncDocumentTitle(data.name);
         }
       }
       return data;

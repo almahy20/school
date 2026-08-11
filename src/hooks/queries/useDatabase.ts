@@ -74,7 +74,7 @@ export function useUpdateRow(tableName: TableName) {
  * Hook to get database statistics (table sizes, row counts, etc.)
  */
 export function useDatabaseStats() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
   return useQuery({
     queryKey: ['database-stats'],
@@ -107,7 +107,7 @@ export function useDatabaseStats() {
         return await fetchDatabaseStatsFallback();
       }
     },
-    enabled: !!user?.isSuperAdmin,
+    enabled: session && !!user?.isSuperAdmin,
     staleTime: 60 * 60 * 1000, // ساعة كاملة
   });
 }

@@ -72,7 +72,7 @@ function MessagesRouter() {
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, isLoading: loading } = useAuth();
 
   // Sync school favicon with branding
   useSchoolFavicon();

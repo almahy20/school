@@ -4,6 +4,7 @@ import { useClassStudents, useSendMessage } from '@/hooks/queries';
 import { useProfilesByIds } from '@/hooks/queries/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { logger } from '@/utils/logger';
 import { Search, User, Send, Users, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,9 +50,9 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
         .select('parent_id')
         .eq('student_id', studentId);
 
-      console.log('🔍 Student ID:', studentId);
-      console.log('🔗 Parent links from DB:', parentLinks);
-      console.log('❌ Link error:', linksError);
+      logger.log('🔍 Student ID:', studentId);
+      logger.log('🔗 Parent links from DB:', parentLinks);
+      logger.log('❌ Link error:', linksError);
 
       if (linksError) {
         throw linksError;
@@ -60,15 +61,15 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
       // If we found links, get parent profiles using cached hook
       if (parentLinks && parentLinks.length > 0) {
         const parentIds = parentLinks.map(link => link.parent_id);
-        console.log('✅ Found parent IDs:', parentIds);
+        logger.log('✅ Found parent IDs:', parentIds);
         setStudentParentIds(parentIds);
       } else {
-        console.log('⚠️ No links found, trying phone match...');
+        logger.log('⚠️ No links found, trying phone match...');
         // No links found - try to find parent by phone number (with normalization)
         const student = students.find((s: any) => s.id === studentId);
         const rawPhone = student?.parent_phone;
         
-        console.log('📱 Student parent_phone:', rawPhone);
+        logger.log('📱 Student parent_phone:', rawPhone);
         
         if (rawPhone) {
           // ✅ normalize phone: نشيل المسافات والشرطات
@@ -86,27 +87,27 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
             )
             .limit(1);
           
-          console.log('👨‍👩‍👧 Potential parents found:', potentialParents);
-          console.log('❌ Phone error:', phoneError);
+          logger.log('👨‍👩‍👧 Potential parents found:', potentialParents);
+          logger.log('❌ Phone error:', phoneError);
           
           if (phoneError) throw phoneError;
           
           if (potentialParents && potentialParents.length > 0) {
             // Found a parent! Use their ID directly
             const parent = potentialParents[0];
-            console.log('✅ Matched parent:', parent);
+            logger.log('✅ Matched parent:', parent);
             setStudentParentIds([parent.id]);
           } else {
-            console.log('❌ No parent found with this phone');
+            logger.log('❌ No parent found with this phone');
             setStudentParentIds([]);
           }
         } else {
-          console.log('❌ No parent_phone on student');
+          logger.log('❌ No parent_phone on student');
           setStudentParentIds([]);
         }
       }
     } catch (error: any) {
-      console.error('💥 Error fetching parents:', error);
+      logger.error('💥 Error fetching parents:', error);
       toast({
         title: 'خطأ',
         description: 'فشل في جلب بيانات أولياء الأمور',

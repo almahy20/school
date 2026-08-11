@@ -10,13 +10,16 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnly }: Props) {
-  const { user, loading } = useAuth();
+  const { user, session, isLoading: loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const hasCachedUser = !!localStorage.getItem('app_user_cache_v2');
   
-  // ✅ Optimization: If we have a cached user, don't show null during background loading.
-  // This keeps the page "present" during refresh.
+  if (!loading && !user && hasCachedUser) {
+    localStorage.removeItem('app_user_cache_v2');
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
   if (loading && !hasCachedUser) {
     return (
       <div className="fixed inset-0 bg-background flex items-center justify-center">
@@ -24,8 +27,19 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
       </div>
     );
   }
+
+  if (loading && hasCachedUser && !session) {
+    return (
+      <div className="fixed inset-0 bg-background flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
   
-  if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  if (!user || !session) {
+    localStorage.removeItem('app_user_cache_v2');
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
 
   // 1. Check Approval Status
   if (user.approvalStatus === 'pending' && location.pathname !== '/waiting-approval') {

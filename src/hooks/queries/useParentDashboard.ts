@@ -2,37 +2,38 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
+import { logger } from '@/utils/logger';
 
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
 export function useParentChildren() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['parent-children', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!user?.id || !user?.schoolId) {
-        console.warn('[useParentChildren] Missing user data:', { userId: user?.id, schoolId: user?.schoolId, role: user?.role });
+        logger.warn('[useParentChildren] Missing user data:', { userId: user?.id, schoolId: user?.schoolId, role: user?.role });
         return [];
       }
       
-      console.log('[useParentChildren] Starting query for user:', user.id, 'school:', user.schoolId);
+      logger.log('[useParentChildren] Starting query for user:', user.id, 'school:', user.schoolId);
       
       try {
         // ✅ Optimization: ONE single RPC call for everything
         // This eliminates the "Waterfall Effect" and reduces requests by 100%
-        console.log('[useParentChildren] Calling RPC get_parent_dashboard_summary...');
+        logger.log('[useParentChildren] Calling RPC get_parent_dashboard_summary...');
         const { data, error } = await (supabase as any).rpc('get_parent_dashboard_summary', { 
           p_parent_id: user.id,
           p_school_id: user.schoolId 
         });
         
         if (error) {
-          console.error('[useParentChildren] RPC Error:', error);
+          logger.error('[useParentChildren] RPC Error:', error);
           
           // ✅ Fallback: Try direct query if RPC fails
-          console.log('[useParentChildren] Trying fallback direct query...');
+          logger.log('[useParentChildren] Trying fallback direct query...');
           
           // Fetch student-parent links with basic info
           const { data: fallbackData, error: fallbackError } = await supabase
@@ -51,7 +52,7 @@ export function useParentChildren() {
             .eq('school_id', user.schoolId);
           
           if (fallbackError) {
-            console.error('[useParentChildren] Fallback Error:', fallbackError);
+            logger.error('[useParentChildren] Fallback Error:', fallbackError);
             throw fallbackError;
           }
           
@@ -86,8 +87,8 @@ export function useParentChildren() {
           ]);
           
           // Transform fallback data to match expected format with REAL data
-          console.log('[useParentChildren] Fallback data fetched:', fallbackData?.length, 'students');
-          console.log('[useParentChildren] Attendance records:', attendanceResult.data?.length);
+          logger.log('[useParentChildren] Fallback data fetched:', fallbackData?.length, 'students');
+          logger.log('[useParentChildren] Attendance records:', attendanceResult.data?.length);
           
           return fallbackData.map((item: any) => {
             const studentId = item.students?.id;
@@ -116,7 +117,7 @@ export function useParentChildren() {
             const studentAttendance = (attendanceResult.data || []).filter((a: any) => a.student_id === studentId);
             let attendanceRate = 0;
             
-            console.log(`[useParentChildren] Student ${item.students?.name}:`, {
+            logger.log(`[useParentChildren] Student ${item.students?.name}:`, {
               totalAttendanceRecords: studentAttendance.length,
               attendanceData: studentAttendance
             });
@@ -124,7 +125,7 @@ export function useParentChildren() {
             if (studentAttendance.length > 0) {
               const presentCount = studentAttendance.filter((a: any) => a.status === 'present').length;
               attendanceRate = Math.round((presentCount / studentAttendance.length) * 100);
-              console.log(`[useParentChildren] Attendance calculation:`, {
+              logger.log(`[useParentChildren] Attendance calculation:`, {
                 present: presentCount,
                 total: studentAttendance.length,
                 rate: attendanceRate
@@ -149,25 +150,25 @@ export function useParentChildren() {
           });
         }
         
-        console.log('[useParentChildren] RPC returned data:', data?.length, 'students');
+        logger.log('[useParentChildren] RPC returned data:', data?.length, 'students');
         if (data && data.length > 0) {
-          console.log('[useParentChildren] First student:', data[0]);
+          logger.log('[useParentChildren] First student sample received');
           
           // ✅ Check if data has attendanceRate field
           const firstStudent = data[0];
           if (!Object.prototype.hasOwnProperty.call(firstStudent, 'attendanceRate')) {
-            console.warn('[useParentChildren] RPC returned data without attendanceRate, using fallback...');
+            logger.warn('[useParentChildren] RPC returned data without attendanceRate, using fallback...');
             throw new Error('RPC returned incomplete data');
           }
         }
         
         return data || [];
       } catch (err) {
-        console.error('[useParentChildren] Unexpected error:', err);
+        logger.error('[useParentChildren] Unexpected error:', err);
         throw err;
       }
     },
-    enabled: !!(user?.id && user?.schoolId && user?.role === 'parent'),
+    enabled: session && !!(user?.id && user?.schoolId && user?.role === 'parent'),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     retry: 2,
@@ -225,7 +226,7 @@ export function useChildFullDetails(studentId: string | undefined) {
       });
 
       if (error) {
-        console.error('Error fetching child full details:', error);
+        logger.error('Error fetching child full details:', error);
         throw error;
       }
 

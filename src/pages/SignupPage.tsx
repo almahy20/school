@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock, ArrowLeft } from 'lucide-react';
 
 export default function SignupPage() {
@@ -31,7 +32,7 @@ export default function SignupPage() {
       // ✅ Store signup time to trigger PWA install prompt
       const signupTime = Date.now().toString();
       sessionStorage.setItem('user_signup_time', signupTime);
-      console.log('✅ General signup - stored signup time:', signupTime);
+      logger.log('✅ General signup - stored signup time:', signupTime);
       navigate('/onboarding');
     }
   };

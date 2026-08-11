@@ -38,7 +38,7 @@ export interface CleanupResult {
  * Admin only - controls how long data is kept
  */
 export function useRetentionPolicies() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
   return useQuery({
     queryKey: ['data-retention-policies'],
@@ -52,7 +52,7 @@ export function useRetentionPolicies() {
       return data as RetentionPolicy[];
     },
     // Only fetch for admin users
-    enabled: user?.role === 'admin' || user?.isSuperAdmin === true,
+    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }
 
@@ -124,7 +124,7 @@ export function useTriggerCleanup() {
  * Admin only
  */
 export function useDatabaseSizeInfo() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
   return useQuery({
     queryKey: ['database-size-info'],
@@ -138,7 +138,7 @@ export function useDatabaseSizeInfo() {
       return data as DatabaseSizeInfo[];
     },
     // Only fetch for admin users
-    enabled: user?.role === 'admin' || user?.isSuperAdmin === true,
+    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }
 
@@ -218,7 +218,7 @@ export function useSchoolAttendanceStats(schoolId: string | null) {
  * Admin only
  */
 export function useCleanupEstimate() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
   return useQuery({
     queryKey: ['cleanup-estimate'],
@@ -272,6 +272,6 @@ export function useCleanupEstimate() {
       return estimates;
     },
     // Only fetch for admin users
-    enabled: user?.role === 'admin' || user?.isSuperAdmin === true,
+    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }

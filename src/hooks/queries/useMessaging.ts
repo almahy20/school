@@ -6,7 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { sendPushToUser } from '@/utils/pushNotifications';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['profiles', user?.schoolId, search, page, pageSize];
   
   return useQuery({
@@ -34,8 +34,8 @@ export function useProfiles(search = '', page = 1, pageSize = 20) {
       if (error) throw error;
       return { data: data || [], count: count || 0 };
     },
-    enabled: !!user?.schoolId,
-    staleTime: 10 * 60 * 1000, // 10 minutes - profiles don't change often
+    enabled: !!(session && user?.schoolId),
+    staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
   });
@@ -141,20 +141,16 @@ export function useSendMessage() {
 }
 
 export function useMessages() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
   
-  // نعيد بناء queryKey ليكون بسيطاً لكن مع ربطه بـ user?.id لتأمين البيانات
   const queryKey = useMemo(() => ['messages', user?.id], [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || !session) return;
 
-    // تفعيل التزامن الفوري للرسائل الخاصة بالمستخدم فقط
-    // هذا يمنع الـ "Refetch Storm" الذي يحدث عند جلب رسائل المدرسة كلها
     const channel = supabase
       .channel(`user-messages-${user.id}`)
-      // 1. الرسائل المرسلة من المستخدم
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -163,7 +159,6 @@ export function useMessages() {
       }, () => {
         queryClient.invalidateQueries({ queryKey });
       })
-      // 2. الرسائل المستلمة من المستخدم
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -178,7 +173,7 @@ export function useMessages() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, queryClient, queryKey]);
+  }, [user?.id, session, queryClient, queryKey]);
       
   return useQuery({
     queryKey,
@@ -196,9 +191,9 @@ export function useMessages() {
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id,
-    staleTime: 30 * 1000, // 30 seconds
+    enabled: !!(session && user?.id),
+    staleTime: 30 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchInterval: false, // Optimized: removed polling, using realtime instead
+    refetchInterval: false,
   });
 }

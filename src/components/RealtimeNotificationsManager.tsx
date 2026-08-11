@@ -52,6 +52,9 @@ export default function RealtimeNotificationsManager() {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
+  // ✅ FIX: Local ref for the debounce timer — replaces window.__notifUpdateTimer global
+  const notifUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     const userId = userIdRef.current;
     const schoolId = schoolIdRef.current;
@@ -101,6 +104,12 @@ export default function RealtimeNotificationsManager() {
 
       if (role === 'admin') {
         qc.invalidateQueries({ queryKey: ['admin-stats'] });
+        // ✅ FIX: When a new complaint arrives, refresh the complaints list and
+        //    dashboard activities so they update without a manual page reload.
+        if (newNotification.type === 'complaint_new') {
+          qc.invalidateQueries({ queryKey: ['complaints'], exact: false });
+          qc.invalidateQueries({ queryKey: ['admin-activities'] });
+        }
       }
     };
 
@@ -114,8 +123,10 @@ export default function RealtimeNotificationsManager() {
         return;
       }
 
-      if ((window as any).__notifUpdateTimer) clearTimeout((window as any).__notifUpdateTimer);
-      (window as any).__notifUpdateTimer = setTimeout(async () => {
+      // ✅ FIX: Use a component-local ref for the timer instead of window global
+      //    to avoid memory leaks on unmount / StrictMode double-invoke
+      if (notifUpdateTimerRef.current) clearTimeout(notifUpdateTimerRef.current);
+      notifUpdateTimerRef.current = window.setTimeout(async () => {
         try {
           const { data, error } = await (supabase as any)
             .from('notifications')
@@ -193,6 +204,8 @@ export default function RealtimeNotificationsManager() {
     return () => {
       supabase.removeChannel(notificationsChannel);
       if (brandingChannel) supabase.removeChannel(brandingChannel);
+      // ✅ FIX: Clear the debounce timer on cleanup to prevent memory leaks
+      if (notifUpdateTimerRef.current) clearTimeout(notifUpdateTimerRef.current);
     };
     // 🛡️ مهم جداً: الـ dependency array ده فقط user?.id و user?.schoolId (PRIMITIVES)،
     //    مش الـ handlers ولا الـ objects، عشان ما يتغيروش كل render ويسببوا unsubscribe/resubscribe LOOP.

@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from '@/utils/logger';
 
 /**
  * Sends a push notification to a specific user via the Edge Function.
@@ -30,12 +31,12 @@ export async function sendPushToUser({
     });
 
     if (error) {
-      console.error('Push notification error:', error);
+      logger.error('Push notification error:', error);
       throw error;
     }
     return data;
   } catch (err) {
-    console.error('Failed to send push notification:', err);
+    logger.error('Failed to send push notification:', err);
     throw err;
   }
 }

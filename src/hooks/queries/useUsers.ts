@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 
 // Types
 export interface UserProfile {
@@ -21,7 +22,7 @@ export interface UserProfile {
  * Hook to get all users (admin only)
  */
 export function useUsers(page: number = 1, pageSize: number = 20, search: string = '', roleFilter: string = '') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
   return useQuery({
     queryKey: ['admin-users', page, pageSize, search, roleFilter],
@@ -68,7 +69,7 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
       return { data: transformedData as UserProfile[], count: count || 0 };
     },
     // Only fetch for admin users
-    enabled: user?.role === 'admin' || user?.isSuperAdmin === true,
+    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
@@ -117,7 +118,7 @@ export function useDeleteUser() {
 
   return useMutation({
     mutationFn: async (userId: string) => {
-      console.log('[Delete User] Starting deletion for:', userId);
+      logger.log('[Delete User] Starting deletion for:', userId);
       
       // Use the admin-users edge function for complete deletion
       const { data, error } = await supabase.functions.invoke('admin-users', {
@@ -127,19 +128,19 @@ export function useDeleteUser() {
         },
       });
 
-      console.log('[Delete User] Response:', { data, error });
+      logger.log('[Delete User] Response:', { data, error });
 
       if (error) {
-        console.error('[Delete User] Function error:', error);
+        logger.error('[Delete User] Function error:', error);
         throw new Error(error.message || 'فشل في حذف المستخدم');
       }
       
       if (!data?.success) {
-        console.error('[Delete User] Unsuccessful:', data);
+        logger.error('[Delete User] Unsuccessful:', data);
         throw new Error(data?.error || 'فشل في حذف المستخدم');
       }
       
-      console.log('[Delete User] Success!');
+      logger.log('[Delete User] Success!');
 
       // Log action to audit logs
       await (supabase as any).rpc('log_action', {

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 import { useTheme } from 'next-themes';
 import {
   Bell, Globe, HelpCircle, Shield,
@@ -20,7 +21,6 @@ import {
   useUpdateMyProfile 
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
-import { logger } from '@/utils/logger';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -53,7 +53,7 @@ export default function SettingsPage() {
         });
       }
     } catch (err: any) {
-      console.error('Test push error:', err);
+      logger.error('Test push error:', err);
       toast({ 
         title: 'فشل إرسال الإشعار', 
         description: err.message || 'حدث خطأ غير متوقع في الخادم.',
@@ -128,10 +128,10 @@ export default function SettingsPage() {
           setIsPWA(true);
         }
       } catch (error) {
-        console.error('Error with PWA install:', error);
+        logger.error('Error with PWA install:', error);
       }
     } else {
-      console.warn('Native install prompt is not available.');
+      logger.warn('Native install prompt is not available.');
     }
   };
 

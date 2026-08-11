@@ -4,9 +4,9 @@ import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
-  ArrowRight, User, Users, School, Info, Mail, Shield, 
-  Edit2, Trash2, Activity, Phone, MapPin, CheckCircle, 
-  BookOpen, ChevronLeft, Loader2, Key, Eye, EyeOff
+  ArrowRight, User, Users, School, Shield, 
+  Edit2, Trash2, Phone, MapPin, CheckCircle, 
+  ChevronLeft, Loader2, Key, EyeOff
 } from 'lucide-react';
 import { EditTeacherModal } from './TeachersPage';
 import { cn } from '@/lib/utils';
@@ -82,7 +82,6 @@ export default function TeacherDetailPage() {
     }
   };
 
-  const isLoadingTotal = teacherLoading || classesLoading || statsLoading;
 
   return (
     <AppLayout>
@@ -323,28 +322,6 @@ function StatsCard({ title, value, sub, icon: Icon, color, smallValue }: any) {
              <h3 className={cn("font-black tracking-tighter leading-none mb-1 md:mb-2", smallValue ? "text-xl md:text-2xl" : "text-3xl md:text-5xl")}>{value}</h3>
              <span className={cn("text-[9px] md:text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
           </div>
-       </div>
-    </div>
-  );
-}
-
-function LoadProgress({ label, percentage, color }: { label: string; percentage: number; color: string }) {
-  const colors: any = {
-    indigo: "bg-indigo-600 shadow-indigo-100",
-    emerald: "bg-emerald-500 shadow-emerald-100",
-    amber: "bg-amber-500 shadow-amber-100"
-  };
-  return (
-    <div className="space-y-4">
-       <div className="flex justify-between items-end px-1">
-          <span className="text-sm font-black text-slate-800">{label}</span>
-          <div className="flex items-center gap-2">
-             <div className={cn("w-2 h-2 rounded-full", colors[color])} />
-             <span className="text-[12px] font-black text-slate-900 tracking-tight">{percentage}%</span>
-          </div>
-       </div>
-       <div className="h-2.5 bg-slate-50 rounded-full overflow-hidden border border-slate-100">
-          <div className={cn("h-full transition-all duration-1000 rounded-full shadow-lg", colors[color])} style={{ width: `${percentage}%` }} />
        </div>
     </div>
   );

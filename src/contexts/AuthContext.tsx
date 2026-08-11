@@ -9,7 +9,6 @@ import { queryClient, clearAllCache } from '@/lib/queryClient';
 interface AuthContextType {
   session: Session | null;
   user: AppUser | null;
-  loading: boolean;
   isLoading: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -138,7 +137,6 @@ async function prefetchCommonQueries(appUser: AppUser) {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   
-  // ✅ Optimization: Initialize user from cache for instant "App Shell" rendering
   const [user, setUser] = useState<AppUser | null>(() => getCachedUser());
 
   const [isLoading, setIsLoading] = useState(true);
@@ -149,7 +147,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(currentSession);
     
     if (currentSession?.user) {
-      // ✅ We have a user in session
       const appUser = await getAppUserData(currentSession.user);
       
       if (appUser) {
@@ -167,23 +164,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         deferPrefetch();
       }
     } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-      // ✅ ONLY clear user if it's an explicit logout/delete
       logger.warn('[Auth] Explicit sign out or user delete');
       setUser(null);
       setCachedUser(null);
       localStorage.removeItem('last_auth_sync');
     } else if (!currentSession && event === 'INITIAL_SESSION') {
-      // On initial load, if no session, check if we should clear cache
-      // We wait for a bit to see if a token refresh happens
-      logger.log('[Auth] No initial session found');
-      // Don't clear user immediately to prevent flicker if refresh is about to happen
+      logger.log('[Auth] No initial session found — will retry getSession after 3s');
+      setTimeout(async () => {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          logger.warn('[Auth] Confirmed no session after retry — clearing stale cache');
+          setUser(null);
+          setCachedUser(null);
+          localStorage.removeItem('last_auth_sync');
+        }
+      }, 3000);
+    } else if (!currentSession && event !== 'INITIAL_SESSION') {
+      logger.warn('[Auth] Session became null (non-initial) — clearing cache');
+      setUser(null);
+      setCachedUser(null);
+      localStorage.removeItem('last_auth_sync');
     }
     
     setIsLoading(false);
   };
 
+  const forceSignOut = () => {
+    logger.warn('[Auth] Force sign-out triggered by global event');
+    try { queryClient.cancelQueries(); } catch (e) { logger.warn('[Auth] cancelQueries error:', e); }
+    clearAllCache();
+    setUser(null);
+    setSession(null);
+    setCachedUser(null);
+    localStorage.removeItem('last_auth_sync');
+    supabase.auth.signOut().catch((e) => logger.warn('[Auth] signOut after force:', e));
+  };
+
   useEffect(() => {
-    // 1. جلب الجلسة الحالية عند التشغيل مع محاولة التحديث التلقائي
+    const onForceSignout = () => forceSignOut();
+    window.addEventListener('auth:force-signout', onForceSignout);
+
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
         syncUser(session, 'INITIAL_SESSION');
@@ -193,7 +213,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         syncUser(null, 'INITIAL_SESSION');
       });
 
-    // 2. الاستماع لتغييرات التوثيق (Refresh, SignOut, SignIn)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === 'TOKEN_REFRESHED') {
@@ -201,21 +220,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (event === 'SIGNED_OUT') {
-          // Force clear everything on sign out (including IndexedDB)
+          try { queryClient.cancelQueries(); } catch {}
           clearAllCache();
+        }
+
+        if (event === 'TOKEN_REFRESH_FAILED') {
+          logger.warn('[Auth] TOKEN_REFRESH_FAILED event — emergency cleanup');
+          try { queryClient.cancelQueries(); } catch {}
+          forceSignOut();
+          return;
+        }
+
+        if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
+          logger.warn(`[Auth] session=null on event ${event} — cleanup`);
+          try { queryClient.cancelQueries(); } catch {}
+          forceSignOut();
+          return;
         }
 
         syncUser(session, event);
       }
     );
 
-    // 3. ✅ إضافة مستمع لإعادة تفعيل الجلسة عند عودة المستخدم للتطبيق (Tab Focus)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         logger.log('[Auth] App focused, checking session...');
         supabase.auth.getSession()
           .then(({ data: { session } }) => {
-            if (session) syncUser(session, 'VISIBILITY_CHANGE');
+            if (session) {
+              syncUser(session, 'VISIBILITY_CHANGE');
+            } else {
+              logger.warn('[Auth] No session on focus — triggering cleanup');
+              forceSignOut();
+            }
           })
           .catch((error) => {
             logger.warn('[Auth] Session check failed on focus:', error);
@@ -227,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('auth:force-signout', onForceSignout);
     };
   }, []);
 
@@ -286,7 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading: isLoading, isLoading, signOut, refreshUser, login, signup }}>
+    <AuthContext.Provider value={{ session, user, isLoading, signOut, refreshUser, login, signup }}>
       {children}
     </AuthContext.Provider>
   );

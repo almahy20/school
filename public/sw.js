@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-cache-v1.7'; // bumped: push reliability fixes
+const CACHE_NAME = 'school-cache-v1.8';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -107,13 +107,9 @@ self.addEventListener('fetch', (event) => {
 
     if (url.pathname.includes('/auth/v1/')) return;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
     event.respondWith(
-      fetch(event.request, { signal: controller.signal })
+      fetch(event.request)
         .then(response => {
-          clearTimeout(timeoutId);
           if (response.status === 200) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
@@ -121,8 +117,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(async (error) => {
-          clearTimeout(timeoutId);
-          console.warn('[SW] Supabase fetch failed or timed out, trying fallback cache:', error);
+          console.warn('[SW] Supabase fetch failed, trying fallback cache:', error);
 
           const cached = await caches.match(event.request);
           if (cached) {
@@ -139,9 +134,7 @@ self.addEventListener('fetch', (event) => {
           return new Response(
             JSON.stringify({
               error: 'offline',
-              message: error.name === 'AbortError'
-                ? 'انتهت مهلة الاتصال بالخادم، تم تحميل البيانات محلياً'
-                : 'أنت غير متصل بالإنترنت حالياً'
+              message: 'أنت غير متصل بالإنترنت حالياً'
             }),
             { status: 503, headers: { 'Content-Type': 'application/json' } }
           );

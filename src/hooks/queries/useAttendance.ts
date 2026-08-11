@@ -13,7 +13,7 @@ export interface AttendanceRecord {
 }
 
 export function useClassAttendance(classId: string | null, date: string) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['attendance', 'class', classId, date];
   
   return useQuery({
@@ -47,7 +47,7 @@ export function useClassAttendance(classId: string | null, date: string) {
         };
       }) as AttendanceRecord[];
     },
-    enabled: !!(user?.schoolId && classId),
+    enabled: !!(session && user?.schoolId && classId),
     placeholderData: keepPreviousData,
   });
 }
@@ -141,7 +141,7 @@ export interface TeacherAttendanceRecord {
 }
 
 export function useTeacherAttendance(date: string) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['teacher-attendance', date];
   
   return useQuery({
@@ -187,7 +187,7 @@ export function useTeacherAttendance(date: string) {
         };
       }) as TeacherAttendanceRecord[];
     },
-    enabled: !!user?.schoolId,
+    enabled: !!(session && user?.schoolId),
     staleTime: 1000 * 60 * 60, 
     gcTime: 1000 * 60 * 60 * 2,
     placeholderData: keepPreviousData,

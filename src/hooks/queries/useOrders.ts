@@ -39,7 +39,7 @@ export function useOrder(id: string | undefined) {
 }
 
 export function useSchoolOrders() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['school-orders'];
   
   return useQuery({
@@ -53,7 +53,7 @@ export function useSchoolOrders() {
       if (error) throw error;
       return data as SchoolOrder[];
     },
-    enabled: !!user?.isSuperAdmin,
+    enabled: session && !!user?.isSuperAdmin,
     staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
     refetchOnWindowFocus: false,
   });

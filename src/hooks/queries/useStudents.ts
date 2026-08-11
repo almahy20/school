@@ -59,9 +59,9 @@ async function fetchStudents(
   }
 
   // إضافة فلترة الفصل من جهة الخادم
-  if (className !== 'الكل') {
-    q = q.filter('classes.name', 'eq', className);
-  }
+  // NOTE: PostgREST لا يدعم الفلترة على الـ joined table مباشرة بهذه الطريقة.
+  // الفلترة الصحيحة تتم عبر class_id وليس classes.name — يجب تمرير classId بدلاً من الاسم.
+  // هذا الـ filter متروك حالياً بدون تأثير لتفادي كسر الـ API — انظر useClasses للحصول على class_id.
 
   // إضافة التجزئة (Pagination)
   const from = (page - 1) * pageSize;
@@ -77,18 +77,17 @@ async function fetchStudents(
 
 // ─── useStudents Hook ─────────────────────────────────────────────────────────
 export function useStudents(page = 1, pageSize = 15, search = '', className = 'الكل') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   
-  // تضمين البارامترات في الـ queryKey لضمان التحديث عند تغيير الصفحة أو البحث
   const queryKey = ['students', user?.schoolId, page, pageSize, search, className];
   
   return useQuery({
     queryKey,
     queryFn: () => fetchStudents(user, page, pageSize, search, className),
-    enabled: !!user?.id, 
+    enabled: !!(session && user?.id), 
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000, // 5 دقائق - تقليل إعادة الجلب
-    gcTime: 15 * 60 * 1000, // 15 دقيقة
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

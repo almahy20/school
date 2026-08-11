@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
 import { getOptimizedImageUrl } from '@/lib/utils';
@@ -44,7 +45,7 @@ export default function TeacherSignupPage() {
       // ✅ Store signup time to trigger PWA install prompt
       const signupTime = Date.now().toString();
       sessionStorage.setItem('user_signup_time', signupTime);
-      console.log('✅ Teacher signup - stored signup time:', signupTime);
+      logger.log('✅ Teacher signup - stored signup time:', signupTime);
       
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة الانتظار لحين موافقة الإدارة...');
       setTimeout(() => navigate('/'), 3000);

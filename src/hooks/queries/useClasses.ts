@@ -52,25 +52,24 @@ async function fetchClasses(
 }
 
 export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id, page, pageSize, search, gradeLevel];
   
   return useQuery({
     queryKey,
     queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
     placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000, // 3 دقائق — Realtime يُحدّث الكاش عند أي تغيير
-    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
-    refetchOnMount: false, // نعتمد على Realtime + staleTime
+    staleTime: 3 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    refetchOnMount: false,
     retry: 1,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 
-// دالة لجلب كافة الفصول (بدون تجزئة) لاستخدامها في القوائم المنسدلة
 export function useAllClasses() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['classes', 'all', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
   
   return useQuery({
@@ -83,7 +82,7 @@ export function useAllClasses() {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
@@ -113,7 +112,7 @@ export function useClass(id: string | undefined | null) {
 }
 
 export function useTeacherClasses(teacherId: string | undefined) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['classes', 'teacher', teacherId, user?.schoolId], [teacherId, user?.schoolId]);
   
   return useQuery({
@@ -129,7 +128,7 @@ export function useTeacherClasses(teacherId: string | undefined) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!(teacherId && user?.schoolId),
+    enabled: !!(session && teacherId && user?.schoolId),
     staleTime: 5 * 60 * 1000,
   });
 }

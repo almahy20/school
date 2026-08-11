@@ -27,7 +27,7 @@ export interface StudentGrade {
 }
 
 export function useExamTemplates(classId: string | null, subject: string | null, page = 1, pageSize = 10) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['exam-templates', user?.schoolId, classId, subject, page, pageSize];
   
   return useQuery({
@@ -55,7 +55,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
       if (error) throw error;
       return { data: (data as ExamTemplate[]) || [], count: count || 0 };
     },
-    enabled: !!(user?.schoolId && classId),
+    enabled: session && !!(user?.schoolId && classId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
@@ -65,7 +65,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
 }
 
 export function useStudentGrades(templateId: string | null, classId: string | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['student-grades', templateId, classId];
   
   return useQuery({
@@ -106,7 +106,7 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
         };
       }) as StudentGrade[];
     },
-    enabled: !!(user?.schoolId && classId && templateId),
+    enabled: session && !!(user?.schoolId && classId && templateId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
   });
@@ -160,23 +160,20 @@ export function useUpsertGrades() {
     mutationFn: async (grades: any[]) => {
       if (!grades.length) return;
       const templateId = grades[0].exam_template_id;
-      const studentIds = grades.map(g => g.student_id);
-      
-      // 1. Delete existing
-      await supabase
-        .from('grades')
-        .delete()
-        .eq('exam_template_id', templateId)
-        .in('student_id', studentIds);
-        
-      // 2. Clean id and insert fresh with school context
+
+      // Clean id and prepare grades with school context
       const cleanedGrades = grades.map(({ id, ...rest }) => ({
         ...rest,
         school_id: user.schoolId,
         teacher_id: user.id
       }));
 
-      const { error } = await supabase.from('grades').insert(cleanedGrades);
+      // ✅ Use upsert instead of delete+insert to avoid data loss if insert fails
+      // onConflict targets the unique constraint on (student_id, exam_template_id)
+      const { error } = await supabase
+        .from('grades')
+        .upsert(cleanedGrades, { onConflict: 'student_id,exam_template_id' });
+
       if (error) throw error;
 
       // Log action to audit logs

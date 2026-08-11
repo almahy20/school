@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowRight, User, Phone, Users, Info, 
   MapPin, Mail, Shield, ChevronLeft, CreditCard,
-  Clock, Bell, CheckCircle, Send, Key
+  Clock, Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logger } from '@/utils/logger';
@@ -25,7 +25,7 @@ export default function ParentDetailPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [notificationStats, setNotificationStats] = useState<any>(null);
+  const [notificationStats] = useState<any>(null);
   const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -105,7 +105,6 @@ export default function ParentDetailPage() {
     }
   };
 
-  const isLoadingTotal = parentLoading || childrenLoading;
 
   return (
     <AppLayout>

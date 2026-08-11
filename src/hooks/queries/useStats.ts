@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { logger } from '@/utils/logger';
 
 export function useAdminStats() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['admin-stats', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
 
             
@@ -20,10 +20,6 @@ export function useAdminStats() {
       if (!user?.isSuperAdmin && !user?.schoolId) return emptyStats;
 
       try {
-        // Use optimized SQL aggregate function (single RPC call)
-        // Before: 6 parallel queries, ~500KB data transfer
-        // After: 1 RPC call, ~100 bytes data transfer
-        // NOTE: Requires running migrations: 20260415000002_add_aggregate_functions.sql
         const { data: stats, error } = await (supabase as any)
           .rpc('get_dashboard_stats', {
             p_school_id: user.schoolId,
@@ -32,20 +28,18 @@ export function useAdminStats() {
         
         if (error) {
           logger.warn('Dashboard stats RPC not available, using fallback method:', error.message);
-          // Fallback to old method if RPC fails (e.g., migration not run yet)
           return await fetchStatsFallback(user);
         }
         
         return stats || emptyStats;
       } catch (error) {
         logger.warn('Error fetching admin stats via RPC, using fallback:', error);
-        // Fallback to ensure app works even if migration hasn't been run
         return await fetchStatsFallback(user);
       }
     },
-    enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 2 * 60 * 1000, // 2 دقائق — Realtime يُحدّث البيانات عند أي تغيير
-    gcTime: 24 * 60 * 60 * 1000, // 24 hours persistence
+    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
+    staleTime: 2 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -104,7 +98,7 @@ async function fetchStatsFallback(user: any) {
 }
 
 export function useTeacherStats() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['teacher-stats', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
   return useQuery({
@@ -121,20 +115,18 @@ export function useTeacherStats() {
       if (error) throw error;
       return data || emptyStats;
     },
-    enabled: !!(user?.id && user?.schoolId && user?.role === 'teacher'),
+    enabled: !!(session && user?.id && user?.schoolId && user?.role === 'teacher'),
     staleTime: 5 * 60 * 1000,
   });
 }
 
 export function useAdminActivities() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   return useQuery({
     queryKey: ['admin-activities', user?.schoolId],
     queryFn: async () => {
       if (!user?.schoolId) return [];
       
-      // ✅ Optimization: ONE single RPC call for all dashboard activities
-      // This replaces multiple parallel queries for complaints, registrations, and payments
       const { data, error } = await (supabase as any).rpc('get_admin_dashboard_activities', {
         p_school_id: user.schoolId
       });
@@ -146,8 +138,8 @@ export function useAdminActivities() {
 
       return data || [];
     },
-    enabled: !!user?.schoolId && user?.role === 'admin',
-    staleTime: 3 * 60 * 1000, // 3 دقائق - تقليل إعادة الجلب
-    gcTime: 10 * 60 * 1000, // 10 دقائق
+    enabled: !!(session && user?.schoolId && user?.role === 'admin'),
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }

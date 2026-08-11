@@ -1,10 +1,42 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
-import { ArrowRight, CreditCard, Layers, User, Phone, Mail, MapPin, Hash, Calendar, BookOpen, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { ArrowRight, CreditCard, Layers, User, Phone, MapPin, Hash, Calendar, BookOpen, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useChildFullDetails } from '@/hooks/queries';
 import { cn } from '@/lib/utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import type { LucideIcon } from 'lucide-react';
+
+// ── Shared header used across all sub-pages ───────────────────────────────────
+function SubPageHeader({
+  onBack,
+  icon: Icon,
+  title,
+  subtitle,
+}: {
+  onBack: () => void;
+  icon: LucideIcon;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
+      <button
+        onClick={onBack}
+        className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0"
+      >
+        <ArrowRight className="w-5 h-5" />
+      </button>
+      <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <h1 className="text-xl md:text-2xl font-black text-slate-900 leading-none mb-1">{title}</h1>
+        {subtitle && <p className="text-xs text-slate-500 font-medium">{subtitle}</p>}
+      </div>
+    </header>
+  );
+}
 
 // Financial Page
 export function StudentFinancialPage() {
@@ -17,18 +49,12 @@ export function StudentFinancialPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
-            <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
-              <ArrowRight className="w-5 h-5" />
-            </button>
-            <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
-              <CreditCard className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 leading-none mb-1">مصروفات {child?.name}</h1>
-              <p className="text-xs text-slate-500 font-medium">{child?.className} • {child?.academic_year}</p>
-            </div>
-          </header>
+          <SubPageHeader
+            onBack={() => navigate(`/parent/children/${id}`)}
+            icon={CreditCard}
+            title={`مصروفات ${child?.name}`}
+            subtitle={`${child?.className} • ${child?.academic_year}`}
+          />
 
           {child?.fees?.length > 0 ? (
             <div className="space-y-6">
@@ -106,18 +132,12 @@ export function StudentCurriculumPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
-            <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
-              <ArrowRight className="w-5 h-5" />
-            </button>
-            <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 leading-none mb-1">منهج {child?.name}</h1>
-              <p className="text-xs text-slate-500 font-medium">{child?.className} • {child?.academic_year}</p>
-            </div>
-          </header>
+          <SubPageHeader
+            onBack={() => navigate(`/parent/children/${id}`)}
+            icon={Layers}
+            title={`منهج ${child?.name}`}
+            subtitle={`${child?.className} • ${child?.academic_year}`}
+          />
 
           {child?.curriculum?.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -168,18 +188,12 @@ export function StudentDataPage() {
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
-          <header className="flex items-center gap-4 bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
-            <button onClick={() => navigate(`/parent/children/${id}`)} className="w-11 h-11 rounded-2xl bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-white border border-slate-100 flex items-center justify-center transition-all active:scale-95 shadow-sm shrink-0">
-              <ArrowRight className="w-5 h-5" />
-            </button>
-            <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-lg shrink-0 rotate-3 group-hover:rotate-0 transition-all duration-500">
-              <User className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 leading-none mb-1">بيانات {child?.name}</h1>
-              <p className="text-xs text-slate-500 font-medium">المعلومات الشخصية</p>
-            </div>
-          </header>
+          <SubPageHeader
+            onBack={() => navigate(`/parent/children/${id}`)}
+            icon={User}
+            title={`بيانات ${child?.name}`}
+            subtitle="المعلومات الشخصية"
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {infoItems.map((item, idx) => (

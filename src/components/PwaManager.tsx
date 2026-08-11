@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { cleanBrandingData } from '@/hooks/useCleanBranding';
 import { useBranding } from '@/hooks/queries/useBranding';
+import { logger } from '@/utils/logger';
 
 const FALLBACK_PWA_ICON = "/icons/icon-192.png";
 
@@ -67,7 +68,7 @@ export default function PwaManager() {
             slug = s.slug;
             loadedFromCache = true;
           } catch (e) {
-            console.error('Error parsing cached branding:', e);
+            logger.error('Error parsing cached branding:', e);
           }
         }
 
@@ -80,7 +81,7 @@ export default function PwaManager() {
               .maybeSingle();
 
             if (error) {
-              console.error('Error fetching PWA school data:', error);
+              logger.error('Error fetching PWA school data:', error);
             } else if (data) {
               const school = data as any;
               const cleaned = cleanBrandingData(school);
@@ -91,7 +92,7 @@ export default function PwaManager() {
               themeColor = "#1e293b";
             }
           } catch (err) {
-            console.error('Fatal error in PwaManager fetch:', err);
+            logger.error('Fatal error in PwaManager fetch:', err);
           }
         }
       }
@@ -114,7 +115,7 @@ export default function PwaManager() {
             .maybeSingle();
           
           if (error) {
-            console.error('Error fetching PWA school data by slug:', error);
+            logger.error('Error fetching PWA school data by slug:', error);
           } else if (data) {
             const school = data as any;
             const cleaned = cleanBrandingData(school);
@@ -125,7 +126,7 @@ export default function PwaManager() {
             themeColor = "#1e293b";
           }
         } catch (err) {
-          console.error('Fatal error in PwaManager fetch by slug:', err);
+          logger.error('Fatal error in PwaManager fetch by slug:', err);
         }
       }
     }

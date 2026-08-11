@@ -18,7 +18,7 @@ export interface School {
 
 
 export function useSchools() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['schools'], []);
   
   return useQuery({
@@ -31,13 +31,13 @@ export function useSchools() {
       if (error) throw error;
       return data as School[];
     },
-    enabled: !!user?.isSuperAdmin,
+    enabled: session && !!user?.isSuperAdmin,
     staleTime: 5 * 60 * 1000, // 5 دقائق بدلاً من 0
   });
 }
 
 export function useSchoolOrders() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['school-orders'], []);
   
   return useQuery({
@@ -50,7 +50,7 @@ export function useSchoolOrders() {
       if (error) throw error;
       return data as SchoolOrder[];
     },
-    enabled: !!user?.isSuperAdmin,
+    enabled: session && !!user?.isSuperAdmin,
     staleTime: 5 * 60 * 1000, // 5 دقائق بدلاً من 0
   });
 }

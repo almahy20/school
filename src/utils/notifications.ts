@@ -1,14 +1,5 @@
 import { logger } from './logger';
 
-export const requestNotificationPermission = async () => {
-  if (!('Notification' in window)) {
-    logger.error('This browser does not support notifications.');
-    return false;
-  }
-  const permission = await Notification.requestPermission();
-  return permission === 'granted';
-};
-
 // Sound is disabled by request — keep the function as a no-op so call sites don't break
 export const playNotificationSound = () => {
   // Disabled

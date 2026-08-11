@@ -17,7 +17,7 @@ export interface FeeRecord {
 }
 
 export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all') {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['fees', user?.schoolId, term, page, pageSize, search, classId];
   
   return useQuery({
@@ -25,7 +25,6 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
     queryFn: async () => {
       if (!user?.schoolId) return { data: [], count: 0, stats: { total_due: 0, total_paid: 0 } };
 
-      // 1. Get all students with their fixed monthly fee
       let studentsQ = supabase
         .from('students')
         .select('id, name, monthly_fee, class_id, classes(id, name)', { count: 'exact' })
@@ -43,7 +42,6 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
 
       if (sErr) throw sErr;
 
-      // 2. Get fee payments for the selected term
       const studentIds = (students || []).map(s => s.id);
       const { data: monthFees, error: fErr } = await supabase
         .from('fees')
@@ -54,8 +52,6 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
 
       if (fErr) throw fErr;
 
-      // 3. Calculate Global Stats for this term (for all students in school/class)
-      // Note: We need another query to get total due/paid for ALL students, not just current page
       let allStudentsQ = supabase
         .from('students')
         .select('id, monthly_fee')
@@ -68,8 +64,6 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
         .select('amount_paid')
         .eq('school_id', user.schoolId)
         .eq('term', term);
-      // If we want stats for a specific class, we'd need a join or a list of IDs
-      // For simplicity and performance, let's use the allStudents list if classId is not 'all'
       if (classId !== 'all' && allStudents) {
         allFeesQ = allFeesQ.in('student_id', allStudents.map(s => s.id));
       }
@@ -78,7 +72,6 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       const total_due = (allStudents || []).reduce((sum, s) => sum + (Number(s.monthly_fee) || 0), 0);
       const total_paid = (allTermFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
 
-      // 4. Enrich student data
       const enrichedData = (students || []).map((s: any) => {
         const feeRecord = (monthFees || []).find(f => f.student_id === s.id);
         
@@ -109,7 +102,7 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
         stats: { total_due, total_paid } 
       };
     },
-    enabled: !!user?.schoolId,
+    enabled: !!(session && user?.schoolId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
   });

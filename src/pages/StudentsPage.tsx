@@ -6,18 +6,17 @@ import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllC
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Search, GraduationCap, School, User, 
-  Eye, Edit2, Edit3, Trash2, Filter, MoreHorizontal,
-  ChevronLeft, ArrowRight, BookOpen, Clock, Activity,
-  Calendar, CheckCircle, Shield, AlertCircle, RefreshCw,
+  Edit2, Trash2,
+  ChevronLeft, ArrowRight, BookOpen,
+  Activity, Edit3,
+  Calendar,
   Phone, MapPin
 } from 'lucide-react';
-import { sendPushToUser } from '@/utils/pushNotifications';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import DataDetailModal from '@/components/DataDetailModal';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
 
@@ -34,10 +33,7 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  
-  // Detail Modal State
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
-  const [showDetail, setShowDetail] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
 
   // ── React Query Hooks ──

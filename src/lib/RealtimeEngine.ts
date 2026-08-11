@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { queryClient } from './queryClient';
+import { logger } from '@/utils/logger';
 
 /**
  * World-Class Silent Realtime Engine
@@ -118,7 +119,7 @@ class RealtimeEngine {
       // to avoid duplicate subscriptions and conflicting cache updates.
 
     } catch (e) {
-      console.warn('[RealtimeEngine] Failed to auto-sync cache', e);
+      logger.warn('[RealtimeEngine] Failed to auto-sync cache', e);
     }
   }
 }
