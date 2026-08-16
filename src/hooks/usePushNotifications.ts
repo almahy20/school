@@ -12,24 +12,123 @@ export function usePushNotifications() {
 
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY; // We'll assume the user will set this
 
-  const checkSubscription = useCallback(async () => {
-    if ('serviceWorker' in navigator && 'PushManager' in window && user?.id) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        setIsSubscribed(subscription !== null);
-        
-        // ✅ If subscription exists but permission is denied, clean it up
-        if (subscription && Notification.permission === 'denied') {
-          await subscription.unsubscribe();
-          setIsSubscribed(false);
-          logger.warn('Push subscription cleaned up due to denied permission');
-        }
-      } catch (error) {
-        logger.error('Error checking push subscription:', error);
-      }
+  // ─── Helper: decode VAPID base64url → Uint8Array ───────────────────────────
+  // Kept outside subscribeToNotifications so checkSubscription can reuse it.
+  const urlBase64ToUint8Array = useCallback((base64String: string) => {
+    const cleaned = base64String.trim().replace(/^"|"$/g, '');
+    const padding = '='.repeat((4 - cleaned.length % 4) % 4);
+    const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
     }
-  }, [user?.id]);
+    return outputArray;
+  }, []);
+
+  // ─── Helper: save/update subscription row in Supabase ───────────────────────
+  const saveSubscriptionToDb = useCallback(async (
+    userId: string,
+    subscription: PushSubscription
+  ): Promise<boolean> => {
+    const subJson = subscription.toJSON();
+    const { error } = await (supabase as any)
+      .from('push_subscriptions')
+      .upsert(
+        { user_id: userId, subscription: subJson, endpoint: subscription.endpoint },
+        { onConflict: 'endpoint' }
+      );
+    if (error) {
+      logger.error('[Push] DB upsert error:', error);
+      return false;
+    }
+    return true;
+  }, []);
+
+  const checkSubscription = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !user?.id) return;
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      // ── Case 1: Permission revoked — clean up ────────────────────────────
+      if (subscription && Notification.permission === 'denied') {
+        await subscription.unsubscribe();
+        setIsSubscribed(false);
+        logger.warn('[Push] Subscription cleaned up — permission denied');
+        return;
+      }
+
+      // ── Case 2: No subscription at all ──────────────────────────────────
+      if (!subscription) {
+        setIsSubscribed(false);
+        return;
+      }
+
+      // ── Case 3: Subscription exists — validate VAPID key match ──────────
+      //
+      // When VAPID keys are rotated, the browser's stored subscription was
+      // signed with the OLD key. FCM will reject it with 410 (Gone) the first
+      // time we try to send. We detect the mismatch HERE, at app load, and
+      // silently resubscribe with the new key so the first real notification
+      // is never lost.
+      //
+      // How we detect: PushSubscription.options.applicationServerKey is the
+      // raw Uint8Array that was used when subscribe() was called. We compare
+      // it byte-for-byte with the current VAPID_PUBLIC_KEY from env.
+      if (VAPID_PUBLIC_KEY && VAPID_PUBLIC_KEY !== 'your_vapid_public_key_here') {
+        try {
+          const currentKeyBytes = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+          const storedKeyBytes  = subscription.options?.applicationServerKey
+            ? new Uint8Array(subscription.options.applicationServerKey as ArrayBuffer)
+            : null;
+
+          const keysMatch =
+            storedKeyBytes !== null &&
+            storedKeyBytes.length === currentKeyBytes.length &&
+            storedKeyBytes.every((byte, i) => byte === currentKeyBytes[i]);
+
+          if (!keysMatch) {
+            logger.warn('[Push] VAPID key mismatch — auto-resubscribing with new key...');
+
+            // Unsubscribe old (dead) subscription
+            await subscription.unsubscribe();
+
+            // Only auto-resubscribe if we have permission — don't prompt user
+            if (Notification.permission === 'granted') {
+              const newSubscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: currentKeyBytes,
+              });
+
+              const saved = await saveSubscriptionToDb(user.id, newSubscription);
+              if (saved) {
+                setIsSubscribed(true);
+                logger.log('[Push] Auto-resubscribe successful — new endpoint registered');
+              } else {
+                setIsSubscribed(false);
+              }
+            } else {
+              setIsSubscribed(false);
+              logger.warn('[Push] VAPID key mismatch found but permission not granted — skipping auto-resubscribe');
+            }
+            return;
+          }
+        } catch (keyCheckErr) {
+          // Non-fatal: if key comparison fails for any reason, leave existing
+          // subscription in place and let normal error handling deal with it.
+          logger.warn('[Push] Could not compare VAPID keys (non-fatal):', keyCheckErr);
+        }
+      }
+
+      // ── Case 4: Everything looks good ───────────────────────────────────
+      setIsSubscribed(true);
+
+    } catch (error) {
+      logger.error('[Push] Error in checkSubscription:', error);
+    }
+  }, [user?.id, VAPID_PUBLIC_KEY, urlBase64ToUint8Array, saveSubscriptionToDb]);
 
   useEffect(() => {
     // ✅ نشيك مرة واحدة فقط - مش كل ما الـ component يتعمل rerender
@@ -56,24 +155,6 @@ export function usePushNotifications() {
       });
     }
   }, [checkSubscription]); // ✅ أضفنا checkSubscription إلى الـ dependencies
-
-  const urlBase64ToUint8Array = (base64String: string) => {
-    const cleaned = base64String.trim().replace(/^"|"$/g, '');
-    const padding = '='.repeat((4 - cleaned.length % 4) % 4);
-    const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
-    
-    try {
-      const rawData = window.atob(base64);
-      const outputArray = new Uint8Array(rawData.length);
-      for (let i = 0; i < rawData.length; ++i) {
-        outputArray[i] = rawData.charCodeAt(i);
-      }
-      return outputArray;
-    } catch (e) {
-      logger.error('Failed to decode VAPID key:', e);
-      throw new Error('Invalid VAPID key format');
-    }
-  };
 
   const subscribeToNotifications = async (): Promise<boolean> => {
     logger.log('--- Start Notification Subscription Process ---');
@@ -168,23 +249,10 @@ export function usePushNotifications() {
         });
 
         logger.log('Subscription created successfully:', subscription.endpoint.substring(0, 30) + '...');
-        const subJson = subscription.toJSON();
 
         logger.log('Saving subscription to Supabase for user:', user.id);
-        const { error } = await (supabase as any)
-          .from('push_subscriptions')
-          .upsert({
-            user_id: user.id,
-            subscription: subJson,
-            endpoint: subscription.endpoint
-          }, { 
-            onConflict: 'endpoint' 
-          });
-
-        if (error) {
-          logger.error('Supabase save error:', error);
-          throw error;
-        }
+        const saved = await saveSubscriptionToDb(user.id, subscription);
+        if (!saved) throw new Error('فشل حفظ بيانات الاشتراك في قاعدة البيانات.');
         
         setIsSubscribed(true);
         logger.log('--- Subscription Process Completed Successfully ---');
