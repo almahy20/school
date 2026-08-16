@@ -274,3 +274,4 @@ ALTER  FUNCTION public.get_school_id_by_slug(text) SET search_path = public;
 -- 4. Refresh PostgREST schema cache
 -- ─────────────────────────────────────────────────────────────────────────────────────
 NOTIFY pgrst, 'reload schema';
+\

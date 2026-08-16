@@ -78,7 +78,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
         } catch {}
       }
 
-      if (res.status === 401) {
+      if (res.status === 401 || (res.status === 403 && isAuthEndpoint(url))) {
         try {
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
@@ -88,13 +88,14 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
               body?.message?.includes('JWT') ||
               body?.message?.includes('token') ||
               body?.error === 'invalid_token' ||
-              body?.error === 'unauthorized'
+              body?.error === 'unauthorized' ||
+              res.status === 403
             ) {
               const { data } = await supabase.auth.getSession();
               if (!data.session) {
-                handleAuthFailure('401 received with no session');
+                handleAuthFailure(`${res.status} received with no session`);
               } else {
-                console.warn('[Supabase] 401 received but session still present — will let TOKEN_REFRESH_FAILED handle cleanup');
+                console.warn(`[Supabase] ${res.status} received but session still present — will let TOKEN_REFRESH_FAILED handle cleanup`);
               }
             }
           }

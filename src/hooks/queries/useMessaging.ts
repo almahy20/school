@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { useEffect, useMemo } from 'react';
-import { sendPushToUser } from '@/utils/pushNotifications';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user, session } = useAuth();
@@ -102,35 +101,12 @@ export function useSendMessage() {
         : 'رسالة جديدة من إدارة المدرسة';
       const notificationBody = content.trim().substring(0, 100);
 
-      const notifications = targets.map(targetId => ({
-        user_id: targetId,
-        school_id: user.schoolId,
-        type: senderName ? 'teacher_message' : 'broadcast_message',
-        title: notificationTitle,
-        message: notificationBody,
-        is_read: false,
-        metadata: { sender_id: user.id, full_content: content.trim(), student_id: studentId }
-      }));
+      // ✅ Note: Database trigger `tr_notify_new_message` on `messages` table 
+      // automatically creates notifications in DB. Direct client inserts violate RLS.
 
-      const { error: ntError } = await (supabase as any).from('notifications').insert(notifications);
-      if (ntError) {
-        logger.error('Notification insert error:', ntError);
-        throw ntError;
-      }
-
-      // ✅ Send push notifications to all recipients so they get an alert
-      // even when the app is closed. The notification links directly to /messages.
-      await Promise.allSettled(
-        targets.map(targetId =>
-          sendPushToUser({
-            userId: targetId,
-            title: notificationTitle,
-            body: notificationBody,
-            url: '/messages',
-          })
-        )
-      );
-
+      // ✅ Note: Database triggers (tr_notify_new_message -> tr_auto_push_on_notification)
+      // automatically generate DB notifications and fire push requests via pg_net reliably,
+      // even if the user closes the app immediately after sending.
       return { targets, content };
     },
     onSettled: () => {

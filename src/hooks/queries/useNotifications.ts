@@ -182,20 +182,27 @@ export function useUnreadCounts() {
     queryFn: async () => {
       if (!user?.id) return { unread: 0, complaints: 0 };
       
-      const { data, error } = await db
-        .from('notifications')
-        .select('type, is_read')
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+      const [{ count: unreadCount, error: unreadError }, { count: complaintsCount, error: complaintsError }] = await Promise.all([
+        db
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('is_read', false),
+        db
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .ilike('type', 'complaint%')
+          .eq('is_read', false)
+      ]);
       
-      if (error) throw error;
+      if (unreadError) throw unreadError;
+      if (complaintsError) throw complaintsError;
       
-      const counts = {
-        unread: (data || []).length,
-        complaints: (data || []).filter((n: any) => n.type?.startsWith('complaint')).length
+      return {
+        unread: unreadCount || 0,
+        complaints: complaintsCount || 0
       };
-      
-      return counts;
     },
     enabled: !!(session && user?.id),
     staleTime: 60 * 1000,
