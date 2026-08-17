@@ -208,8 +208,6 @@ serve(async (req) => {
     },
   };
 
-  webpush.setVapidDetails(vapidEmail, vapidPublic, vapidPrivate);
-
   const payload = JSON.stringify({
     title: title ?? schoolName,
     body: body.toString(),
@@ -226,17 +224,19 @@ serve(async (req) => {
   });
 
   // ─── Send to each subscription, classify failures correctly ──────────
-  const endpointsToDelete: string[] = [];      // Confirmed dead after 3x strikes
-  const subscriptionsToIncrement: { id: string; code: number | null }[] = []; // Need +1 failure_count
-  const subscriptionsToReset: string[] = [];   // Sent OK, reset counter
-  let transientFailures = 0;                   // will retry next window
+  const endpointsToDelete: string[] = [];
+  const subscriptionsToIncrement: { id: string; code: number | null }[] = [];
+  const subscriptionsToReset: string[] = [];
+  let transientFailures = 0;
   let sent = 0;
+  // Per-subscription result details — logged at end for observability
+  const deliveryLog: unknown[] = [];
 
-  const PERMANENT_THRESHOLD = 3; // 3 consecutive 403/410 → delete
-  const INSTANT_DELETE_CODES = [404, 410];     // 404/GONE = dead now, no retries
-  const STRIKE_CODES = [403];                   // 403 = might be VAPID temp → 3 strikes
+  const PERMANENT_THRESHOLD = 3;
+  const INSTANT_DELETE_CODES = [404, 410];
+  const STRIKE_CODES = [403];
 
-  const results = await Promise.allSettled(
+  await Promise.allSettled(
     subscriptions.map(async (sub: any) => {
       let pushSubscriptionObject: any = sub.subscription;
 
@@ -246,21 +246,23 @@ serve(async (req) => {
           pushSubscriptionObject = JSON.parse(pushSubscriptionObject);
         } catch (_parseErr) {
           endpointsToDelete.push(sub.endpoint);
-          return { success: false, reason: "invalid_json_stored" };
+          const entry = { success: false, reason: "invalid_json_stored", endpoint: sub.endpoint.substring(0, 50) };
+          deliveryLog.push(entry);
+          return entry;
         }
       }
 
       try {
         await webpush.sendNotification(pushSubscriptionObject, payload, pushOptions);
         sent++;
-        // ✅ Success — reset failure counter so we start fresh next time
         subscriptionsToReset.push(sub.id);
-        return { success: true, endpoint: sub.endpoint.substring(0, 40) + "..." };
+        const entry = { success: true, endpoint: sub.endpoint.substring(0, 40) + "..." };
+        deliveryLog.push(entry);
+        return entry;
       } catch (err: any) {
         const statusCode = typeof err.statusCode === "number" ? err.statusCode : null;
         const errBody = typeof err.body === "string" ? err.body : "";
 
-        // Treat "invalid" subscription payloads as permanent delete
         const isInvalidSubscription =
           !pushSubscriptionObject ||
           !pushSubscriptionObject.endpoint ||
@@ -270,10 +272,11 @@ serve(async (req) => {
 
         if (isInvalidSubscription) {
           endpointsToDelete.push(sub.endpoint);
-          return { success: false, reason: "invalid_subscription_object", permanent: true };
+          const entry = { success: false, reason: "invalid_subscription_object", permanent: true };
+          deliveryLog.push(entry);
+          return entry;
         }
 
-        // 🚨 404 / 410 = INSTANT delete (user uninstalled / endpoint GONE)
         if (statusCode != null && INSTANT_DELETE_CODES.includes(statusCode)) {
           endpointsToDelete.push(sub.endpoint);
           console.warn(
@@ -281,10 +284,11 @@ serve(async (req) => {
             sub.endpoint.substring(0, 50) + "...",
             errBody ? (" body: " + errBody.substring(0, 160)) : ""
           );
-          return { success: false, statusCode, permanent: true, endpoint: sub.endpoint, reason: "instant_dead" };
+          const entry = { success: false, statusCode, permanent: true, reason: "instant_dead", endpoint: sub.endpoint.substring(0, 50) };
+          deliveryLog.push(entry);
+          return entry;
         }
 
-        // ⚡ 403 = 3-strikes rule (might be transient VAPID mismatch, DON'T delete yet)
         if (statusCode != null && STRIKE_CODES.includes(statusCode)) {
           const currentFailures = typeof sub.failure_count === "number" ? sub.failure_count : 0;
           const newCount = currentFailures + 1;
@@ -295,31 +299,30 @@ serve(async (req) => {
               `[Push] Removing endpoint after ${newCount}x consecutive ${statusCode} failures (3-strike rule):`,
               sub.endpoint.substring(0, 50) + "..."
             );
-            return { success: false, statusCode, permanent: true, endpoint: sub.endpoint, reason: `strike_${newCount}_delete`, strikes: newCount };
+            const entry = { success: false, statusCode, permanent: true, reason: `strike_${newCount}_delete`, strikes: newCount };
+            deliveryLog.push(entry);
+            return entry;
           } else {
-            // Not enough strikes yet → increment counter, keep subscription
             subscriptionsToIncrement.push({ id: sub.id, code: statusCode });
             console.warn(
               `[Push] ${statusCode} STRIKE ${newCount}/${PERMANENT_THRESHOLD} for endpoint — keeping subscription for retry:`,
               sub.endpoint.substring(0, 50) + "..."
             );
-            return { success: false, statusCode, permanent: false, reason: `strike_${newCount}_retry`, strikes: newCount };
+            const entry = { success: false, statusCode, permanent: false, reason: `strike_${newCount}_retry`, strikes: newCount };
+            deliveryLog.push(entry);
+            return entry;
           }
         }
 
-        // Everything else = TEMPORARY (timeouts, 429 rate limit, FCM 5xx,
-        // device was offline for a moment, vendor routing issue). Keep the
-        // subscription in DB; next push will succeed; browser will also
-        // retry internally based on TTL/Urgency headers above.
-        // NOTE: We intentionally do NOT bump failure_count for transient
-        // errors (5xx, network blips) because they don't indicate a bad
-        // subscription — just a temporary condition.
+        // Transient failure
         transientFailures++;
         console.warn(
           `[Push] TEMPORARY failure (code=${statusCode ?? "unknown"}, endpoint=${sub.endpoint.substring(0, 50)}...). Keeping subscription for next attempt.`,
           err?.message ?? ""
         );
-        return { success: false, statusCode, permanent: false, message: err?.message ?? null };
+        const entry = { success: false, statusCode, permanent: false, message: err?.message ?? null };
+        deliveryLog.push(entry);
+        return entry;
       }
     }),
   );
@@ -376,9 +379,12 @@ serve(async (req) => {
 
   const total = subscriptions.length;
 
+  // Log full delivery summary for observability
+  console.log(`[Push] Delivery summary for user ${user_id}: sent=${sent}/${total}, transient=${transientFailures}, pruned=${endpointsToDelete.length}`, JSON.stringify(deliveryLog));
+
   // Fix #3 — Return correct status + descriptive flags so callers can react
   const noActiveSubscriptionsAtAll = sent === 0 && transientFailures === 0 && endpointsToDelete.length === total;
-  const allAttemptsFailedTemporarily    = sent === 0 && transientFailures > 0;
+  const allAttemptsFailedTemporarily = sent === 0 && transientFailures > 0;
 
   const responseBody = {
     success: sent > 0,
@@ -389,6 +395,7 @@ serve(async (req) => {
     has_active_subscription: sent > 0 || transientFailures > 0,
     no_device_registered: noActiveSubscriptionsAtAll,
     temporary_outage: allAttemptsFailedTemporarily,
+    delivery_log: deliveryLog,
   };
 
   // Return 502 (Bad Gateway = upstream provider failure) when we couldn't

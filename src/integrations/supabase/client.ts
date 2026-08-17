@@ -27,14 +27,9 @@ const isAuthEndpoint = (url: string): boolean => {
 };
 
 const handleAuthFailure = async (reason: string) => {
-  console.warn(`[Supabase] Auth failure detected: ${reason} — emergency cleanup`);
-  try {
-    queryClient.cancelQueries();
-  } catch {}
-  try {
-    await clearAllCache();
-  } catch {}
-  window.dispatchEvent(new CustomEvent('auth:force-signout'));
+  // ✅ تم تعطيل الـ auto force-signout — المستخدم يفضل logged in
+  // logout بيحصل بس من زر تسجيل الخروج اليدوي
+  console.log(`[Supabase] Auth event detected: ${reason} — no action (manual sign out only)`);
 };
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {

@@ -8,12 +8,12 @@ import {
   Clock, Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { logger } from '@/utils/logger';
 import { 
   useParent, 
   useParentChildrenBasic,
   useDeleteParent
 } from '@/hooks/queries';
+import { getAuthToken } from '@/utils/getAuthToken';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -85,21 +85,21 @@ export default function ParentDetailPage() {
 
     try {
       setResettingPassword(true);
-      // 🚨 تحذير أمني: لا يمكنك استخدام auth.admin من المتصفح (Frontend Client).
-      // منصة Supabase ترفض هذا بـ (403 Forbidden) لأنه يتطلب مفتاح Service Role الذي يمنع قطعيًا وضعه بالمتصفح.
-      // 💡 الحل الصحيح: إنشاء Edge Function بداخل Supabase للقيام بهذا، أو توجيه المستخدم لاستعادة كلمة مروره بريدياً.
-      
-      toast({ 
-        title: 'إجراء محظور أمنياً (403)', 
-        description: 'لا يمكن تغيير كلمة المرور مباشرة من المتصفح لضمان أمان النظام. يرجى توجيه المستخدم لاستخدام ميزة "نسيت كلمة المرور" من شاشة الدخول.', 
+
+      const token = await getAuthToken();
+      const { data: result, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'reset_password', userId: id, data: { password: newPassword } },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      logger.warn("Blocked insecure client-side admin auth call (403 Forbidden). Requires Edge Function or RPC.");
-      
+
+      if (error) throw new Error(error.message || 'فشل في تغيير كلمة المرور');
+      if (!result?.success) throw new Error(result?.error || 'فشل في تغيير كلمة المرور');
+
+      toast({ title: 'تم بنجاح', description: 'تم تحديث كلمة المرور. يمكن لولي الأمر الدخول بالكلمة الجديدة.' });
       setNewPassword('');
       setShowPassword(false);
     } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message || 'فشل في إعادة تعيين كلمة المرور', variant: 'destructive' });
+      toast({ title: 'خطأ', description: err.message || 'فشل في تغيير كلمة المرور', variant: 'destructive' });
     } finally {
       setResettingPassword(false);
     }

@@ -2,6 +2,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
 import { ReactNode } from 'react';
+import { getCachedUser } from '@/lib/userCache';
 
 interface Props {
   children: ReactNode;
@@ -10,17 +11,12 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnly }: Props) {
-  const { user, session, isLoading: loading } = useAuth();
+  const { user, isLoading: loading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const hasCachedUser = !!localStorage.getItem('app_user_cache_v2');
-  
-  if (!loading && !user && hasCachedUser) {
-    localStorage.removeItem('app_user_cache_v2');
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
-  }
 
-  if (loading && !hasCachedUser) {
+  // ✅ لو loading — اعرض spinner
+  if (loading) {
     return (
       <div className="fixed inset-0 bg-background flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
@@ -28,16 +24,19 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
     );
   }
 
-  if (loading && hasCachedUser && !session) {
-    return (
-      <div className="fixed inset-0 bg-background flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-  
-  if (!user || !session) {
-    localStorage.removeItem('app_user_cache_v2');
+  // ✅ لو مفيش user في الـ state — نتحقق من الـ cache قبل الـ redirect
+  // ده بيمنع الـ redirect لو المستخدم logged in فعلاً بس الـ state لسه بتتحمل
+  if (!user) {
+    const cachedUser = getCachedUser();
+    if (cachedUser) {
+      // ✅ فيه cache — اعرض spinner وانتظر AuthContext يكمل التحميل
+      return (
+        <div className="fixed inset-0 bg-background flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      );
+    }
+    // ✅ مفيش cache ومفيش user — تسجيل خروج يدوي أو جلسة منتهية فعلاً
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 

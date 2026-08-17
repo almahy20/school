@@ -25,6 +25,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 let userFetchPromise: Promise<AppUser | null> | null = null;
 let currentFetchingId: string | null = null;
 
+// ✅ Flag للتمييز بين logout يدوي وانتهاء الـ token تلقائياً
+let isManualSignOut = false;
+
 async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
   // 1. If we are already fetching for THIS user, return the same promise
   if (userFetchPromise && currentFetchingId === supaUser.id) {
@@ -143,17 +146,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const syncUser = async (currentSession: Session | null, event?: string) => {
     logger.log(`[Auth] Syncing user for event: ${event || 'initial'}`);
-    
-    setSession(currentSession);
-    
+
     if (currentSession?.user) {
+      // ✅ فيه session حقيقية — حدّث الـ state
+      setSession(currentSession);
       const appUser = await getAppUserData(currentSession.user);
-      
+
       if (appUser) {
         setUser(appUser);
         setCachedUser(appUser);
         localStorage.setItem('last_auth_sync', Date.now().toString());
-        
+
         const deferPrefetch = () => {
           if ('requestIdleCallback' in window) {
             (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
@@ -163,46 +166,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         deferPrefetch();
       }
-    } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-      logger.warn('[Auth] Explicit sign out or user delete');
+    } else if (event === 'SIGNED_OUT') {
+      // ✅ الحالة الوحيدة اللي نمسح فيها المستخدم — تسجيل خروج يدوي
+      logger.warn('[Auth] Manual sign out — clearing user');
+      setSession(null);
       setUser(null);
       setCachedUser(null);
       localStorage.removeItem('last_auth_sync');
-    } else if (!currentSession && event === 'INITIAL_SESSION') {
-      logger.log('[Auth] No initial session found — will retry getSession after 3s');
-      setTimeout(async () => {
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          logger.warn('[Auth] Confirmed no session after retry — clearing stale cache');
-          setUser(null);
-          setCachedUser(null);
-          localStorage.removeItem('last_auth_sync');
-        }
-      }, 3000);
-    } else if (!currentSession && event !== 'INITIAL_SESSION') {
-      logger.warn('[Auth] Session became null (non-initial) — clearing cache');
-      setUser(null);
-      setCachedUser(null);
-      localStorage.removeItem('last_auth_sync');
+    } else {
+      // ✅ كل الحالات التانية (token expired, network error, null session, etc.)
+      // — نفضل logged in ومنعملش حاجة
+      logger.log(`[Auth] Session null on event "${event}" — keeping user logged in (manual sign out only)`);
     }
-    
+
     setIsLoading(false);
   };
 
   const forceSignOut = () => {
-    logger.warn('[Auth] Force sign-out triggered by global event');
+    // ✅ هذه الدالة بتشتغل بس من تسجيل الخروج اليدوي
+    logger.warn('[Auth] Manual sign-out triggered');
+    isManualSignOut = true; // ✅ نرفع الـ flag قبل signOut
     try { queryClient.cancelQueries(); } catch (e) { logger.warn('[Auth] cancelQueries error:', e); }
     clearAllCache();
     setUser(null);
     setSession(null);
     setCachedUser(null);
     localStorage.removeItem('last_auth_sync');
-    supabase.auth.signOut().catch((e) => logger.warn('[Auth] signOut after force:', e));
+    supabase.auth.signOut().catch((e) => logger.warn('[Auth] signOut error:', e));
   };
 
   useEffect(() => {
-    const onForceSignout = () => forceSignOut();
-    window.addEventListener('auth:force-signout', onForceSignout);
+    // ✅ أوقفنا auth:force-signout — مش محتاجينه بعد كده
+    // window.addEventListener('auth:force-signout', ...) — removed intentionally
 
     supabase.auth.getSession()
       .then(({ data: { session } }) => {
@@ -210,52 +205,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((error) => {
         logger.warn('[Auth] Failed to get initial session:', error);
-        syncUser(null, 'INITIAL_SESSION');
+        // ✅ لو فشل (offline) — نفضل logged in من الـ cache
+        setIsLoading(false);
       });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === 'TOKEN_REFRESHED') {
           logger.log('[Auth] Token refreshed successfully');
+          syncUser(session, event);
+          return;
         }
-        
+
         if (event === 'SIGNED_OUT') {
-          try { queryClient.cancelQueries(); } catch {}
-          clearAllCache();
-        }
-
-        if (event === 'TOKEN_REFRESH_FAILED') {
-          logger.warn('[Auth] TOKEN_REFRESH_FAILED event — emergency cleanup');
-          try { queryClient.cancelQueries(); } catch {}
-          forceSignOut();
+          // ✅ نمسح المستخدم بس لو كان logout يدوي — مش انتهاء token تلقائي
+          if (isManualSignOut) {
+            logger.warn('[Auth] Manual SIGNED_OUT event — clearing user');
+            isManualSignOut = false;
+            try { queryClient.cancelQueries(); } catch {}
+            clearAllCache();
+            syncUser(null, 'SIGNED_OUT');
+          } else {
+            logger.log('[Auth] Supabase-triggered SIGNED_OUT (token expired?) — keeping user logged in');
+            // محاولة تجديد الـ session في الخلفية
+            supabase.auth.refreshSession().catch(() => {
+              logger.log('[Auth] Refresh failed after SIGNED_OUT — user stays logged in from cache');
+            });
+          }
           return;
         }
 
-        if (!session && event !== 'INITIAL_SESSION' && event !== 'SIGNED_OUT') {
-          logger.warn(`[Auth] session=null on event ${event} — cleanup`);
-          try { queryClient.cancelQueries(); } catch {}
-          forceSignOut();
-          return;
+        // ✅ كل الأحداث التانية (TOKEN_REFRESH_FAILED, USER_UPDATED, etc.)
+        // لو فيه session جديدة — حدّث. لو مفيش — ابقى logged in
+        if (session) {
+          syncUser(session, event);
+        } else {
+          logger.log(`[Auth] Event "${event}" with no session — keeping user logged in`);
         }
-
-        syncUser(session, event);
       }
     );
 
+    // ✅ Visibility change — بس للتحديث لو فيه session جديدة، مش للـ logout
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        logger.log('[Auth] App focused, checking session...');
         supabase.auth.getSession()
           .then(({ data: { session } }) => {
             if (session) {
+              logger.log('[Auth] App focused — refreshing session');
               syncUser(session, 'VISIBILITY_CHANGE');
-            } else {
-              logger.warn('[Auth] No session on focus — triggering cleanup');
-              forceSignOut();
             }
+            // ✅ لو مفيش session — نفضل logged in من الـ cache
           })
-          .catch((error) => {
-            logger.warn('[Auth] Session check failed on focus:', error);
+          .catch(() => {
+            // offline — مش نعمل حاجة
           });
       }
     };
@@ -264,16 +266,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('auth:force-signout', onForceSignout);
     };
   }, []);
 
 
   const signOut = async () => {
+    isManualSignOut = true; // ✅ نرفع الـ flag قبل signOut
     await supabase.auth.signOut();
     setUser(null);
     setSession(null);
     await clearAllCache();
+    setCachedUser(null);
   };
 
   const login = async (phone: string, password: string): Promise<string | null> => {

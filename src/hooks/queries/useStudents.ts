@@ -16,13 +16,35 @@ export interface Student {
   classes?: { name: string; grade_level: string | null; teacher_id?: string };
 }
 
+// ─── Arabic text normalizer ───────────────────────────────────────────────────
+// يحوّل ة → ه و ى → ي لتجنب الفرق بين الحرفين عند البحث
+function normalizeArabic(text: string): string {
+  return text
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .trim();
+}
+
+// يبني كل variants ممكنة للكلمة (مع/بدون تطبيع) ليشمل الحالتين في ilike
+function buildArabicSearchPatterns(search: string): string[] {
+  const normalized = normalizeArabic(search);
+  const patterns = new Set<string>();
+  patterns.add(search);
+  patterns.add(normalized);
+  // أيضاً: ه → ة و ي → ى (العكس)
+  patterns.add(search.replace(/ه/g, 'ة').replace(/ي/g, 'ى'));
+  patterns.add(search.replace(/ه/g, 'ة'));
+  patterns.add(search.replace(/ي/g, 'ى'));
+  return Array.from(patterns).filter(Boolean);
+}
+
 // ─── Fetch function ───────────────────────────────────────────────────────────
 async function fetchStudents(
   user: AppUser | null,
   page = 1,
   pageSize = 15,
   search = '',
-  className = 'الكل'
+  classId = 'الكل'  // الآن نستقبل classId بدل className
 ): Promise<{ data: Student[]; count: number }> {
   if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
 
@@ -40,7 +62,40 @@ async function fetchStudents(
     }
   }
 
-  // نحسن الاستعلام باختيار الأعمدة المطلوبة فقط واستخدام التجزئة في قاعدة البيانات
+  // ── فلتر "بدون ولي أمر" — يحتاج subquery منفصل ──
+  if (classId === 'بدون_ولي_امر') {
+    // جلب كل الطلاب اللي عندهم ربط في student_parents
+    const { data: linked } = await supabase
+      .from('student_parents')
+      .select('student_id')
+      .eq('school_id', user.schoolId || '');
+    const linkedIds = (linked || []).map((l: any) => l.student_id).filter(Boolean);
+
+    let q = supabase
+      .from('students')
+      .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+
+    if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
+    if (user.role === 'teacher' && teacherClassIds.length > 0) q = q.in('class_id', teacherClassIds);
+
+    // الطلاب اللي مش موجودين في student_parents
+    if (linkedIds.length > 0) {
+      q = q.not('id', 'in', `(${linkedIds.map(id => `"${id}"`).join(',')})`);
+    }
+
+    if (search.trim()) {
+      const patterns = buildArabicSearchPatterns(search.trim());
+      const orFilter = patterns.map(p => `name.ilike.%${p}%`).join(',');
+      q = q.or(orFilter);
+    }
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    const { data, error, count } = await q.order('name').range(from, to);
+    if (error) throw error;
+    return { data: (data || []) as Student[], count: count || 0 };
+  }
+
   let q = supabase
     .from('students')
     .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
@@ -53,17 +108,21 @@ async function fetchStudents(
     q = q.in('class_id', teacherClassIds);
   }
 
-  // إضافة البحث من جهة الخادم
-  if (search) {
-    q = q.ilike('name', `%${search}%`);
+  // ── فلتر الفصل (server-side) ──
+  if (classId === 'بدون_فصل') {
+    q = q.is('class_id', null);
+  } else if (classId !== 'الكل') {
+    q = q.eq('class_id', classId);
   }
 
-  // إضافة فلترة الفصل من جهة الخادم
-  // NOTE: PostgREST لا يدعم الفلترة على الـ joined table مباشرة بهذه الطريقة.
-  // الفلترة الصحيحة تتم عبر class_id وليس classes.name — يجب تمرير classId بدلاً من الاسم.
-  // هذا الـ filter متروك حالياً بدون تأثير لتفادي كسر الـ API — انظر useClasses للحصول على class_id.
+  // ── البحث مع دعم ة/ه و ى/ي (server-side) ──
+  if (search.trim()) {
+    const patterns = buildArabicSearchPatterns(search.trim());
+    const orFilter = patterns.map(p => `name.ilike.%${p}%`).join(',');
+    q = q.or(orFilter);
+  }
 
-  // إضافة التجزئة (Pagination)
+  // ── Pagination ──
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
   
@@ -76,14 +135,14 @@ async function fetchStudents(
 }
 
 // ─── useStudents Hook ─────────────────────────────────────────────────────────
-export function useStudents(page = 1, pageSize = 15, search = '', className = 'الكل') {
+export function useStudents(page = 1, pageSize = 15, search = '', classId = 'الكل') {
   const { user, session } = useAuth();
   
-  const queryKey = ['students', user?.schoolId, page, pageSize, search, className];
+  const queryKey = ['students', user?.schoolId, page, pageSize, search, classId];
   
   return useQuery({
     queryKey,
-    queryFn: () => fetchStudents(user, page, pageSize, search, className),
+    queryFn: () => fetchStudents(user, page, pageSize, search, classId),
     enabled: !!(session && user?.id), 
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,

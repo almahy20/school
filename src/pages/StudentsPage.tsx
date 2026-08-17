@@ -1,18 +1,19 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllClasses, useBranding } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
+import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, GraduationCap, School, User, 
   Edit2, Trash2,
   ChevronLeft, ArrowRight, BookOpen,
   Activity, Edit3,
   Calendar,
-  Phone, MapPin
+  Phone, MapPin,
+  SlidersHorizontal, Check, ChevronDown
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,12 +30,14 @@ export default function StudentsPage() {
 
   // ── Local UI state ──
   const [search, setSearch] = useState('');
-  const [filterClass, setFilterClass] = useState('الكل');
+  const [filterClassId, setFilterClassId] = useState('الكل');
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   // ── React Query Hooks ──
   // نمرر البارامترات للـ hook ليقوم بالفلترة والتجزئة من جهة الخادم
@@ -44,7 +47,7 @@ export default function StudentsPage() {
     error, 
     refetch, 
     isRefetching 
-  } = useStudents(page, PAGE_SIZE, debouncedSearch, filterClass);
+  } = useStudents(page, PAGE_SIZE, debouncedSearch, filterClassId);
   
   const students = data?.data || [];
   const totalItems = data?.count || 0;
@@ -62,24 +65,33 @@ export default function StudentsPage() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Derive classes list for filter dropdown (نستخدم قائمة الفصول الفعلية بدلاً من استنتاجها من الطلاب)
+  // Derive classes list for filter dropdown — بـ classId وليس اسم الفصل
   const availableClasses = useMemo(() => {
-    if (!classes || !Array.isArray(classes)) return ['الكل'];
-    return [
-      'الكل',
-      ...classes.map(c => c.name)
-    ];
+    if (!classes || !Array.isArray(classes)) return [];
+    return classes.map(c => ({ id: c.id, name: c.name }));
   }, [classes]);
 
   const handleFilterChange = (val: string) => { 
-    setFilterClass(val); 
-    setPage(1); 
+    setFilterClassId(val); 
+    setPage(1);
+    setFilterOpen(false); // إغلاق الـ popover فور الاختيار
   };
 
   const handleSearch = (val: string) => { 
     setSearch(val); 
     setPage(1); 
   };
+
+  // إغلاق الـ popover عند الضغط خارجه
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setFilterOpen(false);
+      }
+    };
+    if (filterOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [filterOpen]);
 
   const handleShowDetail = (student: any) => {
     navigate(`/students/${student.id}`);
@@ -98,7 +110,7 @@ export default function StudentsPage() {
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
         <PageHeader
           icon={GraduationCap}
           title="إدارة شؤون الطلاب"
@@ -115,73 +127,128 @@ export default function StudentsPage() {
           }
         />
 
-        {/* Filters and Search - Premium Scaling */}
-        <div className="flex flex-col lg:flex-row gap-6 items-center">
-          <div className="relative group flex-1 w-full">
+        {/* Search + Filter Row */}
+        <div className="flex items-center gap-3 mt-6 mb-6">
+          <div className="relative group flex-1">
             <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
             <Input
               placeholder="ابحث عن اسم الطالب..."
               value={search}
               onChange={e => handleSearch(e.target.value)}
-              className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
+              className="h-14 pr-14 pl-6 rounded-2xl border-none bg-white text-base font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 w-full"
             />
+            {search && (
+              <button
+                onClick={() => handleSearch('')}
+                className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors text-lg font-bold"
+              >×</button>
+            )}
           </div>
-          
-          <div className="flex items-center gap-3 overflow-x-auto pb-4 no-scrollbar lg:w-auto w-full px-2">
-            {availableClasses.map(cls => (
-              <button 
-                key={cls} 
-                onClick={() => handleFilterChange(cls)}
-                className={cn(
-                  "px-6 py-3 rounded-xl text-xs font-bold whitespace-nowrap transition-all border-2 shadow-sm shrink-0",
-                  filterClass === cls
-                    ? "bg-slate-900 border-slate-900 text-white shadow-lg scale-105"
-                    : "bg-white border-transparent text-slate-500 hover:border-slate-100 hover:text-indigo-600"
-                )}>
-                {cls === 'الكل' ? 'جميع الفصول' : `فصل ${cls}`}
-              </button>
-            ))}
+
+          {/* Filter Button + Popover */}
+          <div className="relative shrink-0" ref={filterRef}>
+            <button
+              onClick={() => setFilterOpen(v => !v)}
+              className={cn(
+                "h-14 px-5 rounded-2xl font-black text-sm flex items-center gap-2 transition-all shadow-sm border",
+                filterClassId === 'الكل'
+                  ? "bg-white border-slate-100 text-slate-500 hover:border-indigo-200 hover:text-indigo-600"
+                  : "bg-indigo-600 border-indigo-600 text-white shadow-indigo-200"
+              )}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">
+                {filterClassId === 'الكل' ? 'تصفية حسب الفصل' : 
+                 filterClassId === 'بدون_فصل' ? 'بدون فصل' : 
+                 filterClassId === 'بدون_ولي_امر' ? 'بدون ولي أمر' :
+                 availableClasses.find(c => c.id === filterClassId)?.name || 'تصفية'}
+              </span>
+              {filterClassId !== 'الكل' && (
+                <span className={cn("w-2 h-2 rounded-full sm:hidden", filterClassId === 'بدون_فصل' ? "bg-amber-300" : "bg-white")} />
+              )}
+              <ChevronDown className={cn("w-4 h-4 transition-transform duration-200", filterOpen && "rotate-180")} />
+            </button>
+
+            {/* Dropdown Popover */}
+            {filterOpen && (
+              <div className="absolute top-[calc(100%+8px)] left-0 z-50 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-2">
+                  <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest px-3 py-2">اختر الفصل</p>
+                  
+                  <FilterOption
+                    label="📚 جميع الفصول"
+                    active={filterClassId === 'الكل'}
+                    onClick={() => handleFilterChange('الكل')}
+                  />
+                  <FilterOption
+                    label="⚠️ بدون فصل"
+                    active={filterClassId === 'بدون_فصل'}
+                    activeColor="amber"
+                    onClick={() => handleFilterChange('بدون_فصل')}
+                  />
+                  <FilterOption
+                    label="👤 بدون ولي أمر"
+                    active={filterClassId === 'بدون_ولي_امر'}
+                    activeColor="rose"
+                    onClick={() => handleFilterChange('بدون_ولي_امر')}
+                  />
+
+                  {availableClasses.length > 0 && (
+                    <div className="my-1.5 border-t border-slate-100 mx-2" />
+                  )}
+
+                  {availableClasses.map(cls => (
+                    <FilterOption
+                      key={cls.id}
+                      label={cls.name}
+                      active={filterClassId === cls.id}
+                      onClick={() => handleFilterChange(cls.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <QueryStateHandler
-          loading={loading}
-          error={error}
-          data={students}
-          onRetry={refetch}
-          isRefetching={isRefetching}
-          loadingMessage="جاري مزامنة بيانات الطلاب..."
-          errorMessage="فشل تحميل قائمة الطلاب. يرجى التحقق من اتصالك بالإنترنت."
-          emptyMessage="لا يوجد طلاب مسجلين حالياً في المدرسة."
-          isEmpty={students.length === 0}
-        >
-          <div className="space-y-10">
-            <div className="flex items-center justify-between px-6">
-              <div className="flex items-center gap-3">
-                 <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                   {totalItems} سجل مكتشف في النظام
-                 </span>
+        {/* Students Grid */}
+        <div className="flex-1 min-w-0 w-full">
+            <QueryStateHandler
+              loading={loading}
+              error={error}
+              data={students}
+              onRetry={refetch}
+              isRefetching={isRefetching}
+              loadingMessage="جاري مزامنة بيانات الطلاب..."
+              errorMessage="فشل تحميل قائمة الطلاب. يرجى التحقق من اتصالك بالإنترنت."
+              emptyMessage="لا يوجد طلاب مسجلين حالياً في المدرسة."
+              isEmpty={students.length === 0}
+            >
+              <div className="space-y-6">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      {totalItems} طالب — الصفحة {page}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {students.map(s => (
+                    <StudentCard key={s.id} student={s as any} onClick={() => handleShowDetail(s)} />
+                  ))}
+                </div>
+
+                <DataPagination
+                  currentPage={page}
+                  totalItems={totalItems}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
               </div>
-              <Badge className="bg-slate-100 text-slate-400 font-black text-[9px] uppercase tracking-widest px-4 py-1.5">الصفحة {page}</Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-              {students.map(s => (
-                <StudentCard key={s.id} student={s as any} onClick={() => handleShowDetail(s)} />
-              ))}
-            </div>
-            
-            <div className="pt-10">
-              <DataPagination
-                currentPage={page}
-                totalItems={totalItems}
-                pageSize={PAGE_SIZE}
-                onPageChange={setPage}
-              />
-            </div>
+            </QueryStateHandler>
           </div>
-        </QueryStateHandler>
       </div>
 
       {selectedStudent && (
@@ -238,41 +305,41 @@ export default function StudentsPage() {
 function StudentCard({ student, onClick }: { student: any; onClick: () => void }) {
   return (
     <div 
-      className="group bg-white rounded-3xl border border-slate-100 shadow-[0_2px_15px_-3px_rgba(0,0,0,0.03)] hover:shadow-[0_15px_30px_-5px_rgba(0,0,0,0.08)] overflow-hidden hover:-translate-y-1.5 transition-all duration-500 text-right cursor-pointer relative" 
+      className="group bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl overflow-hidden hover:-translate-y-1 transition-all duration-300 text-right cursor-pointer" 
       onClick={onClick}
     >
-      {/* Soft gradient hover overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-50/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-      
-      <div className="p-6 relative z-10 space-y-6">
-         <div className="flex items-start justify-between">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50/80 flex items-center justify-center text-indigo-600 transition-all duration-500 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 group-hover:scale-110 shadow-sm border border-indigo-100/50">
-               <User className="w-6 h-6 stroke-[2.5px]" />
-            </div>
-            <Badge variant="outline" className="rounded-xl px-3 py-1.5 bg-slate-50 border-slate-200 text-[10px] font-black tracking-widest text-slate-500 shadow-xs group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors">
-               {student.classes?.grade_level || 'غير محدد'}
-            </Badge>
-         </div>
+      <div className="p-6 flex flex-col gap-4">
+        {/* Header: avatar + grade badge */}
+        <div className="flex items-start justify-between">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 shrink-0">
+            <User className="w-6 h-6 stroke-[2.5px]" />
+          </div>
+          <Badge variant="outline" className="rounded-xl px-3 py-1 bg-slate-50 border-slate-100 text-[10px] font-bold text-slate-400 max-w-[120px] truncate group-hover:border-indigo-100 group-hover:text-indigo-500 transition-colors">
+            {student.classes?.grade_level || 'غير محدد'}
+          </Badge>
+        </div>
 
-         <div className="space-y-1.5 mt-2">
-            <h3 className="text-[17px] font-black text-slate-900 group-hover:text-indigo-700 transition-colors leading-tight truncate pr-1">
-               {student.name}
-            </h3>
-            <div className="flex items-center gap-2 text-slate-500 pr-1">
-               <School className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition-colors" />
-               <span className="text-[11px] font-bold tracking-tight">{student.classes?.name || 'بدون فصل'}</span>
-            </div>
-         </div>
+        {/* Name + Class */}
+        <div>
+          <h3 className="text-lg font-black text-slate-900 group-hover:text-indigo-700 transition-colors leading-tight truncate mb-1">
+            {student.name}
+          </h3>
+          <div className="flex items-center gap-2 text-slate-400">
+            <School className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-xs font-semibold truncate">{student.classes?.name || 'بدون فصل'}</span>
+          </div>
+        </div>
 
-         <div className="flex items-center justify-between pt-5 border-t border-slate-100/80">
-            <div className="flex items-center gap-2.5">
-               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20"></div>
-               <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">مُنتظم</span>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-300">
-               <ArrowRight className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-            </div>
-         </div>
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-slate-50">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20" />
+            <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">مُنتظم</span>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-300">
+            <ArrowRight className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -421,3 +488,42 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
       </div>
     );
   }
+
+// ─── Filter Option Component ──────────────────────────────────────────────────
+function FilterOption({ 
+  label, 
+  active, 
+  activeColor = 'indigo',
+  onClick 
+}: { 
+  label: string; 
+  active: boolean; 
+  activeColor?: 'indigo' | 'amber' | 'rose';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-sm font-bold text-right transition-all",
+        active
+          ? activeColor === 'amber'
+            ? "bg-amber-50 text-amber-700"
+            : activeColor === 'rose'
+            ? "bg-rose-50 text-rose-700"
+            : "bg-indigo-50 text-indigo-700"
+          : "text-slate-600 hover:bg-slate-50"
+      )}
+    >
+      <span className="truncate">{label}</span>
+      {active && (
+        <Check className={cn(
+          "w-4 h-4 shrink-0",
+          activeColor === 'amber' ? "text-amber-500" :
+          activeColor === 'rose' ? "text-rose-500" :
+          "text-indigo-500"
+        )} />
+      )}
+    </button>
+  );
+}

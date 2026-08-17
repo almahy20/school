@@ -37,7 +37,6 @@ export default function ClassesPage() {
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filterLevel, setFilterLevel] = useState('الكل');
   const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
@@ -55,7 +54,7 @@ export default function ClassesPage() {
     error, 
     refetch, 
     isRefetching 
-  } = useClasses(page, PAGE_SIZE, debouncedSearch, filterLevel);
+  } = useClasses(page, PAGE_SIZE, debouncedSearch, 'الكل');
 
   // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي)
   const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
@@ -101,12 +100,12 @@ export default function ClassesPage() {
   const loading = classesLoading || (teachersLoading && !classesData) || (studentsLoading && !classesData);
 
   // نستخدم قائمة المراحل من الخادم أو ثابتة بدلاً من استنتاجها من البيانات المجزأة
-  const gradeLevels = useMemo(() => ['الكل', 'الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس'], []);
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
-  const handleFilterChange = (val: string) => { setFilterLevel(val); setPage(1); };  return (
+
+  return (
     <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
         <PageHeader
           icon={School}
           title="إدارة الفصول الدراسية"
@@ -120,64 +119,58 @@ export default function ClassesPage() {
           }
         />
 
-        {/* Filters and Search - Scaled Down */}
-        <div className="flex flex-col lg:flex-row gap-4 items-center">
-          <div className="relative group flex-1 w-full">
-            <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-            <Input 
-              placeholder="ابحث عن فصل أو معلم مسؤول..." 
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5" 
-            />
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide lg:w-auto w-full">
-            {gradeLevels.map(level => (
-              <button 
-                key={level} 
-                onClick={() => handleFilterChange(level)}
-                className={cn(
-                  "px-6 py-2.5 rounded-xl text-xs font-black whitespace-nowrap transition-all border shadow-sm shrink-0",
-                  filterLevel === level
-                    ? "bg-slate-900 border-slate-900 text-white shadow-lg"
-                    : "bg-white border-white text-slate-400 hover:text-indigo-600"
-                )}>
-                {level === 'الكل' ? 'جميع المراحل' : level}
-              </button>
-            ))}
-          </div>
+        {/* Search Bar - Full Width */}
+        <div className="relative group mt-6 mb-6">
+          <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+          <Input 
+            placeholder="ابحث عن فصل أو معلم مسؤول..." 
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+            className="h-14 pr-14 pl-6 rounded-2xl border-none bg-white text-base font-bold shadow-sm transition-all focus:ring-4 focus:ring-indigo-600/5 w-full" 
+          />
+          {search && (
+            <button
+              onClick={() => handleSearch('')}
+              className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-600 transition-colors text-lg font-bold"
+            >
+              ×
+            </button>
+          )}
         </div>
 
-        <QueryStateHandler
-          loading={loading}
-          error={error}
-          data={classesData?.data || []}
-          onRetry={refetch}
-          isRefetching={isRefetching}
-          loadingMessage="جاري مزامنة بيانات الفصول..."
-          errorMessage="فشل تحميل قائمة الفصول."
-          isEmpty={classes.length === 0}
-        >
-          <div className="space-y-6">
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                {totalItems} فصل — الصفحة {page}
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {classes.map(c => (
-                <ClassCard key={c.id} classItem={c as any} onClick={() => navigate(`/classes/${c.id}`)} />
-              ))}
-            </div>
-            
-            <DataPagination
-              currentPage={page}
-              totalItems={totalItems}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-            />
+        {/* Classes Grid */}
+        <div className="flex-1 min-w-0 w-full">
+            <QueryStateHandler
+              loading={loading}
+              error={error}
+              data={classesData?.data || []}
+              onRetry={refetch}
+              isRefetching={isRefetching}
+              loadingMessage="جاري مزامنة بيانات الفصول..."
+              errorMessage="فشل تحميل قائمة الفصول."
+              isEmpty={classes.length === 0}
+            >
+              <div className="space-y-5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                    {totalItems} فصل — الصفحة {page}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                  {classes.map(c => (
+                    <ClassCard key={c.id} classItem={c as any} onClick={() => navigate(`/classes/${c.id}`)} />
+                  ))}
+                </div>
+                
+                <DataPagination
+                  currentPage={page}
+                  totalItems={totalItems}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </div>
+            </QueryStateHandler>
           </div>
-        </QueryStateHandler>
       </div>
 
       {showAdd && (
@@ -198,40 +191,46 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
 
   return (
     <div 
-      className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] transition-all duration-500 text-right cursor-pointer" 
+      className="group premium-card p-0 overflow-hidden hover:translate-y-[-4px] hover:shadow-xl transition-all duration-300 text-right cursor-pointer" 
       onClick={onClick}
     >
-      <div className="p-5 md:p-6 space-y-5 md:space-y-6">
-         <div className="flex items-start justify-between">
-            <div className="w-10 h-10 md:w-12 md:h-12 rounded-[16px] md:rounded-[18px] bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-slate-900 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
-               <School className="w-5 h-5 md:w-6 md:h-6" />
-            </div>
-            <Badge variant="outline" className="rounded-lg px-2.5 py-0.5 md:px-3 md:py-1 bg-slate-50 border-slate-100 text-[8px] md:text-[9px] font-black uppercase tracking-widest text-slate-400">
-               {classItem.grade_level || 'مرحلة عامة'}
-            </Badge>
-         </div>
+      <div className="p-6 flex flex-col gap-4">
+        {/* Header: icon only */}
+        <div className="flex items-start justify-between">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 shadow-inner shrink-0">
+            <School className="w-6 h-6" />
+          </div>
+        </div>
 
-         <div>
-            <h3 className="text-base md:text-lg font-black text-slate-900 mb-1.5 group-hover:text-indigo-600 transition-colors leading-tight">{classItem.name}</h3>
-            <div className="flex items-center gap-2 text-slate-400">
-               <User className="w-3 h-3 md:w-3.5 md:h-3.5" />
-               <span className="text-[9px] md:text-[10px] font-black tracking-tight">{classItem.teacher_name}</span>
-            </div>
-         </div>
+        {/* Name + Teacher */}
+        <div>
+          <h3 className="text-xl font-black text-slate-900 mb-1 group-hover:text-indigo-600 transition-colors leading-tight">
+            {classItem.name}
+          </h3>
+          <div className="flex items-center gap-2 text-slate-400">
+            <User className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-xs font-semibold truncate">{classItem.teacher_name}</span>
+          </div>
+        </div>
 
-         <div className="space-y-2">
-            <div className="flex justify-between items-end text-[7px] md:text-[8px] font-black uppercase tracking-widest">
-               <span className="text-slate-300">سعة الطلاب</span>
-               <span className={cn("font-black", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>{classItem.student_count} / {capacity}</span>
-            </div>
-            <Progress value={percentage} className="h-1 md:h-1.5 bg-slate-100" />
-         </div>
+        {/* Student count + progress */}
+        <div className="space-y-2 pt-1">
+          <div className="flex justify-between items-center text-[11px] font-bold">
+            <span className="text-slate-400">الطلاب</span>
+            <span className={cn("font-black text-sm", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>
+              {classItem.student_count} / {capacity}
+            </span>
+          </div>
+          <Progress value={percentage} className="h-1.5 bg-slate-100" />
+        </div>
 
-         <div className="flex gap-3 md:gap-4 pt-2 border-t border-slate-50">
-            <div className="flex-1 h-10 md:h-11 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center text-[10px] md:text-xs">
-               استعراض الفصل
-            </div>
-         </div>
+        {/* CTA */}
+        <div className="pt-2 border-t border-slate-50">
+          <div className="h-10 rounded-xl bg-slate-900 text-white font-black group-hover:bg-indigo-600 transition-all flex items-center justify-center gap-2 text-sm">
+            استعراض الفصل
+            <ArrowRight className="w-4 h-4 opacity-60 group-hover:translate-x-[-3px] transition-transform" />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -259,7 +258,6 @@ function ModalShell({ onClose, children }: { onClose: () => void; children: Reac
 function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; user: any; onClose: () => void; onSuccess?: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
-  const [gradeLevel, setGradeLevel] = useState('');
   const [teacherId, setTeacherId] = useState('');
   const addMutation = useAddClass();
   const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
@@ -268,7 +266,7 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; 
     e.preventDefault();
     if (!name.trim()) return;
     try {
-      await addMutation.mutateAsync({ name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null, school_id: user?.schoolId });
+      await addMutation.mutateAsync({ name: name.trim(), grade_level: null, teacher_id: teacherId || null, school_id: user?.schoolId });
       toast({ title: 'تمت الإضافة بنجاح' });
       if (onSuccess) onSuccess(); else onClose();
     } catch (err: any) {
@@ -291,11 +289,6 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; 
             <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">اسم الفصل *</label>
             <Input value={name} onChange={e => setName(e.target.value)}
               className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" placeholder="مثال: 1أ" required />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المرحلة الدراسية</label>
-            <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
-              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" placeholder="مثال: الصف الأول الابتدائي" />
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المعلم الرئيسي</label>
@@ -322,7 +315,6 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; 
 export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any) {
   const { toast } = useToast();
   const [name, setName] = useState(classItem.name);
-  const [gradeLevel, setGradeLevel] = useState(classItem.grade_level || '');
   const [teacherId, setTeacherId] = useState(classItem.teacher_id || '');
   const updateMutation = useUpdateClass();
   const teachersArray = Array.isArray(teachers) ? teachers : (teachers?.data || []);
@@ -331,7 +323,7 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
     e.preventDefault();
     if (!name.trim()) return;
     try {
-      await updateMutation.mutateAsync({ id: classItem.id, name: name.trim(), grade_level: gradeLevel.trim() || null, teacher_id: teacherId || null });
+      await updateMutation.mutateAsync({ id: classItem.id, name: name.trim(), grade_level: null, teacher_id: teacherId || null });
       toast({ title: 'تم الحفظ بنجاح' });
       onSuccess();
     } catch (err: any) {
@@ -353,11 +345,6 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">اسم الفصل *</label>
             <Input value={name} onChange={e => setName(e.target.value)}
-              className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المرحلة الدراسية</label>
-            <Input value={gradeLevel} onChange={e => setGradeLevel(e.target.value)}
               className="h-14 px-6 rounded-2xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm" />
           </div>
           <div className="space-y-2">

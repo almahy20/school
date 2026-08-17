@@ -24,6 +24,7 @@ export default function ParentsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [filterNoChildren, setFilterNoChildren] = useState(false);
 
   // ── Debounce Search ──
   useEffect(() => {
@@ -54,6 +55,13 @@ export default function ParentsPage() {
   const parents = parentsData?.data || [];
   const totalItems = parentsData?.count || 0;
 
+  // فلترة أولياء الأمور بدون أبناء من جهة الـ frontend
+  const filteredParents = filterNoChildren
+    ? parents.filter(p => !p.children || p.children.length === 0)
+    : parents;
+
+  const noChildrenCount = parents.filter(p => !p.children || p.children.length === 0).length;
+
   const handleAction = async (userId: string, status: 'approved' | 'rejected') => {
     try {
       await actionMutation.mutateAsync({ userId, status });
@@ -76,6 +84,7 @@ export default function ParentsPage() {
   };
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
+  const handleToggleNoChildren = () => { setFilterNoChildren(v => !v); setPage(1); };
 
   return (
     <AppLayout>
@@ -158,16 +167,34 @@ export default function ParentsPage() {
           </div>
         )}
 
-        {/* Search */}
-        <div className="relative group max-w-2xl w-full">
-          <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-          <Input
-            type="text"
-            placeholder="ابحث باسم ولي الأمر أو رقم الهاتف..."
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-            className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
-          />
+        {/* Search + Filter */}
+        <div className="flex items-center gap-3 max-w-2xl w-full">
+          <div className="relative group flex-1">
+            <Search className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
+            <Input
+              type="text"
+              placeholder="ابحث باسم ولي الأمر أو رقم الهاتف..."
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5"
+            />
+          </div>
+          <button
+            onClick={handleToggleNoChildren}
+            className={`h-14 px-5 rounded-[28px] font-black text-sm flex items-center gap-2 transition-all shadow-sm border whitespace-nowrap shrink-0 ${
+              filterNoChildren
+                ? 'bg-rose-500 border-rose-500 text-white shadow-rose-200'
+                : 'bg-white border-slate-100 text-slate-500 hover:border-rose-200 hover:text-rose-500'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="hidden sm:inline">بدون أبناء</span>
+            {noChildrenCount > 0 && (
+              <span className={`text-xs font-black px-2 py-0.5 rounded-full ${filterNoChildren ? 'bg-white/20 text-white' : 'bg-rose-50 text-rose-500'}`}>
+                {noChildrenCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <QueryStateHandler
@@ -178,25 +205,27 @@ export default function ParentsPage() {
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات أولياء الأمور..."
           errorMessage="فشل تحميل قائمة أولياء الأمور."
-          isEmpty={parents.length === 0}
+          isEmpty={filteredParents.length === 0}
         >
           <div className="space-y-10">
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">
-                {totalItems} ولي أمر — الصفحة {page}
+                {filterNoChildren ? `${filteredParents.length} ولي أمر بدون أبناء` : `${totalItems} ولي أمر — الصفحة ${page}`}
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {parents.map(p => (
+              {filteredParents.map(p => (
                 <ParentCard key={p.id} parent={p as any} onClick={() => navigate(`/parents/${p.id}`)} />
               ))}
             </div>
-            <DataPagination
-              currentPage={page}
-              totalItems={totalItems}
-              pageSize={PAGE_SIZE}
-              onPageChange={setPage}
-            />
+            {!filterNoChildren && (
+              <DataPagination
+                currentPage={page}
+                totalItems={totalItems}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            )}
           </div>
         </QueryStateHandler>
       </div>

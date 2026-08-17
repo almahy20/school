@@ -349,6 +349,27 @@ Deno.serve(async (req) => {
         return jsonResponse(req, { success: true });
       }
 
+      case "reset_password": {
+        if (!userId || !data?.password) {
+          return jsonResponse(req, { error: "userId and password are required" }, 400);
+        }
+
+        if (typeof data.password !== "string" || data.password.length < 6) {
+          return jsonResponse(req, { error: "Password must be at least 6 characters" }, 400);
+        }
+
+        // التحقق من أن المدير ينتمي لنفس المدرسة
+        const tenantCheck = await ensureSameTenant(userId);
+        if (!tenantCheck.ok) return tenantCheck.response!;
+
+        const { error } = await adminClient.auth.admin.updateUserById(userId, {
+          password: data.password,
+        });
+
+        if (error) throw error;
+        return jsonResponse(req, { success: true });
+      }
+
       default:
         return jsonResponse(req, { error: "Unknown action" }, 400);
     }
