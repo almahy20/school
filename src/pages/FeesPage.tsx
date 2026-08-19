@@ -31,7 +31,12 @@ export default function FeesPage() {
   const [selectedTerm, setSelectedTerm] = useSessionState('fees:selectedTerm', `شهر ${MONTHS_AR[currentMonthIdx]} ${currentYear}`);
   const [selectedClassId, setSelectedClassId] = useSessionState<string>('fees:selectedClassId', 'all');
   const [search, setSearch] = useSessionState('fees:search', '');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('fees:search');
+      return stored !== null ? JSON.parse(stored) : '';
+    } catch { return ''; }
+  });
   const [filterStatus, setFilterStatus] = useSessionState('fees:filterStatus', 'الكل');
   const [page, setPage] = useSessionState('fees:page', 1);
   const PAGE_SIZE = 15;

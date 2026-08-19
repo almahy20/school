@@ -33,7 +33,13 @@ export default function StudentsPage() {
   const [search, setSearch] = useSessionState('students:search', '');
   const [filterClassId, setFilterClassId] = useSessionState('students:filterClassId', 'الكل');
   const [page, setPage] = useSessionState('students:page', 1);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // نبدأ debouncedSearch بنفس قيمة search المحفوظة حتى لا يتأخر الفلتر عند العودة للصفحة
+  const [debouncedSearch, setDebouncedSearch] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('students:search');
+      return stored !== null ? JSON.parse(stored) : '';
+    } catch { return ''; }
+  });
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
