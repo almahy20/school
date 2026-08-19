@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSessionState } from '@/hooks/useSessionState';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -27,12 +28,12 @@ export default function FeesPage() {
   const currentMonthIdx = new Date().getMonth();
   const currentYear = new Date().getFullYear();
   
-  const [selectedTerm, setSelectedTerm] = useState(`شهر ${MONTHS_AR[currentMonthIdx]} ${currentYear}`);
-  const [selectedClassId, setSelectedClassId] = useState<string>('all');
-  const [search, setSearch] = useState('');
+  const [selectedTerm, setSelectedTerm] = useSessionState('fees:selectedTerm', `شهر ${MONTHS_AR[currentMonthIdx]} ${currentYear}`);
+  const [selectedClassId, setSelectedClassId] = useSessionState<string>('fees:selectedClassId', 'all');
+  const [search, setSearch] = useSessionState('fees:search', '');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('الكل');
-  const [page, setPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useSessionState('fees:filterStatus', 'الكل');
+  const [page, setPage] = useSessionState('fees:page', 1);
   const PAGE_SIZE = 15;
   
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);

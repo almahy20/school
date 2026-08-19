@@ -29,7 +29,7 @@ const adminLinks: SidebarLink[] = [
   { to: '/students', label: 'إدارة الطلاب', icon: Users, queryKey: ['students'] },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap, queryKey: ['teachers'] },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck, queryKey: ['parents'] },
-  { to: '/classes', label: 'الفصول الدراسية', icon: School, queryKey: ['classes'] },
+  { to: '/classes', label: 'الفصول', icon: School, queryKey: ['classes'] },
   { to: '/attendance', label: 'سجل حضور المعلمين', icon: CalendarCheck },
   { to: '/fees', label: 'المصروفات', icon: CreditCard, queryKey: ['fees'] },
   { to: '/settings', label: 'الإعدادات العامة', icon: Settings },
@@ -172,7 +172,7 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-1.5 overflow-y-auto scrollbar-hide flex flex-col justify-start pt-2 pb-4">
+      <nav className="flex-1 px-3 space-y-2 overflow-y-auto scrollbar-hide flex flex-col justify-start pt-2 pb-4">
         {links.map(link => (
           <NavLink 
             key={link.to} 
@@ -180,17 +180,17 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
             end={link.to === '/'}
             onClick={onClose}
             className={({ isActive }) => cn(
-              "flex items-center justify-between px-4 h-12 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
+              "flex items-center justify-between px-4 h-13 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
               isActive 
                 ? "bg-gradient-to-l from-indigo-600 to-indigo-500 text-white shadow-lg shadow-indigo-500/20" 
-                : "text-white/50 hover:text-white hover:bg-white/[0.05]"
+                : "text-white/50 hover:text-white hover:bg-white/[0.06]"
             )}
           >
             {({ isActive }) => (
               <>
                 <div className="flex items-center gap-3 relative z-10">
                   <div className={cn(
-                    "w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300",
+                    "w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-300",
                     isActive
                       ? "bg-white/20 text-white"
                       : "bg-white/5 text-white/40 group-hover:bg-white/10 group-hover:text-white/70"

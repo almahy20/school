@@ -769,6 +769,7 @@ export type Database = {
           id: string
           subject_name: string
           updated_at: string | null
+          term: string | null
         }
         Insert: {
           content?: string | null
@@ -777,6 +778,7 @@ export type Database = {
           id?: string
           subject_name: string
           updated_at?: string | null
+          term?: string | null
         }
         Update: {
           content?: string | null
@@ -785,6 +787,7 @@ export type Database = {
           id?: string
           subject_name?: string
           updated_at?: string | null
+          term?: string | null
         }
         Relationships: [
           {

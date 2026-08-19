@@ -23,7 +23,7 @@ export function ClassHero({
   const navigate = useNavigate();
 
   return (
-    <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-indigo-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
+    <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-gradient-to-l from-slate-900 via-indigo-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-7 md:p-10 rounded-[40px] relative overflow-hidden group">
       {/* Ambient Animated Glows */}
       <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
       <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
@@ -42,7 +42,7 @@ export function ClassHero({
               <School className="w-8 h-8 md:w-12 md:h-12 drop-shadow-md" />
            </div>
            <div className="space-y-2 min-w-0">
-              <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{classItem?.name}</h1>
+              <h1 className="text-2xl md:text-3xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{classItem?.name}</h1>
               <div className="flex items-center gap-3 flex-wrap">
                 <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
                    {classItem?.grade_level || 'المرحلة الأكاديمية'}

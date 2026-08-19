@@ -24,15 +24,6 @@ interface CurriculumModalsProps {
   editingCurriculum: any;
   setEditingCurriculum: (val: any) => void;
   handleEditCurriculum: (e: React.FormEvent) => void;
-  showAddSubject: boolean;
-  setShowAddSubject: (show: boolean) => void;
-  newSubject: any;
-  setNewSubject: (val: any) => void;
-  handleAddSubject: (e: React.FormEvent) => void;
-  isSavingSubject: boolean;
-  editingSubject: any;
-  setEditingSubject: (val: any) => void;
-  handleEditSubject: (e: React.FormEvent) => void;
 }
 
 export function CurriculumModals({
@@ -48,15 +39,6 @@ export function CurriculumModals({
   editingCurriculum,
   setEditingCurriculum,
   handleEditCurriculum,
-  showAddSubject,
-  setShowAddSubject,
-  newSubject,
-  setNewSubject,
-  handleAddSubject,
-  isSavingSubject,
-  editingSubject,
-  setEditingSubject,
-  handleEditSubject,
 }: CurriculumModalsProps) {
   return (
     <>
@@ -161,51 +143,6 @@ export function CurriculumModals({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showAddSubject} onOpenChange={setShowAddSubject}>
-        <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
-          <DialogHeader className="text-right">
-            <DialogTitle className="text-2xl font-black text-slate-900">إضافة مادة تعليمية</DialogTitle>
-            <DialogDescription className="text-sm font-bold text-slate-400">أدخل تفاصيل المادة الجديدة للمنهج.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleAddSubject} className="mt-8 space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
-              <Input placeholder="مثال: لغتي الجميلة" value={newSubject.subject_name} onChange={e => setNewSubject({...newSubject, subject_name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى التعليمي</label>
-              <Textarea value={newSubject.content} onChange={e => setNewSubject({...newSubject, content: e.target.value})} className="min-h-[120px] px-6 py-4 rounded-2xl bg-slate-50 border-none text-base font-bold resize-none" />
-            </div>
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={isSavingSubject} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-white font-black text-lg">إضافة المادة</Button>
-              <Button type="button" onClick={() => setShowAddSubject(false)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!editingSubject} onOpenChange={() => setEditingSubject(null)}>
-        <DialogContent className="max-w-md rounded-[40px] p-10 text-right">
-          <DialogHeader className="text-right">
-            <DialogTitle className="text-2xl font-black text-slate-900">تعديل المادة</DialogTitle>
-            <DialogDescription className="text-sm font-bold text-slate-400">تحديث بيانات المادة الدراسية.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditSubject} className="mt-8 space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم المادة</label>
-              <Input value={editingSubject?.subject_name || ''} onChange={e => setEditingSubject({...editingSubject!, subject_name: e.target.value})} className="h-14 px-6 rounded-2xl bg-slate-50 border-none font-bold text-lg" required />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المحتوى التعليمي</label>
-              <Textarea value={editingSubject?.content || ''} onChange={e => setEditingSubject({...editingSubject!, content: e.target.value})} className="min-h-[120px] px-6 py-4 rounded-2xl bg-slate-50 border-none text-base font-bold resize-none" />
-            </div>
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={isSavingSubject} className="flex-1 h-14 rounded-2xl bg-indigo-600 text-white font-black text-lg">حفظ التعديلات</Button>
-              <Button type="button" onClick={() => setEditingSubject(null)} variant="ghost" className="h-14 px-8 rounded-2xl bg-slate-50 text-slate-400 font-bold">إلغاء</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

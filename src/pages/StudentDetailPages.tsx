@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { ArrowRight, CreditCard, Layers, User, Phone, MapPin, Hash, Calendar, BookOpen, AlertCircle } from 'lucide-react';
+import { ArrowRight, CreditCard, Layers, User, Phone, MapPin, Hash, Calendar, BookOpen, AlertCircle, FolderOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useChildFullDetails } from '@/hooks/queries';
 import { cn } from '@/lib/utils';
@@ -122,12 +123,69 @@ export function StudentFinancialPage() {
   );
 }
 
-// Curriculum Page
+// Curriculum Page — Month Card Drill-Down (Parent)
 export function StudentCurriculumPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: child, isLoading, error, refetch } = useChildFullDetails(id);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
+  // Group subjects by term (month)
+  const curriculumByMonth = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    (child?.curriculum || []).forEach((sub: any) => {
+      const termName = sub.term || 'عام';
+      if (!groups[termName]) groups[termName] = [];
+      groups[termName].push(sub);
+    });
+    return groups;
+  }, [child?.curriculum]);
+
+  const allMonths = useMemo(() => Object.keys(curriculumByMonth), [curriculumByMonth]);
+
+  // If a month is selected — show its subjects full-width
+  if (selectedMonth) {
+    const subjects = curriculumByMonth[selectedMonth] || [];
+    return (
+      <AppLayout>
+        <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-2 md:px-0" dir="rtl">
+          <SubPageHeader
+            onBack={() => setSelectedMonth(null)}
+            icon={BookOpen}
+            title={`مقررات ${selectedMonth}`}
+            subtitle={`${child?.name} • ${child?.className}`}
+          />
+
+          {subjects.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {subjects.map((sub: any) => (
+                <div key={sub.id} className="bg-white border border-slate-100 rounded-[28px] p-6 shadow-sm hover:shadow-md hover:border-indigo-100 transition-all duration-300">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 space-y-1.5">
+                      <h4 className="text-base font-black text-slate-900">{sub.subject_name}</h4>
+                      {sub.content && (
+                        <p className="text-sm text-slate-500 leading-relaxed font-medium">{sub.content}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-20 text-center space-y-4 bg-white border border-slate-100 rounded-[32px]">
+              <BookOpen className="w-10 h-10 mx-auto text-slate-200" />
+              <p className="font-bold text-sm text-slate-400">لا توجد مواد مسجلة لهذا الشهر بعد</p>
+            </div>
+          )}
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // Main view — month cards grid
   return (
     <AppLayout>
       <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
@@ -135,32 +193,50 @@ export function StudentCurriculumPage() {
           <SubPageHeader
             onBack={() => navigate(`/parent/children/${id}`)}
             icon={Layers}
-            title={`منهج ${child?.name}`}
-            subtitle={`${child?.className} • ${child?.academic_year}`}
+            title={`المنهج الدراسي — ${child?.name}`}
+            subtitle={`${child?.className} • ${child?.academic_year || '2025/2026'}`}
           />
 
-          {child?.curriculum?.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {child.curriculum.map((sub: any) => (
-                <div key={sub.id} className="bg-white border border-slate-100 rounded-[28px] p-8 shadow-sm hover:shadow-md transition-all duration-300">
-                  <div className="flex items-center gap-5 mb-6">
-                    <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center shadow-sm">
-                      <BookOpen className="w-7 h-7" />
+          {allMonths.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allMonths.map(month => {
+                const count = curriculumByMonth[month]?.length || 0;
+                return (
+                  <button
+                    key={month}
+                    onClick={() => setSelectedMonth(month)}
+                    className="group text-right p-6 rounded-[28px] bg-white border border-slate-100 hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-50/60 transition-all duration-300 active:scale-[0.98] flex flex-col gap-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-colors shrink-0">
+                        <BookOpen className="w-6 h-6" />
+                      </div>
+                      <FolderOpen className="w-5 h-5 text-slate-200 group-hover:text-indigo-400 transition-colors" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900">{sub.subject_name}</h3>
-                  </div>
-                  <div className="p-6 rounded-[24px] bg-slate-50/50 border border-slate-100 text-slate-600 font-medium leading-relaxed text-sm">
-                    {sub.content || 'لا توجد تفاصيل متاحة لهذا المنهج حالياً.'}
-                  </div>
-                </div>
-              ))}
+                    <div>
+                      <h3 className="font-black text-slate-900 text-base mb-1">📖 {month}</h3>
+                      <p className="text-[11px] text-slate-400 font-bold">{count} مادة دراسية</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {curriculumByMonth[month]?.slice(0, 3).map((sub: any) => (
+                        <span key={sub.id} className="text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-100 px-2.5 py-1 rounded-lg">
+                          {sub.subject_name}
+                        </span>
+                      ))}
+                      {count > 3 && (
+                        <span className="text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-100 px-2.5 py-1 rounded-lg">+{count - 3}</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ) : (
-            <div className="py-20 text-center space-y-4">
+            <div className="py-20 text-center space-y-4 bg-white border border-slate-100 rounded-[32px]">
               <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center text-slate-300 mx-auto border border-slate-100">
                 <Layers className="w-10 h-10" />
               </div>
-              <p className="text-slate-400 font-bold">لم يتم تحديد المنهج لهذا الفصل بعد</p>
+              <p className="text-slate-400 font-bold text-base">لم يتم تحديث خطة المنهج لهذا الفصل بعد</p>
             </div>
           )}
         </QueryStateHandler>
@@ -168,6 +244,7 @@ export function StudentCurriculumPage() {
     </AppLayout>
   );
 }
+
 
 // Student Data Page
 export function StudentDataPage() {

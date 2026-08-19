@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, School, BookOpen, Award, User, 
   Trash2, Edit2, CalendarCheck, Info, Loader2,
-  Clock, ShieldCheck, UserCircle
+  Phone, MapPin, Hash, UserCircle, GraduationCap, FolderOpen, ChevronLeft
 } from 'lucide-react';
 import { EditStudentModal } from './StudentsPage';
 import { cn } from '@/lib/utils';
@@ -20,39 +21,86 @@ import {
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 
+type Tab = 'info' | 'curriculum' | 'grades' | 'attendance';
+
 export default function StudentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   
-  const [activeTab, setActiveTab] = useState<'curriculum' | 'grades' | 'attendance' | 'info'>('curriculum');
+  const [activeTab, setActiveTab] = useState<Tab>('info');
   const [showEdit, setShowEdit] = useState(false);
 
-  // ── Optimized Query: Single RPC for everything ──
-  const { 
-    data: fullData, 
-    isLoading: studentLoading, 
-    error: studentError, 
-    refetch: refetchStudent 
-  } = useChildFullDetails(id);
+  // Curriculum drill-down state
+  const [curriculumView, setCurriculumView] = useState<'folders' | 'subjects'>('folders');
+  const [selectedCurrMonth, setSelectedCurrMonth] = useState<string>('');
 
+  // Grades drill-down state
+  const [gradesView, setGradesView] = useState<'folders' | 'list'>('folders');
+  const [selectedGradesFolder, setSelectedGradesFolder] = useState<string>('');
+
+  const { data: fullData, isLoading, error, refetch } = useChildFullDetails(id);
   const student = fullData;
   const grades = fullData?.grades || [];
   const attendance = fullData?.attendance || [];
-  const parent = null; // Basic info now included in student record
   const curriculumSubjects = fullData?.curriculum || [];
-  
-  // For Edit Modal
+
+  // Group curriculum by month (term)
+  const curriculumByMonth = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    (curriculumSubjects as any[]).forEach((sub: any) => {
+      const key = (sub.term || 'عام').trim();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(sub);
+    });
+    return groups;
+  }, [curriculumSubjects]);
+  const curriculumMonths = useMemo(() => Object.keys(curriculumByMonth), [curriculumByMonth]);
+
+  // Fetch grades with exam_templates joined to get the correct title/term
+  const { data: fullGrades = [], isLoading: loadingGrades } = useQuery({
+    queryKey: ['student-grades-full', id],
+    queryFn: async () => {
+      const { supabase } = await import('@/integrations/supabase/client');
+      const { data, error } = await supabase
+        .from('grades')
+        .select(`
+          *,
+          exam_templates (
+            title,
+            term,
+            subject
+          )
+        `)
+        .eq('student_id', id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id
+  });
+
+  // Group grades by title (exam card name)
+  const gradesByFolder = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    (fullGrades as any[]).forEach((g: any) => {
+      // Use exam_templates title/term if available, fallback to grade term
+      const key = (g.exam_templates?.title || g.exam_templates?.term || g.title || g.term || 'تقييم شهري').trim();
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(g);
+    });
+    return groups;
+  }, [fullGrades]);
+  const gradeFolderKeys = useMemo(() => Object.keys(gradesByFolder), [gradesByFolder]);
+
   const { data: classesData } = useAllClasses();
   const classes = Array.isArray(classesData) ? classesData : [];
   const { data: branding } = useBranding();
 
-  // ── Mutations ──
   const deleteStudentMutation = useDeleteStudent();
 
   const handleDelete = async () => {
-    if (!id || !confirm('هل أنت متأكد من حذف سجل الطالب نهائياً من قاعدة البيانات؟')) return;
+    if (!id || !confirm('هل أنت متأكد من حذف سجل الطالب نهائياً؟')) return;
     try {
       await deleteStudentMutation.mutateAsync(id);
       toast({ title: 'تم الحذف بنجاح' });
@@ -62,296 +110,407 @@ export default function StudentDetailPage() {
     }
   };
 
-  const isLoadingTotal = studentLoading;
+  const tabs: { id: Tab; label: string; icon: typeof Info }[] = [
+    { id: 'info', label: 'البيانات الأساسية', icon: Info },
+    { id: 'curriculum', label: 'المنهج الدراسي', icon: BookOpen },
+    { id: 'grades', label: 'النتائج والدرجات', icon: Award },
+    { id: 'attendance', label: 'سجل الحضور', icon: CalendarCheck },
+  ];
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-10 max-w-[1200px] mx-auto text-right pb-20 animate-in fade-in duration-500" dir="rtl">
-        
-          {/* ✅ LCP & CLS Fix: Hero Banner with stable height (min-h-[200px] md:min-h-[280px]) */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group min-h-[200px] md:min-h-[280px]">
-            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
-            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-purple-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
-            
-            <div className="flex items-center gap-6 md:gap-8 relative z-10 text-right w-full lg:w-2/3">
-              <button 
-                onClick={() => navigate(currentUser?.role === 'parent' ? '/' : '/students')}
-                className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white/5 border border-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xl shrink-0 backdrop-blur-md"
-              >
-                 <ArrowRight className="w-5 h-5 md:w-7 md:h-7" />
-              </button>
-              
-              {student ? (
-                <>
-                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] bg-gradient-to-tr from-purple-500 to-indigo-500 text-white shadow-2xl shadow-indigo-500/20 flex items-center justify-center font-black text-2xl md:text-4xl group-hover:rotate-3 transition-transform duration-700 shrink-0 border border-white/20">
-                     {student?.name?.trim()[0]}
-                  </div>
-                  
-                  <div className="space-y-2 min-w-0">
-                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">
-                      {student?.name}
-                    </h1>
-                    <div className="flex flex-wrap items-center gap-3">
-                       <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
-                          {student?.classes?.name || 'غير مسجل بفصل'}
-                       </Badge>
-                       <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
-                          انضم {new Date(student?.created_at || '').toLocaleDateString('ar-EG', { year: 'numeric', month: 'short' })}
-                       </Badge>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* ✅ Skeleton with matching dimensions to prevent shift */
-                <div className="flex items-center gap-6 md:gap-8 animate-pulse w-full">
-                   <div className="w-16 h-16 md:w-24 md:h-24 bg-white/10 rounded-[28px] md:rounded-[40px] shrink-0" />
-                   <div className="space-y-4 w-full max-w-md">
-                      <div className="h-8 md:h-12 w-3/4 bg-white/20 rounded-2xl" />
-                      <div className="flex gap-3">
-                        <div className="h-6 md:h-8 w-24 bg-white/10 rounded-xl" />
-                        <div className="h-6 md:h-8 w-32 bg-white/10 rounded-xl" />
-                      </div>
-                   </div>
-                </div>
-              )}
-            </div>
-            
-            {(currentUser?.role === 'admin' && student) && (
-              <div className="flex items-center gap-4 relative z-10 w-full lg:w-auto lg:justify-end mt-4 lg:mt-0">
-                <Button 
-                  onClick={() => setShowEdit(true)} 
-                  className="h-14 md:h-16 px-8 rounded-2xl md:rounded-[24px] bg-white text-slate-900 font-black text-xs md:text-sm hover:bg-slate-50 transition-all shadow-xl gap-3 flex-1 lg:flex-none"
+      <div className="max-w-5xl mx-auto pb-24 px-2 md:px-0 space-y-6 text-right animate-in fade-in duration-500" dir="rtl">
+
+        {/* ── Hero Banner ── */}
+        <header className="relative bg-slate-900 rounded-[40px] overflow-hidden p-8 md:p-10 min-h-[200px] flex flex-col justify-between border border-white/5 shadow-2xl">
+          {/* Background blobs */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/15 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+
+          {/* Top row */}
+          <div className="flex items-center justify-between gap-4 relative z-10">
+            <button
+              onClick={() => navigate(currentUser?.role === 'parent' ? '/' : '/students')}
+              className="w-11 h-11 rounded-2xl bg-white/10 border border-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all shrink-0"
+            >
+              <ArrowRight className="w-5 h-5" />
+            </button>
+
+            {currentUser?.role === 'admin' && student && (
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => setShowEdit(true)}
+                  className="h-11 px-5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 shadow-lg gap-2"
                 >
-                  <Edit2 className="w-4 h-4 md:w-5 md:h-5 text-indigo-600" /> تعديل البيانات
+                  <Edit2 className="w-4 h-4 text-indigo-600" />
+                  تعديل
                 </Button>
-                <Button 
-                  onClick={handleDelete} 
+                <Button
+                  onClick={handleDelete}
                   disabled={deleteStudentMutation.isPending}
-                  className="h-14 md:h-16 w-14 md:w-16 bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 rounded-2xl md:rounded-[24px] flex items-center justify-center transition-all shrink-0"
+                  className="h-11 w-11 bg-rose-500/20 border border-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-xl flex items-center justify-center transition-all"
                 >
-                  {deleteStudentMutation.isPending ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Trash2 className="w-5 h-5 md:w-6 md:h-6" />}
+                  {deleteStudentMutation.isPending
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Trash2 className="w-4 h-4" />}
                 </Button>
               </div>
             )}
-          </header>
+          </div>
 
-        <QueryStateHandler
-          loading={studentLoading}
-          error={studentError}
-          data={student}
-          onRetry={refetchStudent}
-          loadingMessage="جاري استرجاع سجل الطالب وتاريخه الأكاديمي..."
-        >
+          {/* Student info */}
+          {student ? (
+            <div className="flex items-end gap-5 relative z-10 mt-6">
+              <div className="w-16 h-16 md:w-20 md:h-20 rounded-[24px] bg-gradient-to-tr from-purple-500 to-indigo-500 text-white shadow-2xl shadow-indigo-900/40 flex items-center justify-center font-black text-2xl md:text-3xl shrink-0 border border-white/20">
+                {student?.name?.trim()?.[0] || '?'}
+              </div>
+              <div className="space-y-2 min-w-0">
+                <h1 className="text-2xl md:text-4xl font-black text-white tracking-tight truncate">
+                  {student.name}
+                </h1>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] px-3 py-1 rounded-xl">
+                    <School className="w-3 h-3 ml-1 inline" />
+                    {student?.classes?.name || 'غير مسجل بفصل'}
+                  </Badge>
+                  <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 font-bold text-[10px] px-3 py-1 rounded-xl">
+                    <GraduationCap className="w-3 h-3 ml-1 inline" />
+                    {student?.academic_year || '2025/2026'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-end gap-5 relative z-10 mt-6 animate-pulse">
+              <div className="w-16 h-16 bg-white/10 rounded-[24px] shrink-0" />
+              <div className="space-y-2 w-56">
+                <div className="h-8 bg-white/20 rounded-xl" />
+                <div className="h-5 w-36 bg-white/10 rounded-lg" />
+              </div>
+            </div>
+          )}
+        </header>
 
-          {/* Navigation Tabs */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-3 md:gap-4 px-2 pb-2 -mx-2">
-            {[
-              { id: 'curriculum', label: 'المنهج الدراسي', icon: BookOpen },
-              { id: 'grades', label: 'النتائج والدرجات', icon: Award },
-              { id: 'attendance', label: 'سجل الحضور', icon: CalendarCheck },
-              { id: 'info', label: 'المعلومات الأساسية', icon: Info }
-            ].map(tab => (
-               <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
-                  className={cn(
-                    "px-6 md:px-8 py-3.5 md:py-4 rounded-[20px] md:rounded-[22px] text-[10px] md:text-xs font-black transition-all flex items-center gap-2.5 md:gap-3 whitespace-nowrap border-2 shrink-0",
-                    activeTab === tab.id 
-                      ? "bg-slate-900 text-white border-slate-900 shadow-xl shadow-slate-200 scale-[1.02]" 
-                      : "bg-white text-slate-400 border-transparent hover:bg-slate-50 hover:text-slate-600"
-                  )}
-               >
-                  <tab.icon className={cn("w-3.5 h-3.5 md:w-4 md:h-4 shrink-0", activeTab === tab.id ? "text-indigo-400" : "text-slate-200")} />
-                  {tab.label}
-               </button>
+        {/* ── Query wrapper ── */}
+        <QueryStateHandler loading={isLoading} error={error} data={student} onRetry={refetch} loadingMessage="جاري تحميل سجل الطالب...">
+
+          {/* ── Tabs ── */}
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  'flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black whitespace-nowrap transition-all shrink-0',
+                  activeTab === tab.id
+                    ? 'bg-slate-900 text-white shadow-lg'
+                    : 'bg-white text-slate-400 border border-slate-100 hover:text-slate-700 hover:border-slate-200'
+                )}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
             ))}
           </div>
 
-          {/* Content Area */}
-          <div className="mt-4">
-             {activeTab === 'curriculum' && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {curriculumSubjects.length === 0 ? (
-                    <div className="col-span-full p-24 text-center text-slate-400 font-bold bg-white rounded-[48px] border border-dashed border-slate-100 shadow-sm">
-                       <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-                          <BookOpen className="w-10 h-10" />
-                       </div>
-                       لا يوجد محتوى دراسي مسجل لهذا الفصل حالياً.
-                    </div>
-                 ) : (
-                    curriculumSubjects.map((sub: any) => (
-                      <div key={sub.id} className="p-8 bg-white rounded-[40px] border border-slate-50 shadow-xl shadow-slate-100/50 flex flex-col gap-5 hover:scale-[1.02] transition-transform duration-500">
-                         <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
-                               <BookOpen className="w-6 h-6" />
-                            </div>
-                            <h3 className="font-black text-slate-900 text-lg leading-none">{sub.subject_name}</h3>
-                         </div>
-                         <div className="bg-slate-50/50 rounded-2xl p-6 text-sm font-bold text-slate-600 leading-relaxed border border-slate-50">
-                            {sub.content || 'المحتوى المطلوب دراسته لم يحدد بعد من قبل المعلم.'}
-                         </div>
-                      </div>
-                    ))
-                 )}
-               </div>
-             )}
+          {/* ── Tab Content ── */}
+          <div className="mt-2">
 
-             {activeTab === 'grades' && (
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 {grades.length === 0 ? (
-                    <div className="col-span-full p-24 text-center text-slate-400 font-bold bg-white rounded-[48px] border border-dashed border-slate-100 shadow-sm">
-                       <div className="w-20 h-20 rounded-3xl bg-slate-50 flex items-center justify-center mx-auto mb-6 text-slate-200">
-                          <Award className="w-10 h-10" />
-                       </div>
-                       لم يتم رصد نتائج لهذا الطالب بعد.
+            {/* INFO TAB */}
+            {activeTab === 'info' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { label: 'الاسم الكامل', value: student?.name, icon: User, color: 'indigo' },
+                  { label: 'الفصل', value: student?.classes?.name, icon: School, color: 'purple' },
+                  { label: 'معلم الفصل', value: student?.classes?.teacher?.full_name, icon: UserCircle, color: 'emerald' },
+                  { label: 'رقم القيد', value: student?.id?.split('-')[0]?.toUpperCase(), icon: Hash, color: 'slate' },
+                  { label: 'تاريخ الميلاد', value: student?.birth_date ? new Date(student.birth_date).toLocaleDateString('ar-EG') : null, icon: CalendarCheck, color: 'amber' },
+                  { label: 'رقم ولي الأمر', value: student?.parent_phone, icon: Phone, color: 'indigo' },
+                  { label: 'العنوان', value: student?.address, icon: MapPin, color: 'slate' },
+                  { label: 'السنة الدراسية', value: student?.academic_year || '2025/2026', icon: GraduationCap, color: 'purple' },
+                ].map(item => (
+                  <InfoCard key={item.label} {...item} />
+                ))}
+                {student?.notes && (
+                  <div className="sm:col-span-2 lg:col-span-3 p-6 bg-white rounded-[24px] border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-2">ملاحظات أكاديمية</p>
+                    <p className="text-sm font-bold text-slate-600 leading-relaxed">{student.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CURRICULUM TAB — Monthly Cards Drill-Down */}
+            {activeTab === 'curriculum' && (
+              <div className="space-y-4">
+                {curriculumSubjects.length === 0 ? (
+                  <EmptyState icon={BookOpen} message="لا يوجد محتوى دراسي مسجل لهذا الفصل حالياً." />
+                ) : curriculumView === 'folders' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {curriculumMonths.map(month => {
+                      const subs = curriculumByMonth[month] || [];
+                      return (
+                        <button
+                          key={month}
+                          onClick={() => { setSelectedCurrMonth(month); setCurriculumView('subjects'); }}
+                          className="group text-right p-6 rounded-[28px] border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-50/60 transition-all duration-300 active:scale-[0.98]"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-colors shrink-0">
+                              <FolderOpen className="w-6 h-6" />
+                            </div>
+                            <ChevronLeft className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 mt-1 shrink-0" />
+                          </div>
+                          <h3 className="font-black text-slate-900 text-base mb-1.5">📖 {month}</h3>
+                          <p className="text-[11px] text-slate-400 font-bold mb-3">{subs.length} مادة مقررة</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {subs.slice(0, 4).map((s: any) => (
+                              <span key={s.id} className="text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-100 px-2.5 py-1 rounded-lg">{s.subject_name}</span>
+                            ))}
+                            {subs.length > 4 && <span className="text-[10px] font-bold bg-indigo-50 text-indigo-500 px-2 py-1 rounded-lg">+{subs.length - 4}</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setCurriculumView('folders')}
+                        className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-colors"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        المنهج الدراسي
+                      </button>
+                      <span className="text-slate-200">/</span>
+                      <span className="text-sm font-black text-slate-900">{selectedCurrMonth}</span>
                     </div>
-                 ) : (
-                    grades.map((grade: any) => (
-                      <div key={grade.id} className="p-6 bg-white rounded-[32px] border border-slate-50 shadow-xl shadow-slate-100/30 flex items-center justify-between hover:translate-y-[-4px] transition-all duration-300">
-                         <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shadow-sm">
-                               <Award className="w-7 h-7" />
+                    <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden shadow-sm">
+                      <div className="p-5 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                        <FolderOpen className="w-5 h-5 text-indigo-600" />
+                        <div>
+                          <h3 className="text-base font-black text-slate-900">مقررات {selectedCurrMonth}</h3>
+                          <p className="text-[11px] text-slate-400 font-bold mt-0.5">{(curriculumByMonth[selectedCurrMonth] || []).length} مادة</p>
+                        </div>
+                      </div>
+                      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {(curriculumByMonth[selectedCurrMonth] || []).map((sub: any) => (
+                          <div key={sub.id} className="p-5 rounded-[24px] border border-slate-100 bg-slate-50/50 hover:shadow-md transition-all">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                                <BookOpen className="w-5 h-5" />
+                              </div>
+                              <h4 className="font-black text-slate-900 text-sm">{sub.subject_name}</h4>
                             </div>
-                            <div>
-                               <h3 className="font-black text-slate-900 text-base mb-1">{grade.subject}</h3>
-                               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{grade.term || grade.exam_type}</p>
+                            <div className="bg-white rounded-2xl p-4 text-sm font-bold text-slate-600 leading-relaxed border border-slate-100">
+                              {sub.content || 'المحتوى لم يُحدد بعد.'}
                             </div>
-                         </div>
-                         <div className="px-6 py-3 bg-slate-900 rounded-2xl text-xl font-black text-white shadow-xl shadow-slate-200">
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* GRADES TAB — Monthly Cards Drill-Down */}
+            {activeTab === 'grades' && (
+              <div className="space-y-4">
+                {fullGrades.length === 0 ? (
+                  <EmptyState icon={Award} message="لم يتم رصد نتائج لهذا الطالب بعد." />
+                ) : gradesView === 'folders' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {gradeFolderKeys.map(folder => {
+                      const folderGrades = gradesByFolder[folder] || [];
+                      const avg = folderGrades
+                        .filter((g: any) => !isNaN(Number(g.score)))
+                        .reduce((acc: number, g: any, _: any, arr: any[]) => acc + Number(g.score) / arr.length, 0);
+                      return (
+                        <button
+                          key={folder}
+                          onClick={() => { setSelectedGradesFolder(folder); setGradesView('list'); }}
+                          className="group text-right p-6 rounded-[28px] border border-slate-100 bg-white hover:border-amber-200 hover:shadow-xl hover:shadow-amber-50/60 transition-all duration-300 active:scale-[0.98]"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-colors shrink-0">
+                              <Award className="w-6 h-6" />
+                            </div>
+                            <ChevronLeft className="w-5 h-5 text-slate-300 group-hover:text-amber-500 mt-1 shrink-0" />
+                          </div>
+                          <h3 className="font-black text-slate-900 text-base mb-1.5">🏆 {folder}</h3>
+                          <p className="text-[11px] text-slate-400 font-bold mb-3">{folderGrades.length} مادة دراسية</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {folderGrades.slice(0, 4).map((g: any) => (
+                              <span key={g.id} className="text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-100 px-2.5 py-1 rounded-lg">
+                                {g.exam_templates?.subject || g.subject || 'غير محدد'}
+                              </span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setGradesView('folders')}
+                        className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-colors"
+                      >
+                        <ArrowRight className="w-4 h-4" />
+                        الدرجات والنتائج
+                      </button>
+                      <span className="text-slate-200">/</span>
+                      <span className="text-sm font-black text-slate-900">{selectedGradesFolder}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(gradesByFolder[selectedGradesFolder] || []).map((grade: any) => (
+                        <div key={grade.id} className="p-5 bg-white rounded-[24px] border border-slate-100 shadow-sm flex items-center justify-between gap-4 hover:shadow-md transition-all">
+                          <div className="flex items-center gap-3">
+                            <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                              <Award className="w-5 h-5" />
+                            </div>
+                            <h3 className="font-black text-slate-900 text-sm">{grade.exam_templates?.subject || grade.subject || 'غير محدد'}</h3>
+                          </div>
+                          <div className="px-5 py-2.5 bg-slate-900 rounded-2xl font-black text-white text-base shadow-lg shrink-0">
                             {grade.score}
                             {!isNaN(Number(grade.score)) && (
-                              <span className="text-[10px] text-white/30 mx-1.5 opacity-60">/ {grade.max_score}</span>
+                              <span className="text-[10px] text-white/30 mr-1">/ {grade.max_score}</span>
                             )}
-                         </div>
-                      </div>
-                    ))
-                 )}
-               </div>
-             )}
-
-             {activeTab === 'attendance' && (
-               <div className="bg-white p-12 rounded-[48px] border border-slate-100 shadow-xl shadow-slate-100/50">
-                 <div className="flex items-center justify-between mb-10">
-                    <h3 className="text-xl font-black text-slate-900">المخطط الزمني للحضور</h3>
-                    <div className="flex items-center gap-6">
-                       <AttendanceLegend label="حاضر" color="bg-emerald-500" />
-                       <AttendanceLegend label="متأخر" color="bg-amber-500" />
-                       <AttendanceLegend label="غائب" color="bg-rose-500" />
-                    </div>
-                 </div>
-                 {attendance.length === 0 ? (
-                   <div className="p-12 text-center text-slate-300 font-bold border-2 border-dashed border-slate-50 rounded-[32px]">لا يوجد سجل حضور مسجل حالياً.</div>
-                 ) : (
-                   <div className="space-y-10">
-                      {/* Group by month */}
-                      {Object.entries(
-                        // Group attendance by month-year
-                        attendance.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                          .reduce((groups: any, record: any) => {
-                            const date = new Date(record.date);
-                            const key = `${date.getFullYear()}-${date.getMonth()}`;
-                            if (!groups[key]) {
-                              groups[key] = {
-                                month: date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
-                                records: []
-                              };
-                            }
-                            groups[key].records.push(record);
-                            return groups;
-                          }, {})
-                      ).map(([key, group]: [string, any]) => (
-                        <div key={key} className="last:mb-0">
-                          {/* Month Header */}
-                          <div className="flex items-center gap-4 mb-6">
-                            <div className="h-px flex-1 bg-slate-100"></div>
-                            <h4 className="text-lg font-black text-slate-400">{group.month}</h4>
-                            <div className="h-px flex-1 bg-slate-100"></div>
-                          </div>
-                          
-                          <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 gap-3">
-                            {group.records.map((record: any) => {
-                              const date = new Date(record.date);
-                              return (
-                                <div 
-                                  key={record.id} 
-                                  title={`${date.toLocaleDateString('ar-EG')} - ${record.status}`}
-                                  className={cn(
-                                    "aspect-square rounded-xl border-2 flex flex-col items-center justify-center font-black transition-all hover:scale-110",
-                                    record.status === 'present' 
-                                      ? "bg-emerald-50 border-emerald-100/50 text-emerald-600" 
-                                      : record.status === 'late'
-                                      ? "bg-amber-50 border-amber-100/50 text-amber-600"
-                                      : "bg-rose-50 border-rose-100/50 text-rose-600"
-                                  )}
-                                >
-                                  <span className="text-[10px] mb-0.5 opacity-40">{date.toLocaleDateString('ar-EG', { month: 'short' })}</span>
-                                  <span className="text-sm">{date.getDate()}</span>
-                                </div>
-                              );
-                            })}
                           </div>
                         </div>
                       ))}
-                   </div>
-                 )}
-               </div>
-             )}
-
-             {activeTab === 'info' && (
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <InfoCard title="الفصل الدراسي" value={student?.classes?.name} icon={School} color="indigo" />
-                  <InfoCard title="معلم الفصل" value={student?.classes?.teacher?.full_name} icon={User} color="emerald" />
-                  <InfoCard title="ولي الأمر" value={parent?.full_name || 'لم يتم الربط'} icon={UserCircle} color="amber" />
-                  <InfoCard title="تاريخ الميلاد" value={student?.birth_date ? new Date(student.birth_date).toLocaleDateString('ar-EG') : 'غير محدد'} icon={CalendarCheck} color="slate" />
-                  <InfoCard title="رقم ولي الأمر" value={parent?.phone || student?.parent_phone || 'غير متاح'} icon={ShieldCheck} color="indigo" />
-                  <div className="sm:col-span-2 lg:col-span-1 p-8 bg-white rounded-[32px] border border-slate-50 shadow-sm flex flex-col gap-2">
-                     <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">ملاحظات إضافية</p>
-                     <p className="text-sm font-bold text-slate-600 leading-relaxed truncate-3-lines">{student?.notes || 'لا توجد ملاحظات أكاديمية أو سلوكية مسجلة لهذا الطالب.'}</p>
+                    </div>
                   </div>
-               </div>
-             )}
+                )}
+              </div>
+            )}
+
+            {/* ATTENDANCE TAB */}
+            {activeTab === 'attendance' && (
+              <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-base font-black text-slate-900">المخطط الزمني للحضور</h3>
+                  <div className="flex items-center gap-4">
+                    <AttendanceLegend label="حاضر" color="bg-emerald-500" />
+                    <AttendanceLegend label="متأخر" color="bg-amber-500" />
+                    <AttendanceLegend label="غائب" color="bg-rose-500" />
+                  </div>
+                </div>
+
+                {attendance.length === 0 ? (
+                  <EmptyState icon={CalendarCheck} message="لا يوجد سجل حضور مسجل حالياً." />
+                ) : (
+                  <div className="space-y-8">
+                    {Object.entries(
+                      attendance
+                        .slice()
+                        .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                        .reduce((groups: any, record: any) => {
+                          const date = new Date(record.date);
+                          const key = `${date.getFullYear()}-${date.getMonth()}`;
+                          if (!groups[key]) {
+                            groups[key] = {
+                              month: date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+                              records: []
+                            };
+                          }
+                          groups[key].records.push(record);
+                          return groups;
+                        }, {})
+                    ).map(([key, group]: [string, any]) => (
+                      <div key={key}>
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="h-px flex-1 bg-slate-100" />
+                          <h4 className="text-sm font-black text-slate-400">{group.month}</h4>
+                          <div className="h-px flex-1 bg-slate-100" />
+                        </div>
+                        <div className="grid grid-cols-7 sm:grid-cols-10 md:grid-cols-14 gap-2.5">
+                          {group.records.map((record: any) => {
+                            const date = new Date(record.date);
+                            return (
+                              <div
+                                key={record.id}
+                                title={`${date.toLocaleDateString('ar-EG')} — ${record.status === 'present' ? 'حاضر' : record.status === 'late' ? 'متأخر' : 'غائب'}`}
+                                className={cn(
+                                  'aspect-square rounded-xl flex flex-col items-center justify-center font-black text-xs transition-all hover:scale-110 cursor-default border',
+                                  record.status === 'present'
+                                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+                                    : record.status === 'late'
+                                    ? 'bg-amber-50 border-amber-100 text-amber-600'
+                                    : 'bg-rose-50 border-rose-100 text-rose-500'
+                                )}
+                              >
+                                <span className="text-[8px] opacity-40">{date.toLocaleDateString('ar-EG', { month: 'short' })}</span>
+                                <span>{date.getDate()}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </QueryStateHandler>
       </div>
 
       {showEdit && student && (
-        <EditStudentModal 
-          student={student} 
-          classes={classes} 
+        <EditStudentModal
+          student={student}
+          classes={classes}
           user={currentUser}
-          onClose={() => setShowEdit(false)} 
-          onSuccess={() => { setShowEdit(false); refetchStudent(); }}
+          onClose={() => setShowEdit(false)}
+          onSuccess={() => { setShowEdit(false); refetch(); }}
         />
       )}
     </AppLayout>
   );
 }
 
-function AttendanceLegend({ label, color }: { label: string, color: string }) {
-   return (
-      <div className="flex items-center gap-2">
-         <div className={cn("w-3 h-3 rounded-full shadow-sm", color)} />
-         <span className="text-[10px] font-black text-slate-400">{label}</span>
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+function InfoCard({ label, value, icon: Icon, color }: { label: string; value?: string | null; icon: any; color: string }) {
+  const colorMap: Record<string, string> = {
+    indigo: 'bg-indigo-50 text-indigo-600',
+    purple: 'bg-purple-50 text-purple-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    amber: 'bg-amber-50 text-amber-600',
+    slate: 'bg-slate-100 text-slate-500',
+  };
+
+  return (
+    <div className="p-5 bg-white rounded-[24px] border border-slate-100 shadow-sm flex items-center gap-4 group hover:shadow-md transition-all">
+      <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center shrink-0', colorMap[color] || colorMap.slate)}>
+        <Icon className="w-5 h-5" />
       </div>
-   );
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest truncate">{label}</p>
+        <p className="text-sm font-black text-slate-900 mt-0.5 truncate">{value || 'غير محدد'}</p>
+      </div>
+    </div>
+  );
 }
 
-function InfoCard({ title, value, icon: Icon, color }: any) {
-  const colors: any = {
-    indigo: "bg-indigo-50 text-indigo-600",
-    emerald: "bg-emerald-50 text-emerald-600",
-    amber: "bg-amber-50 text-amber-600",
-    slate: "bg-slate-50 text-slate-600"
-  };
+function AttendanceLegend({ label, color }: { label: string; color: string }) {
   return (
-    <div className="p-6 md:p-8 bg-white rounded-[28px] md:rounded-[32px] border border-slate-50 shadow-xl shadow-slate-200/20 flex items-center gap-4 md:gap-5 group hover:bg-slate-50/50 transition-all text-right translate-x-0">
-       <div className={cn("w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-transform group-hover:rotate-6", colors[color])}>
-          <Icon className="w-6 h-6 md:w-7 md:h-7" />
-       </div>
-       <div className="min-w-0">
-          <p className="text-[9px] md:text-[10px] font-black text-slate-300 uppercase tracking-widest truncate">{title}</p>
-          <p className="text-sm md:text-base font-black text-slate-900 leading-none mt-1 truncate">{value || 'غير محدد'}</p>
-       </div>
+    <div className="flex items-center gap-1.5">
+      <div className={cn('w-2.5 h-2.5 rounded-full', color)} />
+      <span className="text-[10px] font-black text-slate-400">{label}</span>
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
+  return (
+    <div className="py-20 text-center bg-white border border-dashed border-slate-100 rounded-[32px] space-y-4">
+      <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200 mx-auto">
+        <Icon className="w-8 h-8" />
+      </div>
+      <p className="text-slate-400 font-bold text-sm">{message}</p>
     </div>
   );
 }

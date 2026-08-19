@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useSessionState } from '@/hooks/useSessionState';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   BookOpen, Plus, ClipboardList, Check, Trash2, Users, Save, 
   Search, X, ArrowLeft, ChevronLeft, LayoutGrid, Award,
-  Sparkles, History, Filter, AlertCircle, TrendingUp, Info
+  Sparkles, History, Filter, AlertCircle, TrendingUp, Info, FolderOpen, FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -21,7 +22,6 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
-import { sendPushToUser } from '@/utils/pushNotifications';
 
 interface ExamTemplate {
   id: string;
@@ -44,18 +44,13 @@ interface StudentGrade {
   gradeId?: string;
 }
 
-const EXAM_TYPES = [
-  { value: 'daily', label: 'يومي', color: 'indigo' },
-  { value: 'monthly', label: 'شهري', color: 'emerald' },
-  { value: 'final', label: 'نهائي', color: 'rose' },
-];
-
 export default function GradesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Selection state
-  const [selectedClassId, setSelectedClassId] = useState<string>('');
+  // Selection state (session-persistent)
+  const [selectedClassId, setSelectedClassId] = useSessionState<string>('grades:selectedClassId', '');
+  const [selectedMonthFolder, setSelectedMonthFolder] = useSessionState<string>('grades:selectedMonthFolder', '');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,33 +66,69 @@ export default function GradesPage() {
   );
 
   const { data: subjects = [], isLoading: subjectsLoading, error: subjectsError } = useCurriculumSubjects(selectedClass?.curriculum_id || null);
-  const { data: templates = [], isLoading: templatesLoading, error: templatesError } = useExamTemplates(selectedClassId, selectedSubject);
-  const { data: dbGrades = [], isLoading: gradesLoading, error: gradesError, refetch: refetchGrades, isRefetching } = useStudentGrades(selectedTemplate?.id || null, selectedClassId);
+  const { data: templatesResponse, isLoading: templatesLoading, error: templatesError } = useExamTemplates(selectedClassId, null, 1, 100);
+  const allTemplates = templatesResponse?.data || [];
 
-  // Local state for pending grade changes
-  const [localGrades, setLocalGrades] = useState<StudentGrade[]>([]);
+  // Group templates by Month Card / Term (e.g. "تقييم شهر 7", "تقييم شهر 8")
+  const monthFolders = useMemo(() => {
+    const folders: Record<string, ExamTemplate[]> = {};
+    allTemplates.forEach(t => {
+      const folderName = t.term || t.title || 'تقييم شهري';
+      if (!folders[folderName]) folders[folderName] = [];
+      folders[folderName].push(t);
+    });
+    return folders;
+  }, [allTemplates]);
 
-  // Sync local grades with DB data - use stringify to prevent infinite loop from unstable references
-  const dbGradesStr = JSON.stringify(dbGrades);
-  useEffect(() => {
-    if (dbGrades && dbGrades.length > 0) {
-      setLocalGrades(dbGrades);
-    }
-  }, [dbGradesStr, dbGrades]);
-
-  // Handle first class selection
+  // Set default class
   useEffect(() => {
     if (classes.length > 0 && !selectedClassId) {
       setSelectedClassId(classes[0].id);
     }
   }, [classes, selectedClassId]);
 
-  // Handle first subject selection
+  // Auto select first month folder
+  const monthFolderKeys = Object.keys(monthFolders);
   useEffect(() => {
-    if (subjects.length > 0 && !selectedSubject) {
-      setSelectedSubject(subjects[0].subject_name);
+    if (monthFolderKeys.length > 0 && !selectedMonthFolder) {
+      setSelectedMonthFolder(monthFolderKeys[0]);
     }
-  }, [subjects, selectedSubject]);
+  }, [monthFolderKeys, selectedMonthFolder]);
+
+  // Active templates for current month folder
+  const currentMonthTemplates = useMemo(() => {
+    if (!selectedMonthFolder) return [];
+    return monthFolders[selectedMonthFolder] || [];
+  }, [selectedMonthFolder, monthFolders]);
+
+  // Auto select template when subject or month folder changes
+  useEffect(() => {
+    if (currentMonthTemplates.length > 0) {
+      if (selectedSubject) {
+        const found = currentMonthTemplates.find(t => t.subject === selectedSubject);
+        if (found) {
+          setSelectedTemplate(found);
+          return;
+        }
+      }
+      setSelectedTemplate(currentMonthTemplates[0]);
+      setSelectedSubject(currentMonthTemplates[0].subject);
+    } else {
+      setSelectedTemplate(null);
+    }
+  }, [selectedMonthFolder, selectedSubject, currentMonthTemplates]);
+
+  const { data: dbGrades = [], isLoading: gradesLoading, error: gradesError, refetch: refetchGrades, isRefetching } = useStudentGrades(selectedTemplate || null, selectedClassId);
+
+  // Local state for pending grade changes
+  const [localGrades, setLocalGrades] = useState<StudentGrade[]>([]);
+
+  const dbGradesStr = JSON.stringify(dbGrades);
+  useEffect(() => {
+    if (dbGrades && dbGrades.length > 0) {
+      setLocalGrades(dbGrades);
+    }
+  }, [dbGradesStr, dbGrades]);
 
   // ── Mutations ──
   const upsertMutation = useUpsertGrades();
@@ -133,14 +164,14 @@ export default function GradesPage() {
 
     try {
       await upsertMutation.mutateAsync(toUpsert);
-      toast({ title: 'تم حفظ الدرجات بنجاح', description: 'تم تحديث سجلات الطلاب بنجاح.' });
+      toast({ title: 'تم حفظ التقييمات بنجاح', description: 'تم تحديث سجلات الطلاب بنجاح.' });
     } catch (err: any) {
       toast({ title: 'خطأ في الحفظ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا التقييم؟ سيتم حذف جميع الدرجات المرتبطة به.')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا التقييم والمادة التابعة له؟')) return;
     try {
       await deleteMutation.mutateAsync(templateId);
       toast({ title: 'تم الحذف بنجاح' });
@@ -152,58 +183,56 @@ export default function GradesPage() {
     }
   };
 
-   const filteredGrades = localGrades.filter(sg => 
-      (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  
-   const average = localGrades.length > 0 
-     ? Math.round(localGrades.reduce((sum, sg) => sum + (Number(sg.score) || 0), 0) / localGrades.length) 
-     : 0;
-
+  const filteredGrades = localGrades.filter(sg => 
+    (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <AppLayout>
-      <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000">
-        {/* Premium Header - Scaled Down */}
+      <div className="flex flex-col gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000" dir="rtl">
+        {/* Premium Header */}
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white/40 backdrop-blur-md p-8 rounded-[40px] border border-white/50 shadow-xl shadow-slate-200/10">
           <div className="flex items-center gap-6">
             <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
                {branding?.logo_url ? (
                  <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
                ) : (
-                 <BookOpen className="w-8 h-8 text-indigo-600" />
+                 <Award className="w-8 h-8 text-indigo-600" />
                )}
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-3">
-                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'سجل الدرجات'}</h1>
-                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">منصة المعلم</Badge>
+                 <h1 className="text-2xl font-black text-slate-900 tracking-tight">{branding?.name || 'رصد التقييمات والنتائج'}</h1>
+                 <Badge variant="outline" className="rounded-lg bg-indigo-50 border-indigo-100 text-indigo-600 font-black text-[9px] uppercase px-3">لوحة الإدارة والتقييم</Badge>
               </div>
-              <p className="text-slate-500 font-medium text-sm">إدارة التقييمات الأكاديمية ونتائج الطلاب</p>
+              <p className="text-slate-500 font-medium text-sm">إنشاء التقييمات الشهرية ورصد نتائج الطلاب بسهولة وبدون تكرار</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-             <div className="relative group min-w-[180px]">
-               <select value={selectedClassId} onChange={e => { setSelectedClassId(e.target.value); setSelectedSubject(''); setSelectedTemplate(null); }}
-                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer">
+             {/* Class Picker */}
+             <div className="relative group min-w-[200px]">
+               <select 
+                 value={selectedClassId} 
+                 onChange={e => { 
+                   setSelectedClassId(e.target.value); 
+                   setSelectedMonthFolder('');
+                   setSelectedSubject(''); 
+                   setSelectedTemplate(null); 
+                 }}
+                 className="w-full pr-10 pl-8 h-12 rounded-xl border-none bg-white text-slate-900 font-black text-sm focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer"
+               >
                  {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                </select>
-               <Users className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
-             </div>
-
-             <div className="relative group min-w-[180px]">
-               <select value={selectedSubject} onChange={e => { setSelectedSubject(e.target.value); setSelectedTemplate(null); }}
-                 disabled={subjects.length === 0}
-                 className="w-full pr-10 pl-8 h-11 rounded-xl border-none bg-white text-slate-900 font-black text-xs focus:ring-4 focus:ring-indigo-600/5 transition-all shadow-xl appearance-none cursor-pointer disabled:opacity-50">
-                 {subjects.map((s: any) => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
-               </select>
-               <BookOpen className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 pointer-events-none group-focus-within:text-indigo-600 transition-colors" />
+               <Users className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
              </div>
              
              {selectedClassId && (
-               <Button onClick={() => setShowCreateTemplate(true)} className="h-11 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:scale-[1.02] active:scale-95 transition-all gap-3">
-                 <Plus className="w-4.5 h-4.5" /> إضافة اختبار
+               <Button 
+                 onClick={() => setShowCreateTemplate(true)} 
+                 className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black text-xs shadow-xl shadow-slate-900/10 hover:bg-indigo-600 transition-all gap-3"
+               >
+                 <Plus className="w-5 h-5" /> إنشاء تقييم شهري جديد
                </Button>
              )}
           </div>
@@ -218,360 +247,351 @@ export default function GradesPage() {
             refetchGrades();
           }}
           isRefetching={isRefetching}
-          loadingMessage="جاري مزامنة السجلات الأكاديمية..."
+          loadingMessage="جاري مزامنة بيانات التقييمات..."
           emptyMessage="لم يتم العثور على فصول دراسية."
           isEmpty={classes.length === 0}
         >
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
-            {/* Left Sidebar: Templates List - Scaled Down */}
+            {/* Left Sidebar: Month Cards & Subjects */}
             <div className="xl:col-span-4 space-y-6 xl:sticky xl:top-6">
                <div className="flex items-center justify-between px-3">
-                  <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">الاختبارات والتقييمات</h2>
-                  <Badge variant="outline" className="bg-white text-indigo-600 font-black px-3 py-0.5 rounded-full text-[9px]">{templates.length} اختبار</Badge>
+                  <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest leading-none flex items-center gap-2">
+                    <FolderOpen className="w-4 h-4 text-indigo-600" />
+                    كروت التقييمات الشهرية
+                  </h2>
+                  <Badge variant="outline" className="bg-white text-indigo-600 font-black px-3 py-0.5 rounded-full text-xs">
+                    {monthFolderKeys.length} شهور
+                  </Badge>
                </div>
 
+               {/* Month Cards Grid */}
                <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
-                  {templates.length === 0 ? (
-                    <div className="bg-white/40 backdrop-blur-sm border border-dashed border-slate-200 p-12 text-center rounded-[32px]">
-                       <p className="text-slate-400 font-black text-[9px] uppercase tracking-widest opacity-60">لا توجد اختبارات لهذه المادة</p>
+                  {monthFolderKeys.length === 0 ? (
+                    <div className="bg-white/60 border border-dashed border-slate-200 p-10 text-center rounded-[32px] space-y-3">
+                       <FolderOpen className="w-10 h-10 text-slate-300 mx-auto" />
+                       <p className="text-slate-400 font-bold text-xs">لا توجد تقييمات شهرية حتى الآن لهذا الفصل</p>
+                       <Button 
+                         onClick={() => setShowCreateTemplate(true)}
+                         className="bg-indigo-600 text-white font-bold text-xs rounded-xl h-10 px-4"
+                       >
+                         إضافة أول تقييم شهري
+                       </Button>
                     </div>
-                  ) : templates.map(t => {
-                    const isSelected = selectedTemplate?.id === t.id;
-                    return (
-                      <div key={t.id}
-                        onClick={() => setSelectedTemplate(t)}
-                        className={cn(
-                          "premium-card p-5 cursor-pointer transition-all duration-500 overflow-hidden relative group",
-                          isSelected 
-                            ? "bg-slate-900 text-white shadow-xl shadow-slate-200 border-none translate-x-2 scale-[1.03]" 
-                            : "hover:translate-x-2 shadow-sm"
-                        )}>
-                        <div className="flex items-start justify-between gap-4 mb-3 relative z-10">
-                           <div className="flex-1">
-                              <h3 className={cn("text-base font-black tracking-tight", isSelected ? "text-white" : "text-slate-900")}>{t.title}</h3>
-                              <p className={cn("text-[8px] uppercase font-black tracking-widest mt-1", isSelected ? "text-indigo-300" : "text-slate-400")}>{t.subject} • {t.term}</p>
-                           </div>
-                           <button onClick={e => { e.stopPropagation(); handleDeleteTemplate(t.id); }}
-                             className={cn(
-                               "w-8 h-8 rounded-lg flex items-center justify-center transition-all shrink-0",
-                               isSelected ? "bg-white/10 text-white/40 hover:bg-rose-500/20 hover:text-rose-400" : "bg-slate-50 text-slate-300 hover:text-rose-500"
-                             )}>
-                             <Trash2 className="w-4 h-4" />
-                           </button>
+                  ) : (
+                    monthFolderKeys.map((folderName) => {
+                      const isFolderSelected = selectedMonthFolder === folderName;
+                      const folderTemplates = monthFolders[folderName] || [];
+
+                      return (
+                        <div
+                          key={folderName}
+                          onClick={() => {
+                            setSelectedMonthFolder(folderName);
+                            if (folderTemplates.length > 0) {
+                              setSelectedTemplate(folderTemplates[0]);
+                              setSelectedSubject(folderTemplates[0].subject);
+                            }
+                          }}
+                          className={cn(
+                            "premium-card p-5 cursor-pointer transition-all duration-300 overflow-hidden relative group rounded-[24px] border",
+                            isFolderSelected 
+                              ? "bg-slate-900 text-white shadow-xl border-slate-900" 
+                              : "bg-white text-slate-900 border-slate-100 hover:border-indigo-100 hover:shadow-md"
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <h3 className={cn("text-lg font-black tracking-tight", isFolderSelected ? "text-white" : "text-slate-900")}>
+                              📁 {folderName}
+                            </h3>
+                            <Badge className={cn("text-xs font-bold px-2.5 py-1 rounded-lg", isFolderSelected ? "bg-indigo-500/20 text-indigo-200" : "bg-indigo-50 text-indigo-700")}>
+                              {folderTemplates.length} مواد
+                            </Badge>
+                          </div>
+
+                          {/* Subjects Chips inside Month Card */}
+                          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100/10">
+                            {folderTemplates.map((t) => (
+                              <button
+                                key={t.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedMonthFolder(folderName);
+                                  setSelectedTemplate(t);
+                                  setSelectedSubject(t.subject);
+                                }}
+                                className={cn(
+                                  "px-3 py-1 rounded-lg text-xs font-bold transition-all",
+                                  selectedTemplate?.id === t.id
+                                    ? "bg-indigo-600 text-white shadow-xs"
+                                    : isFolderSelected
+                                    ? "bg-white/10 text-slate-300 hover:bg-white/20"
+                                    : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+                                )}
+                              >
+                                {t.subject}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 relative z-10 border-t pt-3 mt-1 border-white/5 disabled:border-slate-50">
-                            <span className={cn(
-                                "px-2 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest",
-                                isSelected ? "bg-white/10 text-white" : "bg-slate-100 text-slate-500"
-                            )}>
-                              {t.exam_type === 'daily' ? 'يومي' : t.exam_type === 'monthly' ? 'شهري' : 'نهائي'}
-                            </span>
-                            <span className={cn("text-[9px] font-black", isSelected ? "text-white/40" : "text-slate-300")}>الدرجة: {t.max_score}</span>
-                        </div>
-                        {isSelected && (
-                          <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-600/20 rounded-bl-[80px] pointer-events-none" />
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                </div>
             </div>
 
-            {/* Right Column: Grade entry rows - Scaled Down */}
-            <div className="xl:col-span-8 space-y-8">
+            {/* Right Main Column: Grade entry for active selected template */}
+            <div className="xl:col-span-8 space-y-6">
               {!selectedTemplate ? (
-                 <div className="bg-white border-2 border-dashed border-slate-100 p-24 text-center rounded-[48px] shadow-sm">
-                    <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-[32px] flex items-center justify-center mx-auto mb-6 text-slate-200">
+                 <div className="bg-white border-2 border-dashed border-slate-100 p-20 text-center rounded-[40px] shadow-sm">
+                    <div className="w-20 h-20 bg-slate-50 border border-slate-100 rounded-[32px] flex items-center justify-center mx-auto mb-6 text-slate-300">
                       <Sparkles className="w-10 h-10" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 mb-2">اختر اختباراً للبدء برصد الدرجات</h3>
-                    <p className="text-slate-400 font-medium text-sm max-w-xs mx-auto">قم باختيار الفصل والمادة، ثم حدد الاختبار من القائمة الجانبية لإدخال الدرجات.</p>
+                    <h3 className="text-xl font-black text-slate-900 mb-2">اختر أو أنشئ كارت تقييم شهري للبدء</h3>
+                    <p className="text-slate-400 font-medium text-sm max-w-sm mx-auto">
+                      قم باختيار التقييم الشهري من الكروت الجانبية ثم حدد المادة لرصد الدرجات والتقييم النصي للطلاب.
+                    </p>
                  </div>
               ) : (
-                <div className="premium-card p-0 overflow-hidden flex flex-col shadow-xl animate-in slide-in-from-left-6 duration-700">
-                   <div className="p-8 border-b border-slate-50 bg-slate-50/20 flex flex-col md:flex-row md:items-center justify-between gap-8">
-                      <div className="flex items-center gap-5">
-                         <div className="w-16 h-16 rounded-[22px] bg-indigo-600 text-white flex items-center justify-center shadow-xl shadow-indigo-200 shrink-0">
-                            <Award className="w-8 h-8" />
+                <div className="bg-white border border-slate-100 rounded-[36px] overflow-hidden shadow-xl animate-in slide-in-from-left-6 duration-700">
+                   {/* Subject & Evaluation Bar */}
+                   <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                      <div className="flex items-center gap-4">
+                         <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shrink-0">
+                            <BookOpen className="w-7 h-7" />
                          </div>
                          <div>
-                            <div className="flex items-center gap-3 mb-1">
-                               <h2 className="text-xl font-black text-slate-900">{selectedTemplate.title}</h2>
-                               <Badge className="bg-white border-slate-100 font-black text-[8px] uppercase">{selectedTemplate.subject}</Badge>
+                            <div className="flex items-center gap-2 mb-1">
+                               <h2 className="text-xl font-black text-slate-900">{selectedTemplate.subject}</h2>
+                               <Badge className="bg-indigo-50 text-indigo-700 font-bold text-xs px-3 py-0.5">
+                                 {selectedTemplate.term || selectedTemplate.title}
+                               </Badge>
                             </div>
-                            <div className="flex items-center gap-3 text-[9px] font-black text-slate-300 uppercase tracking-widest mt-1">
-                               <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-indigo-400" /> الطلاب: {localGrades.length}</span>
-                               <div className="w-1 h-1 rounded-full bg-slate-200" />
-                               <span>الفصل: {selectedTemplate.term}</span>
-                            </div>
+                            <p className="text-xs text-slate-400 font-bold">
+                              نظام التقييم: {selectedTemplate.score_type === 'text' ? 'تقييم نصي / وصفي' : `درجات رقمية (من ${selectedTemplate.max_score})`}
+                            </p>
                          </div>
                       </div>
 
                       <div className="flex items-center gap-3">
-                         <div className="relative group w-full md:w-56">
-                            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
-                            <input 
-                              type="text" 
-                              placeholder="بحث باسم الطالب..." 
+                         <div className="relative min-w-[200px]">
+                            <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                            <Input 
                               value={searchQuery}
                               onChange={e => setSearchQuery(e.target.value)}
-                              className="w-full pr-10 pl-4 py-2.5 rounded-xl border border-slate-100 bg-white text-xs font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 transition-all" 
+                              placeholder="بحث باسم الطالب..."
+                              className="pr-10 h-11 bg-white border-slate-200 text-xs font-bold rounded-xl"
                             />
                          </div>
-                         <Button onClick={handleSaveAll} disabled={upsertMutation.isPending} className="h-12 px-6 rounded-xl bg-slate-900 text-white font-black hover:bg-indigo-600 transition-all text-xs shadow-lg gap-2 shrink-0">
-                            {upsertMutation.isPending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-4.5 h-4.5" />}
-                            {upsertMutation.isPending ? 'جاري الحفظ...' : 'حفظ الدرجات'}
+
+                         <Button 
+                           onClick={() => handleDeleteTemplate(selectedTemplate.id)}
+                           variant="ghost"
+                           className="h-11 px-3 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all"
+                         >
+                           <Trash2 className="w-4.5 h-4.5" />
+                         </Button>
+
+                         <Button 
+                           onClick={handleSaveAll}
+                           disabled={upsertMutation.isPending}
+                           className="h-11 px-6 rounded-xl bg-indigo-600 text-white font-black text-xs shadow-lg hover:bg-indigo-700 transition-all gap-2"
+                         >
+                           <Save className="w-4.5 h-4.5" />
+                           {upsertMutation.isPending ? 'جاري الحفظ...' : 'حفظ الكل'}
                          </Button>
                       </div>
                    </div>
 
-                   <div className="divide-y divide-slate-50 max-h-[600px] overflow-y-auto custom-scrollbar">
-                      {filteredGrades.length === 0 ? (
-                        <div className="p-24 text-center">
-                           <Users className="w-12 h-12 text-slate-100 mx-auto mb-4 opacity-50" />
-                           <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest">لا توجد نتائج</p>
-                        </div>
-                      ) : (
-                        filteredGrades.map((sg, idx) => (
-                           <div key={sg.studentId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 px-8 py-5 hover:bg-slate-50/50 transition-all group">
-                             <div className="flex items-center gap-4 min-w-0">
-                               <div className="w-9 h-9 rounded-lg bg-slate-50 flex items-center justify-center text-[10px] font-black text-slate-300 group-hover:bg-slate-900 group-hover:text-white transition-all shadow-inner shrink-0">
-                                  {idx + 1}
-                               </div>
-                               <div className="min-w-0">
-                                  <h3 className="text-base font-black text-slate-800 transition-colors truncate leading-tight mb-1 group-hover:text-indigo-600">{sg.studentName}</h3>
-                                  <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest opacity-60">إدخال درجة الطالب</p>
-                               </div>
-                             </div>
+                   {/* Student Grades Entry Table */}
+                   <div className="p-6">
+                      <div className="divide-y divide-slate-100">
+                         {filteredGrades.length === 0 ? (
+                           <div className="py-12 text-center text-slate-400 font-bold text-sm">
+                             لا يوجد طلاب مسجلون في هذا الفصل
+                           </div>
+                         ) : (
+                           filteredGrades.map((sg) => (
+                             <div key={sg.studentId} className="py-4 px-4 flex items-center justify-between hover:bg-slate-50/50 rounded-2xl transition-colors gap-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                   <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-700 shrink-0">
+                                      {sg.studentName[0]}
+                                   </div>
+                                   <span className="font-black text-slate-800 text-sm truncate">{sg.studentName}</span>
+                                </div>
 
-                             <div className="relative group/input w-full sm:w-48">
-                               {selectedTemplate.score_type === 'text' && selectedTemplate.expected_results && selectedTemplate.expected_results.length > 0 ? (
-                                 <Select
-                                   value={sg.score}
-                                   onValueChange={(value) => handleScoreChange(sg.studentId, value)}
-                                 >
-                                   <SelectTrigger className="w-full h-12 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base">
-                                     <SelectValue placeholder="اختر النتيجة" />
-                                   </SelectTrigger>
-                                   <SelectContent>
-                                     {selectedTemplate.expected_results.map((res) => (
-                                       <SelectItem key={res} value={res}>
-                                         {res}
-                                       </SelectItem>
-                                     ))}
-                                   </SelectContent>
-                                 </Select>
-                               ) : (
-                                 <>
-                                   <input
-                                     type="text"
-                                     value={sg.score}
-                                     onChange={e => handleScoreChange(sg.studentId, e.target.value)}
-                                     placeholder="درجة أو نص..."
-                                     className="w-full h-12 px-6 rounded-2xl border border-slate-100 bg-white text-slate-900 font-black text-base text-center focus:outline-none focus:border-indigo-600/30 transition-all focus:ring-8 focus:ring-indigo-600/5 shadow-inner"
-                                   />
-                                   {selectedTemplate.score_type !== 'text' && (
-                                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-200 uppercase pointer-events-none tracking-widest">
-                                       / {selectedTemplate.max_score}
+                                <div className="flex items-center gap-3 w-full max-w-xs sm:max-w-md">
+                                   {selectedTemplate.score_type === 'text' ? (
+                                     <Input
+                                       value={sg.score}
+                                       onChange={e => handleScoreChange(sg.studentId, e.target.value)}
+                                       placeholder="مثال: ممتاز في القراءة والاستيعاب"
+                                       className="h-11 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl focus:bg-white transition-all text-right"
+                                     />
+                                   ) : (
+                                     <div className="flex items-center gap-2 w-full justify-end">
+                                       <Input
+                                         type="number"
+                                         value={sg.score}
+                                         onChange={e => handleScoreChange(sg.studentId, e.target.value)}
+                                         placeholder="الدرجة"
+                                         className="h-11 bg-slate-50 border-slate-200 text-sm font-black rounded-xl focus:bg-white transition-all text-center w-28"
+                                       />
+                                       <span className="text-xs font-bold text-slate-400">/ {selectedTemplate.max_score}</span>
                                      </div>
                                    )}
-                                 </>
-                               )}
+                                </div>
                              </div>
-                           </div>
-                        ))
-                      )}
+                           ))
+                         )}
+                      </div>
                    </div>
                 </div>
               )}
             </div>
           </div>
         </QueryStateHandler>
-      </div>
 
-      {showCreateTemplate && (
-        <CreateTemplateModal
-          classId={selectedClassId}
-          teacherId={user!.id}
-          user={user}
-          subjects={subjects}
-          onClose={() => setShowCreateTemplate(false)}
-          onCreated={(t: any) => {
-            setSelectedTemplate(t);
-            setShowCreateTemplate(false);
-          }}
-        />
-      )}
+        {/* Modal: Create New Monthly Evaluation Session (For All Subjects at once) */}
+        {showCreateTemplate && (
+          <CreateMonthlyEvaluationModal 
+            classId={selectedClassId}
+            className={selectedClass?.name || ''}
+            subjects={subjects}
+            onClose={() => setShowCreateTemplate(false)}
+            onSuccess={() => {
+              setShowCreateTemplate(false);
+              refetchClasses();
+            }}
+          />
+        )}
+      </div>
     </AppLayout>
   );
 }
 
-// ─── Create Template Modal (Scaled Down) ─────────────────────────────────────
-function CreateTemplateModal({ classId, teacherId, user, subjects, onClose, onCreated }: any) {
-  const [title, setTitle] = useState('');
-  const [subject, setSubject] = useState('');
-  const [examType, setExamType] = useState('monthly');
+// Modal component for creating a month evaluation folder for ALL subjects in 1-click
+function CreateMonthlyEvaluationModal({ 
+  classId, 
+  className,
+  subjects, 
+  onClose, 
+  onSuccess 
+}: { 
+  classId: string;
+  className: string;
+  subjects: any[]; 
+  onClose: () => void; 
+  onSuccess: () => void; 
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [monthTitle, setMonthTitle] = useState('تقييم شهر 7');
+  const [scoreType, setScoreType] = useState<'numeric' | 'text'>('text');
   const [maxScore, setMaxScore] = useState('100');
-  const [weight, setWeight] = useState('1');
-  const [term, setTerm] = useState('الفصل الأول');
-  const [scoreType, setScoreType] = useState<'numeric' | 'text'>('numeric');
-  const [expectedResults, setExpectedResults] = useState<string[]>([]);
-  const [newResult, setNewResult] = useState('');
-  const createMutation = useCreateExamTemplate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (subjects.length > 0 && !subject) setSubject(subjects[0].subject_name);
-  }, [subjects, subject]);
+  const createMutation = useCreateExamTemplate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject.trim()) return;
-    
+    if (!monthTitle.trim() || !classId) return;
+
+    if (subjects.length === 0) {
+      toast({ title: 'تنبيه', description: 'لا توجد مواد مضافة لهذا الفصل بعد. يرجى ربط منهج بالفصل أولاً.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      const data = await createMutation.mutateAsync({
+      // Create a single placeholder template to establish the folder
+      await createMutation.mutateAsync({
         class_id: classId,
-        teacher_id: teacherId,
-        subject: subject.trim(),
-        exam_type: examType,
-        max_score: Number(maxScore),
-        weight: Number(weight),
-        term,
-        title: title.trim() || subject.trim(),
+        subject: 'مادة جديدة',
+        exam_type: 'monthly',
+        max_score: Number(maxScore) || 100,
+        weight: 1,
+        term: monthTitle.trim(),
+        title: monthTitle.trim(),
         score_type: scoreType,
-        expected_results: expectedResults,
-      } as any);
-      onCreated(data);
-    } catch (err) {
-      // toast handled via mutation? or here
+        teacher_id: user?.id || '',
+      });
+
+      toast({ 
+        title: 'تم إنشاء التقييم الشهري بنجاح! 🌟', 
+        description: `يمكنك الآن إضافة المواد يدوياً من داخل الكارت.` 
+      });
+      onSuccess();
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose}>
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50/50 rounded-bl-[80px]" />
-        <h2 className="text-2xl font-black text-slate-900 mb-8 tracking-tight relative z-10">إعداد اختبار جديد</h2>
-        <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">اسم الاختبار</label>
-            <Input value={title} onChange={e => setTitle(e.target.value)}
-              className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: تقييم الأسبوع الرابع" />
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right animate-in fade-in" onClick={onClose} dir="rtl">
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-lg p-8 rounded-[40px] animate-in zoom-in-95 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+            <FolderOpen className="w-6 h-6" />
           </div>
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">المادة الدراسية *</label>
-            <select value={subject} onChange={e => setSubject(e.target.value)}
-              className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
-              {subjects.map((s: any) => <option key={s.subject_name} value={s.subject_name}>{s.subject_name}</option>)}
-            </select>
+          <div>
+            <h2 className="text-xl font-black text-slate-900">إنشاء كارت تقييم شهري جديد</h2>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">{className}</p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">نوع التقييم</label>
-               <select value={examType} onChange={e => setExamType(e.target.value)}
-                 className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
-                 {EXAM_TYPES.map(et => <option key={et.value} value={et.value}>{et.label}</option>)}
-               </select>
-            </div>
-            <div className="space-y-1.5">
-               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
-               <select value={term} onChange={e => setTerm(e.target.value)}
-                 className="w-full h-11 px-5 rounded-xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all text-sm font-bold appearance-none">
-                 <option value="الفصل الأول">الفصل الأول</option>
-                 <option value="الفصل الثاني">الفصل الثاني</option>
-               </select>
-            </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-xs font-black text-slate-700">اسم التقييم الشهري *</label>
+            <Input 
+              value={monthTitle} 
+              onChange={e => setMonthTitle(e.target.value)}
+              className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
+              placeholder="مثال: تقييم شهر 7 أو تقييم شهر أكتوبر" 
+              required
+            />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">نظام الدرجات</label>
+            <label className="text-xs font-black text-slate-700">نظام ورصد التقييم</label>
             <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setScoreType('numeric')}
-                className={cn(
-                  "h-11 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
-                  scoreType === 'numeric'
-                    ? "border-indigo-600 bg-indigo-50 text-indigo-600"
-                    : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
-                )}
-              >
-                رقمي
-              </button>
               <button
                 type="button"
                 onClick={() => setScoreType('text')}
                 className={cn(
-                  "h-11 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
+                  "h-12 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
                   scoreType === 'text'
-                    ? "border-indigo-600 bg-indigo-50 text-indigo-600"
-                    : "border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200"
+                    ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-xs"
+                    : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
                 )}
               >
-                نصي
+                📝 تقييم وصفي / نصي
+              </button>
+              <button
+                type="button"
+                onClick={() => setScoreType('numeric')}
+                className={cn(
+                  "h-12 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
+                  scoreType === 'numeric'
+                    ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-xs"
+                    : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
+                )}
+              >
+                🔢 درجات رقمية
               </button>
             </div>
           </div>
 
-          {scoreType === 'numeric' ? (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الدرجة النهائية</label>
-                  <Input type="number" value={maxScore} onChange={e => setMaxScore(e.target.value)}
-                    className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
-              </div>
-              <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الوزن (%)</label>
-                  <Input type="number" value={weight} onChange={e => setWeight(e.target.value)}
-                    className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-center text-sm" />
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3 pt-2">
-              <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">النتائج المتوقعة</label>
-              <div className="flex gap-2">
-                <Input
-                  value={newResult}
-                  onChange={(e) => setNewResult(e.target.value)}
-                  placeholder="مثال: جيد جداً"
-                  className="h-11 px-5 rounded-xl border-slate-100 bg-slate-50 focus:bg-white font-bold text-sm"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      if (newResult.trim()) {
-                        setExpectedResults([...expectedResults, newResult.trim()]);
-                        setNewResult('');
-                      }
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  onClick={() => {
-                    if (newResult.trim()) {
-                      setExpectedResults([...expectedResults, newResult.trim()]);
-                      setNewResult('');
-                    }
-                  }}
-                  className="h-11 w-11 rounded-xl bg-slate-50 text-slate-400 hover:bg-slate-100 shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
-              
-              {expectedResults.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {expectedResults.map((res, i) => (
-                    <Badge key={i} className="bg-indigo-50 text-indigo-700 border-indigo-100 py-1.5 px-3 gap-2 rounded-lg">
-                      {res}
-                      <X
-                        className="w-3 h-3 cursor-pointer hover:text-rose-500"
-                        onClick={() => setExpectedResults(expectedResults.filter((_, idx) => idx !== i))}
-                      />
-                    </Badge>
-                  ))}
-                </div>
-              )}
+          {scoreType === 'numeric' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-black text-slate-700">الدرجة النهائية لكل مادة</label>
+              <Input 
+                type="number" 
+                value={maxScore} 
+                onChange={e => setMaxScore(e.target.value)}
+                className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 font-black text-center text-sm" 
+              />
             </div>
           )}
 

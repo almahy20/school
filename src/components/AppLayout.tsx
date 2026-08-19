@@ -193,7 +193,7 @@ export default function AppLayout({ children }: Props) {
         />
 
       {/* Desktop Header Navigation */}
-      <div className="hidden lg:flex h-24 items-center justify-between px-10 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
+      <div className="hidden lg:flex h-16 xl:h-20 items-center justify-between px-8 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
               نظام الإدارة الذكي — {schoolBranding.cleanName}
@@ -255,7 +255,7 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 w-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 relative z-10">
+        <div className="flex-1 w-full px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 relative z-10">
           {children}
         </div>
 

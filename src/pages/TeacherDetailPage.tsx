@@ -85,7 +85,7 @@ export default function TeacherDetailPage() {
 
   return (
     <AppLayout>
-      <div className="page-wrapper-detail">
+      <div className="flex flex-col gap-8 max-w-7xl mx-auto pb-24 px-4 md:px-0 animate-in fade-in duration-500 text-right">
         
         <QueryStateHandler
           loading={teacherLoading}

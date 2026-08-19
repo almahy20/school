@@ -64,8 +64,9 @@ export function useExamTemplates(classId: string | null, subject: string | null,
   });
 }
 
-export function useStudentGrades(templateId: string | null, classId: string | null) {
+export function useStudentGrades(template: any | null, classId: string | null) {
   const { user, session } = useAuth();
+  const templateId = template?.id;
   const queryKey = ['student-grades', templateId, classId];
   
   return useQuery({
@@ -82,7 +83,9 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
           grades!grades_student_id_fkey(
             id,
             score,
-            exam_template_id
+            exam_template_id,
+            subject,
+            term
           )
         `)
         .eq('school_id', user.schoolId)
@@ -95,7 +98,10 @@ export function useStudentGrades(templateId: string | null, classId: string | nu
       // Transform data to match expected format
       return studentsWithGrades.map(s => {
         const grade = Array.isArray(s.grades) 
-          ? s.grades.find((g: any) => g.exam_template_id === templateId)
+          ? s.grades.find((g: any) => 
+              g.exam_template_id === templateId || 
+              (!g.exam_template_id && g.subject === template?.subject && g.term === (template?.term || template?.title))
+            )
           : s.grades;
         
         return {
@@ -147,7 +153,9 @@ export function useDeleteExamTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
       queryClient.invalidateQueries({ queryKey: ['student-grades'] });
-      queryClient.invalidateQueries({ queryKey: ['grades'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['student-grades-full'] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
     },
   });
 }

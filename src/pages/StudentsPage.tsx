@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSessionState } from '@/hooks/useSessionState';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -28,10 +29,10 @@ export default function StudentsPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // ── Local UI state ──
-  const [search, setSearch] = useState('');
-  const [filterClassId, setFilterClassId] = useState('الكل');
-  const [page, setPage] = useState(1);
+  // ── Local UI state ── (session-persistent filters)
+  const [search, setSearch] = useSessionState('students:search', '');
+  const [filterClassId, setFilterClassId] = useSessionState('students:filterClassId', 'الكل');
+  const [page, setPage] = useSessionState('students:page', 1);
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -261,7 +262,7 @@ export default function StudentsPage() {
           badge={{ label: selectedStudent.classes?.grade_level || 'عام', variant: 'outline' }}
           data={[
             { label: 'الاسم الكامل', value: selectedStudent.name, icon: User, fullWidth: true },
-            { label: 'الفصل الدراسي', value: selectedStudent.classes?.name || 'غير محدد', icon: School },
+            { label: 'الفصل', value: selectedStudent.classes?.name || 'غير محدد', icon: School },
             { label: 'المرحلة الدراسية', value: selectedStudent.classes?.grade_level || 'غير محدد', icon: BookOpen },
             { label: 'تاريخ التسجيل', value: selectedStudent.created_at ? new Date(selectedStudent.created_at).toLocaleDateString('ar-EG') : 'غير متوفر', icon: Calendar },
             { label: 'رقم الهاتف (ولي الأمر)', value: selectedStudent.parent_phone || 'لا يوجد', icon: Phone },
@@ -460,7 +461,7 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
+                <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل</label>
                 <select value={classId} onChange={e => setClassId(e.target.value)}
                   className="w-full h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
                   <option value="">بدون فصل</option>

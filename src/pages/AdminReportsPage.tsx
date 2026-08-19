@@ -252,7 +252,7 @@ export default function AdminReportsPage() {
                       <p className="text-base font-black text-slate-900">{student?.id_number || 'غير مسجل'}</p>
                    </div>
                    <div className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"> <MapPin className="w-3 h-3" /> الفصل الدراسي </p>
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"> <MapPin className="w-3 h-3" /> الفصل </p>
                       <p className="text-base font-black text-slate-900">{student?.classes?.name || 'بدون فصل'}</p>
                    </div>
                    <div className="space-y-1">

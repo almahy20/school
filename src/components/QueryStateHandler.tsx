@@ -186,8 +186,8 @@ export function QueryStateHandler({
 
   // 4. Success State (Clean children render)
   return (
-    <div className="relative">
+    <>
       {children}
-    </div>
+    </>
   );
 }

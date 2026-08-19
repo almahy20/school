@@ -282,7 +282,7 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; 
             <School className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">إنشاء فصل جديد</h2>
-          <p className="text-sm text-slate-400 font-medium mt-1">أدخل بيانات الفصل الدراسي الجديد</p>
+          <p className="text-sm text-slate-400 font-medium mt-1">أدخل بيانات الفصل الجديد</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
@@ -339,7 +339,7 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
             <Edit3 className="w-8 h-8 text-indigo-400" />
           </div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight">تعديل إعدادات الفصل</h2>
-          <p className="text-sm text-slate-400 font-medium mt-1">قم بتحديث بيانات الفصل الدراسي</p>
+          <p className="text-sm text-slate-400 font-medium mt-1">قم بتحديث بيانات الفصل</p>
         </div>
         <form onSubmit={handleSave} className="space-y-6">
           <div className="space-y-2">

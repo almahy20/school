@@ -123,7 +123,7 @@ export function useDeleteCurriculum() {
 export function useUpsertSubject() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (subject: { id?: string; curriculum_id: string; subject_name: string; content?: string | null }) => {
+    mutationFn: async (subject: { id?: string; curriculum_id: string; subject_name: string; content?: string | null; term?: string | null }) => {
       const { data, error } = await supabase
         .from('curriculum_subjects')
         .upsert(subject)

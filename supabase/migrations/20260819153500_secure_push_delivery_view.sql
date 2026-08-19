@@ -1,0 +1,1 @@
+ALTER VIEW public.push_delivery_with_response SET (security_invoker = true);
