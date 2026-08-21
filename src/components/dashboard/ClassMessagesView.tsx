@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { DeliveryStatusBadge } from '@/components/DeliveryStatusBadge';
 
 interface ClassMessagesViewProps {
   classId: string;
@@ -25,6 +26,8 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
   const [messageContent, setMessageContent] = useState('');
   const [studentParentIds, setStudentParentIds] = useState<string[]>([]);
   const [loadingParents, setLoadingParents] = useState(false);
+  // Track notification IDs for sent messages to show delivery status
+  const [sentNotificationIds, setSentNotificationIds] = useState<Record<string, string | null>>({});
 
   // Fetch students for this class
   const { data: studentsData, isLoading, error, refetch } = useClassStudents(classId);
@@ -143,14 +146,32 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
         studentId: selectedStudent.id,
       });
 
+      // Fetch notification IDs created for these parents (by the DB trigger) to show delivery status
+      try {
+        const { data: notifRows } = await supabase
+          .from('notifications')
+          .select('id, user_id')
+          .in('user_id', studentParentIds)
+          .order('created_at', { ascending: false })
+          .limit(studentParentIds.length);
+
+        if (notifRows && notifRows.length > 0) {
+          const map: Record<string, string | null> = {};
+          for (const row of notifRows) {
+            if (!map[row.user_id]) map[row.user_id] = row.id;
+          }
+          setSentNotificationIds(map);
+        }
+      } catch (notifErr) {
+        logger.warn('[Messages] Could not fetch notification IDs for delivery status (non-fatal):', notifErr);
+      }
+
       toast({
         title: 'تم الإرسال',
         description: `تم إرسال الرسالة إلى ${studentParentIds.length} ولي أمر`,
       });
 
       setMessageContent('');
-      setSelectedStudent(null);
-      setStudentParentIds([]);
     } catch (error: any) {
       toast({
         title: 'خطأ في الإرسال',
@@ -170,6 +191,7 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
             setSelectedStudent(null);
             setStudentParentIds([]);
             setMessageContent('');
+            setSentNotificationIds({});
           }}
           className="flex items-center gap-3 text-slate-600 hover:text-indigo-600 font-bold transition-colors text-lg"
         >
@@ -200,10 +222,18 @@ export default function ClassMessagesView({ classId, className }: ClassMessagesV
             <h4 className="text-sm font-black text-slate-700 mb-4">أولياء الأمور:</h4>
             <div className="flex flex-wrap gap-3">
               {parentProfiles.map((parent: any) => (
-                <Badge key={parent.id} className="bg-emerald-100 text-emerald-700 px-4 py-2 text-sm">
-                  <User className="w-3 h-3 ml-1" />
-                  {parent.full_name || 'ولي الأمر'}
-                </Badge>
+                <div key={parent.id} className="flex items-center gap-2">
+                  <Badge className="bg-emerald-100 text-emerald-700 px-4 py-2 text-sm">
+                    <User className="w-3 h-3 ml-1" />
+                    {parent.full_name || 'ولي الأمر'}
+                  </Badge>
+                  {sentNotificationIds[parent.id] && (
+                    <DeliveryStatusBadge
+                      notificationId={sentNotificationIds[parent.id]!}
+                      isPrivileged={user?.role === 'admin' || user?.role === 'teacher'}
+                    />
+                  )}
+                </div>
               ))}
             </div>
           </div>

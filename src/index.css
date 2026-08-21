@@ -43,7 +43,7 @@
   
   body {
     @apply bg-background text-foreground;
-    font-family: 'Cairo', sans-serif;
+    font-family: 'Cairo', 'Segoe UI', Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-overflow-scrolling: touch;

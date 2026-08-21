@@ -4,10 +4,12 @@ import { Bell, X, ShieldCheck, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { IOSPwaGuideModal } from '@/components/IOSPwaGuideModal';
+import { AndroidBatteryGuideSheet } from '@/components/AndroidBatteryGuideSheet';
 
 export default function PushNotificationPrompt() {
   const { user } = useAuth();
-  const { permission, isSubscribed, subscribeToNotifications } = usePushNotifications();
+  const { permission, isSubscribed, subscribeToNotifications, showIOSGuide, setShowIOSGuide, showBatteryGuide, dismissBatteryGuide } = usePushNotifications();
   const [isVisible, setIsVisible] = useState(false);
   const [isDismissed, setIsDismissed] = useState(false);
 
@@ -43,13 +45,13 @@ export default function PushNotificationPrompt() {
   const handleDismiss = () => {
     setIsVisible(false);
     setIsDismissed(true);
-    // Also save to session storage so we don't ask again in this session
-    sessionStorage.setItem('push_prompt_dismissed', 'true');
+    // Save to localStorage so dismissal persists across sessions
+    localStorage.setItem('push_prompt_dismissed_v1', 'true');
   };
 
-  // Check session storage on mount
+  // Check localStorage on mount
   useEffect(() => {
-    if (sessionStorage.getItem('push_prompt_dismissed') === 'true') {
+    if (localStorage.getItem('push_prompt_dismissed_v1') === 'true') {
       setIsDismissed(true);
     }
   }, []);
@@ -57,7 +59,10 @@ export default function PushNotificationPrompt() {
   if (!isVisible) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 md:left-auto md:right-10 md:w-[400px] z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500" dir="rtl">
+    <>
+      <IOSPwaGuideModal open={showIOSGuide} onClose={() => setShowIOSGuide(false)} />
+      <AndroidBatteryGuideSheet open={showBatteryGuide} onDismiss={dismissBatteryGuide} />
+      <div className="fixed bottom-24 left-4 right-4 md:left-auto md:right-10 md:w-[400px] z-[100] animate-in fade-in slide-in-from-bottom-10 duration-500" dir="rtl">
       <div className="bg-slate-900 border border-slate-800 rounded-[32px] p-6 shadow-2xl shadow-indigo-500/20 relative overflow-hidden group">
         {/* Decorative elements */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500" />
@@ -107,5 +112,6 @@ export default function PushNotificationPrompt() {
         </div>
       </div>
     </div>
+    </>
   );
 }

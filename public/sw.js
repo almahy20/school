@@ -5,7 +5,6 @@ const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-512.png',
   '/icons/badge-72.png',
   '/placeholder.svg'
 ];
@@ -227,7 +226,7 @@ self.addEventListener('push', function (event) {
     // Sanitize icon/badge paths (some browsers throw if these are invalid URLs
     // or blocked by CORS — especially the case on Android WebAPKs). We
     // resolve them against the SW origin so relative paths always work.
-    const safeIcon = new URL(data.icon || '/icons/icon-512.png', self.location.origin).href;
+    const safeIcon = new URL(data.icon || '/icons/badge-72.png', self.location.origin).href;
     const safeBadge = new URL(data.badge || '/icons/badge-72.png', self.location.origin).href;
     const safeImage = data.image ? new URL(data.image, self.location.origin).href : undefined;
 

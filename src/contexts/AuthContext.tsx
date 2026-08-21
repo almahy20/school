@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
@@ -18,10 +18,53 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ── Singleton fetch — منع الطلبات المتكررة ───────────────────────────────────
-let userFetchPromise: Promise<AppUser | null> | null = null;
-let currentFetchingId: string | null = null;
-let loginSessionPromise: Promise<AppUser | null> | null = null; // منع double applySession من onAuthStateChange
+// ── Build a partial AppUser instantly from JWT claims (zero network) ──────────
+function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
+  try {
+    const app = supaUser.app_metadata as any;
+    const meta = supaUser.user_metadata as any;
+    const role: AppRole = (app?.role || meta?.role || 'parent') as AppRole;
+    // school_id comes from app_metadata when the custom JWT hook is active,
+    // falling back to user_metadata for older tokens / first-login before hook fires
+    const schoolId: string | undefined =
+      (app?.school_id ? String(app.school_id) : undefined) ||
+      (meta?.school_id ? String(meta.school_id) : undefined);
+    const fullName: string = meta?.full_name || '';
+    const phone: string = meta?.phone || '';
+    const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin);
+    // approval_status is now embedded in the JWT by the custom hook,
+    // so we can use it immediately instead of defaulting to 'approved'
+    const approvalStatus = (app?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected';
+
+    // Load cached branding so dashboard renders with the correct logo immediately
+    let schoolStatus = 'active';
+    if (schoolId) {
+      try {
+        const cached = localStorage.getItem(`branding_${schoolId}`);
+        if (cached) {
+          const b = JSON.parse(cached);
+          schoolStatus = b.status || 'active';
+          queryClient.setQueryData(['school-branding', schoolId], b);
+        }
+      } catch { /* ignore */ }
+    }
+
+    return {
+      id: supaUser.id,
+      email: supaUser.email || '',
+      phone,
+      fullName,
+      role,
+      isSuperAdmin,
+      schoolId,
+      schoolStatus,
+      approvalStatus, // from JWT when hook is active, else 'approved' default
+      subscriptionExpired: false,
+    };
+  } catch {
+    return null;
+  }
+}
 
 async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<AppUser | null> {
   try {
@@ -29,29 +72,18 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
       supabase.from('profiles').select('*').eq('id', supaUser.id).maybeSingle(),
       supabase.from('user_roles').select('*').eq('user_id', supaUser.id).maybeSingle(),
     ]);
-
     const profile = profileRes.data as any;
     const role = roleRes.data as any;
     let school: any = null;
-
     if (profile?.school_id) {
       const schoolRes = await supabase.from('schools').select('*').eq('id', profile.school_id).maybeSingle();
       school = schoolRes.data;
     }
-
     if (school && profile?.school_id) {
-      const brandingData = {
-        id: school.id,
-        name: school.name,
-        logo_url: school.logo_url || null,
-        slug: school.slug,
-      };
-      queryClient.setQueryData(['school-branding', profile.school_id], brandingData);
-      try {
-        localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(brandingData));
-      } catch { /* ignore quota errors */ }
+      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug };
+      queryClient.setQueryData(['school-branding', profile.school_id], b);
+      try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
-
     return {
       id: supaUser.id,
       email: supaUser.email || '',
@@ -65,85 +97,36 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
       subscriptionExpired: false,
     };
   } catch (err) {
-    logger.error('[Auth] Direct fallback query also failed:', err);
+    logger.error('[Auth] Direct fallback query failed:', err);
     return null;
   }
 }
 
 async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
-  if (userFetchPromise && currentFetchingId === supaUser.id) {
-    return userFetchPromise;
-  }
-
-  currentFetchingId = supaUser.id;
-
-  userFetchPromise = (async () => {
-    try {
-      let profile: any = null;
-      let role: any = null;
-      let school: any = null;
-
-      try {
-        const { data: userData, error } = await supabase.rpc('get_complete_user_data', {
-          p_user_id: supaUser.id,
-        });
-
-        if (error || !userData) {
-          logger.warn('[Auth] RPC get_complete_user_data failed, using direct table fallback:', error);
-          throw new Error('rpc_failed');
-        }
-
-        const parsed = userData as any;
-        profile = parsed.profile;
-        role = parsed.role;
-        school = parsed.school;
-      } catch (rpcErr) {
-        const fallbackUser = await buildAppUserFromDirectQueries(supaUser);
-        if (fallbackUser) return fallbackUser;
-        return null;
-      }
-
-      if (school && profile?.school_id) {
-        const brandingData = {
-          id: school.id,
-          name: school.name,
-          logo_url: school.logo_url || null,
-          slug: school.slug,
-        };
-        queryClient.setQueryData(['school-branding', profile.school_id], brandingData);
-        try {
-          localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(brandingData));
-        } catch { /* ignore quota errors */ }
-      }
-
-      return {
-        id: supaUser.id,
-        email: supaUser.email || '',
-        phone: profile?.phone || '',
-        fullName: profile?.full_name || '',
-        role: (role?.role || 'parent') as AppRole,
-        isSuperAdmin: role?.is_super_admin || false,
-        schoolId: profile?.school_id,
-        schoolStatus: school?.status || 'active',
-        approvalStatus: role?.approval_status || 'approved',
-        subscriptionExpired: false,
-      };
-    } catch (err) {
-      logger.error('Unexpected error in getAppUserData:', err);
-      return null;
-    } finally {
-      // Reset singleton lock after 30 seconds to allow re-fetch if session changes
-      // (30s is safe: login flow takes <5s under normal conditions)
-      setTimeout(() => {
-        if (currentFetchingId === supaUser.id) {
-          userFetchPromise = null;
-          currentFetchingId = null;
-        }
-      }, 30000);
+  try {
+    const { data: userData, error } = await supabase.rpc('get_complete_user_data', { p_user_id: supaUser.id });
+    if (error || !userData) throw new Error('rpc_failed');
+    const { profile, role, school } = userData as any;
+    if (school && profile?.school_id) {
+      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug };
+      queryClient.setQueryData(['school-branding', profile.school_id], b);
+      try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
-  })();
-
-  return userFetchPromise;
+    return {
+      id: supaUser.id,
+      email: supaUser.email || '',
+      phone: profile?.phone || '',
+      fullName: profile?.full_name || '',
+      role: (role?.role || 'parent') as AppRole,
+      isSuperAdmin: role?.is_super_admin || false,
+      schoolId: profile?.school_id,
+      schoolStatus: school?.status || 'active',
+      approvalStatus: role?.approval_status || 'approved',
+      subscriptionExpired: false,
+    };
+  } catch {
+    return buildAppUserFromDirectQueries(supaUser);
+  }
 }
 
 async function prefetchCommonQueries(appUser: AppUser) {
@@ -151,42 +134,30 @@ async function prefetchCommonQueries(appUser: AppUser) {
     queryClient.prefetchQuery({
       queryKey: ['profile', appUser.id],
       queryFn: async () => {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', appUser.id)
-          .maybeSingle();
+        const { data } = await supabase.from('profiles').select('*').eq('id', appUser.id).maybeSingle();
         return data;
       },
       staleTime: 5 * 60 * 1000,
     });
-
     if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
       queryClient.prefetchQuery({
         queryKey: ['all-profiles', appUser.schoolId],
         queryFn: async () => {
-          const { data } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('school_id', appUser.schoolId)
-            .neq('id', appUser.id);
+          const { data } = await supabase.from('profiles').select('id').eq('school_id', appUser.schoolId).neq('id', appUser.id);
           return (data || []).map((p: any) => p.id);
         },
         staleTime: 5 * 60 * 1000,
       });
     }
   } catch (err) {
-    logger.error('[Prefetch] Error prefetching queries:', err);
+    logger.error('[Prefetch] Error:', err);
   }
 }
 
-// ── الدالة الوحيدة لتسجيل الخروج الكامل ─────────────────────────────────────
-// لا تُستدعى إلا من زر تسجيل الخروج اليدوي
 async function performSignOut(
   setUser: (u: AppUser | null) => void,
   setSession: (s: Session | null) => void,
 ) {
-  logger.warn('[Auth] Manual sign out — clearing everything');
   try { queryClient.cancelQueries(); } catch {}
   clearAllCache();
   setUser(null);
@@ -199,142 +170,147 @@ async function performSignOut(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser | null>(() => getCachedUser());
-  // If we have a cached user, start with isLoading=false to avoid spinner on reload
   const [isLoading, setIsLoading] = useState(() => getCachedUser() === null);
 
-  // ── حدّث الـ state لما تكون فيه session صحيحة ─────────────────────────────
-  const applySession = async (s: Session) => {
+  const isSigningOutRef = useRef(false);
+  // Tracks the user ID currently being loaded — prevents duplicate RPC calls for same user
+  const loadingUserIdRef = useRef<string | null>(null);
+
+  const applySession = (s: Session) => {
     setSession(s);
-    const appUser = await getAppUserData(s.user);
-    if (appUser) {
-      setUser(appUser);
-      setCachedUser(appUser);
+
+    // Read last_auth_sync BEFORE updating it — used later to decide if RPC can be skipped
+    const lastSync = parseInt(localStorage.getItem('last_auth_sync') || '0', 10);
+
+    // Step 1: Set user immediately from JWT (instant, zero network)
+    const jwtUser = buildUserFromJwt(s.user);
+    if (jwtUser) {
+      setUser(jwtUser);
+      setCachedUser(jwtUser);
       localStorage.setItem('last_auth_sync', Date.now().toString());
-      const defer = () => {
+    }
+
+    // Step 2: Background RPC to get accurate approval_status / school data
+    // Guard: don't fire if the session token is just the anon key (no real user auth)
+    if (!s.access_token || s.access_token === s.refresh_token) {
+      logger.warn('[Auth] Skipping background RPC — no valid access token');
+      return;
+    }
+
+    // Skip if already loading for this user (prevents duplicate calls)
+    if (loadingUserIdRef.current === s.user.id) {
+      logger.log('[Auth] Background RPC skipped — already loading for this user');
+      return;
+    }
+
+    // Skip if JWT has role + school_id AND we synced recently (within 30 min).
+    // approval_status is optional — if the custom JWT hook isn't enabled yet we still
+    // skip as long as the cached user has a valid approvalStatus from a previous RPC call.
+    const cachedUser = getCachedUser();
+    const jwtHasEssentials = !!(
+      s.user.app_metadata?.role &&
+      s.user.app_metadata?.school_id
+    );
+    const approvalKnown = !!(
+      s.user.app_metadata?.approval_status ||   // JWT hook is active
+      (cachedUser?.approvalStatus && cachedUser.id === s.user.id) // previous RPC result cached
+    );
+    const syncedRecently = (Date.now() - lastSync) < 30 * 60 * 1000 && lastSync > 0;
+
+    if (jwtHasEssentials && approvalKnown && syncedRecently) {
+      logger.log('[Auth] Background RPC skipped — JWT complete + recently synced');
+      return;
+    }
+    loadingUserIdRef.current = s.user.id;
+
+    getAppUserData(s.user)
+      .then((appUser) => {
+        if (!appUser) return;
+        setUser(appUser);
+        setCachedUser(appUser);
+        localStorage.setItem('last_auth_sync', Date.now().toString());
         if ('requestIdleCallback' in window) {
           (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
         } else {
           setTimeout(() => prefetchCommonQueries(appUser), 1000);
         }
-      };
-      defer();
-    }
+      })
+      .catch(() => { /* keep JWT user */ })
+      .finally(() => {
+        loadingUserIdRef.current = null;
+      });
   };
 
-  // ── محاولة تجديد الـ token بصمت ───────────────────────────────────────────
   const silentRefresh = async (): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.refreshSession();
       if (!error && data.session) {
-        await applySession(data.session);
-        logger.log('[Auth] Silent refresh succeeded');
+        applySession(data.session);
         return true;
       }
     } catch {}
-    logger.log('[Auth] Silent refresh failed — keeping cached user');
     return false;
   };
 
   useEffect(() => {
-    // ── 1. تحميل أولي ───────────────────────────────────────────────────────
-    supabase.auth.getSession()
-      .then(async ({ data: { session } }) => {
-        if (session) {
-          await applySession(session);
-        } else {
-          // مفيش session — نحاول refresh صامت
-          // لو فشل نفضل على الـ cached user (مش نطرد المستخدم)
-          await silentRefresh();
-        }
-        setIsLoading(false);
-      })
-      .catch(() => {
-        // offline أو خطأ شبكة — نفضل logged in من الـ cache
-        logger.warn('[Auth] Failed to get initial session (offline?) — keeping cached user');
-        setIsLoading(false);
-      });
-
-    // ── 2. Supabase auth events ──────────────────────────────────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, eventSession) => {
+      (event, eventSession) => {
         logger.log(`[Auth] Event: ${event}`);
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          // Skip if login() is already handling this session — await it instead of double-fetching
-          if (event === 'SIGNED_IN' && loginSessionPromise) {
-            logger.log('[Auth] SIGNED_IN event — login() in progress, awaiting its result');
-            await loginSessionPromise;
-            return;
+        if (event === 'INITIAL_SESSION') {
+          if (eventSession) {
+            applySession(eventSession);
+          } else {
+            silentRefresh();
           }
-          if (eventSession) await applySession(eventSession);
+          setIsLoading(false);
+          return;
+        }
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (eventSession) applySession(eventSession);
           return;
         }
 
         if (event === 'SIGNED_OUT') {
-          // لا نعمل أي حاجة — تسجيل الخروج يحصل بس من performSignOut
-          // Supabase ممكن يبعت SIGNED_OUT تلقائياً أثناء تسجيل دخول جديد (token rotation)
-          // نتحقق أولاً لو فيه session فعلية قبل ما نحاول refresh
-          logger.log('[Auth] SIGNED_OUT event received — checking current session first');
-          try {
-            const { data: { session: currentSess } } = await supabase.auth.getSession();
-            if (currentSess) {
-              // فيه session جديدة بالفعل (حصل login جديد) — مش محتاجين نعمل حاجة
-              logger.log('[Auth] SIGNED_OUT ignored — active session exists');
-              return;
+          if (isSigningOutRef.current) return; // manual sign-out, already handled
+          // Supabase sends SIGNED_OUT during token rotation — check if session still exists
+          supabase.auth.getSession().then(({ data: { session: current } }) => {
+            if (current) {
+              logger.log('[Auth] SIGNED_OUT ignored — active session exists (token rotation)');
+            } else {
+              silentRefresh();
             }
-          } catch { /* offline */ }
-          // مفيش session — نحاول refresh صامت
-          await silentRefresh();
+          }).catch(() => { /* offline */ });
           return;
         }
 
         if (event === 'TOKEN_REFRESH_FAILED') {
-          // الـ token مش صالح — نحاول refresh مرة أخيرة
-          // لو فشل نفضل على الـ cached user (مش نطرد)
-          logger.warn('[Auth] TOKEN_REFRESH_FAILED — retrying once');
-          await silentRefresh();
+          silentRefresh();
           return;
         }
-
-        // أي event تاني مع session → حدّث
-        if (eventSession) await applySession(eventSession);
       }
     );
 
-    // ── 3. لما المستخدم يرجع للتاب ──────────────────────────────────────────
-    const handleVisibilityChange = async () => {
+    const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (currentSession) {
-          // جدد لو قارب ينتهي خلال 10 دقايق
-          const expiresAt = currentSession.expires_at ?? 0;
-          if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) {
-            logger.log('[Auth] Visibility — token expiring soon, refreshing');
-            await silentRefresh();
-          }
+      supabase.auth.getSession().then(({ data: { session: current } }) => {
+        if (current) {
+          const expiresAt = current.expires_at ?? 0;
+          if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) silentRefresh();
         } else {
-          // مفيش session — نحاول refresh صامت
-          await silentRefresh();
+          silentRefresh();
         }
-      } catch { /* offline */ }
+      }).catch(() => { /* offline */ });
     };
     window.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // ── 4. Proactive refresh كل 4 دقايق ─────────────────────────────────────
-    const refreshInterval = setInterval(async () => {
-      try {
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!currentSession) {
-          await silentRefresh();
-          return;
-        }
-        const expiresAt = currentSession.expires_at ?? 0;
-        if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) {
-          logger.log('[Auth] Proactive refresh — token expiring soon');
-          await silentRefresh();
-        }
-      } catch { /* ignore */ }
+    const refreshInterval = setInterval(() => {
+      supabase.auth.getSession().then(({ data: { session: current } }) => {
+        if (!current) { silentRefresh(); return; }
+        const expiresAt = current.expires_at ?? 0;
+        if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) silentRefresh();
+      }).catch(() => { /* ignore */ });
     }, 4 * 60 * 1000);
 
     return () => {
@@ -345,72 +321,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── تسجيل الخروج اليدوي فقط ─────────────────────────────────────────────
   const signOut = async () => {
+    isSigningOutRef.current = true;
     await performSignOut(setUser, setSession);
+    isSigningOutRef.current = false;
   };
 
   const login = async (phone: string, password: string): Promise<string | null> => {
     try {
       const email = `${phone}@edara.com`;
-
-      // ضع placeholder في loginSessionPromise قبل الـ signIn
-      // علشان أي SIGNED_IN event يجي فوراً يشوف إن login شغال وينتظر
-      let resolveLogin!: () => void;
-      loginSessionPromise = new Promise<AppUser | null>((resolve) => {
-        resolveLogin = () => resolve(null);
-      });
-
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        loginSessionPromise = null;
-        if (error.message.includes('Invalid login credentials')) {
-          return 'رقم الهاتف أو كلمة المرور غير صحيحة';
-        }
-        return error.message;
+        return error.message.includes('Invalid login credentials')
+          ? 'رقم الهاتف أو كلمة المرور غير صحيحة'
+          : error.message;
       }
-      if (data.session) {
-        // Reset singleton lock so fresh user data is fetched
-        userFetchPromise = null;
-        currentFetchingId = null;
-        try {
-          await applySession(data.session);
-        } finally {
-          setIsLoading(false);
-          resolveLogin();
-          loginSessionPromise = null;
-        }
-      } else {
-        resolveLogin();
-        loginSessionPromise = null;
-      }
+      // applySession is called by the SIGNED_IN event from onAuthStateChange
+      // But also call it directly here to set user immediately without waiting for event
+      if (data.session) applySession(data.session);
       sessionStorage.setItem('user_signup_time', Date.now().toString());
       return null;
     } catch {
-      loginSessionPromise = null;
-      setIsLoading(false);
       return 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
     }
   };
 
   const signup = async (
-    phone: string,
-    password: string,
-    fullName: string,
-    role: string,
-    schoolId: string,
+    phone: string, password: string, fullName: string, role: string, schoolId: string,
   ): Promise<string | null> => {
     try {
       const email = `${phone}@edara.com`;
       const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName, phone, role, school_id: schoolId },
-        },
+        email, password,
+        options: { data: { full_name: fullName, phone, role, school_id: schoolId } },
       });
-      if (error) return error.message;
-      return null;
+      return error ? error.message : null;
     } catch (err: any) {
       return err.message;
     }
@@ -418,7 +363,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshUser = async () => {
     const { data: { session: s } } = await supabase.auth.getSession();
-    if (s) await applySession(s);
+    if (s) applySession(s);
   };
 
   return (

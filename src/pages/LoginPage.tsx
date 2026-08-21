@@ -1,17 +1,14 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { BookOpen, Eye, EyeOff, Lock, Phone, ArrowLeft } from 'lucide-react';
+import { BookOpen, Eye, EyeOff, Lock, Phone } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
-import { getOptimizedImageUrl } from '@/lib/utils';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const { login } = useAuth();
@@ -33,34 +30,50 @@ export default function LoginPage() {
     }
   }, [schoolBranding.cleanName]);
 
+  const [loginError, setLoginError] = useState('');
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
 
-  // Redirect immediately if user is already authenticated (e.g. back-navigation)
+  // Redirect when user state is set — this fires AFTER React state update, so user is guaranteed set
   const { user } = useAuth();
   useEffect(() => {
-    if (user && !loading) {
-      navigate(isDeveloperLogin ? '/super-admin' : '/', { replace: true });
+    if (user && (loginSuccess || !loginError)) {
+      const destination = isDeveloperLogin ? '/super-admin' : (from === '/login' ? '/' : from);
+      navigate(destination, { replace: true });
     }
-  }, [user, loading, navigate, isDeveloperLogin]);
+  }, [user, loginSuccess, loginError, navigate, isDeveloperLogin, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!phone.trim() || !password.trim()) {
-      setError('يرجى إدخال رقم الهاتف وكلمة المرور');
+      setLoginError('يرجى إدخال رقم الهاتف وكلمة المرور');
       return;
     }
+    setLoginError('');
     setLoading(true);
     const err = await login(phone.trim(), password);
     setLoading(false);
     if (err) {
-      setError(err);
+      setLoginError(err);
       return;
     }
-    // user + isLoading are both set correctly inside login() now — navigate directly
-    const destination = isDeveloperLogin ? '/super-admin' : (from === '/login' ? '/' : from);
-    navigate(destination, { replace: true });
+    // Mark success — useEffect above will navigate once user state updates in React
+    setLoginSuccess(true);
   };
+
+  // While waiting for user state to update after successful login, show a full-screen loader
+  if (loginSuccess && !user) {
+    return (
+      <div className="fixed inset-0 bg-[#0a0f1e] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-white/20 border-t-indigo-400 rounded-full animate-spin" />
+          <p className="text-white/40 text-sm font-bold">جاري الدخول...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen-safe bg-[#0a0f1e] flex items-center justify-center p-6 relative overflow-hidden text-right" dir="rtl">
@@ -112,7 +125,7 @@ export default function LoginPage() {
                 <input
                   type="tel"
                   value={phone}
-                  onChange={e => { setPhone(e.target.value); setError(''); }}
+                onChange={e => { setPhone(e.target.value); setLoginError(''); }}
                   className="w-full h-14 px-5 pr-13 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold"
                   placeholder="05xxxxxxxx"
                   dir="ltr"
@@ -129,7 +142,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={e => { setPassword(e.target.value); setError(''); }}
+                onChange={e => { setPassword(e.target.value); setLoginError(''); }}
                   className="w-full h-14 px-5 pr-13 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold"
                   placeholder="••••••••"
                 />
@@ -162,9 +175,9 @@ export default function LoginPage() {
               </label>
             </div>
 
-            {error && (
+            {loginError && (
               <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold p-4 rounded-2xl text-center animate-in slide-in-from-top-2">
-                {error}
+                {loginError}
               </div>
             )}
 

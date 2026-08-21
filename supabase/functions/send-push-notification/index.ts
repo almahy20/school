@@ -179,7 +179,7 @@ serve(async (req) => {
 
   // ─── Build push payload (matches expected SW data structure) ─────────
   const schoolName = (profile?.schools as any)?.name ?? "إشعار من المدرسة";
-  const schoolLogo = (profile?.schools as any)?.logo_url ?? "/icons/icon-512.png";
+  const schoolLogo = (profile?.schools as any)?.logo_url ?? null;
   const isMessage = type === "teacher_message" || type === "broadcast_message" || url === "/messages";
   const targetUrl = url ?? (isMessage ? "/messages" : "/notifications");
 
@@ -397,6 +397,31 @@ serve(async (req) => {
     temporary_outage: allAttemptsFailedTemporarily,
     delivery_log: deliveryLog,
   };
+
+  // ─── Write delivery log to notification_delivery_logs ──────────────────
+  // Non-fatal: if this fails, the HTTP response is unchanged.
+  if (notification_id) {
+    try {
+      const noDeviceYet = sent === 0 && transientFailures === 0 && endpointsToDelete.length === total;
+      const allTransient = sent === 0 && transientFailures > 0;
+      await supabase.from('notification_delivery_logs').insert({
+        notification_id,
+        sent_count: sent,
+        total_subscriptions: total,
+        has_active_subscription: sent > 0 || transientFailures > 0,
+        no_device_registered: noDeviceYet,
+        temporary_outage: allTransient,
+        raw_response: {
+          sent, total,
+          transient_failures: transientFailures,
+          pruned: endpointsToDelete.length,
+          delivery_log: deliveryLog,
+        },
+      });
+    } catch (logErr) {
+      console.warn('[Push] Delivery log write failed (non-fatal):', logErr);
+    }
+  }
 
   // Return 502 (Bad Gateway = upstream provider failure) when we couldn't
   // deliver to ANY subscription — this lets the DB trigger / caller know

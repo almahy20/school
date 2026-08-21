@@ -30,7 +30,7 @@ export default function AppLayout({ children }: Props) {
   const { data: branding } = useBranding();
   
   const schoolBranding = useCleanBranding(branding);
-  const hasBottomNav = user?.role === 'teacher' || user?.role === 'parent';
+  const hasBottomNav = true; // BottomNav shows for ALL roles on mobile (md:hidden)
   
   const [logoError, setLogoError] = useState(false);
 
@@ -142,8 +142,8 @@ export default function AppLayout({ children }: Props) {
             )}
           </div>
 
-          {/* Sidebar button for admin/superadmin */}
-          {user?.role !== 'teacher' && user?.role !== 'parent' && (
+          {/* Sidebar button - show for admin/superadmin on mobile, hide for teacher/parent who use BottomNav */}
+          {(user?.role === 'admin' || user?.isSuperAdmin) && (
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2.5 sm:p-3 rounded-2xl bg-white text-slate-900 hover:bg-slate-50 transition-all active:scale-95 border border-slate-100 shadow-sm shrink-0"
@@ -249,7 +249,7 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 w-full px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 relative z-10">
+        <div className="flex-1 w-full px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-6 relative z-10">
           {children}
         </div>
 

@@ -92,12 +92,12 @@ function AppRoutes() {
         <Route
           path="/"
           element={
-            loading && !user ? (
-              <div className="fixed inset-0 bg-transparent" />
-            ) : user ? (
+            user ? (
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
+            ) : loading ? (
+              <div className="fixed inset-0 bg-transparent" />
             ) : (
               <Navigate to="/home" replace />
             )

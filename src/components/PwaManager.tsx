@@ -5,15 +5,14 @@ import { cleanBrandingData } from '@/hooks/useCleanBranding';
 import { useBranding } from '@/hooks/queries/useBranding';
 import { logger } from '@/utils/logger';
 
-const FALLBACK_PWA_ICON = "/icons/icon-512.png";
+const FALLBACK_PWA_ICON = "/icons/badge-72.png";
 
 function toValidIconUrl(icon: string | null | undefined) {
   const value = (icon || "").trim();
-  const fallback = window.location.origin + FALLBACK_PWA_ICON;
 
-  if (!value) return fallback;
+  if (!value) return '';
   if (/^data:image\//i.test(value)) return value;
-  if (/^data:/i.test(value) || /^blob:/i.test(value)) return fallback;
+  if (/^data:/i.test(value) || /^blob:/i.test(value)) return '';
   if (/^https?:\/\//i.test(value)) return value;
 
   return window.location.origin + (value.startsWith('/') ? value : `/${value}`);
@@ -132,10 +131,9 @@ export default function PwaManager() {
       }
     }
 
-    // للـ PWA manifest نستخدم الـ static icons الموثوقة فقط
-    // اللوجو الديناميكي بيستخدم فقط للـ favicon في الـ DOM مش في الـ manifest
     // ✅ favicon (icon/shortcut icon) → width=32 لأن المتصفح بيعرضه بـ 16-32px
     // ✅ apple-touch-icon → width=120 — نفس الـ URL المستخدم في الـ UI لضمان cache موحد
+    // ✅ الـ manifest icons بتستخدم لوجو المدرسة الديناميكي بدل أي static file
     const rawLogoUrl = brandingDataRef.current?.logo_url || '';
     const { getOptimizedImageUrl } = await import('@/lib/utils');
     const faviconUrl = rawLogoUrl
@@ -144,11 +142,15 @@ export default function PwaManager() {
     const appleTouchUrl = rawLogoUrl
       ? getOptimizedImageUrl(rawLogoUrl, { width: 120, quality: 75 })
       : '';
-    const cacheBustFavicon = toValidIconUrl(faviconUrl || icon || FALLBACK_PWA_ICON);
-    const cacheBustApple = toValidIconUrl(appleTouchUrl || icon || FALLBACK_PWA_ICON);
+    const manifestIconUrl = rawLogoUrl
+      ? getOptimizedImageUrl(rawLogoUrl, { width: 512, quality: 90 })
+      : '';
+    const cacheBustFavicon = toValidIconUrl(faviconUrl || icon || '');
+    const cacheBustApple = toValidIconUrl(appleTouchUrl || icon || '');
+    const cacheBustManifest = toValidIconUrl(manifestIconUrl || appleTouchUrl || icon || '');
 
     // @ts-expect-error - Deep type instantiation
-    const manifest = {
+    const manifest: Record<string, unknown> = {
       name: name,
       short_name: shortName,
       description: `نظام إدارة ${name} الذكي`,
@@ -156,15 +158,25 @@ export default function PwaManager() {
       display: "standalone",
       background_color: "#0a0f1e",
       theme_color: themeColor,
-      icons: [
+    };
+
+    // فقط نضيف icons لو عندنا لوجو المدرسة — مش بنستخدم static files
+    if (cacheBustManifest) {
+      (manifest as any).icons = [
         {
-          src: window.location.origin + "/icons/icon-512.png",
+          src: cacheBustManifest,
           sizes: "512x512",
           type: "image/png",
           purpose: "any maskable"
+        },
+        {
+          src: cacheBustApple || cacheBustManifest,
+          sizes: "192x192",
+          type: "image/png",
+          purpose: "any"
         }
-      ]
-    };
+      ];
+    }
 
     const stringManifest = JSON.stringify(manifest);
     const blob = new Blob([stringManifest], { type: 'application/json' });

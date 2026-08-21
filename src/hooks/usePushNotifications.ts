@@ -9,8 +9,23 @@ export function usePushNotifications() {
   const { toast } = useToast();
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showBatteryGuide, setShowBatteryGuide] = useState(false);
 
   const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY; // We'll assume the user will set this
+
+  const onBatteryPermissionGranted = useCallback(() => {
+    const isAndroid = /Android/.test(navigator.userAgent);
+    if (!isAndroid) return;
+    if (localStorage.getItem('battery_guidance_dismissed_v1') !== 'true') {
+      setShowBatteryGuide(true);
+    }
+  }, []);
+
+  const dismissBatteryGuide = useCallback((permanent: boolean) => {
+    if (permanent) localStorage.setItem('battery_guidance_dismissed_v1', 'true');
+    setShowBatteryGuide(false);
+  }, []);
 
   // ─── Helper: decode VAPID base64url → Uint8Array ───────────────────────────
   // Kept outside subscribeToNotifications so checkSubscription can reuse it.
@@ -62,7 +77,25 @@ export function usePushNotifications() {
 
       // ── Case 2: No subscription at all ──────────────────────────────────
       if (!subscription) {
-        setIsSubscribed(false);
+        // Proactive re-registration: if permission is granted but subscription is null,
+        // silently attempt to re-subscribe (handles 410 Gone + user cleared site data)
+        if (Notification.permission === 'granted' && VAPID_PUBLIC_KEY && VAPID_PUBLIC_KEY !== 'your_vapid_public_key_here') {
+          try {
+            logger.log('[Push] Proactive re-registration: granted+null → re-subscribing silently');
+            const newSub = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+            });
+            const saved = await saveSubscriptionToDb(user.id, newSub);
+            setIsSubscribed(saved);
+            if (saved) logger.log('[Push] Proactive re-registration succeeded');
+          } catch (err) {
+            logger.warn('[Push] Proactive re-registration failed (silent):', err);
+            setIsSubscribed(false);
+          }
+        } else {
+          setIsSubscribed(false);
+        }
         return;
       }
 
@@ -158,6 +191,16 @@ export function usePushNotifications() {
 
   const subscribeToNotifications = async (): Promise<boolean> => {
     logger.log('--- Start Notification Subscription Process ---');
+
+    // iOS non-standalone guard: Web Push لا يعمل على Safari بدون PWA mode
+    const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent);
+    const isStandaloneIOS = window.matchMedia('(display-mode: standalone)').matches
+      || (window.navigator as any).standalone === true;
+    if (isIOS && !isStandaloneIOS) {
+      setShowIOSGuide(true);
+      return false;
+    }
+
     if (!user?.id) {
       logger.warn('User not logged in, cannot subscribe');
       return false;
@@ -257,6 +300,8 @@ export function usePushNotifications() {
         setIsSubscribed(true);
         logger.log('--- Subscription Process Completed Successfully ---');
         toast({ title: 'تم تفعيل الإشعارات بنجاح!' });
+        // Android battery optimization guidance
+        onBatteryPermissionGranted();
         return true;
       } else {
         logger.warn('User dismissed the permission prompt');
@@ -284,6 +329,20 @@ export function usePushNotifications() {
   };
 
 
-  return { permission, isSubscribed, subscribeToNotifications };
+  const unsubscribeFromNotifications = async (): Promise<void> => {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await subscription.unsubscribe();
+        await supabase.from('push_subscriptions').delete().eq('endpoint', subscription.endpoint);
+      }
+      setIsSubscribed(false);
+    } catch (err) {
+      logger.warn('[Push] Unsubscribe failed:', err);
+    }
+  };
+
+  return { permission, isSubscribed, subscribeToNotifications, unsubscribeFromNotifications, showIOSGuide, setShowIOSGuide, showBatteryGuide, dismissBatteryGuide };
 }
 

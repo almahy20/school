@@ -50,7 +50,7 @@ export const queryClient = new QueryClient({
 // ✅ Optimization: IndexedDB Query Persistence with Versioning
 if (typeof window !== 'undefined') {
   // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v1.2'; 
+  const CACHE_VERSION = 'v1.3'; // bumped: exclude child-full-details from persistence
 
   const idbPersister = {
     persistClient: async (client: any) => {
@@ -75,6 +75,11 @@ if (typeof window !== 'undefined') {
       
       // ✅ Don't persist queries that are marked as 'no-persist' in their meta
       if (query.meta?.persist === false) return false;
+
+      // ✅ Don't persist child-full-details — they're heavy and cause unwanted
+      // background refetches on every page load via the persist client restore
+      const key = query.queryKey[0];
+      if (key === 'child-full-details') return false;
 
       return true;
     },

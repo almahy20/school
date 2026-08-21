@@ -11,6 +11,7 @@ import {
 import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
 import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { sendPushToUser } from '@/utils/pushNotifications';
 import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
@@ -29,7 +30,7 @@ export default function SettingsPage() {
   const { signOut, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { isSubscribed, subscribeToNotifications } = usePushNotifications();
+  const { permission, isSubscribed, subscribeToNotifications, unsubscribeFromNotifications } = usePushNotifications();
   const [isTestingPush, setIsTestingPush] = useState(false);
 
   const handleTestPush = async () => {
@@ -299,38 +300,12 @@ export default function SettingsPage() {
                  </div>
 
                  <div className="grid grid-cols-1 gap-6 pt-2">
-                    <div className="bg-white border border-slate-100 p-10 rounded-[48px] shadow-xl shadow-slate-100/50 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
-                       <div className="flex items-center gap-6">
-                          <div className="w-16 h-16 rounded-3xl bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                             <Bell className="w-8 h-8" />
-                          </div>
-                          <div>
-                             <h4 className="text-xl font-black text-slate-900 mb-1">إشعارات الجوال (Push Notifications)</h4>
-                             <p className="text-sm font-medium text-slate-400">احصل على تنبيهات فورية عن الحضور، الدرجات، والرسائل.</p>
-                          </div>
-                       </div>
-                       
-                       <div className="flex flex-col md:flex-row items-center gap-3">
-                          {isSubscribed && (
-                            <Button 
-                              onClick={handleTestPush} 
-                              disabled={isTestingPush}
-                              variant="outline" 
-                              className="h-12 px-6 rounded-xl border-indigo-100 text-indigo-600 font-black hover:bg-indigo-50"
-                            >
-                               {isTestingPush ? 'جاري الإرسال...' : 'إرسال إشعار تجريبي'}
-                            </Button>
-                          )}
-
-                          {!isSubscribed ? (
-                            <Button onClick={subscribeToNotifications} className="h-14 px-10 rounded-2xl bg-indigo-600 text-white font-black hover:scale-105 transition-all shadow-xl shadow-indigo-100">
-                               تفعيل الآن
-                            </Button>
-                          ) : (
-                            <Badge className="h-12 px-6 rounded-xl bg-emerald-50 text-emerald-600 font-black border-none">قيد التشغيل</Badge>
-                          )}
-                       </div>
-                    </div>
+                    <NotificationSettingsCard
+                      permission={permission}
+                      isSubscribed={isSubscribed}
+                      onSubscribe={subscribeToNotifications}
+                      onUnsubscribe={unsubscribeFromNotifications}
+                    />
                  </div>
               </div>
           </div>

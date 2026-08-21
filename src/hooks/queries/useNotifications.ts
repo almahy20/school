@@ -182,26 +182,38 @@ export function useUnreadCounts() {
     queryFn: async () => {
       if (!user?.id) return { unread: 0, complaints: 0 };
       
-      const [{ count: unreadCount, error: unreadError }, { count: complaintsCount, error: complaintsError }] = await Promise.all([
-        db
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('is_read', false),
-        db
-          .from('notifications')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .ilike('type', 'complaint%')
-          .eq('is_read', false)
-      ]);
-      
-      if (unreadError) throw unreadError;
-      if (complaintsError) throw complaintsError;
-      
+      // Single RPC call instead of two parallel queries — cuts one round-trip
+      const { data, error } = await (db as any)
+        .rpc('get_unread_notification_counts', { p_user_id: user.id });
+
+      if (error) {
+        // Fallback to two parallel queries if RPC not available yet
+        const [{ count: unreadCount, error: unreadError }, { count: complaintsCount, error: complaintsError }] = await Promise.all([
+          db
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('is_read', false),
+          db
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .ilike('type', 'complaint%')
+            .eq('is_read', false)
+        ]);
+
+        if (unreadError) throw unreadError;
+        if (complaintsError) throw complaintsError;
+
+        return {
+          unread: unreadCount || 0,
+          complaints: complaintsCount || 0
+        };
+      }
+
       return {
-        unread: unreadCount || 0,
-        complaints: complaintsCount || 0
+        unread: Number(data?.unread) || 0,
+        complaints: Number(data?.complaints) || 0
       };
     },
     enabled: !!(session && user?.id),

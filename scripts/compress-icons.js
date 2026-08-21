@@ -4,7 +4,7 @@ const path = require('path');
 
 // Compress PWA icons
 const icons = [
-  { input: 'public/icons/icon-512.png', output: 'public/icons/icon-512.png', size: 512 },
+  { input: 'public/icons/badge-72.png', output: 'public/icons/badge-72.png', size: 72 },
 ];
 
 async function compressIcons() {
