@@ -3,22 +3,28 @@ import { useSessionState } from '@/hooks/useSessionState';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllClasses, useBranding } from '@/hooks/queries';
+import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllClasses } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, GraduationCap, School, User, 
-  Edit2, Trash2,
-  ChevronLeft, ArrowRight, BookOpen,
-  Activity, Edit3,
-  Calendar,
-  Phone, MapPin,
+  ArrowRight,
   SlidersHorizontal, Check, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
 
@@ -43,6 +49,7 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -59,7 +66,6 @@ export default function StudentsPage() {
   const students = data?.data || [];
   const totalItems = data?.count || 0;
 
-  const { data: branding } = useBranding();
   const { data: classesData } = useAllClasses();
   // Normalize classes to always be an array
   const classes: Array<{id: string; name: string; grade_level: string | null}> = useMemo(() => 
@@ -105,13 +111,13 @@ export default function StudentsPage() {
   };
 
   const handleDeleteStudent = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا الطالب؟')) return;
     try {
       await deleteMutation.mutateAsync(id);
       toast({ title: 'تم الحذف', description: 'تم حذف الطالب بنجاح' });
-      setShowDetail(false);
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message || 'فشل في حذف الطالب', variant: 'destructive' });
+    } finally {
+      setDeleteTargetId(null);
     }
   };
 
@@ -259,37 +265,11 @@ export default function StudentsPage() {
       </div>
 
       {selectedStudent && (
-        <DataDetailModal
-          isOpen={showDetail}
-          onClose={() => setShowDetail(false)}
-          title={selectedStudent.name}
-          subtitle={`طالب في فصل ${selectedStudent.classes?.name || 'غير محدد'}`}
-          icon={GraduationCap}
-          badge={{ label: selectedStudent.classes?.grade_level || 'عام', variant: 'outline' }}
-          data={[
-            { label: 'الاسم الكامل', value: selectedStudent.name, icon: User, fullWidth: true },
-            { label: 'الفصل', value: selectedStudent.classes?.name || 'غير محدد', icon: School },
-            { label: 'المرحلة الدراسية', value: selectedStudent.classes?.grade_level || 'غير محدد', icon: BookOpen },
-            { label: 'تاريخ التسجيل', value: selectedStudent.created_at ? new Date(selectedStudent.created_at).toLocaleDateString('ar-EG') : 'غير متوفر', icon: Calendar },
-            { label: 'رقم الهاتف (ولي الأمر)', value: selectedStudent.parent_phone || 'لا يوجد', icon: Phone },
-            { label: 'العنوان', value: selectedStudent.address || 'غير مسجل', icon: MapPin, fullWidth: true },
-          ]}
-          actions={user?.role === 'admin' ? [
-            { label: 'عرض السجل الأكاديمي', icon: Activity, onClick: () => navigate(`/students/${selectedStudent.id}`) },
-            { label: 'تعديل البيانات', icon: Edit3, onClick: () => { setShowDetail(false); setShowEdit(true); } },
-            { label: 'حذف السجل', icon: Trash2, variant: 'destructive', onClick: () => handleDeleteStudent(selectedStudent.id) }
-          ] : [
-            { label: 'عرض السجل الأكاديمي', icon: Activity, onClick: () => navigate(`/students/${selectedStudent.id}`) }
-          ]}
-        />
-      )}
-
-      {showEdit && selectedStudent && (
         <EditStudentModal
           student={selectedStudent}
           classes={classes}
           user={user}
-          onClose={() => setShowEdit(false)}
+          onClose={() => { setShowEdit(false); setSelectedStudent(null); }}
           onSuccess={() => {
             setShowEdit(false);
             setSelectedStudent(null);
@@ -305,6 +285,27 @@ export default function StudentsPage() {
           onSuccess={() => setShowAdd(false)} 
         />
       )}
+
+      {/* Confirm Delete Dialog */}
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تأكيد حذف الطالب</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا الطالب؟ لا يمكن التراجع عن هذا الإجراء وسيتم حذف جميع البيانات المرتبطة.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteTargetId && handleDeleteStudent(deleteTargetId)}
+            >
+              {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

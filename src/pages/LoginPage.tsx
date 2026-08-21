@@ -36,13 +36,13 @@ export default function LoginPage() {
   const from = location.state?.from || '/';
   const isDeveloperLogin = from === '/super-admin';
 
-  // Redirect immediately if user is already authenticated
+  // Redirect immediately if user is already authenticated (e.g. back-navigation)
   const { user } = useAuth();
   useEffect(() => {
-    if (user) {
+    if (user && !loading) {
       navigate(isDeveloperLogin ? '/super-admin' : '/', { replace: true });
     }
-  }, [user, navigate, isDeveloperLogin]);
+  }, [user, loading, navigate, isDeveloperLogin]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,8 +55,11 @@ export default function LoginPage() {
     setLoading(false);
     if (err) {
       setError(err);
+      return;
     }
-    // Don't navigate here - let the useEffect handle it when user is loaded
+    // user + isLoading are both set correctly inside login() now — navigate directly
+    const destination = isDeveloperLogin ? '/super-admin' : (from === '/login' ? '/' : from);
+    navigate(destination, { replace: true });
   };
 
   return (

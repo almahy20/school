@@ -8,7 +8,6 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
-import { useSchoolFavicon } from "./hooks/queries";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
 
@@ -35,11 +34,11 @@ const NotificationsPage        = lazy(() => import("./pages/NotificationsPage"))
 const ParentChildDetailPage    = lazy(() => import("./pages/ParentChildDetailPage"));
 const UsersManagementPage      = lazy(() => import("./pages/UsersManagementPage"));
 const DataRetentionSettingsPage = lazy(() => import("./pages/DataRetentionSettingsPage"));
-const MessagingPage            = lazy(() => import("./pages/MessagingPage"));
-const ParentMessagesPage       = lazy(() => import("./pages/ParentMessagesPage"));
 const NotFound                 = lazy(() => import("./pages/NotFound"));
-const ParentComplaintsPage     = lazy(() => import("./pages/ParentComplaintsPage"));
 const AdminComplaintsPage      = lazy(() => import("./pages/AdminComplaintsPage"));
+const ParentConversationsPage  = lazy(() => import("./pages/ParentConversationsPage"));
+const AdminConversationsPage        = lazy(() => import("./pages/AdminConversationsPage"));
+const AdminConversationDetailPage   = lazy(() => import("./pages/AdminConversationDetailPage"));
 const AdminReportsPage         = lazy(() => import("./pages/AdminReportsPage"));
 const LandingPage              = lazy(() => import("./pages/LandingPage"));
 const PaymentPage              = lazy(() => import("./pages/PaymentPage"));
@@ -64,19 +63,17 @@ const DeveloperSecretLogin = isDev
   : null;
 
 // ── App Routes ───────────────────────────────────────────────────────────────
-// Smart router: shows admin broadcast page or parent inbox based on role
+// Smart router: shows conversations page for both admin and parent
 function MessagesRouter() {
   const { user } = useAuth();
-  if (user?.role === 'parent') return <ParentMessagesPage />;
-  return <MessagingPage />;
+  if (user?.role === 'parent') return <Navigate to="/conversations" replace />;
+  return <Navigate to="/manage-conversations" replace />;
 }
 
 function AppRoutes() {
   const { user, isLoading: loading } = useAuth();
 
-  // Sync school favicon with branding
-  useSchoolFavicon();
-
+  // Sync school favicon with branding — handled by PwaManager
   return (
     <Suspense fallback={<div className="fixed inset-0 bg-transparent" />}>
       <Routes>
@@ -127,8 +124,12 @@ function AppRoutes() {
         <Route path="/messages"        element={<ProtectedRoute allowedRoles={['admin', 'parent']}><MessagesRouter /></ProtectedRoute>} />
         <Route path="/users"           element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />
         <Route path="/data-retention"  element={<ProtectedRoute allowedRoles={['admin']}><DataRetentionSettingsPage /></ProtectedRoute>} />
-        <Route path="/complaints"      element={<ProtectedRoute allowedRoles={['parent']}><ParentComplaintsPage /></ProtectedRoute>} />
+        <Route path="/complaints"      element={<ProtectedRoute allowedRoles={['parent']}><Navigate to="/conversations" replace /></ProtectedRoute>} />
         <Route path="/manage-complaints" element={<ProtectedRoute allowedRoles={['admin']}><AdminComplaintsPage /></ProtectedRoute>} />
+        {/* ── New Conversations System ── */}
+        <Route path="/conversations"       element={<ProtectedRoute allowedRoles={['parent']}><ParentConversationsPage /></ProtectedRoute>} />
+        <Route path="/manage-conversations" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationsPage /></ProtectedRoute>} />
+        <Route path="/manage-conversations/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationDetailPage /></ProtectedRoute>} />
         <Route path="/admin-reports"   element={<ProtectedRoute allowedRoles={['admin']}><AdminReportsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="/expired"         element={<ProtectedRoute><SubscriptionExpiredPage /></ProtectedRoute>} />

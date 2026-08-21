@@ -4,33 +4,26 @@ import { useLocation } from "react-router-dom";
 /**
  * ScrollToTop
  * -----------
- * Side-effect-only component: resets the WINDOW scroll position to the top
- * every time the user navigates to a new route (pathname changes).
- *
- * IMPORTANT NOTE (scroll containers):
- * -------------------------------------------------------------
- * This component ONLY controls the MAIN BROWSER WINDOW scroll (window.scrollTo).
- * It does NOT affect, and is NOT needed for, any internal scrollable elements
- * inside your UI that use `overflow: auto` / `overflow: scroll` on a fixed-size
- * container (e.g. a modal body, a custom scrollable Sidebar, a scrollable
- * card/table with max-height, a sheet/drawer content, etc.).
- *
- * For internal scroll containers you should:
- *   - Keep their own scroll state as-is (they are intentionally independent)
- *   - Or scroll them manually inside the specific modal/page component if you
- *     need to reset them (e.g. `myRef.current?.scrollTo({top:0, behavior:'instant'})`
- *     when that container's content changes).
- * -------------------------------------------------------------
+ * Resets scroll position on every route change.
+ * Uses double-rAF to ensure the new page is painted before scrolling.
+ * Note: scrollRestoration = 'manual' is set in main.tsx at app startup.
  */
 const ScrollToTop = () => {
   const { pathname } = useLocation();
 
   useEffect(() => {
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "instant",
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+        document.querySelectorAll('main').forEach(el => {
+          (el as HTMLElement).scrollTop = 0;
+        });
+      });
+      return () => cancelAnimationFrame(raf2);
     });
+    return () => cancelAnimationFrame(raf1);
   }, [pathname]);
 
   return null;

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -107,7 +107,7 @@ export function useTeachers(page = 1, pageSize = 15, search = '', status = 'ال
   return useQuery({
     queryKey,
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
-    enabled: session && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!session && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
@@ -168,7 +168,7 @@ export function useTeacherDetailStats(id: string | undefined | null) {
 
       return { studentCount: studentCount || 0, curriculumProgress: avgProgress };
     },
-    enabled: session && !!(id && user?.schoolId),
+    enabled: !!session && !!(id && user?.schoolId),
   });
 }
 

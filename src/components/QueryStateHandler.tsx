@@ -33,17 +33,16 @@ export function QueryStateHandler({
   const [showTimeoutError, setShowTimeoutError] = React.useState(false);
   const loadingStartRef = React.useRef<number>(0);
 
-  // ✅ Watchdog: لو التحميل طول عن 30 ثانية، اظهر زر إعادة محاولة
+  // ✅ Watchdog: لو التحميل طول عن 15 ثانية، اظهر زر إعادة محاولة
   React.useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     
-    if (loading && !isRefetching) {
-      // Store start time in ref to avoid re-renders
+    if (loading && !isRefetching && !error) {
       loadingStartRef.current = Date.now();
       
       timer = setTimeout(() => {
         setShowTimeoutError(true);
-      }, 30000); // 30 ثانية
+      }, 15000); // 15 ثانية
     } else {
       // Reset timeout error when loading completes
       if (showTimeoutError) {
@@ -69,24 +68,7 @@ export function QueryStateHandler({
   // Use either the real error or the timeout error
   const finalError = error || (showTimeoutError ? new Error('تأخرت الاستجابة من السيرفر') : null);
 
-  // 1. Loading State
-  if (loading && !isRefetching && !showTimeoutError) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-100 rounded-full animate-ping opacity-75"></div>
-          <div className="relative w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin shadow-lg"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-4 h-4 bg-indigo-500 rounded-full animate-pulse"></div>
-          </div>
-        </div>
-        <p className="text-slate-500 font-bold text-sm tracking-widest uppercase animate-pulse">{loadingMessage}</p>
-      </div>
-    );
-  }
-
-  // 2. Error State
+  // 1. Error State - MUST be checked first to avoid hiding errors behind loading spinner
   if (finalError) {
     const isTimeout = showTimeoutError && !error;
     const loadDuration = Date.now() - loadingStartRef.current;
@@ -152,6 +134,23 @@ export function QueryStateHandler({
           <RefreshCw className={cn("w-5 h-5", isRefetching && "animate-spin")} />
           إعادة المحاولة الآن
         </Button>
+      </div>
+    );
+  }
+
+  // 2. Loading State (checked after error so errors show immediately)
+  if (loading && !isRefetching && !showTimeoutError) {
+    return (
+      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-100 rounded-full animate-ping opacity-75"></div>
+          <div className="relative w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin shadow-lg"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-4 h-4 bg-indigo-500 rounded-full animate-pulse"></div>
+          </div>
+        </div>
+        <p className="text-slate-500 font-bold text-sm tracking-widest uppercase animate-pulse">{loadingMessage}</p>
       </div>
     );
   }

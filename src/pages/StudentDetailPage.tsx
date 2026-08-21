@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,10 +12,19 @@ import { EditStudentModal } from './StudentsPage';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   useChildFullDetails,
   useAllClasses,
-  useBranding,
   useDeleteStudent
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
@@ -31,6 +39,7 @@ export default function StudentDetailPage() {
   
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [showEdit, setShowEdit] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Curriculum drill-down state
   const [curriculumView, setCurriculumView] = useState<'folders' | 'subjects'>('folders');
@@ -58,55 +67,58 @@ export default function StudentDetailPage() {
   }, [curriculumSubjects]);
   const curriculumMonths = useMemo(() => Object.keys(curriculumByMonth), [curriculumByMonth]);
 
-  // Fetch grades with exam_templates joined to get the correct title/term
-  const { data: fullGrades = [], isLoading: loadingGrades } = useQuery({
-    queryKey: ['student-grades-full', id],
-    queryFn: async () => {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { data, error } = await supabase
-        .from('grades')
-        .select(`
-          *,
-          exam_templates (
-            title,
-            term,
-            subject
-          )
-        `)
-        .eq('student_id', id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id
-  });
-
-  // Group grades by title (exam card name)
-  const gradesByFolder = useMemo(() => {
+  // Group grades by exam card title — using exam_templates title for correct card name
+  // ترتيب الكروت بالأحدث أولاً بناءً على created_at للـ exam_template
+  const { gradesByFolder, gradeFolderKeys } = useMemo(() => {
     const groups: Record<string, any[]> = {};
-    (fullGrades as any[]).forEach((g: any) => {
-      // Use exam_templates title/term if available, fallback to grade term
-      const key = (g.exam_templates?.title || g.exam_templates?.term || g.title || g.term || 'تقييم شهري').trim();
-      if (!groups[key]) groups[key] = [];
+    const folderDates: Record<string, string> = {};
+
+    (grades as any[]).forEach((g: any) => {
+      // نستخدم عنوان الكارت من exam_templates — هو الاسم الصح اللي دخله المعلم
+      const key = (
+        g.exam_templates?.title ||
+        g.exam_templates?.term  ||
+        g.term                  ||
+        g.title                 ||
+        'تقييم شهري'
+      ).trim();
+
+      if (!groups[key]) {
+        groups[key] = [];
+        folderDates[key] = g.created_at || g.date || '';
+      }
+      // نحتفظ بأحدث تاريخ للكارت
+      if ((g.created_at || g.date || '') > folderDates[key]) {
+        folderDates[key] = g.created_at || g.date || '';
+      }
       groups[key].push(g);
     });
-    return groups;
-  }, [fullGrades]);
-  const gradeFolderKeys = useMemo(() => Object.keys(gradesByFolder), [gradesByFolder]);
+
+    // ترتيب الكروت بالأحدث أولاً
+    const sortedKeys = Object.keys(groups).sort(
+      (a, b) => (folderDates[b] > folderDates[a] ? 1 : -1)
+    );
+
+    return { gradesByFolder: groups, gradeFolderKeys: sortedKeys };
+  }, [grades]);
+
+  const fullGrades = grades; // alias for template compatibility
 
   const { data: classesData } = useAllClasses();
   const classes = Array.isArray(classesData) ? classesData : [];
-  const { data: branding } = useBranding();
 
   const deleteStudentMutation = useDeleteStudent();
 
   const handleDelete = async () => {
-    if (!id || !confirm('هل أنت متأكد من حذف سجل الطالب نهائياً؟')) return;
+    if (!id) return;
     try {
       await deleteStudentMutation.mutateAsync(id);
       toast({ title: 'تم الحذف بنجاح' });
       navigate('/students');
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -146,7 +158,7 @@ export default function StudentDetailPage() {
                   تعديل
                 </Button>
                 <Button
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   disabled={deleteStudentMutation.isPending}
                   className="h-11 w-11 bg-rose-500/20 border border-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-xl flex items-center justify-center transition-all"
                 >
@@ -468,6 +480,26 @@ export default function StudentDetailPage() {
           onSuccess={() => { setShowEdit(false); refetch(); }}
         />
       )}
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف سجل الطالب نهائياً</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف سجل الطالب نهائياً؟ لا يمكن التراجع عن هذا الإجراء وسيتم حذف جميع البيانات المرتبطة بالطالب.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDelete}
+            >
+              {deleteStudentMutation.isPending ? 'جاري الحذف...' : 'حذف نهائي'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

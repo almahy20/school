@@ -179,7 +179,7 @@ serve(async (req) => {
 
   // ─── Build push payload (matches expected SW data structure) ─────────
   const schoolName = (profile?.schools as any)?.name ?? "إشعار من المدرسة";
-  const schoolLogo = (profile?.schools as any)?.logo_url ?? "/icons/icon-192.png";
+  const schoolLogo = (profile?.schools as any)?.logo_url ?? "/icons/icon-512.png";
   const isMessage = type === "teacher_message" || type === "broadcast_message" || url === "/messages";
   const targetUrl = url ?? (isMessage ? "/messages" : "/notifications");
 

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -52,7 +52,7 @@ export function useRetentionPolicies() {
       return data as RetentionPolicy[];
     },
     // Only fetch for admin users
-    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
+    enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }
 
@@ -138,77 +138,7 @@ export function useDatabaseSizeInfo() {
       return data as DatabaseSizeInfo[];
     },
     // Only fetch for admin users
-    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
-  });
-}
-
-/**
- * Hook to get student attendance history
- * Yearly summary computed on-demand (no storage cost)
- */
-export function useStudentAttendanceHistory(studentId: string | null) {
-  return useQuery({
-    queryKey: ['attendance-history', studentId],
-    queryFn: async () => {
-      if (!studentId) return [];
-
-      const { data, error } = await supabase
-        .from('student_attendance_history')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('academic_year', { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!studentId,
-  });
-}
-
-/**
- * Hook to get student grade history
- * Summary by subject and term (computed on-demand)
- */
-export function useStudentGradeHistory(studentId: string | null) {
-  return useQuery({
-    queryKey: ['grade-history', studentId],
-    queryFn: async () => {
-      if (!studentId) return [];
-
-      const { data, error } = await supabase
-        .from('student_grade_history')
-        .select('*')
-        .eq('student_id', studentId)
-        .order('academic_year', { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!studentId,
-  });
-}
-
-/**
- * Hook to get school-wide attendance statistics
- * Monthly breakdown by school
- */
-export function useSchoolAttendanceStats(schoolId: string | null) {
-  return useQuery({
-    queryKey: ['school-attendance-stats', schoolId],
-    queryFn: async () => {
-      if (!schoolId) return [];
-
-      const { data, error } = await supabase
-        .from('school_attendance_stats')
-        .select('*')
-        .eq('school_id', schoolId)
-        .order('year', { ascending: false })
-        .order('month', { ascending: false });
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!schoolId,
+    enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }
 
@@ -272,6 +202,6 @@ export function useCleanupEstimate() {
       return estimates;
     },
     // Only fetch for admin users
-    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
+    enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
   });
 }

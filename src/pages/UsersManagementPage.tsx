@@ -30,6 +30,16 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import DataPagination from '@/components/ui/DataPagination';
 
@@ -49,6 +59,7 @@ export default function UsersManagementPage() {
   const [showPassword, setShowPassword] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // ── Debounce Search ──
   useEffect(() => {
@@ -79,7 +90,6 @@ export default function UsersManagementPage() {
   const handleRoleFilter = (val: string) => { setRoleFilter(val); setPage(1); };
 
   const handleDelete = async (userId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً من قاعدة البيانات والخدمات السحابية؟')) return;
     try {
       await deleteUserMutation.mutateAsync(userId);
       toast({ 
@@ -314,7 +324,7 @@ export default function UsersManagementPage() {
                    key={u.id} 
                    user={u} 
                    currentAdminId={currentUser?.id}
-                   onDelete={handleDelete}
+                   onDelete={(id: string) => setDeleteTargetId(id)}
                    onRoleChange={handleRoleChange}
                    onStatusChange={handleStatusChange}
                    onEditProfile={(u: any) => { setEditingId(u.id); setEditForm({ fullName: u.fullName, phone: u.phone }); }}
@@ -366,6 +376,26 @@ export default function UsersManagementPage() {
            </DialogContent>
         </Dialog>
       )}
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف المستخدم نهائياً</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا المستخدم نهائياً من قاعدة البيانات والخدمات السحابية؟ لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteTargetId && handleDelete(deleteTargetId)}
+            >
+              {deleteUserMutation.isPending ? 'جاري الحذف...' : 'حذف نهائي'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

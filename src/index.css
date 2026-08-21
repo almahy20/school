@@ -554,3 +554,9 @@
 section {
   @apply max-w-full;
 }
+
+/* ── Carbon Fibre Texture — local SVG data URI (replaces external transparenttextures.com) ── */
+/* بدل ما يتحمل من موقع خارجي بطيء، الـ pattern محفوظ محلياً كـ data URI */
+.bg-carbon-fibre {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='2' height='2' fill='rgba(255,255,255,0.03)'/%3E%3Crect x='2' y='2' width='2' height='2' fill='rgba(255,255,255,0.03)'/%3E%3C/svg%3E");
+}

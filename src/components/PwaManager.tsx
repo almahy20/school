@@ -5,7 +5,7 @@ import { cleanBrandingData } from '@/hooks/useCleanBranding';
 import { useBranding } from '@/hooks/queries/useBranding';
 import { logger } from '@/utils/logger';
 
-const FALLBACK_PWA_ICON = "/icons/icon-192.png";
+const FALLBACK_PWA_ICON = "/icons/icon-512.png";
 
 function toValidIconUrl(icon: string | null | undefined) {
   const value = (icon || "").trim();
@@ -23,6 +23,7 @@ export default function PwaManager() {
   const { user } = useAuth();
   const branding = useBranding();
   const brandingDataRef = useRef(branding.data);
+  const lastIconUrlRef = useRef<string>(''); // ✅ track last favicon URL to skip redundant network requests
 
   brandingDataRef.current = branding.data;
 
@@ -131,10 +132,20 @@ export default function PwaManager() {
       }
     }
 
-    // ✅ Optimization: Remove Date.now() cache buster. 
-    // It was causing the logo to be re-downloaded on every page navigation.
-    // The logo_url in the database already has a version timestamp if updated.
-    const cacheBustIcon = toValidIconUrl(icon); 
+    // للـ PWA manifest نستخدم الـ static icons الموثوقة فقط
+    // اللوجو الديناميكي بيستخدم فقط للـ favicon في الـ DOM مش في الـ manifest
+    // ✅ favicon (icon/shortcut icon) → width=32 لأن المتصفح بيعرضه بـ 16-32px
+    // ✅ apple-touch-icon → width=120 — نفس الـ URL المستخدم في الـ UI لضمان cache موحد
+    const rawLogoUrl = brandingDataRef.current?.logo_url || '';
+    const { getOptimizedImageUrl } = await import('@/lib/utils');
+    const faviconUrl = rawLogoUrl
+      ? getOptimizedImageUrl(rawLogoUrl, { width: 32, quality: 80 })
+      : '';
+    const appleTouchUrl = rawLogoUrl
+      ? getOptimizedImageUrl(rawLogoUrl, { width: 120, quality: 75 })
+      : '';
+    const cacheBustFavicon = toValidIconUrl(faviconUrl || icon || FALLBACK_PWA_ICON);
+    const cacheBustApple = toValidIconUrl(appleTouchUrl || icon || FALLBACK_PWA_ICON);
 
     // @ts-expect-error - Deep type instantiation
     const manifest = {
@@ -147,16 +158,10 @@ export default function PwaManager() {
       theme_color: themeColor,
       icons: [
         {
-          // ✅ Optimization: Use optimized smaller versions for manifest icons if possible
-          src: cacheBustIcon,
-          sizes: "192x192",
+          src: window.location.origin + "/icons/icon-512.png",
+          sizes: "512x512",
           type: "image/png",
           purpose: "any maskable"
-        },
-        {
-          src: cacheBustIcon,
-          sizes: "512x512",
-          type: "image/png"
         }
       ]
     };
@@ -188,11 +193,14 @@ export default function PwaManager() {
       link.href = href;
     };
 
-    const finalIcon = cacheBustIcon;
-
-    updateIcon('icon', finalIcon);
-    updateIcon('apple-touch-icon', finalIcon);
-    updateIcon('shortcut icon', finalIcon);
+    // ✅ Skip favicon update if URL hasn't changed — avoids redundant network requests
+    // favicon (16-32px display) uses width=32, apple-touch-icon (homescreen) uses width=120
+    if (lastIconUrlRef.current !== cacheBustFavicon) {
+      lastIconUrlRef.current = cacheBustFavicon;
+      updateIcon('icon', cacheBustFavicon);
+      updateIcon('shortcut icon', cacheBustFavicon);
+      updateIcon('apple-touch-icon', cacheBustApple);
+    }
 
     let metaTheme = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
     if (!metaTheme) {

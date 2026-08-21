@@ -67,13 +67,28 @@
                   document.title = cleanName;
                 }
 
-                // Update Favicon
+                // Update Favicon (use optimized small version to avoid loading full-res image)
                 if (branding.logo_url) {
+                  var rawLogoUrl = branding.logo_url;
+                  var faviconUrl = rawLogoUrl;
+                  // Transform to render/image for smaller favicon (32px)
+                  if (rawLogoUrl.includes('supabase.co/storage/v1/object/public/')) {
+                    faviconUrl = rawLogoUrl.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+                    var sep = faviconUrl.includes('?') ? '&' : '?';
+                    faviconUrl = faviconUrl + sep + 'width=32&quality=80&resize=contain';
+                  }
                   var link = document.querySelector("link[rel~='icon']");
-                  if (link) link.href = branding.logo_url;
-                  
+                  if (link) link.href = faviconUrl;
+
+                  // apple-touch-icon uses slightly larger size
+                  var appleUrl = rawLogoUrl;
+                  if (rawLogoUrl.includes('supabase.co/storage/v1/object/public/')) {
+                    appleUrl = rawLogoUrl.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/');
+                    var sep2 = appleUrl.includes('?') ? '&' : '?';
+                    appleUrl = appleUrl + sep2 + 'width=120&quality=75&resize=contain';
+                  }
                   var appleLink = document.querySelector("link[rel~='apple-touch-icon']");
-                  if (appleLink) appleLink.href = branding.logo_url;
+                  if (appleLink) appleLink.href = appleUrl;
                 }
               }
             }

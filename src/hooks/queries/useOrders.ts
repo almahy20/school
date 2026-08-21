@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -53,7 +53,7 @@ export function useSchoolOrders() {
       if (error) throw error;
       return data as SchoolOrder[];
     },
-    enabled: session && !!user?.isSuperAdmin,
+    enabled: !!session && !!user?.isSuperAdmin,
     staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
     refetchOnWindowFocus: false,
   });

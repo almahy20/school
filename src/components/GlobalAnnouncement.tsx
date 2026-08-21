@@ -72,6 +72,7 @@ export function GlobalAnnouncement() {
   }, [profilesArray]);
 
   // Update queue when unread messages are loaded
+  // Wait for senderProfiles to be ready before building the queue to avoid "جاري التحميل..." placeholder
   useEffect(() => {
     if (!unreadMessages || unreadMessages.length === 0) return;
 
@@ -86,11 +87,15 @@ export function GlobalAnnouncement() {
     const ids = filteredMessages.map((msg: any) => msg.sender_id).filter(Boolean);
     setSenderIds(ids);
 
-    // Create announcement items
+    // Only build the queue when we have profile data (or when there are no sender IDs to resolve)
+    const hasPendingProfiles = ids.length > 0 && Object.keys(senderProfiles).length === 0;
+    if (hasPendingProfiles) return; // wait for useProfilesByIds to resolve
+
+    // Create announcement items with resolved sender names
     const items: AnnouncementMessage[] = filteredMessages.map((msg: any) => ({
       id: msg.id,
       content: msg.content,
-      sender_name: senderProfiles?.[msg.sender_id] || 'جاري التحميل...',
+      sender_name: senderProfiles?.[msg.sender_id] || 'الإدارة',
       sender_id: msg.sender_id,
     }));
     
@@ -118,23 +123,20 @@ export function GlobalAnnouncement() {
       const newMsg = payload.new as any;
       if (markedAsReadRef.current.has(newMsg.id)) return;
 
-      // Add to queue, fetch profile asynchronously
+      // Add to queue with placeholder, then resolve sender name
       setQueue(prev => {
         if (prev.some(m => m.id === newMsg.id)) return prev;
         return [...prev, {
           id: newMsg.id,
           content: newMsg.content,
-          sender_name: 'جاري التحميل...',
+          sender_name: senderProfiles[newMsg.sender_id] || 'الإدارة',
           sender_id: newMsg.sender_id,
         }];
       });
       setIsOpen(true);
 
-      // Fetch sender profile and cache it
       if (newMsg.sender_id) {
         setSenderIds(prev => prev.includes(newMsg.sender_id) ? prev : [...prev, newMsg.sender_id]);
-        
-        // Invalidate the unread messages query to update cache
         queryClient.invalidateQueries({ queryKey: ['unread-announcements', user.id] });
       }
     };

@@ -16,6 +16,16 @@ import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useAl
 import DataPagination from '@/components/ui/DataPagination';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
@@ -38,6 +48,7 @@ export default function FeesPage() {
     } catch { return ''; }
   });
   const [filterStatus, setFilterStatus] = useSessionState('fees:filterStatus', 'الكل');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [page, setPage] = useSessionState('fees:page', 1);
   const PAGE_SIZE = 15;
   
@@ -91,12 +102,12 @@ export default function FeesPage() {
   const handleStatusChange = (val: string) => { setFilterStatus(val); setPage(1); };
 
   const handleClearTerm = async () => {
-    if (window.confirm(`هل أنت متأكد من تصفير جميع سجلات ${selectedTerm}؟ لا يمكن التراجع عن هذه الخطوة.`)) {
-      try {
-        await clearTermMutation.mutateAsync(selectedTerm);
-      } catch (err: any) {
-        toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-      }
+    try {
+      await clearTermMutation.mutateAsync(selectedTerm);
+    } catch (err: any) {
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setShowClearConfirm(false);
     }
   };
 
@@ -148,7 +159,7 @@ export default function FeesPage() {
               </Button>
               <Button 
                 variant="destructive"
-                onClick={handleClearTerm} 
+                onClick={() => setShowClearConfirm(true)} 
                 disabled={clearTermMutation.isPending}
                 className="h-12 px-6 rounded-2xl font-black text-xs shadow-xl gap-3"
               >
@@ -274,6 +285,26 @@ export default function FeesPage() {
           onSuccess={onUpdateSuccess}
         />
       )}
+
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>تصفير سجلات الشهر</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من تصفير جميع سجلات {selectedTerm}؟ لا يمكن التراجع عن هذه الخطوة.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleClearTerm}
+            >
+              {clearTermMutation.isPending ? 'جاري التصفير...' : 'تصفير'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

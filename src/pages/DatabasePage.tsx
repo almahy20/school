@@ -12,6 +12,16 @@ import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { cn } from '@/lib/utils';
 import { TABLES, TableName } from '@/config/database-tables';
 import { DatabaseTable } from '@/components/database/DatabaseTable';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 export default function DatabasePage() {
   const { toast } = useToast();
@@ -21,6 +31,7 @@ export default function DatabasePage() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [addMode, setAddMode] = useState(false);
   const [newRow, setNewRow] = useState<Record<string, string>>({});
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const tableConfig = useMemo(() => TABLES.find(t => t.name === activeTable)!, [activeTable]);
 
@@ -33,12 +44,13 @@ export default function DatabasePage() {
   const deleteRowMutation = useDeleteRow(activeTable);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return;
     try {
       await deleteRowMutation.mutateAsync(id);
       toast({ title: 'تم الحذف بنجاح' });
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteTargetId(null);
     }
   };
 
@@ -205,7 +217,7 @@ export default function DatabasePage() {
             setEditForm={setEditForm}
             startEdit={startEdit}
             saveEdit={saveEdit}
-            handleDelete={handleDelete}
+            handleDelete={(id: string) => setDeleteTargetId(id)}
             cancelEdit={() => setEditingId(null)}
             isMutationPending={isMutationPending}
             updatePending={updateRowMutation.isPending}
@@ -213,6 +225,26 @@ export default function DatabasePage() {
           />
         </QueryStateHandler>
       </div>
+
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف السجل</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا السجل؟ لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteTargetId && handleDelete(deleteTargetId)}
+            >
+              {deleteRowMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

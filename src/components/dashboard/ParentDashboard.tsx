@@ -31,7 +31,7 @@ export function ParentDashboard() {
       >
         <header className="bg-slate-900 p-6 md:p-10 rounded-[32px] md:rounded-[48px] text-white shadow-2xl relative overflow-hidden group animate-fade-in">
           <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.2),transparent)] pointer-events-none" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
+          <div className="absolute inset-0 bg-carbon-fibre opacity-[0.05] pointer-events-none" />
           
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-5 text-right">

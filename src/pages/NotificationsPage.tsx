@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
@@ -21,6 +22,7 @@ import { logger } from '@/utils/logger';
 const PAGE_SIZE = 15;
 
 export default function NotificationsPage() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const { data, isLoading, error, refetch } = useNotifications(page, PAGE_SIZE);
   const notifications = useMemo(() => data?.data || [], [data?.data]);
@@ -72,9 +74,11 @@ export default function NotificationsPage() {
       case 'attendance_alert':
         return { icon: AlertCircle, color: 'text-rose-500', bg: 'bg-rose-50' };
       case 'broadcast_message':
-        return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' };
       case 'teacher_message':
-        return { icon: MessageSquare, color: 'text-blue-500', bg: 'bg-blue-50' };
+        return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' };
+      case 'conversation_admin_reply':
+      case 'conversation_new_message':
+        return { icon: MessageSquare, color: 'text-indigo-500', bg: 'bg-indigo-50' };
       default:
         return { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' };
     }
@@ -165,13 +169,17 @@ export default function NotificationsPage() {
                        >
                          <Trash2 className="w-4.5 h-4.5" />
                        </button>
-                       {n.metadata?.url && (
-                         <a 
-                           href={n.metadata.url}
+                       {(n.metadata?.url || n.type === 'conversation_admin_reply' || n.type === 'conversation_new_message') && (
+                         <button
+                           onClick={() => navigate(
+                             n.metadata?.url ||
+                             (n.type === 'conversation_admin_reply' ? '/conversations' : '/manage-conversations')
+                           )}
                            className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center transition-all hover:scale-110 shadow-sm"
+                           title="فتح الرسائل"
                          >
                             <ChevronLeft className="w-5 h-5" />
-                         </a>
+                         </button>
                        )}
                     </div>
                   </div>

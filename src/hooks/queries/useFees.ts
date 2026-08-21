@@ -54,7 +54,7 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
 
       let allStudentsQ = supabase
         .from('students')
-        .select('id, monthly_fee')
+        .select('*')
         .eq('school_id', user.schoolId);
       if (classId !== 'all') allStudentsQ = allStudentsQ.eq('class_id', classId);
       const { data: allStudents } = await allStudentsQ;

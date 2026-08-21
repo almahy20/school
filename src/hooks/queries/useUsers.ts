@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
@@ -73,7 +73,7 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
 
       return { data: transformedData as UserProfile[], count: count || 0 };
     },
-    enabled: session && (user?.role === 'admin' || user?.isSuperAdmin === true),
+    enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });

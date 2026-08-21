@@ -20,7 +20,7 @@ export const sendLocalNotification = async (
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
 
-  const icon = options?.icon || '/icons/icon-192.png';
+  const icon = options?.icon || '/icons/icon-512.png';
   const url = options?.url || '/notifications';
   const tag = options?.tag || 'general-notification';
 

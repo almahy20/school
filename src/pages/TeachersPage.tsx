@@ -19,6 +19,16 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import DataDetailModal from '@/components/DataDetailModal';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 const PAGE_SIZE = 15;
 
@@ -42,6 +52,7 @@ export default function TeachersPage() {
   const [page, setPage] = useState(1);
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   // ── Debounce Search ──
   useEffect(() => {
@@ -90,13 +101,14 @@ export default function TeachersPage() {
   };
 
   const handleDeleteTeacher = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف حساب هذا المعلم؟ سيؤدي ذلك لإلغاء صلاحياته.')) return;
     try {
       await deleteMutation.mutateAsync(id);
       toast({ title: 'تم التنفيذ', description: 'تم إلغاء صلاحيات المعلم بنجاح' });
       setShowDetail(false);
     } catch (err: any) {
       toast({ title: 'خطأ', description: 'فشل في إلغاء صلاحيات المعلم', variant: 'destructive' });
+    } finally {
+      setDeleteTargetId(null);
     }
   };
 
@@ -234,6 +246,25 @@ export default function TeachersPage() {
         </QueryStateHandler>
       </div>
 
+      <AlertDialog open={!!deleteTargetId} onOpenChange={(open) => { if (!open) setDeleteTargetId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف حساب المعلم</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف حساب هذا المعلم؟ سيؤدي ذلك لإلغاء صلاحياته بالكامل.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteTargetId && handleDeleteTeacher(deleteTargetId)}
+            >
+              {deleteMutation.isPending ? 'جاري الحذف...' : 'حذف'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

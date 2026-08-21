@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +36,7 @@ export function useProfile() {
       
       return (data as unknown) as Profile;
     },
-    enabled: session && !!user?.id,
+    enabled: !!session && !!user?.id,
     staleTime: 30 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnMount: true,

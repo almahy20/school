@@ -21,7 +21,7 @@ export function TeacherDashboard() {
     <div className="flex flex-col gap-10 max-w-[1500px] mx-auto text-right px-4 md:px-0">
       <header className="bg-gradient-to-l from-slate-900 via-indigo-950 to-slate-900 p-8 md:p-12 rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
+        <div className="absolute inset-0 bg-carbon-fibre opacity-[0.05] pointer-events-none" />
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
           <div className="flex items-center gap-6 text-right">

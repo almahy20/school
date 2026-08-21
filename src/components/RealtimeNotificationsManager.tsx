@@ -21,6 +21,9 @@ const getTypeConfig = (type: string) => {
     case 'broadcast_message':
     case 'teacher_message':
       return { icon: MessageSquare, color: 'text-emerald-500' };
+    case 'conversation_admin_reply':
+    case 'conversation_new_message':
+      return { icon: MessageSquare, color: 'text-indigo-500' };
     default:
       return { icon: Bell, color: 'text-slate-400' };
   }
@@ -77,7 +80,9 @@ export default function RealtimeNotificationsManager() {
       const config = getTypeConfig(newNotification.type);
       const isMessage =
         newNotification.type === 'broadcast_message' ||
-        newNotification.type === 'teacher_message';
+        newNotification.type === 'teacher_message' ||
+        newNotification.type === 'conversation_new_message' ||
+        newNotification.type === 'conversation_admin_reply';
 
       toast(newNotification.title, {
         description: newNotification.message,
@@ -85,7 +90,11 @@ export default function RealtimeNotificationsManager() {
         duration: 10000,
         action: {
           label: isMessage ? 'فتح الرسائل' : 'عرض التنبيهات',
-          onClick: () => nav(isMessage ? '/messages' : '/notifications'),
+          onClick: () => {
+            const url = newNotification.metadata?.url;
+            if (url) nav(url);
+            else nav(isMessage ? '/conversations' : '/notifications');
+          },
         },
       });
 
@@ -109,6 +118,22 @@ export default function RealtimeNotificationsManager() {
         if (newNotification.type === 'complaint_new') {
           qc.invalidateQueries({ queryKey: ['complaints'], exact: false });
           qc.invalidateQueries({ queryKey: ['admin-activities'] });
+        }
+        // New conversations system
+        if (newNotification.type === 'conversation_new_message') {
+          qc.invalidateQueries({ queryKey: ['conversations', 'admin'], exact: false });
+          qc.invalidateQueries({ queryKey: ['conversations-unread-count'], exact: false });
+        }
+      }
+
+      // Parent conversation reply
+      if (role === 'parent' && newNotification.type === 'conversation_admin_reply') {
+        qc.invalidateQueries({ queryKey: ['conversations', 'parent'], exact: false });
+        qc.invalidateQueries({ queryKey: ['conversations-parent-unread'], exact: false });
+        // Refresh the messages if conversation is open
+        const convId = newNotification.metadata?.conversation_id;
+        if (convId) {
+          qc.invalidateQueries({ queryKey: ['conversation-messages', convId] });
         }
       }
     };

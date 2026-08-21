@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,7 +55,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
       if (error) throw error;
       return { data: (data as ExamTemplate[]) || [], count: count || 0 };
     },
-    enabled: session && !!(user?.schoolId && classId),
+    enabled: !!session && !!(user?.schoolId && classId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
@@ -112,7 +112,7 @@ export function useStudentGrades(template: any | null, classId: string | null) {
         };
       }) as StudentGrade[];
     },
-    enabled: session && !!(user?.schoolId && classId && templateId),
+    enabled: !!session && !!(user?.schoolId && classId && templateId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
   });

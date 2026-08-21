@@ -201,7 +201,7 @@ export default function PaymentPage() {
 
             {/* 2. Payment Instructions */}
             <div className="bg-indigo-600 rounded-[48px] p-10 text-white shadow-2xl shadow-indigo-900/40 relative overflow-hidden group border-4 border-indigo-500/20">
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.05] pointer-events-none" />
+              <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,.2) 2px, rgba(255,255,255,.2) 4px)' }} />
               <h2 className="text-xl font-black text-white mb-10 flex items-center gap-4 relative z-10">
                 <span className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-sm font-black border border-white/20">2</span>
                 منصة التحويل الفوري

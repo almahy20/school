@@ -8,6 +8,16 @@ import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { useCurriculumSubjects, useDeleteSubject, useUpsertSubject } from '@/hooks/queries';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ClassCurriculumViewProps {
   classItem: any;
@@ -28,6 +38,7 @@ export function ClassCurriculumView({ classItem, onAddCurriculum }: ClassCurricu
   const [showAddMonthDialog, setShowAddMonthDialog] = useState(false);
   const [showSubjectDialog, setShowSubjectDialog] = useState(false);
   const [editingSubject, setEditingSubject] = useState<any | null>(null);
+  const [deleteSubjectId, setDeleteSubjectId] = useState<string | null>(null);
   const [subjectName, setSubjectName] = useState('');
   const [subjectContent, setSubjectContent] = useState('');
 
@@ -65,7 +76,6 @@ export function ClassCurriculumView({ classItem, onAddCurriculum }: ClassCurricu
 
   // ── Handlers ──
   const handleDeleteSubject = async (subjectId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذه المادة؟')) return;
     if (!classItem?.curriculum_id) return;
     try {
       await deleteSubjectMutation.mutateAsync({ id: subjectId, curriculumId: classItem.curriculum_id });
@@ -73,6 +83,8 @@ export function ClassCurriculumView({ classItem, onAddCurriculum }: ClassCurricu
       refetchSubjects();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteSubjectId(null);
     }
   };
 
@@ -314,7 +326,7 @@ export function ClassCurriculumView({ classItem, onAddCurriculum }: ClassCurricu
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={() => handleDeleteSubject(sub.id)}
+                      onClick={() => setDeleteSubjectId(sub.id)}
                       className="w-8 h-8 rounded-lg bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50 border border-slate-100 transition-all flex items-center justify-center"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -340,6 +352,26 @@ export function ClassCurriculumView({ classItem, onAddCurriculum }: ClassCurricu
           onSubmit={handleSubjectSubmit}
         />
       )}
+
+      <AlertDialog open={!!deleteSubjectId} onOpenChange={(open) => { if (!open) setDeleteSubjectId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف المادة الدراسية</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذه المادة؟ لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteSubjectId && handleDeleteSubject(deleteSubjectId)}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 }

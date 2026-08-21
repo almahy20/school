@@ -15,28 +15,29 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ✅ لو loading — اعرض spinner
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-background flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  // ✅ لو مفيش user في الـ state — نتحقق من الـ cache قبل الـ redirect
-  // ده بيمنع الـ redirect لو المستخدم logged in فعلاً بس الـ state لسه بتتحمل
+  // If user is already available, render immediately — don't wait for isLoading
+  // This prevents the freeze: login() sets user+isLoading correctly, but
+  // the onAuthStateChange useEffect might re-trigger isLoading briefly
   if (!user) {
-    const cachedUser = getCachedUser();
-    if (cachedUser) {
-      // ✅ فيه cache — اعرض spinner وانتظر AuthContext يكمل التحميل
+    // ✅ لو loading — اعرض spinner
+    if (loading) {
       return (
         <div className="fixed inset-0 bg-background flex items-center justify-center">
           <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       );
     }
-    // ✅ مفيش cache ومفيش user — تسجيل خروج يدوي أو جلسة منتهية فعلاً
+
+    // ✅ لو مفيش user في الـ state — نتحقق من الـ cache قبل الـ redirect
+    const cachedUser = getCachedUser();
+    if (cachedUser) {
+      return (
+        <div className="fixed inset-0 bg-background flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+        </div>
+      );
+    }
+
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 

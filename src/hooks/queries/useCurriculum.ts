@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -33,7 +33,7 @@ export function useCurriculums() {
       if (error) throw error;
       return data as Curriculum[];
     },
-    enabled: session && !!user?.schoolId,
+    enabled: !!session && !!user?.schoolId,
     staleTime: 60 * 60 * 1000, // 1 hour - curriculums are static
     gcTime: 2 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,

@@ -9,7 +9,7 @@ import {
   LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
   School, LogOut, BookOpen, CalendarCheck, 
   Settings, X, MessageSquare, ChevronLeft, ShieldAlert, 
-  Bell, Layers, CreditCard, Send, Home, Database
+  Bell, Layers, CreditCard, Home, Database
 } from 'lucide-react';
 import { cn, getOptimizedImageUrl } from '@/lib/utils';
 
@@ -17,15 +17,14 @@ interface SidebarLink {
   to: string;
   label: string;
   icon: LucideIcon;
-  badge?: 'notifications' | 'complaints';
+  badge?: 'notifications' | 'complaints' | 'conversations';
   queryKey?: string[];
 }
 
 const adminLinks: SidebarLink[] = [
   { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['admin-stats'] },
   { to: '/admin-reports', label: 'مركز التقارير', icon: Layers },
-  { to: '/messages', label: 'بث الرسائل', icon: Send },
-  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare, badge: 'complaints' },
+  { to: '/manage-conversations', label: 'مركز الرسائل', icon: MessageSquare, badge: 'complaints' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users, queryKey: ['students'] },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap, queryKey: ['teachers'] },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck, queryKey: ['parents'] },
@@ -37,8 +36,7 @@ const adminLinks: SidebarLink[] = [
 
 const superAdminLinks: SidebarLink[] = [
   { to: '/super-admin', label: 'إدارة المدارس', icon: ShieldAlert },
-  { to: '/manage-complaints', label: 'الشكاوى والمقترحات', icon: MessageSquare },
-  { to: '/messages', label: 'بث الرسائل', icon: Send },
+  { to: '/manage-conversations', label: 'مركز الرسائل', icon: MessageSquare },
   { to: '/settings', label: 'إعدادات المنصة', icon: Settings },
 ];
 
@@ -50,7 +48,7 @@ const teacherLinks: SidebarLink[] = [
 
 const parentLinks: SidebarLink[] = [
   { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['parent-child-overview'] },
-  { to: '/complaints', label: 'الشكاوى', icon: MessageSquare, badge: 'complaints' },
+  { to: '/conversations', label: 'التواصل مع المدرسة', icon: MessageSquare, badge: 'conversations' },
   { to: '/settings', label: 'الإعدادات', icon: Settings },
 ];
 
@@ -120,9 +118,8 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
       "h-full w-72 bg-slate-900 flex flex-col relative z-[90] border-l border-white/5 shadow-2xl overflow-hidden text-right",
       className
     )}>
-      {/* Premium Background Effects */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.08),transparent)] pointer-events-none" />
-      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+      <div className="absolute inset-0 bg-carbon-fibre opacity-[0.03] pointer-events-none" />
       
       {/* Mobile Close Button */}
       <div className="lg:hidden absolute top-4 left-4 z-[100]">

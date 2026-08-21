@@ -18,41 +18,91 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * دالة بسيطة لجلب بيانات المستخدم الإضافية (الرتبة والمدرسة)
- * ✅ تحسين: منع الطلبات المتكررة نهائياً عبر Singleton Pattern صارم
- */
+// ── Singleton fetch — منع الطلبات المتكررة ───────────────────────────────────
 let userFetchPromise: Promise<AppUser | null> | null = null;
 let currentFetchingId: string | null = null;
+let loginSessionPromise: Promise<AppUser | null> | null = null; // منع double applySession من onAuthStateChange
 
-// ✅ Flag للتمييز بين logout يدوي وانتهاء الـ token تلقائياً
-let isManualSignOut = false;
+async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<AppUser | null> {
+  try {
+    const [profileRes, roleRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', supaUser.id).maybeSingle(),
+      supabase.from('user_roles').select('*').eq('user_id', supaUser.id).maybeSingle(),
+    ]);
+
+    const profile = profileRes.data as any;
+    const role = roleRes.data as any;
+    let school: any = null;
+
+    if (profile?.school_id) {
+      const schoolRes = await supabase.from('schools').select('*').eq('id', profile.school_id).maybeSingle();
+      school = schoolRes.data;
+    }
+
+    if (school && profile?.school_id) {
+      const brandingData = {
+        id: school.id,
+        name: school.name,
+        logo_url: school.logo_url || null,
+        slug: school.slug,
+      };
+      queryClient.setQueryData(['school-branding', profile.school_id], brandingData);
+      try {
+        localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(brandingData));
+      } catch { /* ignore quota errors */ }
+    }
+
+    return {
+      id: supaUser.id,
+      email: supaUser.email || '',
+      phone: profile?.phone || '',
+      fullName: profile?.full_name || '',
+      role: (role?.role || 'parent') as AppRole,
+      isSuperAdmin: role?.is_super_admin || false,
+      schoolId: profile?.school_id,
+      schoolStatus: school?.status || 'active',
+      approvalStatus: role?.approval_status || 'approved',
+      subscriptionExpired: false,
+    };
+  } catch (err) {
+    logger.error('[Auth] Direct fallback query also failed:', err);
+    return null;
+  }
+}
 
 async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
-  // 1. If we are already fetching for THIS user, return the same promise
   if (userFetchPromise && currentFetchingId === supaUser.id) {
-    logger.log('[Auth] Reusing existing fetch promise for:', supaUser.id);
     return userFetchPromise;
   }
 
-  // 2. Start a new fetch
-  logger.log('[Auth] Starting fresh singleton fetch for:', supaUser.id);
   currentFetchingId = supaUser.id;
-  
+
   userFetchPromise = (async () => {
     try {
-      const { data: userData, error } = await supabase.rpc('get_complete_user_data', { 
-        p_user_id: supaUser.id 
-      });
+      let profile: any = null;
+      let role: any = null;
+      let school: any = null;
 
-      if (error || !userData) {
-        logger.error('Error fetching app user data:', error);
+      try {
+        const { data: userData, error } = await supabase.rpc('get_complete_user_data', {
+          p_user_id: supaUser.id,
+        });
+
+        if (error || !userData) {
+          logger.warn('[Auth] RPC get_complete_user_data failed, using direct table fallback:', error);
+          throw new Error('rpc_failed');
+        }
+
+        const parsed = userData as any;
+        profile = parsed.profile;
+        role = parsed.role;
+        school = parsed.school;
+      } catch (rpcErr) {
+        const fallbackUser = await buildAppUserFromDirectQueries(supaUser);
+        if (fallbackUser) return fallbackUser;
         return null;
       }
 
-      const { profile, role, school } = userData as any;
-
-      // ✅ Seed branding cache from RPC — eliminates separate schools HTTP request
       if (school && profile?.school_id) {
         const brandingData = {
           id: school.id,
@@ -82,25 +132,22 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
       logger.error('Unexpected error in getAppUserData:', err);
       return null;
     } finally {
-      // ✅ Keep the promise cached for 10 seconds to swallow all initial events (SESSION, SIGNED_IN, etc)
+      // Reset singleton lock after 30 seconds to allow re-fetch if session changes
+      // (30s is safe: login flow takes <5s under normal conditions)
       setTimeout(() => {
         if (currentFetchingId === supaUser.id) {
           userFetchPromise = null;
           currentFetchingId = null;
         }
-      }, 10000); 
+      }, 30000);
     }
   })();
 
   return userFetchPromise;
 }
 
-/**
- * Prefetch common queries when user logs in to improve initial load performance
- */
 async function prefetchCommonQueries(appUser: AppUser) {
   try {
-    // Prefetch user's own profile
     queryClient.prefetchQuery({
       queryKey: ['profile', appUser.id],
       queryFn: async () => {
@@ -114,7 +161,6 @@ async function prefetchCommonQueries(appUser: AppUser) {
       staleTime: 5 * 60 * 1000,
     });
 
-    // Prefetch all profiles for messaging (IDs only) - ONLY FOR ADMINS/TEACHERS
     if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
       queryClient.prefetchQuery({
         queryKey: ['all-profiles', appUser.schoolId],
@@ -124,195 +170,244 @@ async function prefetchCommonQueries(appUser: AppUser) {
             .select('id')
             .eq('school_id', appUser.schoolId)
             .neq('id', appUser.id);
-          
           return (data || []).map((p: any) => p.id);
         },
         staleTime: 5 * 60 * 1000,
       });
     }
-
-    logger.log('[Prefetch] Common queries prefetched for user:', appUser.id);
   } catch (err) {
     logger.error('[Prefetch] Error prefetching queries:', err);
   }
 }
 
+// ── الدالة الوحيدة لتسجيل الخروج الكامل ─────────────────────────────────────
+// لا تُستدعى إلا من زر تسجيل الخروج اليدوي
+async function performSignOut(
+  setUser: (u: AppUser | null) => void,
+  setSession: (s: Session | null) => void,
+) {
+  logger.warn('[Auth] Manual sign out — clearing everything');
+  try { queryClient.cancelQueries(); } catch {}
+  clearAllCache();
+  setUser(null);
+  setSession(null);
+  setCachedUser(null);
+  localStorage.removeItem('last_auth_sync');
+  try { await supabase.auth.signOut(); } catch {}
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  
   const [user, setUser] = useState<AppUser | null>(() => getCachedUser());
+  // If we have a cached user, start with isLoading=false to avoid spinner on reload
+  const [isLoading, setIsLoading] = useState(() => getCachedUser() === null);
 
-  const [isLoading, setIsLoading] = useState(true);
-
-  const syncUser = async (currentSession: Session | null, event?: string) => {
-    logger.log(`[Auth] Syncing user for event: ${event || 'initial'}`);
-
-    if (currentSession?.user) {
-      // ✅ فيه session حقيقية — حدّث الـ state
-      setSession(currentSession);
-      const appUser = await getAppUserData(currentSession.user);
-
-      if (appUser) {
-        setUser(appUser);
-        setCachedUser(appUser);
-        localStorage.setItem('last_auth_sync', Date.now().toString());
-
-        const deferPrefetch = () => {
-          if ('requestIdleCallback' in window) {
-            (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
-          } else {
-            setTimeout(() => prefetchCommonQueries(appUser), 1000);
-          }
-        };
-        deferPrefetch();
-      }
-    } else if (event === 'SIGNED_OUT') {
-      // ✅ الحالة الوحيدة اللي نمسح فيها المستخدم — تسجيل خروج يدوي
-      logger.warn('[Auth] Manual sign out — clearing user');
-      setSession(null);
-      setUser(null);
-      setCachedUser(null);
-      localStorage.removeItem('last_auth_sync');
-    } else {
-      // ✅ كل الحالات التانية (token expired, network error, null session, etc.)
-      // — نفضل logged in ومنعملش حاجة
-      logger.log(`[Auth] Session null on event "${event}" — keeping user logged in (manual sign out only)`);
+  // ── حدّث الـ state لما تكون فيه session صحيحة ─────────────────────────────
+  const applySession = async (s: Session) => {
+    setSession(s);
+    const appUser = await getAppUserData(s.user);
+    if (appUser) {
+      setUser(appUser);
+      setCachedUser(appUser);
+      localStorage.setItem('last_auth_sync', Date.now().toString());
+      const defer = () => {
+        if ('requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
+        } else {
+          setTimeout(() => prefetchCommonQueries(appUser), 1000);
+        }
+      };
+      defer();
     }
-
-    setIsLoading(false);
   };
 
-  const forceSignOut = () => {
-    // ✅ هذه الدالة بتشتغل بس من تسجيل الخروج اليدوي
-    logger.warn('[Auth] Manual sign-out triggered');
-    isManualSignOut = true; // ✅ نرفع الـ flag قبل signOut
-    try { queryClient.cancelQueries(); } catch (e) { logger.warn('[Auth] cancelQueries error:', e); }
-    clearAllCache();
-    setUser(null);
-    setSession(null);
-    setCachedUser(null);
-    localStorage.removeItem('last_auth_sync');
-    supabase.auth.signOut().catch((e) => logger.warn('[Auth] signOut error:', e));
+  // ── محاولة تجديد الـ token بصمت ───────────────────────────────────────────
+  const silentRefresh = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (!error && data.session) {
+        await applySession(data.session);
+        logger.log('[Auth] Silent refresh succeeded');
+        return true;
+      }
+    } catch {}
+    logger.log('[Auth] Silent refresh failed — keeping cached user');
+    return false;
   };
 
   useEffect(() => {
-    // ✅ أوقفنا auth:force-signout — مش محتاجينه بعد كده
-    // window.addEventListener('auth:force-signout', ...) — removed intentionally
-
+    // ── 1. تحميل أولي ───────────────────────────────────────────────────────
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        syncUser(session, 'INITIAL_SESSION');
+      .then(async ({ data: { session } }) => {
+        if (session) {
+          await applySession(session);
+        } else {
+          // مفيش session — نحاول refresh صامت
+          // لو فشل نفضل على الـ cached user (مش نطرد المستخدم)
+          await silentRefresh();
+        }
+        setIsLoading(false);
       })
-      .catch((error) => {
-        logger.warn('[Auth] Failed to get initial session:', error);
-        // ✅ لو فشل (offline) — نفضل logged in من الـ cache
+      .catch(() => {
+        // offline أو خطأ شبكة — نفضل logged in من الـ cache
+        logger.warn('[Auth] Failed to get initial session (offline?) — keeping cached user');
         setIsLoading(false);
       });
 
+    // ── 2. Supabase auth events ──────────────────────────────────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'TOKEN_REFRESHED') {
-          logger.log('[Auth] Token refreshed successfully');
-          syncUser(session, event);
+      async (event, eventSession) => {
+        logger.log(`[Auth] Event: ${event}`);
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          // Skip if login() is already handling this session — await it instead of double-fetching
+          if (event === 'SIGNED_IN' && loginSessionPromise) {
+            logger.log('[Auth] SIGNED_IN event — login() in progress, awaiting its result');
+            await loginSessionPromise;
+            return;
+          }
+          if (eventSession) await applySession(eventSession);
           return;
         }
 
         if (event === 'SIGNED_OUT') {
-          // ✅ نمسح المستخدم بس لو كان logout يدوي — مش انتهاء token تلقائي
-          if (isManualSignOut) {
-            logger.warn('[Auth] Manual SIGNED_OUT event — clearing user');
-            isManualSignOut = false;
-            try { queryClient.cancelQueries(); } catch {}
-            clearAllCache();
-            syncUser(null, 'SIGNED_OUT');
-          } else {
-            logger.log('[Auth] Supabase-triggered SIGNED_OUT (token expired?) — keeping user logged in');
-            // محاولة تجديد الـ session في الخلفية
-            supabase.auth.refreshSession().catch(() => {
-              logger.log('[Auth] Refresh failed after SIGNED_OUT — user stays logged in from cache');
-            });
-          }
+          // لا نعمل أي حاجة — تسجيل الخروج يحصل بس من performSignOut
+          // Supabase ممكن يبعت SIGNED_OUT تلقائياً أثناء تسجيل دخول جديد (token rotation)
+          // نتحقق أولاً لو فيه session فعلية قبل ما نحاول refresh
+          logger.log('[Auth] SIGNED_OUT event received — checking current session first');
+          try {
+            const { data: { session: currentSess } } = await supabase.auth.getSession();
+            if (currentSess) {
+              // فيه session جديدة بالفعل (حصل login جديد) — مش محتاجين نعمل حاجة
+              logger.log('[Auth] SIGNED_OUT ignored — active session exists');
+              return;
+            }
+          } catch { /* offline */ }
+          // مفيش session — نحاول refresh صامت
+          await silentRefresh();
           return;
         }
 
-        // ✅ كل الأحداث التانية (TOKEN_REFRESH_FAILED, USER_UPDATED, etc.)
-        // لو فيه session جديدة — حدّث. لو مفيش — ابقى logged in
-        if (session) {
-          syncUser(session, event);
-        } else {
-          logger.log(`[Auth] Event "${event}" with no session — keeping user logged in`);
+        if (event === 'TOKEN_REFRESH_FAILED') {
+          // الـ token مش صالح — نحاول refresh مرة أخيرة
+          // لو فشل نفضل على الـ cached user (مش نطرد)
+          logger.warn('[Auth] TOKEN_REFRESH_FAILED — retrying once');
+          await silentRefresh();
+          return;
         }
+
+        // أي event تاني مع session → حدّث
+        if (eventSession) await applySession(eventSession);
       }
     );
 
-    // ✅ Visibility change — بس للتحديث لو فيه session جديدة، مش للـ logout
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        supabase.auth.getSession()
-          .then(({ data: { session } }) => {
-            if (session) {
-              logger.log('[Auth] App focused — refreshing session');
-              syncUser(session, 'VISIBILITY_CHANGE');
-            }
-            // ✅ لو مفيش session — نفضل logged in من الـ cache
-          })
-          .catch(() => {
-            // offline — مش نعمل حاجة
-          });
-      }
+    // ── 3. لما المستخدم يرجع للتاب ──────────────────────────────────────────
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (currentSession) {
+          // جدد لو قارب ينتهي خلال 10 دقايق
+          const expiresAt = currentSession.expires_at ?? 0;
+          if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) {
+            logger.log('[Auth] Visibility — token expiring soon, refreshing');
+            await silentRefresh();
+          }
+        } else {
+          // مفيش session — نحاول refresh صامت
+          await silentRefresh();
+        }
+      } catch { /* offline */ }
     };
     window.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // ── 4. Proactive refresh كل 4 دقايق ─────────────────────────────────────
+    const refreshInterval = setInterval(async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) {
+          await silentRefresh();
+          return;
+        }
+        const expiresAt = currentSession.expires_at ?? 0;
+        if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) {
+          logger.log('[Auth] Proactive refresh — token expiring soon');
+          await silentRefresh();
+        }
+      } catch { /* ignore */ }
+    }, 4 * 60 * 1000);
 
     return () => {
       subscription.unsubscribe();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(refreshInterval);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-
+  // ── تسجيل الخروج اليدوي فقط ─────────────────────────────────────────────
   const signOut = async () => {
-    isManualSignOut = true; // ✅ نرفع الـ flag قبل signOut
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    await clearAllCache();
-    setCachedUser(null);
+    await performSignOut(setUser, setSession);
   };
 
   const login = async (phone: string, password: string): Promise<string | null> => {
     try {
       const email = `${phone}@edara.com`;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+      // ضع placeholder في loginSessionPromise قبل الـ signIn
+      // علشان أي SIGNED_IN event يجي فوراً يشوف إن login شغال وينتظر
+      let resolveLogin!: () => void;
+      loginSessionPromise = new Promise<AppUser | null>((resolve) => {
+        resolveLogin = () => resolve(null);
+      });
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        loginSessionPromise = null;
         if (error.message.includes('Invalid login credentials')) {
           return 'رقم الهاتف أو كلمة المرور غير صحيحة';
         }
         return error.message;
       }
-      
-      // ✅ Set signup time to trigger PWA prompt
+      if (data.session) {
+        // Reset singleton lock so fresh user data is fetched
+        userFetchPromise = null;
+        currentFetchingId = null;
+        try {
+          await applySession(data.session);
+        } finally {
+          setIsLoading(false);
+          resolveLogin();
+          loginSessionPromise = null;
+        }
+      } else {
+        resolveLogin();
+        loginSessionPromise = null;
+      }
       sessionStorage.setItem('user_signup_time', Date.now().toString());
-      
       return null;
-    } catch (err) {
+    } catch {
+      loginSessionPromise = null;
+      setIsLoading(false);
       return 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
     }
   };
 
-  const signup = async (phone: string, password: string, fullName: string, role: string, schoolId: string): Promise<string | null> => {
+  const signup = async (
+    phone: string,
+    password: string,
+    fullName: string,
+    role: string,
+    schoolId: string,
+  ): Promise<string | null> => {
     try {
       const email = `${phone}@edara.com`;
-      const { error } = await supabase.auth.signUp({ 
-        email, 
+      const { error } = await supabase.auth.signUp({
+        email,
         password,
         options: {
-          data: {
-            full_name: fullName,
-            phone: phone, // ✅ إضافة رقم الهاتف
-            role: role,
-            school_id: schoolId
-          }
-        }
+          data: { full_name: fullName, phone, role, school_id: schoolId },
+        },
       });
       if (error) return error.message;
       return null;
@@ -322,8 +417,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refreshUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    await syncUser(session);
+    const { data: { session: s } } = await supabase.auth.getSession();
+    if (s) await applySession(s);
   };
 
   return (
@@ -331,7 +426,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-
 }
 
 export const useAuth = () => {

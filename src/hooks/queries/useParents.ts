@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -133,7 +133,7 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
   return useQuery({
     queryKey,
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
-    enabled: session && !!user?.schoolId,
+    enabled: !!session && !!user?.schoolId,
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
@@ -193,7 +193,7 @@ export function usePendingParents(limit = 100) {
         approval_status: rolesMap.get(profile.id)?.approval_status,
       })) as PendingParent[];
     },
-    enabled: session && !!user?.schoolId,
+    enabled: !!session && !!user?.schoolId,
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: true,
@@ -266,7 +266,7 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
           };
         });
     },
-    enabled: session && !!(parentId && user?.schoolId),
+    enabled: !!session && !!(parentId && user?.schoolId),
     staleTime: 1000 * 60 * 60,
     gcTime: 1000 * 60 * 60 * 2,
     refetchOnWindowFocus: false,
@@ -305,7 +305,7 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
           class_name: classes.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
         }));
     },
-    enabled: session && !!(parentId && user?.schoolId),
+    enabled: !!session && !!(parentId && user?.schoolId),
     staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,

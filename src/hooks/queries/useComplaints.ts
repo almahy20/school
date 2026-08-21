@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,7 +62,7 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
 
       return { data, count: count || 0 };
     },
-    enabled: session && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!session && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 0,
     gcTime: 5 * 60 * 1000,
@@ -94,7 +94,7 @@ export function useParentComplaints(page = 1, pageSize = 10) {
       if (error) throw error;
       return { data: (data || []) as Complaint[], count: count || 0 };
     },
-    enabled: session && !!(user?.id && user?.schoolId),
+    enabled: !!session && !!(user?.id && user?.schoolId),
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,

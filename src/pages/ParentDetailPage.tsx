@@ -18,6 +18,16 @@ import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useState, useEffect } from 'react';
 
 export default function ParentDetailPage() {
@@ -30,6 +40,7 @@ export default function ParentDetailPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // ── Queries ──
   const { data: parent, isLoading: parentLoading, error: parentError, refetch: refetchParent } = useParent(id);
@@ -65,15 +76,15 @@ export default function ParentDetailPage() {
   }, [parentExtraData]);
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('هل أنت متأكد من حذف حساب ولي الأمر هذا؟ سيؤدي ذلك لإزالة صلاحياته بالكامل.')) return;
+    if (!id) return;
     try {
       await deleteParentMutation.mutateAsync(id);
       toast({ title: 'تم الحذف بنجاح', description: 'تمت إزالة ولي الأمر من النظام.' });
-      
-      // Use React Router navigation instead of full page reload
       navigate('/parents');
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -444,7 +455,7 @@ export default function ParentDetailPage() {
                      <Button className="w-full h-14 md:h-16 rounded-[24px] md:rounded-[28px] bg-indigo-600 text-white font-black hover:bg-slate-100 hover:text-slate-900 transition-all text-xs shadow-3xl shadow-indigo-900/60">تحميل ملف الأسرة (Dossier)</Button>
                      <Button 
                        variant="ghost" 
-                       onClick={handleDelete}
+                       onClick={() => setShowDeleteConfirm(true)}
                        disabled={deleteParentMutation.isPending}
                        className="w-full h-14 md:h-16 rounded-[24px] md:rounded-[28px] text-rose-400 font-bold hover:bg-rose-500/10 text-xs gap-3"
                      >
@@ -454,7 +465,7 @@ export default function ParentDetailPage() {
                </section>
 
                <div className="p-12 rounded-[56px] bg-emerald-600 text-white flex flex-col items-center gap-8 text-center shadow-2xl relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none" />
+                  <div className="absolute inset-0 opacity-[0.07] pointer-events-none" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,.15) 2px, rgba(255,255,255,.15) 4px)' }} />
                   <div className="w-24 h-24 bg-white/20 rounded-[40px] flex items-center justify-center relative z-10 transition-transform duration-700 group-hover:scale-110">
                       <Users className="w-12 h-12" />
                   </div>
@@ -469,6 +480,26 @@ export default function ParentDetailPage() {
           </div>
         </QueryStateHandler>
       </div>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف حساب ولي الأمر</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف حساب ولي الأمر هذا؟ سيؤدي ذلك لإزالة صلاحياته بالكامل ولا يمكن التراجع عنه.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDelete}
+            >
+              {deleteParentMutation.isPending ? 'جاري الحذف...' : 'حذف نهائي'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }

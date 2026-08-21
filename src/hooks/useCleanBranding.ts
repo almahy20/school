@@ -22,8 +22,8 @@ export function cleanBrandingData(rawBranding: { name?: string; logo_url?: strin
     .replace(/^مدرسه\s*/i, '')
     .trim();
 
-  // Optimize logo URL for faster loading
-  const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 160, quality: 80 });
+  // Optimize logo URL for faster loading — نفس المعاملات في كل مكان لضمان الكاش
+  const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
 
   return {
     name: rawName,

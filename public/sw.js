@@ -1,11 +1,10 @@
-const CACHE_NAME = 'school-cache-v1.8';
+const CACHE_NAME = 'school-cache-v2.0';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/badge-72.png',
   '/placeholder.svg'
@@ -86,20 +85,27 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin.includes('supabase.co')) {
-    if (url.pathname.includes('/storage/v1/object/public/')) {
+    // Cache both /object/public/ and /render/image/public/ (optimized) variants
+    if (
+      url.pathname.includes('/storage/v1/object/public/') ||
+      url.pathname.includes('/storage/v1/render/image/public/')
+    ) {
       event.respondWith(
-        caches.match(event.request).then((cached) => {
-          const fetchPromise = fetch(event.request).then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              const copy = networkResponse.clone();
-              caches.open(BRANDING_CACHE).then(cache => {
-                cache.put(event.request, copy);
+        caches.open(BRANDING_CACHE).then((cache) => {
+          // ✅ Cache keyed by pathname only (ignores query params like ?v=, ?width=, etc.)
+          // This prevents the same image being fetched multiple times when URL params differ slightly
+          const cacheKey = new Request(url.origin + url.pathname);
+          return cache.match(cacheKey).then((cached) => {
+            if (cached) return cached; // cache-first for images
+            return fetch(event.request).then((networkResponse) => {
+              if (networkResponse && networkResponse.status === 200) {
+                // Store with pathname-only key so future requests with different params hit cache
+                cache.put(cacheKey, networkResponse.clone());
                 limitCacheSize(BRANDING_CACHE, MAX_BRANDING_ITEMS);
-              });
-            }
-            return networkResponse;
-          }).catch(() => cached);
-          return cached || fetchPromise;
+              }
+              return networkResponse;
+            }).catch(() => cached);
+          });
         })
       );
       return;
@@ -221,7 +227,7 @@ self.addEventListener('push', function (event) {
     // Sanitize icon/badge paths (some browsers throw if these are invalid URLs
     // or blocked by CORS — especially the case on Android WebAPKs). We
     // resolve them against the SW origin so relative paths always work.
-    const safeIcon = new URL(data.icon || '/icons/icon-192.png', self.location.origin).href;
+    const safeIcon = new URL(data.icon || '/icons/icon-512.png', self.location.origin).href;
     const safeBadge = new URL(data.badge || '/icons/badge-72.png', self.location.origin).href;
     const safeImage = data.image ? new URL(data.image, self.location.origin).href : undefined;
 

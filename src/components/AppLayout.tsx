@@ -2,15 +2,13 @@ import { useState, ReactNode, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
-import { Menu, BookOpen, Bell, Search, User, ChevronLeft, ShieldAlert, Smartphone, CheckCircle2, Zap, Layers } from 'lucide-react';
+import { Menu, BookOpen, Bell, Search, User, ChevronLeft } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
 import { cn, getOptimizedImageUrl } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Button } from './ui/button';
-import { useToast } from "@/components/ui/use-toast";
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
 import { logger } from '@/utils/logger';
@@ -87,11 +85,7 @@ export default function AppLayout({ children }: Props) {
   }, [user, queryClient]);
 
   // Show a non-blocking toast reminder if user is in browser but already logged in
-  useEffect(() => {
-    if (user && !isPWA) {
-      // Logic for PWA reminder could go here if needed in future
-    }
-  }, [user, isPWA]);
+  // (Reserved for future PWA reminder logic)
 
   // Quick navigation search
   const allLinks = useMemo(() => {
@@ -267,8 +261,8 @@ export default function AppLayout({ children }: Props) {
           <div className="flex mb-20 md:mb-0  flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">
-                {schoolBranding.logo ? (
-                  <img src={schoolBranding.logo} alt="Logo" className="w-full h-full object-contain p-2" />
+                {schoolBranding.logo && !logoError ? (
+                  <img src={schoolBranding.logo} alt="Logo" className="w-full h-full object-contain p-2" onError={() => setLogoError(true)} />
                 ) : (
                   <BookOpen className="w-6 h-6 text-slate-400" />
                 )}

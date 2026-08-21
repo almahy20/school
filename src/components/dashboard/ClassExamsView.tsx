@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
-import { 
-  BookOpen, Plus, Trash2, Save, FolderOpen, Sparkles, Search, ArrowRight, ChevronLeft, Copy, CheckCheck
+import {
+  BookOpen, Plus, Trash2, Save, FolderOpen, Sparkles, Search,
+  ArrowRight, ChevronLeft, ArrowUp, ArrowDown, RotateCcw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,11 +13,20 @@ import {
   useCreateExamTemplate,
   useDeleteExamTemplate,
   useUpsertGrades,
-  useAllClasses
 } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ClassExamsViewProps {
   classId: string;
@@ -25,6 +35,66 @@ interface ClassExamsViewProps {
 
 type ViewState = 'folders' | 'grading';
 
+// ── Autocomplete Input ────────────────────────────────────────────────────────
+// يعرض اقتراحات من القيم المكتوبة في نفس الكارت
+function AutocompleteInput({
+  value,
+  onChange,
+  suggestions,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suggestions: string[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // فلتر الاقتراحات بناءً على ما كتبه المستخدم
+  const filtered = useMemo(() => {
+    if (!value.trim()) return suggestions.slice(0, 6);
+    const q = value.trim().toLowerCase();
+    return suggestions.filter(s => s.toLowerCase().includes(q) && s !== value).slice(0, 6);
+  }, [value, suggestions]);
+
+  // إغلاق الـ dropdown لو ضغط برا
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative flex-1 min-w-0">
+      <Input
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        className="h-11 sm:h-10 text-sm sm:text-xs font-bold rounded-xl text-right bg-slate-50 border-slate-200 focus:bg-white w-full"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute top-[calc(100%+4px)] right-0 left-0 z-50 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+          {filtered.map((s, i) => (
+            <button
+              key={i}
+              type="button"
+              onMouseDown={e => { e.preventDefault(); onChange(s); setOpen(false); }}
+              className="w-full text-right px-4 py-3 sm:py-2.5 text-sm sm:text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-b border-slate-50 last:border-0 active:bg-indigo-100"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 export default function ClassExamsView({ classId, className }: ClassExamsViewProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -35,18 +105,16 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAddSubjectDialog, setShowAddSubjectDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [copiedStudentId, setCopiedStudentId] = useState<string | null>(null);
+  const [deleteExamTargetId, setDeleteExamTargetId] = useState<string | null>(null);
 
-  const { 
-    data: templatesData, 
-    isLoading: templatesLoading, 
-    error: templatesError,
-    refetch: refetchTemplates 
-  } = useExamTemplates(classId, null, 1, 100);
+  // ── ترتيب مؤقت (يرجع للافتراضي لما تغير الكارت أو الصفحة) ──────────────
+  const [customOrder, setCustomOrder] = useState<string[]>([]);
+
+  const { data: templatesData, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } =
+    useExamTemplates(classId, null, 1, 100);
 
   const templates = templatesData?.data || [];
 
-  // Group by title (monthly card name)
   const monthFolders = useMemo(() => {
     const folders: Record<string, any[]> = {};
     templates.forEach(t => {
@@ -59,33 +127,77 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
   const monthFolderKeys = Object.keys(monthFolders);
 
-  const { 
-    data: studentGradesData,
-    isLoading: gradesLoading,
-    error: gradesError,
-    refetch: refetchGrades
-  } = useStudentGrades(selectedTemplate || null, classId);
+  const { data: studentGradesData, isLoading: gradesLoading, error: gradesError, refetch: refetchGrades } =
+    useStudentGrades(selectedTemplate || null, classId);
 
   const studentGrades = useMemo(() => studentGradesData || [], [studentGradesData]);
   const [localGrades, setLocalGrades] = useState(studentGrades);
 
-  useEffect(() => { setLocalGrades(studentGrades); }, [studentGrades]);
+  // لما تتحمّل درجات جديدة — رتّبها حسب customOrder لو موجود
+  useEffect(() => {
+    if (!studentGrades.length) return;
+    if (customOrder.length > 0) {
+      const sorted = [...studentGrades].sort((a, b) => {
+        const ia = customOrder.indexOf(a.studentId);
+        const ib = customOrder.indexOf(b.studentId);
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+      setLocalGrades(sorted);
+    } else {
+      setLocalGrades(studentGrades);
+    }
+  }, [studentGrades, customOrder]);
+
+  // إعادة ضبط الترتيب لما تغير الكارت أو المادة
+  useEffect(() => {
+    setCustomOrder([]);
+  }, [selectedFolderName, selectedTemplate?.id]);
 
   const handleGradeChange = (studentId: string, score: string) => {
     setLocalGrades(prev => prev.map(g => g.studentId === studentId ? { ...g, score } : g));
   };
 
-  // Copy one student's score to clipboard feedback
-  const handleCopyToOthers = (sourceStudentId: string) => {
-    const source = localGrades.find(g => g.studentId === sourceStudentId);
-    if (!source?.score?.trim()) return;
-    setLocalGrades(prev => prev.map(g =>
-      g.studentId !== sourceStudentId ? { ...g, score: source.score } : g
-    ));
-    setCopiedStudentId(sourceStudentId);
-    setTimeout(() => setCopiedStudentId(null), 1500);
-    toast({ title: `تم نسخ "${source.score}" لجميع الطلاب` });
-  };
+  // تحريك طالب لأعلى
+  const moveUp = useCallback((idx: number) => {
+    if (idx === 0) return;
+    setLocalGrades(prev => {
+      const next = [...prev];
+      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+      setCustomOrder(next.map(g => g.studentId));
+      return next;
+    });
+  }, []);
+
+  // تحريك طالب لأسفل
+  const moveDown = useCallback((idx: number) => {
+    setLocalGrades(prev => {
+      if (idx === prev.length - 1) return prev;
+      const next = [...prev];
+      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+      setCustomOrder(next.map(g => g.studentId));
+      return next;
+    });
+  }, []);
+
+  // إعادة الترتيب الافتراضي
+  const resetOrder = useCallback(() => {
+    setCustomOrder([]);
+    setLocalGrades(studentGrades);
+  }, [studentGrades]);
+
+  const isCustomOrdered = customOrder.length > 0;
+
+  // ── اقتراحات Autocomplete — من القيم المكتوبة في الكارت الحالي ────────────
+  const autocompleteSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    localGrades.forEach(g => {
+      if (g.score?.trim() && g.score.trim().length > 0) seen.add(g.score.trim());
+    });
+    return Array.from(seen);
+  }, [localGrades]);
 
   const filteredGrades = localGrades.filter(sg =>
     (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -119,7 +231,6 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   };
 
   const handleDeleteExam = async (templateId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا التقييم نهائياً؟')) return;
     try {
       await deleteExamMutation.mutateAsync(templateId);
       toast({ title: 'تم الحذف بنجاح' });
@@ -128,6 +239,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
       refetchTemplates();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteExamTargetId(null);
     }
   };
 
@@ -138,9 +251,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     setView('grading');
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // VIEW: Month Cards Grid
-  // ─────────────────────────────────────────────────────────────
+  // ─── VIEW: Month Cards Grid ───────────────────────────────────────────────
   if (view === 'folders') {
     return (
       <div className="space-y-5 animate-in fade-in duration-400 text-right" dir="rtl">
@@ -213,7 +324,6 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
             onSuccess={(folderName) => {
               setShowCreateDialog(false);
               refetchTemplates();
-              // Enter the new folder immediately
               setTimeout(() => {
                 setSelectedFolderName(folderName);
                 setSelectedTemplate(null);
@@ -226,9 +336,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // VIEW: Inside a Month — Grading Full Width
-  // ─────────────────────────────────────────────────────────────
+  // ─── VIEW: Grading ────────────────────────────────────────────────────────
   const currentFolderTemplates = monthFolders[selectedFolderName] || [];
 
   return (
@@ -255,12 +363,12 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         </Button>
       </div>
 
-      {/* Subject tabs */}
       <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden shadow-sm">
+        {/* Subject tabs */}
         <div className="p-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3 overflow-x-auto hide-scrollbar">
           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">المواد:</span>
           {currentFolderTemplates.length === 0 ? (
-            <span className="text-xs text-slate-400 font-bold">لا توجد مواد بعد — اضغط "إضافة مادة" لإضافة أول مادة</span>
+            <span className="text-xs text-slate-400 font-bold">لا توجد مواد بعد — اضغط "إضافة مادة"</span>
           ) : (
             <div className="flex items-center gap-2">
               {currentFolderTemplates.map(t => (
@@ -283,8 +391,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
         {selectedTemplate ? (
           <>
-            {/* Grade entry header */}
-            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-indigo-600" />
@@ -296,18 +404,29 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                     : `🔢 درجات رقمية (من ${selectedTemplate.max_score})`}
                 </p>
               </div>
-              <div className="flex items-center gap-3 flex-wrap justify-end">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* زرار إعادة الترتيب — يظهر بس لو الترتيب اتغير */}
+                {isCustomOrdered && (
+                  <button
+                    onClick={resetOrder}
+                    title="إعادة الترتيب الافتراضي"
+                    className="h-10 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-100 flex items-center gap-1.5 text-xs font-black transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">إعادة الترتيب</span>
+                  </button>
+                )}
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-300 absolute right-3 top-1/2 -translate-y-1/2" />
                   <Input
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
                     placeholder="بحث..."
-                    className="pr-9 h-10 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl w-36"
+                    className="pr-9 h-10 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl w-32 sm:w-36"
                   />
                 </div>
                 <button
-                  onClick={() => handleDeleteExam(selectedTemplate.id)}
+                  onClick={() => selectedTemplate && setDeleteExamTargetId(selectedTemplate.id)}
                   className="w-10 h-10 rounded-xl bg-rose-50 text-rose-400 hover:bg-rose-100 flex items-center justify-center transition-all shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -318,7 +437,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                   className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md gap-2"
                 >
                   <Save className="w-4 h-4" />
-                  حفظ الدرجات
+                  {upsertGradesMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
                 </Button>
               </div>
             </div>
@@ -331,54 +450,60 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
               onRetry={refetchGrades}
               loadingMessage="جاري تحميل قائمة الطلاب..."
             >
-              <div className="divide-y divide-slate-50 max-h-[500px] overflow-y-auto">
+              <div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">
                 {filteredGrades.map((grade, idx) => (
-                  <div key={grade.studentId} className="px-6 py-3.5 flex items-center justify-between gap-4 hover:bg-slate-50/60 transition-colors">
-                    <div className="flex items-center gap-3">
+                  <div
+                    key={grade.studentId}
+                    className="px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-3 hover:bg-slate-50/60 transition-colors"
+                  >
+                    {/* أسهم الترتيب — تظهر بس لما مفيش بحث نشط */}
+                    {!searchQuery && (
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button
+                          onClick={() => moveUp(idx)}
+                          disabled={idx === 0}
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => moveDown(idx)}
+                          disabled={idx === filteredGrades.length - 1}
+                          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* رقم + اسم */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 text-xs font-black flex items-center justify-center shrink-0">
                         {idx + 1}
                       </div>
-                      <span className="font-black text-slate-800 text-sm">{grade.studentName}</span>
+                      <span className="font-black text-slate-800 text-sm truncate">{grade.studentName}</span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    {/* Input */}
+                    <div className="flex items-center gap-2 w-44 sm:w-56">
                       {selectedTemplate.score_type === 'text' ? (
-                        <>
-                          <Input
-                            value={grade.score}
-                            onChange={e => handleGradeChange(grade.studentId, e.target.value)}
-                            placeholder="ممتاز، جيد جداً، يحتاج دعم..."
-                            className="h-10 w-48 text-xs font-bold rounded-xl text-right bg-slate-50 border-slate-200 focus:bg-white"
-                          />
-                          {/* Copy to all button */}
-                          {grade.score.trim() && (
-                            <button
-                              onClick={() => handleCopyToOthers(grade.studentId)}
-                              title="نسخ هذا التقييم لجميع الطلاب"
-                              className={cn(
-                                'w-9 h-9 rounded-xl border flex items-center justify-center transition-all shrink-0',
-                                copiedStudentId === grade.studentId
-                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
-                                  : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600'
-                              )}
-                            >
-                              {copiedStudentId === grade.studentId
-                                ? <CheckCheck className="w-3.5 h-3.5" />
-                                : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          )}
-                        </>
+                        <AutocompleteInput
+                          value={grade.score}
+                          onChange={v => handleGradeChange(grade.studentId, v)}
+                          suggestions={autocompleteSuggestions}
+                          placeholder="ممتاز، جيد جداً..."
+                        />
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <>
                           <Input
                             type="number"
                             value={grade.score}
                             onChange={e => handleGradeChange(grade.studentId, e.target.value)}
                             placeholder="0"
-                            className="h-10 w-20 text-center font-black text-sm rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
+                            className="h-11 sm:h-10 w-20 text-center font-black text-sm rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
                           />
-                          <span className="text-xs font-bold text-slate-300">/ {selectedTemplate.max_score}</span>
-                        </div>
+                          <span className="text-xs font-bold text-slate-300 shrink-0">/ {selectedTemplate.max_score}</span>
+                        </>
                       )}
                     </div>
                   </div>
@@ -389,7 +514,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         ) : (
           <div className="py-16 text-center text-slate-400 space-y-3">
             <Sparkles className="w-10 h-10 mx-auto text-slate-200" />
-            <p className="font-bold text-sm">اضغط "إضافة مادة" لإضافة أول مادة دراسية لهذا الكارت الشهري</p>
+            <p className="font-bold text-sm">اضغط "إضافة مادة" لإضافة أول مادة دراسية لهذا الكارت</p>
           </div>
         )}
       </div>
@@ -405,11 +530,31 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
           }}
         />
       )}
+
+      <AlertDialog open={!!deleteExamTargetId} onOpenChange={(open) => { if (!open) setDeleteExamTargetId(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف التقييم نهائياً</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف هذا التقييم نهائياً؟ سيتم حذف جميع درجات الطلاب المرتبطة به.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => deleteExamTargetId && handleDeleteExam(deleteExamTargetId)}
+            >
+              {deleteExamMutation.isPending ? 'جاري الحذف...' : 'حذف نهائي'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
 
-// ─── Create Month Card Dialog (NO auto-generation) ────────────────────────────
+// ─── Create Month Card Dialog ─────────────────────────────────────────────────
 function CreateMonthCardDialog({
   classId,
   className,
@@ -423,9 +568,7 @@ function CreateMonthCardDialog({
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [monthTitle, setMonthTitle] = useState('تقييم شهر 7');
-  const [scoreType, setScoreType] = useState<'numeric' | 'text'>('text');
-  const [maxScore, setMaxScore] = useState('100');
+  const [monthTitle, setMonthTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createMutation = useCreateExamTemplate();
 
@@ -434,16 +577,15 @@ function CreateMonthCardDialog({
     if (!monthTitle.trim()) return;
     setIsSubmitting(true);
     try {
-      // Create a single placeholder template to establish the folder
       await createMutation.mutateAsync({
         class_id: classId,
         subject: 'مادة جديدة',
         exam_type: 'monthly',
-        max_score: Number(maxScore) || 100,
+        max_score: 100,
         weight: 1,
         term: monthTitle.trim(),
         title: monthTitle.trim(),
-        score_type: scoreType,
+        score_type: 'text',
         teacher_id: user?.id || ''
       });
       toast({ title: 'تم إنشاء كارت التقييم الشهري 🌟', description: 'يمكنك الآن إضافة المواد يدوياً' });
@@ -475,43 +617,11 @@ function CreateMonthCardDialog({
               value={monthTitle}
               onChange={e => setMonthTitle(e.target.value)}
               className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: تقييم شهر 7"
+              placeholder="مثال: تقييم شهر سبتمبر"
               required
+              autoFocus
             />
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-black text-slate-700">نوع التقييم الافتراضي</label>
-            <div className="grid grid-cols-2 gap-3">
-              {[{ val: 'text', label: '📝 وصفي / مهارات' }, { val: 'numeric', label: '🔢 درجات رقمية' }].map(opt => (
-                <button
-                  key={opt.val}
-                  type="button"
-                  onClick={() => setScoreType(opt.val as any)}
-                  className={cn(
-                    'h-12 rounded-xl border flex items-center justify-center font-black text-xs transition-all',
-                    scoreType === opt.val
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-200 bg-slate-50 text-slate-400 hover:border-slate-300'
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {scoreType === 'numeric' && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-slate-700">الدرجة النهائية</label>
-              <Input
-                type="number"
-                value={maxScore}
-                onChange={e => setMaxScore(e.target.value)}
-                className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 font-black text-center text-sm"
-              />
-            </div>
-          )}
 
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
             <p className="text-xs font-bold text-slate-500">
@@ -533,7 +643,7 @@ function CreateMonthCardDialog({
   );
 }
 
-// ─── Add Subject Dialog (inside a folder) ────────────────────────────────────
+// ─── Add Subject Dialog ───────────────────────────────────────────────────────
 function AddSubjectDialog({
   classId,
   folderName,

@@ -20,4 +20,4 @@ export * from './useProfile';
 export * from './useDataRetention';
 export * from './useDatabase';
 export * from './useUsers';
-export * from './useSchoolFavicon';
+export * from './useConversations';

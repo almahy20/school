@@ -3,6 +3,11 @@ import App from "./App.tsx";
 import "./index.css";
 import { logger } from "./utils/logger";
 
+// Disable browser scroll restoration — we handle it ourselves via ScrollToTop
+if ('scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual';
+}
+
 // Service Worker registration logic
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 

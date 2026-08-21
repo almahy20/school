@@ -7,7 +7,7 @@ import {
   Search, X, ArrowLeft, ChevronLeft, LayoutGrid, Award,
   Sparkles, History, Filter, AlertCircle, TrendingUp, Info, FolderOpen, FileText
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, getOptimizedImageUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,16 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useClasses, useBranding, useCurriculumSubjects, useExamTemplates, useStudentGrades, useCreateExamTemplate, useDeleteExamTemplate, useUpsertGrades } from '@/hooks/queries';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ExamTemplate {
   id: string;
@@ -53,6 +63,7 @@ export default function GradesPage() {
   const [selectedMonthFolder, setSelectedMonthFolder] = useSessionState<string>('grades:selectedMonthFolder', '');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedTemplate, setSelectedTemplate] = useState<ExamTemplate | null>(null);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateTemplate, setShowCreateTemplate] = useState(false);
 
@@ -171,7 +182,6 @@ export default function GradesPage() {
   };
 
   const handleDeleteTemplate = async (templateId: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا التقييم والمادة التابعة له؟')) return;
     try {
       await deleteMutation.mutateAsync(templateId);
       toast({ title: 'تم الحذف بنجاح' });
@@ -180,6 +190,8 @@ export default function GradesPage() {
       }
     } catch (err: any) {
       toast({ title: 'خطأ', description: 'فشل في حذف التقييم', variant: 'destructive' });
+    } finally {
+      setDeleteTemplateId(null);
     }
   };
 
@@ -195,7 +207,7 @@ export default function GradesPage() {
           <div className="flex items-center gap-6">
             <div className="w-16 h-16 rounded-[24px] bg-white p-3 shadow-lg shadow-indigo-100/50 flex items-center justify-center border border-indigo-50 overflow-hidden shrink-0">
                {branding?.logo_url ? (
-                 <img src={branding.logo_url} alt="Logo" className="w-full h-full object-contain" />
+                 <img src={getOptimizedImageUrl(branding.logo_url, { width: 120, quality: 75 })} alt="Logo" className="w-full h-full object-contain" loading="lazy" />
                ) : (
                  <Award className="w-8 h-8 text-indigo-600" />
                )}
@@ -384,7 +396,7 @@ export default function GradesPage() {
                          </div>
 
                          <Button 
-                           onClick={() => handleDeleteTemplate(selectedTemplate.id)}
+                           onClick={() => selectedTemplate && setDeleteTemplateId(selectedTemplate.id)}
                            variant="ghost"
                            className="h-11 px-3 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all"
                          >
@@ -464,6 +476,26 @@ export default function GradesPage() {
             }}
           />
         )}
+
+        <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => { if (!open) setDeleteTemplateId(null); }}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>حذف التقييم</AlertDialogTitle>
+              <AlertDialogDescription>
+                هل أنت متأكد من حذف هذا التقييم والمادة التابعة له؟ لا يمكن التراجع عن هذا الإجراء.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => deleteTemplateId && handleDeleteTemplate(deleteTemplateId)}
+              >
+                حذف
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AppLayout>
   );
@@ -552,48 +584,6 @@ function CreateMonthlyEvaluationModal({
               required
             />
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-black text-slate-700">نظام ورصد التقييم</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setScoreType('text')}
-                className={cn(
-                  "h-12 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
-                  scoreType === 'text'
-                    ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-xs"
-                    : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
-                )}
-              >
-                📝 تقييم وصفي / نصي
-              </button>
-              <button
-                type="button"
-                onClick={() => setScoreType('numeric')}
-                className={cn(
-                  "h-12 rounded-xl border flex items-center justify-center gap-2 font-black text-xs transition-all",
-                  scoreType === 'numeric'
-                    ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-xs"
-                    : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
-                )}
-              >
-                🔢 درجات رقمية
-              </button>
-            </div>
-          </div>
-
-          {scoreType === 'numeric' && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-slate-700">الدرجة النهائية لكل مادة</label>
-              <Input 
-                type="number" 
-                value={maxScore} 
-                onChange={e => setMaxScore(e.target.value)}
-                className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 font-black text-center text-sm" 
-              />
-            </div>
-          )}
 
           <div className="flex gap-3 pt-4">
             <Button type="submit" disabled={createMutation.isPending}
