@@ -1,8 +1,8 @@
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
-import { ReactNode } from 'react';
-import { getCachedUser } from '@/lib/userCache';
+import { ReactNode, useEffect } from 'react';
+import { getCachedUser, setCachedUser } from '@/lib/userCache';
 
 interface Props {
   children: ReactNode;
@@ -16,8 +16,6 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   const navigate = useNavigate();
 
   // If user is already available, render immediately — don't wait for isLoading
-  // This prevents the freeze: login() sets user+isLoading correctly, but
-  // the onAuthStateChange useEffect might re-trigger isLoading briefly
   if (!user) {
     // ✅ لو loading — اعرض spinner
     if (loading) {
@@ -28,14 +26,12 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
       );
     }
 
-    // ✅ لو مفيش user في الـ state — نتحقق من الـ cache قبل الـ redirect
+    // ✅ لو مفيش user و loading خلص — الـ session منتهية
+    // امسح الـ cache القديم وروح للـ login
     const cachedUser = getCachedUser();
     if (cachedUser) {
-      return (
-        <div className="fixed inset-0 bg-background flex items-center justify-center">
-          <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-        </div>
-      );
+      // Cache موجود بس مفيش session حقيقية — امسحه وارجع للـ login
+      setCachedUser(null);
     }
 
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
