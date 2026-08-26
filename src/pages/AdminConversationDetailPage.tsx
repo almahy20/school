@@ -12,8 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import {
   Send, ChevronRight, Clock, CheckCircle2, AlertCircle,
-  Loader2, User, School, XCircle, Trash2, MessageCircle,
-  Phone,
+  Loader2, User, School, XCircle, Trash2, MessageCircle, Phone,
 } from 'lucide-react';
 import {
   useAdminConversations,
@@ -24,8 +23,9 @@ import {
   type ConversationStatus,
 } from '@/hooks/queries/useConversations';
 import { formatDisplayDate } from '@/lib/date-utils';
-
-// ─── Status config ────────────────────────────────────────────────────────────
+import { supabase } from '@/integrations/supabase/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 
 const STATUS_CONFIG: Record<ConversationStatus, { label: string; color: string; icon: React.ElementType }> = {
   open:        { label: 'جديدة',         color: 'bg-rose-50 text-rose-600',       icon: AlertCircle  },
@@ -37,91 +37,57 @@ const STATUS_CONFIG: Record<ConversationStatus, { label: string; color: string; 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 
 function MessageBubble({ msg, onDelete }: {
-  msg: {
-    id: string; sender_role: string; sender_name?: string;
-    content: string; is_read: boolean; created_at: string;
-  };
+  msg: { id: string; sender_role: string; sender_name?: string; content: string; is_read: boolean; created_at: string };
   onDelete?: (id: string) => void;
 }) {
-  const isAdminMsg = msg.sender_role === 'admin' || msg.sender_role === 'teacher';
+  const isAdmin = msg.sender_role === 'admin' || msg.sender_role === 'teacher';
   const [hover, setHover] = useState(false);
 
   return (
     <div
-      className={cn('flex items-end gap-2 mb-3 group', isAdminMsg ? 'flex-row-reverse' : 'flex-row')}
+      className={cn('flex items-end gap-2 mb-3 group', isAdmin ? 'flex-row-reverse' : 'flex-row')}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
-      {/* Avatar */}
-      <div className={cn(
-        'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5',
-        isAdminMsg ? 'bg-indigo-100' : 'bg-slate-100'
-      )}>
-        {isAdminMsg
-          ? <School className="w-4 h-4 text-indigo-600" />
-          : <User className="w-4 h-4 text-slate-500" />
-        }
+      <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0 mb-0.5', isAdmin ? 'bg-indigo-100' : 'bg-slate-100')}>
+        {isAdmin ? <School className="w-4 h-4 text-indigo-600" /> : <User className="w-4 h-4 text-slate-500" />}
       </div>
 
-      <div className={cn('max-w-[72%] flex flex-col gap-1', isAdminMsg ? 'items-end' : 'items-start')}>
-        {/* Sender name */}
+      <div className={cn('max-w-[72%] flex flex-col gap-1', isAdmin ? 'items-end' : 'items-start')}>
         <span className="text-[10px] font-bold text-slate-400 px-1">
-          {isAdminMsg
-            ? `الإدارة${msg.sender_name ? ` — ${msg.sender_name}` : ''}`
-            : (msg.sender_name || 'ولي أمر')}
+          {isAdmin ? `الإدارة${msg.sender_name ? ` — ${msg.sender_name}` : ''}` : (msg.sender_name || 'ولي أمر')}
         </span>
 
         <div className="flex items-end gap-1.5">
-          {/* Delete button (admin only, on hover) */}
           {onDelete && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <button className={cn(
-                  'p-1 rounded-lg text-slate-300 hover:text-rose-400 transition-all',
-                  hover ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                )}>
+                <button className={cn('p-1 rounded-lg text-slate-300 hover:text-rose-400 transition-all', hover ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </AlertDialogTrigger>
               <AlertDialogContent className="rounded-3xl" dir="rtl">
                 <AlertDialogHeader>
                   <AlertDialogTitle className="text-right font-black">حذف الرسالة</AlertDialogTitle>
-                  <AlertDialogDescription className="text-right">
-                    هل أنت متأكد من حذف هذه الرسالة؟
-                  </AlertDialogDescription>
+                  <AlertDialogDescription className="text-right">هل أنت متأكد من حذف هذه الرسالة؟</AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter className="flex-row-reverse gap-2">
-                  <AlertDialogAction
-                    onClick={() => onDelete(msg.id)}
-                    className="bg-rose-500 hover:bg-rose-600 rounded-xl font-black"
-                  >
-                    حذف
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={() => onDelete(msg.id)} className="bg-rose-500 hover:bg-rose-600 rounded-xl font-black">حذف</AlertDialogAction>
                   <AlertDialogCancel className="rounded-xl font-bold">إلغاء</AlertDialogCancel>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
-
-          {/* Bubble */}
-          <div className={cn(
-            'px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm',
-            isAdminMsg
-              ? 'bg-indigo-600 text-white rounded-br-sm'
-              : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm'
-          )}>
+          <div className={cn('px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm', isAdmin ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm')}>
             <p className="whitespace-pre-wrap break-words">{msg.content}</p>
           </div>
         </div>
 
-        {/* Time + read */}
-        <div className={cn('flex items-center gap-1 px-1', isAdminMsg ? 'flex-row-reverse' : 'flex-row')}>
+        <div className={cn('flex items-center gap-1 px-1', isAdmin ? 'flex-row-reverse' : 'flex-row')}>
           <span className="text-[9px] text-slate-400">
             {new Date(msg.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
           </span>
-          {isAdminMsg && (
-            <CheckCircle2 className={cn('w-3 h-3', msg.is_read ? 'text-emerald-400' : 'text-slate-300')} />
-          )}
+          {isAdmin && <CheckCircle2 className={cn('w-3 h-3', msg.is_read ? 'text-emerald-400' : 'text-slate-300')} />}
         </div>
       </div>
     </div>
@@ -136,24 +102,38 @@ export default function AdminConversationDetailPage() {
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Load all conversations to find the one we need
   const { data: conversations = [], isLoading: convsLoading } = useAdminConversations('all', '');
   const conversation = conversations.find(c => c.id === id) ?? null;
-
   const { data: messages = [], isLoading: msgsLoading } = useConversationMessages(id ?? null);
   const sendMessage = useSendConversationMessage();
   const markRead = useMarkConversationRead();
   const deleteMessage = useDeleteConversationMessage();
 
-  // Mark as read on open
+  // تعليم إشعارات هذه المحادثة كمقروءة
   useEffect(() => {
-    if (conversation && conversation.unread_by_admin > 0) {
+    if (!id || !user?.id) return;
+    const db = supabase as any;
+    db.from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false)
+      .contains('metadata', { conversation_id: id })
+      .then(() => {
+        // refresh unread counts
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
+      });
+  }, [id, user?.id]);
+
+  useEffect(() => {
+    if (conversation?.unread_by_admin > 0) {
       markRead.mutate({ conversationId: conversation.id, asRole: 'admin' });
     }
   }, [conversation?.id]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
@@ -166,7 +146,6 @@ export default function AdminConversationDetailPage() {
     catch (_) {}
   };
 
-  // ── Loading state ──
   if (convsLoading) {
     return (
       <AppLayout>
@@ -177,7 +156,6 @@ export default function AdminConversationDetailPage() {
     );
   }
 
-  // ── Not found ──
   if (!conversation) {
     return (
       <AppLayout>
@@ -195,22 +173,36 @@ export default function AdminConversationDetailPage() {
   const cfg = STATUS_CONFIG[conversation.status];
   const StatusIcon = cfg.icon;
 
+  // ── Layout strategy:
+  // نستخدم negative margins لإلغاء الـ padding بتاع AppLayout
+  // وبعدين نبني flex column يملأ الشاشة بالكامل
+  // الـ AppLayout content div عنده: px-4 sm:px-6 md:px-8 lg:px-10, py-5 sm:py-6, pb-24 md:pb-6
+  // desktop header: h-16 xl:h-20
+
   return (
     <AppLayout>
       <div
-        className="h-[calc(100vh-5rem)] max-w-[860px] mx-auto flex flex-col animate-in fade-in duration-400 px-4 md:px-0"
         dir="rtl"
+        className={[
+          // إلغاء الـ padding الأفقي والعمودي بتاع AppLayout
+          '-mx-4 sm:-mx-6 md:-mx-8 lg:-mx-10',
+          '-mt-5 sm:-mt-6',
+          // إلغاء الـ pb-24 md:pb-6 من الأسفل
+          '-mb-24 md:-mb-6',
+          // ارتفاع كامل: الـ viewport ناقص desktop header (64px أو 80px)
+          'flex flex-col',
+          'h-[calc(100vh-64px)] xl:h-[calc(100vh-80px)]',
+        ].join(' ')}
       >
-        {/* ── Top bar ── */}
-        <div className="flex items-center gap-3 py-3 shrink-0">
+        {/* ── Top bar — fixed header ── */}
+        <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm">
           <button
             onClick={() => navigate('/manage-conversations')}
-            className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors"
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors shrink-0"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
 
-          {/* Sender info */}
           <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-black text-sm shrink-0">
             {conversation.parent_name?.[0] ?? <User className="w-4 h-4" />}
           </div>
@@ -230,7 +222,7 @@ export default function AdminConversationDetailPage() {
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-0.5">
               <Badge className={cn('px-1.5 py-0 rounded-full text-[9px] font-bold border-none flex items-center gap-0.5', cfg.color)}>
                 <StatusIcon className="w-2.5 h-2.5" />
                 {cfg.label}
@@ -240,92 +232,83 @@ export default function AdminConversationDetailPage() {
           </div>
         </div>
 
-        {/* ── Chat area ── */}
-        <div className="flex-1 min-h-0 rounded-3xl border border-slate-100 bg-white shadow-xl overflow-hidden flex flex-col mb-4">
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-5 py-5 bg-slate-50/30">
-            {msgsLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                <MessageCircle className="w-10 h-10 text-slate-200" />
-                <p className="text-sm font-bold text-slate-400">لا توجد رسائل بعد</p>
-              </div>
-            ) : (
-              <>
-                {/* Date separator — first message */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="h-px flex-1 bg-slate-200" />
-                  <span className="text-[9px] font-bold text-slate-400 px-2">
-                    {formatDisplayDate(messages[0].created_at, { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </span>
-                  <div className="h-px flex-1 bg-slate-200" />
-                </div>
-
-                {messages.map((msg, i) => {
-                  const prev = messages[i - 1];
-                  const showDate = i > 0 && prev &&
-                    new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
-                  return (
-                    <div key={msg.id}>
-                      {showDate && (
-                        <div className="flex items-center gap-3 my-3">
-                          <div className="h-px flex-1 bg-slate-200" />
-                          <span className="text-[9px] font-bold text-slate-400 px-2">
-                            {new Date(msg.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}
-                          </span>
-                          <div className="h-px flex-1 bg-slate-200" />
-                        </div>
-                      )}
-                      <MessageBubble
-                        msg={msg}
-                        onDelete={(msgId) => deleteMessage.mutate(msgId)}
-                      />
-                    </div>
-                  );
-                })}
-                <div ref={bottomRef} />
-              </>
-            )}
-          </div>
-
-          {/* Input */}
-          {conversation.status !== 'closed' ? (
-            <div className="px-4 py-3 bg-white border-t border-slate-100 shrink-0">
-              <div className="flex items-end gap-2">
-                <Textarea
-                  ref={textareaRef}
-                  value={text}
-                  onChange={e => setText(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                  }}
-                  placeholder="اكتب ردك هنا..."
-                  rows={1}
-                  className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl border-slate-100 bg-slate-50 focus:bg-white text-sm font-medium px-4 py-3 transition-all"
-                />
-                <Button
-                  onClick={handleSend}
-                  disabled={!text.trim() || sendMessage.isPending}
-                  size="icon"
-                  className="w-11 h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shrink-0 disabled:opacity-40"
-                >
-                  {sendMessage.isPending
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Send className="w-4 h-4 -rotate-45" />
-                  }
-                </Button>
-              </div>
+        {/* ── Messages — يملأ الباقي ويتسكرل داخلياً ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-12 lg:px-20 py-6 bg-slate-50/40">
+          {msgsLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+              <MessageCircle className="w-10 h-10 text-slate-200" />
+              <p className="text-sm font-bold text-slate-400">لا توجد رسائل بعد</p>
             </div>
           ) : (
-            <div className="px-4 py-3 bg-slate-50 border-t border-slate-100 text-center shrink-0">
-              <p className="text-xs font-bold text-slate-400">تم إغلاق هذه المحادثة</p>
+            <div className="max-w-[760px] mx-auto">
+              {/* Date separator — first message */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="h-px flex-1 bg-slate-200" />
+                <span className="text-[9px] font-bold text-slate-400 px-2">
+                  {formatDisplayDate(messages[0].created_at, { day: 'numeric', month: 'long', year: 'numeric' })}
+                </span>
+                <div className="h-px flex-1 bg-slate-200" />
+              </div>
+
+              {messages.map((msg, i) => {
+                const prev = messages[i - 1];
+                const showDate = i > 0 && prev &&
+                  new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString();
+                return (
+                  <div key={msg.id}>
+                    {showDate && (
+                      <div className="flex items-center gap-3 my-4">
+                        <div className="h-px flex-1 bg-slate-200" />
+                        <span className="text-[9px] font-bold text-slate-400 px-2">
+                          {new Date(msg.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' })}
+                        </span>
+                        <div className="h-px flex-1 bg-slate-200" />
+                      </div>
+                    )}
+                    <MessageBubble msg={msg} onDelete={(msgId) => deleteMessage.mutate(msgId)} />
+                  </div>
+                );
+              })}
+              <div ref={bottomRef} />
             </div>
           )}
         </div>
+
+        {/* ── Input — ثابت في الأسفل ── */}
+        {conversation.status !== 'closed' ? (
+          <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-3 bg-white border-t border-slate-100">
+            <div className="max-w-[760px] mx-auto flex items-end gap-2">
+              <Textarea
+                ref={textareaRef}
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder="اكتب ردك هنا..."
+                rows={1}
+                className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium px-4 py-3 transition-all"
+              />
+              <Button
+                onClick={handleSend}
+                disabled={!text.trim() || sendMessage.isPending}
+                size="icon"
+                className="w-11 h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shrink-0 disabled:opacity-40"
+              >
+                {sendMessage.isPending
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Send className="w-4 h-4 -rotate-45" />
+                }
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="shrink-0 px-4 py-3 bg-slate-50 border-t border-slate-100 text-center">
+            <p className="text-xs font-bold text-slate-400">تم إغلاق هذه المحادثة</p>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

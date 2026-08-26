@@ -24,6 +24,8 @@ const getTypeConfig = (type: string) => {
     case 'conversation_admin_reply':
     case 'conversation_new_message':
       return { icon: MessageSquare, color: 'text-indigo-500' };
+    case 'class_chat_message':
+      return { icon: MessageSquare, color: 'text-emerald-500' };
     default:
       return { icon: Bell, color: 'text-slate-400' };
   }
@@ -82,7 +84,8 @@ export default function RealtimeNotificationsManager() {
         newNotification.type === 'broadcast_message' ||
         newNotification.type === 'teacher_message' ||
         newNotification.type === 'conversation_new_message' ||
-        newNotification.type === 'conversation_admin_reply';
+        newNotification.type === 'conversation_admin_reply' ||
+        newNotification.type === 'class_chat_message';
 
       toast(newNotification.title, {
         description: newNotification.message,
@@ -134,6 +137,15 @@ export default function RealtimeNotificationsManager() {
         const convId = newNotification.metadata?.conversation_id;
         if (convId) {
           qc.invalidateQueries({ queryKey: ['conversation-messages', convId] });
+        }
+      }
+
+      // Class chat message — refresh conversations-parent-unread badge
+      if (role === 'parent' && newNotification.type === 'class_chat_message') {
+        qc.invalidateQueries({ queryKey: ['conversations-parent-unread'], exact: false });
+        const roomId = newNotification.metadata?.room_id;
+        if (roomId) {
+          qc.invalidateQueries({ queryKey: ['class-chat-messages', roomId] });
         }
       }
     };

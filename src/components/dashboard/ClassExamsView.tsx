@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { useSessionState } from '@/hooks/useSessionState';
 import {
   BookOpen, Plus, Trash2, Save, FolderOpen, Sparkles, Search,
   ArrowRight, ChevronLeft, ArrowUp, ArrowDown, RotateCcw
@@ -107,8 +108,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteExamTargetId, setDeleteExamTargetId] = useState<string | null>(null);
 
-  // ── ترتيب مؤقت (يرجع للافتراضي لما تغير الكارت أو الصفحة) ──────────────
-  const [customOrder, setCustomOrder] = useState<string[]>([]);
+  // ── ترتيب مؤقت — يبقى محفوظاً طوال الجلسة لهذا الفصل، ويُمسح عند إغلاق التاب ──
+  const [customOrder, setCustomOrder] = useSessionState<string[]>(`grades:order:${classId}`, []);
 
   const { data: templatesData, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } =
     useExamTemplates(classId, null, 1, 100);
@@ -151,10 +152,14 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     }
   }, [studentGrades, customOrder]);
 
-  // إعادة ضبط الترتيب لما تغير الكارت أو المادة
+  // إعادة ضبط الترتيب فقط عند تغيير الفصل الدراسي — الانتقال بين المواد لا يُعيد الضبط
+  const prevClassId = useRef(classId);
   useEffect(() => {
-    setCustomOrder([]);
-  }, [selectedFolderName, selectedTemplate?.id]);
+    if (prevClassId.current !== classId) {
+      setCustomOrder([]);
+      prevClassId.current = classId;
+    }
+  }, [classId]);
 
   const handleGradeChange = (studentId: string, score: string) => {
     setLocalGrades(prev => prev.map(g => g.studentId === studentId ? { ...g, score } : g));

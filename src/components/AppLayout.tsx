@@ -91,7 +91,6 @@ export default function AppLayout({ children }: Props) {
   const allLinks = useMemo(() => {
     const links = [
       { to: '/', label: 'لوحة التحكم' },
-      { to: '/admin-reports', label: 'مركز التقارير والتحليلات' },
       { to: '/students', label: 'الطلاب' },
       { to: '/teachers', label: 'المعلمون' },
       { to: '/parents', label: 'أولياء الأمور' },

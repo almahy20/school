@@ -21,3 +21,5 @@ export * from './useDataRetention';
 export * from './useDatabase';
 export * from './useUsers';
 export * from './useConversations';
+export * from './useElectronicExams';
+export * from './useClassChat';

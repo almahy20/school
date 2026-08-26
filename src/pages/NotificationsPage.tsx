@@ -79,6 +79,8 @@ export default function NotificationsPage() {
       case 'conversation_admin_reply':
       case 'conversation_new_message':
         return { icon: MessageSquare, color: 'text-indigo-500', bg: 'bg-indigo-50' };
+      case 'class_chat_message':
+        return { icon: MessageSquare, color: 'text-emerald-500', bg: 'bg-emerald-50' };
       default:
         return { icon: Bell, color: 'text-slate-400', bg: 'bg-slate-50' };
     }
@@ -169,7 +171,7 @@ export default function NotificationsPage() {
                        >
                          <Trash2 className="w-4.5 h-4.5" />
                        </button>
-                       {(n.metadata?.url || n.type === 'conversation_admin_reply' || n.type === 'conversation_new_message') && (
+                       {(n.metadata?.url || n.type === 'conversation_admin_reply' || n.type === 'conversation_new_message' || n.type === 'class_chat_message') && (
                          <button
                            onClick={() => navigate(
                              n.metadata?.url ||

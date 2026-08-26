@@ -39,7 +39,7 @@ const AdminComplaintsPage      = lazy(() => import("./pages/AdminComplaintsPage"
 const ParentConversationsPage  = lazy(() => import("./pages/ParentConversationsPage"));
 const AdminConversationsPage        = lazy(() => import("./pages/AdminConversationsPage"));
 const AdminConversationDetailPage   = lazy(() => import("./pages/AdminConversationDetailPage"));
-const AdminReportsPage         = lazy(() => import("./pages/AdminReportsPage"));
+const ParentExamsPage          = lazy(() => import("./pages/ParentExamsPage"));
 const LandingPage              = lazy(() => import("./pages/LandingPage"));
 const PaymentPage              = lazy(() => import("./pages/PaymentPage"));
 const SubscriptionExpiredPage  = lazy(() => import("./pages/SubscriptionExpiredPage"));
@@ -130,7 +130,8 @@ function AppRoutes() {
         <Route path="/conversations"       element={<ProtectedRoute allowedRoles={['parent']}><ParentConversationsPage /></ProtectedRoute>} />
         <Route path="/manage-conversations" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationsPage /></ProtectedRoute>} />
         <Route path="/manage-conversations/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationDetailPage /></ProtectedRoute>} />
-        <Route path="/admin-reports"   element={<ProtectedRoute allowedRoles={['admin']}><AdminReportsPage /></ProtectedRoute>} />
+        {/* ── Electronic Exams ── */}
+        <Route path="/exams" element={<ProtectedRoute allowedRoles={['parent']}><ParentExamsPage /></ProtectedRoute>} />
         <Route path="/settings"        element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="/expired"         element={<ProtectedRoute><SubscriptionExpiredPage /></ProtectedRoute>} />
 

@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 import {
-  Send, Loader2, School, MessageCircle,
+  Send, Loader2, School, MessageCircle, Users, ArrowRight, ChevronLeft,
 } from 'lucide-react';
 import {
   useParentConversations,
@@ -14,7 +14,17 @@ import {
   useSendConversationMessage,
   useMarkConversationRead,
 } from '@/hooks/queries/useConversations';
+import {
+  useParentClassChatRooms,
+  useClassChatMessages,
+  useEnsureClassChatRoom,
+  useSendClassChatMessage,
+  useClassChatUnreadCounts,
+  useMarkClassChatRoomRead,
+  type ClassChatRoom,
+} from '@/hooks/queries/useClassChat';
 import { useParentChildren } from '@/hooks/queries';
+import PageHeader from '@/components/layout/PageHeader';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,52 +34,112 @@ function dateSeparator(iso: string) {
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 
-function Bubble({ content, isMe, time }: { content: string; isMe: boolean; time: string }) {
+function Bubble({
+  content, isMe, time, senderName, showName,
+}: {
+  content: string; isMe: boolean; time: string; senderName?: string; showName?: boolean;
+}) {
   return (
-    <div className={cn('flex mb-2', isMe ? 'justify-start' : 'justify-end')}>
-      <div className={cn(
-        'max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
-        isMe
-          ? 'bg-indigo-600 text-white rounded-br-md'
-          : 'bg-white text-slate-800 shadow-sm border border-slate-100 rounded-bl-md'
-      )}>
-        <p className="whitespace-pre-wrap break-words mb-1">{content}</p>
-        <span className={cn('text-[10px] leading-none', isMe ? 'text-indigo-100' : 'text-slate-400')}>
-          {new Date(time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-        </span>
+    <div className={cn('flex mb-1.5', isMe ? 'justify-start' : 'justify-end')}>
+      <div className="max-w-[75%]">
+        {showName && senderName && !isMe && (
+          <p className="text-[10px] font-black text-slate-400 mb-1 px-1 text-left">{senderName}</p>
+        )}
+        <div className={cn(
+          'px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
+          isMe
+            ? 'bg-indigo-600 text-white rounded-br-sm'
+            : 'bg-white text-slate-800 shadow-sm border border-slate-100 rounded-bl-sm',
+        )}>
+          <p className="whitespace-pre-wrap break-words mb-1">{content}</p>
+          <span className={cn('text-[10px] leading-none', isMe ? 'text-indigo-200' : 'text-slate-400')}>
+            {new Date(time).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Chat View shell — full screen with back button ───────────────────────────
 
-export default function ParentConversationsPage() {
+function ChatView({
+  onBack,
+  headerIcon,
+  headerTitle,
+  headerSubtitle,
+  children,
+}: {
+  onBack: () => void;
+  headerIcon: React.ReactNode;
+  headerTitle: string;
+  headerSubtitle: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <AppLayout>
+      <div
+        dir="rtl"
+        className={[
+          '-mx-4 sm:-mx-6 md:-mx-8 lg:-mx-10',
+          '-mt-5 sm:-mt-6',
+          '-mb-24 md:-mb-6',
+          'flex flex-col',
+          'h-[calc(100vh-64px)] xl:h-[calc(100vh-80px)]',
+        ].join(' ')}
+      >
+        {/* Header */}
+        <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm">
+          <button
+            onClick={onBack}
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors shrink-0"
+          >
+            <ArrowRight className="w-5 h-5" />
+          </button>
+          <div className="shrink-0">{headerIcon}</div>
+          <div>
+            <p className="text-sm font-black text-slate-900">{headerTitle}</p>
+            <p className="text-[10px] text-slate-400 font-medium">{headerSubtitle}</p>
+          </div>
+        </div>
+        {children}
+      </div>
+    </AppLayout>
+  );
+}
+
+// ─── Admin Chat ───────────────────────────────────────────────────────────────
+
+function AdminChatView({ onBack }: { onBack: () => void }) {
   const { user } = useAuth();
   const [text, setText] = useState('');
   const [selectedChild, setSelectedChild] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: conversations = [], isLoading: convsLoading } = useParentConversations();
   const { data: children = [] } = useParentChildren();
-  
-  // Get the first (or only) conversation
   const conversation = conversations[0] ?? null;
-
   const { data: messages = [], isLoading: msgsLoading } = useConversationMessages(conversation?.id ?? null);
   const sendMessage = useSendConversationMessage();
   const markRead = useMarkConversationRead();
   const create = useCreateConversation();
 
-  // Mark as read
   useEffect(() => {
-    if (conversation && conversation.unread_by_parent > 0) {
+    if (conversation?.unread_by_parent > 0) {
       markRead.mutate({ conversationId: conversation.id, asRole: 'parent' });
+    }
+    // تعليم إشعارات هذه المحادثة كمقروءة في جدول notifications
+    if (conversation?.id && user?.id) {
+      const db = supabase as any;
+      db.from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .in('type', ['conversation_admin_reply', 'conversation_new_message'])
+        .contains('metadata', { conversation_id: conversation.id });
     }
   }, [conversation?.id]);
 
-  // Scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
@@ -77,15 +147,11 @@ export default function ParentConversationsPage() {
   const handleSend = async () => {
     const t = text.trim();
     if (!t) return;
-
     setText('');
-
     try {
       if (conversation) {
-        // Send to existing conversation
         await sendMessage.mutateAsync({ conversationId: conversation.id, content: t });
       } else {
-        // Create new conversation
         const subject = t.length > 60 ? t.slice(0, 60) + '…' : t;
         await create.mutateAsync({ subject, firstMessage: t, studentId: selectedChild || undefined });
         setSelectedChild('');
@@ -94,127 +160,359 @@ export default function ParentConversationsPage() {
   };
 
   const isSending = sendMessage.isPending || create.isPending;
+  const isLoading = convsLoading || msgsLoading;
+  const hasMessages = !!(conversation && messages.length > 0);
 
   return (
-    <AppLayout>
-      <div
-        className="h-[calc(100vh-5rem)] max-w-[900px] mx-auto flex flex-col rounded-2xl overflow-hidden border border-slate-100 shadow-lg bg-white mx-4 md:mx-0"
-        dir="rtl"
-      >
-        {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
-            <School className="w-5 h-5 text-indigo-600" />
+    <ChatView
+      onBack={onBack}
+      headerIcon={<div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center"><School className="w-4 h-4 text-indigo-600" /></div>}
+      headerTitle="إدارة المدرسة"
+      headerSubtitle="سيتم الرد عليك في أقرب وقت"
+    >
+      {/* Messages */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
+        {isLoading ? (
+          <div className="h-full flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
           </div>
-          <div>
-            <p className="text-sm font-black text-slate-900">إدارة المدرسة</p>
-            <p className="text-xs text-slate-500">سيتم الرد عليك في أقرب وقت</p>
+        ) : !hasMessages ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center">
+              <MessageCircle className="w-6 h-6 text-indigo-300" />
+            </div>
+            <p className="text-sm font-bold text-slate-500">ابدأ المحادثة مع إدارة المدرسة</p>
+            <p className="text-xs text-slate-400">اكتب رسالتك في الأسفل</p>
           </div>
-        </div>
-
-        {/* Messages area */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 bg-slate-50/30">
-          {convsLoading || msgsLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
-            </div>
-          ) : !conversation || messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                <MessageCircle className="w-7 h-7 text-indigo-300" />
-              </div>
-              <p className="text-sm font-bold text-slate-500">ابدأ المحادثة مع إدارة المدرسة</p>
-              <p className="text-xs text-slate-400">اكتب رسالتك في الأسفل وسنرد عليك</p>
-            </div>
-          ) : (
-            <>
-              {messages.map((msg, i) => {
-                const prev = messages[i - 1];
-                const showDate = i === 0 || (prev &&
-                  new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString());
-                const isMe = msg.sender_id === user?.id;
-                return (
-                  <div key={msg.id}>
-                    {showDate && (
-                      <div className="flex justify-center my-4">
-                        <span className="bg-white/80 text-[10px] font-bold text-slate-400 px-3 py-1 rounded-full shadow-sm border border-slate-100">
-                          {dateSeparator(msg.created_at)}
-                        </span>
-                      </div>
-                    )}
-                    <Bubble content={msg.content} isMe={isMe} time={msg.created_at} />
-                  </div>
-                );
-              })}
-              <div ref={bottomRef} />
-            </>
-          )}
-        </div>
-
-        {/* Input area */}
-        <div className="px-4 py-3 bg-white border-t border-slate-100 shrink-0">
-          {/* Child selector (only when no conversation yet) */}
-          {!conversation && children.length > 0 && (
-            <div className="mb-3">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">بخصوص (اختياري)</p>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSelectedChild('')}
-                  className={cn(
-                    'px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
-                    !selectedChild
-                      ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                      : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-200'
+        ) : (
+          <div className="max-w-[720px] mx-auto">
+            {messages.map((msg, i) => {
+              const prev = messages[i - 1];
+              const showDate = i === 0 || (prev && new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString());
+              return (
+                <div key={msg.id}>
+                  {showDate && (
+                    <div className="flex justify-center my-3">
+                      <span className="bg-white/80 text-[10px] font-bold text-slate-400 px-3 py-1 rounded-full shadow-sm border border-slate-100">
+                        {dateSeparator(msg.created_at)}
+                      </span>
+                    </div>
                   )}
-                >
+                  <Bubble content={msg.content} isMe={msg.sender_id === user?.id} time={msg.created_at} />
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-3 bg-white border-t border-slate-100">
+        <div className="max-w-[720px] mx-auto space-y-2">
+          {!conversation && (children as any[]).length > 0 && (
+            <div>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">بخصوص</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => setSelectedChild('')}
+                  className={cn('px-3 py-1 rounded-xl text-xs font-bold border transition-all',
+                    !selectedChild ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-slate-50 text-slate-400 border-slate-100')}>
                   عام
                 </button>
-                {children.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setSelectedChild(c.id)}
-                    className={cn(
-                      'px-3 py-1.5 rounded-xl text-xs font-bold transition-all border',
-                      selectedChild === c.id
-                        ? 'bg-indigo-50 text-indigo-600 border-indigo-200'
-                        : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-200'
-                    )}
-                  >
+                {(children as any[]).map((c: any) => (
+                  <button key={c.id} type="button" onClick={() => setSelectedChild(c.id)}
+                    className={cn('px-3 py-1 rounded-xl text-xs font-bold border transition-all',
+                      selectedChild === c.id ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-slate-50 text-slate-400 border-slate-100')}>
                     {c.name}
                   </button>
                 ))}
               </div>
             </div>
           )}
-
-          {/* Message input */}
           <div className="flex items-end gap-2">
-            <Textarea
-              ref={textareaRef}
+            <textarea
               value={text}
               onChange={e => setText(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-              }}
-              placeholder={conversation ? "اكتب رسالتك..." : "اكتب رسالتك لإدارة المدرسة..."}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="اكتب رسالتك..."
               rows={1}
-              className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium px-4 py-3 transition-all"
+              className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-300 text-sm font-medium px-4 py-3 outline-none transition-all"
             />
-            <Button
-              onClick={handleSend}
-              disabled={!text.trim() || isSending}
-              size="icon"
-              className="w-11 h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shrink-0 disabled:opacity-40"
-            >
-              {isSending
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Send className="w-4 h-4 -rotate-45" />
-              }
+            <Button onClick={handleSend} disabled={!text.trim() || isSending} size="icon"
+              className="w-11 h-11 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shrink-0 disabled:opacity-40">
+              {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 -rotate-45" />}
             </Button>
           </div>
         </div>
+      </div>
+    </ChatView>
+  );
+}
+
+// ─── Class Chat View ──────────────────────────────────────────────────────────
+
+function ClassChatView({ room, onBack }: { room: ClassChatRoom; onBack: () => void }) {
+  const { user } = useAuth();
+  const [text, setText] = useState('');
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const charCount = text.length;
+  const overLimit = charCount > 500;
+
+  const { data: messages = [], isLoading } = useClassChatMessages(room.id);
+  const sendMsg = useSendClassChatMessage();
+  const markRead = useMarkClassChatRoomRead();
+
+  // لما تُفتح الغرفة تُعلَّم الإشعارات كمقروءة
+  useEffect(() => {
+    markRead.mutate(room.id);
+  }, [room.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length]);
+
+  const handleSend = async () => {
+    const t = text.trim();
+    if (!t || overLimit) return;
+    setText('');
+    try { await sendMsg.mutateAsync({ roomId: room.id, content: t }); }
+    catch (_) {}
+  };
+
+  return (
+    <ChatView
+      onBack={onBack}
+      headerIcon={<div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center"><Users className="w-4 h-4 text-emerald-600" /></div>}
+      headerTitle={room.class_name || room.name}
+      headerSubtitle="دردشة أولياء الأمور"
+    >
+      {/* Messages */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
+        {isLoading ? (
+          <div className="h-full flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
+              <Users className="w-6 h-6 text-emerald-300" />
+            </div>
+            <p className="text-sm font-bold text-slate-500">لا توجد رسائل بعد</p>
+            <p className="text-xs text-slate-400">كن أول من يبدأ المحادثة</p>
+          </div>
+        ) : (
+          <div className="max-w-[720px] mx-auto">
+            {messages.map((msg, i) => {
+              const prev = messages[i - 1];
+              const showDate = i === 0 || (prev && new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString());
+              const isMe = msg.sender_id === user?.id;
+              const showName = !isMe && prev?.sender_id !== msg.sender_id;
+              return (
+                <div key={msg.id}>
+                  {showDate && (
+                    <div className="flex justify-center my-3">
+                      <span className="bg-white/80 text-[10px] font-bold text-slate-400 px-3 py-1 rounded-full shadow-sm border border-slate-100">
+                        {dateSeparator(msg.created_at)}
+                      </span>
+                    </div>
+                  )}
+                  <Bubble content={msg.content} isMe={isMe} time={msg.created_at}
+                    senderName={msg.sender_name || 'ولي أمر'} showName={showName} />
+                </div>
+              );
+            })}
+            <div ref={bottomRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Input */}
+      <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-3 bg-white border-t border-slate-100">
+        <div className="max-w-[720px] mx-auto space-y-1">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder="اكتب رسالتك... (حد أقصى 500 حرف)"
+              rows={1}
+              maxLength={520}
+              className={cn(
+                'flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-slate-50 text-sm font-medium px-4 py-3 outline-none border transition-all focus:bg-white',
+                overLimit ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-300',
+              )}
+            />
+            <Button onClick={handleSend} disabled={!text.trim() || overLimit || sendMsg.isPending} size="icon"
+              className="w-11 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shrink-0 disabled:opacity-40">
+              {sendMsg.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 -rotate-45" />}
+            </Button>
+          </div>
+          {charCount > 400 && (
+            <p className={cn('text-[9px] font-black text-left px-1', overLimit ? 'text-rose-500' : 'text-slate-400')}>
+              {charCount}/500
+            </p>
+          )}
+        </div>
+      </div>
+    </ChatView>
+  );
+}
+
+// ─── Chat Card — action card style ───────────────────────────────────────────
+
+function ChatCard({
+  icon, title, desc, color, badge, onClick, disabled,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  color: 'indigo' | 'emerald';
+  badge?: number;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const colorMap = {
+    indigo: { bg: 'bg-indigo-50', border: 'border-indigo-100', hover: 'hover:border-indigo-300 hover:shadow-indigo-100/80' },
+    emerald: { bg: 'bg-emerald-50', border: 'border-emerald-100', hover: 'hover:border-emerald-300 hover:shadow-emerald-100/80' },
+  };
+  const c = colorMap[color];
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'group text-right p-6 rounded-[28px] bg-white border transition-all duration-300 hover:shadow-xl active:scale-[0.98] flex flex-col gap-4 relative',
+        c.border, c.hover,
+        disabled && 'opacity-60 cursor-not-allowed',
+      )}
+    >
+      {/* Badge */}
+      {!!badge && badge > 0 && (
+        <span className="absolute top-4 left-4 w-5 h-5 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shadow">
+          {badge}
+        </span>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110', c.bg)}>
+          {icon}
+        </div>
+        <ChevronLeft className="w-4 h-4 text-slate-300 group-hover:text-slate-600 transition-colors" />
+      </div>
+
+      <div>
+        <h3 className="font-black text-slate-900 text-base">{title}</h3>
+        <p className="text-xs text-slate-400 font-bold mt-1 leading-relaxed">{desc}</p>
+      </div>
+    </button>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+type ActiveView =
+  | { type: 'none' }
+  | { type: 'admin' }
+  | { type: 'class'; room: ClassChatRoom };
+
+export default function ParentConversationsPage() {
+  const [active, setActive] = useState<ActiveView>({ type: 'none' });
+
+  const { data: conversations = [] } = useParentConversations();
+  const { data: classRooms = [], isLoading: roomsLoading } = useParentClassChatRooms();
+  const { data: children = [] } = useParentChildren();
+  const ensureRoom = useEnsureClassChatRoom();
+  const { data: classChatUnread = {} } = useClassChatUnreadCounts();
+
+  const adminConv = conversations[0] ?? null;
+  const adminUnread = adminConv?.unread_by_parent || 0;
+
+  const handleOpenClass = async (classId: string, className: string) => {
+    const existing = classRooms.find(r => r.class_id === classId);
+    if (existing) { setActive({ type: 'class', room: existing }); return; }
+    try {
+      const room = await ensureRoom.mutateAsync({ classId, className });
+      setActive({ type: 'class', room });
+    } catch (_) {}
+  };
+
+  // ── Chat screens — full page ──
+  if (active.type === 'admin') {
+    return <AdminChatView onBack={() => setActive({ type: 'none' })} />;
+  }
+  if (active.type === 'class') {
+    return <ClassChatView room={active.room} onBack={() => setActive({ type: 'none' })} />;
+  }
+
+  // ── Cards landing ──
+  return (
+    <AppLayout>
+      <div className="max-w-[900px] mx-auto pb-20 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
+        <div className="pb-6">
+          <PageHeader
+            icon={MessageCircle}
+            title="التواصل"
+            subtitle="رسائلك مع المدرسة ودردشة الفصول"
+          />
+        </div>
+
+        {/* Section: Admin */}
+        <section className="mb-8">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">
+            التواصل مع المدرسة
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <ChatCard
+              icon={<School className="w-6 h-6 text-indigo-600" />}
+              title="التواصل مع الإدارة"
+              desc={adminConv?.last_message_preview || 'محادثة خاصة مع إدارة المدرسة'}
+              color="indigo"
+              badge={adminUnread}
+              onClick={() => setActive({ type: 'admin' })}
+            />
+          </div>
+        </section>
+
+        {/* Section: Class Rooms */}
+        <section>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">
+            دردشة الفصول
+          </p>
+          {roomsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
+            </div>
+          ) : (children as any[]).filter((c: any) => c.class_id || c.classId).length === 0 ? (
+            <div className="text-center py-10 text-sm font-bold text-slate-400 bg-white rounded-[28px] border border-slate-100">
+              لا يوجد أبناء مرتبطون بفصول حالياً
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(children as any[])
+                .filter((c: any) => c.class_id || c.classId)
+                .map((child: any) => {
+                  const classId = child.class_id || child.classId;
+                  const className = child.className || child.class_name || 'الفصل';
+                  // إيجاد الـ room المرتبط بالفصل لمعرفة عدد الرسائل غير المقروءة
+                  const room = classRooms.find(r => r.class_id === classId);
+                  const unread = room ? (classChatUnread[room.id] || 0) : 0;
+                  return (
+                    <ChatCard
+                      key={child.id}
+                      icon={<Users className="w-6 h-6 text-emerald-600" />}
+                      title={className}
+                      desc={`دردشة أولياء أمور فصل ${child.name || className}`}
+                      color="emerald"
+                      badge={unread}
+                      onClick={() => handleOpenClass(classId, className)}
+                      disabled={ensureRoom.isPending}
+                    />
+                  );
+                })}
+            </div>
+          )}
+        </section>
       </div>
     </AppLayout>
   );

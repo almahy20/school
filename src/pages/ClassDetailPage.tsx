@@ -4,7 +4,7 @@ import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  ArrowRight, BookOpen, Layers, CalendarCheck, MessageSquare, ChevronLeft, Users
+  ArrowRight, BookOpen, Layers, CalendarCheck, MessageSquare, ChevronLeft, Users, ClipboardList
 } from 'lucide-react';
 import { EditClassModal } from './ClassesPage';
 import ClassExamsView from '@/components/dashboard/ClassExamsView';
@@ -28,8 +28,9 @@ import { ClassHero } from '@/components/class-detail/ClassHero';
 import { ClassAttendanceView } from '@/components/class-detail/ClassAttendanceView';
 import { ClassCurriculumView } from '@/components/class-detail/ClassCurriculumView';
 import { CurriculumModals } from '@/components/class-detail/CurriculumModals';
+import ElectronicExamsView from '@/components/class-detail/ElectronicExamsView';
 
-type ViewMode = 'details' | 'exams' | 'curriculum' | 'attendance' | 'messages';
+type ViewMode = 'details' | 'exams' | 'curriculum' | 'attendance' | 'messages' | 'electronic-exams';
 
 const VIEW_LABELS: Record<ViewMode, string> = {
   details: 'تفاصيل الفصل',
@@ -37,6 +38,7 @@ const VIEW_LABELS: Record<ViewMode, string> = {
   curriculum: 'إدارة المنهج',
   attendance: 'رصد الحضور',
   messages: 'رسائل الفصل',
+  'electronic-exams': 'الاختبارات الإلكترونية',
 };
 
 export default function ClassDetailPage() {
@@ -130,6 +132,7 @@ export default function ClassDetailPage() {
   const actionCards = [
     { mode: 'attendance' as ViewMode, icon: CalendarCheck, title: 'رصد الحضور', desc: 'تسجيل حضور وغياب الطلاب', color: 'indigo' },
     { mode: 'exams' as ViewMode, icon: BookOpen, title: 'الاختبارات والدرجات', desc: 'إنشاء اختبارات ورصد الدرجات', color: 'emerald' },
+    { mode: 'electronic-exams' as ViewMode, icon: ClipboardList, title: 'الاختبارات الإلكترونية', desc: 'اختبارات تفاعلية مؤقتة للطلاب', color: 'violet' },
     ...(currentUser?.role === 'teacher' ? [{ mode: 'messages' as ViewMode, icon: MessageSquare, title: 'رسائل الفصل', desc: 'إرسال رسائل لأولياء الأمور', color: 'blue' }] : []),
     { mode: 'curriculum' as ViewMode, icon: Layers, title: 'إدارة المنهج', desc: classItem?.curriculum_id ? 'عرض وتعديل المقررات الشهرية' : 'ربط منهج بالفصل', color: 'purple' },
   ];
@@ -182,6 +185,7 @@ export default function ClassDetailPage() {
                 </div>
 
                 {viewMode === 'exams' && <ClassExamsView classId={id!} className={classItem?.name || ''} />}
+                {viewMode === 'electronic-exams' && <ElectronicExamsView classId={id!} className={classItem?.name || ''} />}
                 {viewMode === 'messages' && <ClassMessagesView classId={id!} className={classItem?.name || ''} />}
                 {viewMode === 'attendance' && (
                   <ClassAttendanceView classId={id!} className={classItem?.name || ''} onBack={() => setViewMode('details')} />
@@ -231,6 +235,7 @@ function ActionCard({ onClick, icon: Icon, title, desc, color }: {
     emerald: { bg: 'bg-emerald-50', icon: 'text-emerald-600', border: 'border-emerald-100', hover: 'hover:border-emerald-300 hover:shadow-emerald-100/80' },
     blue: { bg: 'bg-blue-50', icon: 'text-blue-600', border: 'border-blue-100', hover: 'hover:border-blue-300 hover:shadow-blue-100/80' },
     purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-100', hover: 'hover:border-purple-300 hover:shadow-purple-100/80' },
+    violet: { bg: 'bg-violet-50', icon: 'text-violet-600', border: 'border-violet-100', hover: 'hover:border-violet-300 hover:shadow-violet-100/80' },
   };
   const c = colorMap[color] || colorMap.indigo;
 

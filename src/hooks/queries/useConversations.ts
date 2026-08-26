@@ -119,8 +119,11 @@ export function useParentConversations() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const channelName = `parent-conversations-${user.id}`;
+    db.removeChannel(db.channel(channelName));
+
     const channel = db
-      .channel(`parent-conversations-${user.id}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -171,15 +174,18 @@ export function useConversationMessages(conversationId: string | null) {
   useEffect(() => {
     if (!conversationId || !user?.id) return;
 
+    const channelName = `conv-messages-${conversationId}`;
+    // أزل أي channel قديم بنفس الاسم قبل الإنشاء
+    db.removeChannel(db.channel(channelName));
+
     const channel = db
-      .channel(`conv-messages-${conversationId}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'conversation_messages',
         filter: `conversation_id=eq.${conversationId}`,
       }, (payload: any) => {
-        // Optimistic append
         queryClient.setQueryData(queryKey, (old: ConversationMessage[] | undefined) => {
           const msgs = old || [];
           if (msgs.some(m => m.id === payload.new.id)) return msgs;
@@ -462,7 +468,7 @@ export function useUnreadConversationsCount() {
   });
 }
 
-/** عدد المحادثات غير المقروءة لولي الأمر */
+/** عدد الرسائل غير المقروءة لولي الأمر (محادثات الإدارة + دردشة الفصول) */
 export function useUnreadConversationsParentCount() {
   const { user, session } = useAuth();
 
@@ -470,16 +476,26 @@ export function useUnreadConversationsParentCount() {
     queryKey: ['conversations-parent-unread', user?.id],
     queryFn: async () => {
       if (!user?.id) return 0;
-      const { count, error } = await db
+
+      // عدد محادثات الإدارة غير المقروءة
+      const { count: convCount } = await db
         .from('conversations')
         .select('*', { count: 'exact', head: true })
         .eq('parent_id', user.id)
         .gt('unread_by_parent', 0);
 
-      if (error) return 0;
-      return count || 0;
+      // عدد إشعارات دردشة الفصل غير المقروءة
+      const { count: chatCount } = await db
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('type', 'class_chat_message')
+        .eq('is_read', false);
+
+      return (convCount || 0) + (chatCount || 0);
     },
     enabled: !!(session && user?.id && user?.role === 'parent'),
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 }

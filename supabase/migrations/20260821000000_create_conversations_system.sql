@@ -398,7 +398,7 @@ BEGIN
                         'conversation_id', NEW.conversation_id,
                         'message_id',      NEW.id,
                         'parent_id',       v_conv.parent_id,
-                        'url',             '/manage-conversations'
+                        'url',             '/manage-conversations/' || NEW.conversation_id
                     )
                 );
             END LOOP;

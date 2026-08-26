@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Home, MessageSquare, Settings, ShieldAlert, Users, School } from 'lucide-react';
+import { Home, MessageSquare, Settings, ShieldAlert, Users, School, ClipboardList } from 'lucide-react';
 import { useUnreadCounts } from '@/hooks/queries';
 import { useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
 
@@ -29,6 +29,7 @@ export default function BottomNav() {
   const parentLinks = [
     { to: '/',              label: 'الرئيسية',  icon: Home         },
     { to: '/conversations', label: 'التواصل',   icon: MessageSquare, badge: unreadConversations },
+    { to: '/exams',         label: 'الاختبارات', icon: ClipboardList },
     { to: '/settings',      label: 'الإعدادات', icon: Settings     },
   ];
 
