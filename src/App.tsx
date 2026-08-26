@@ -39,6 +39,8 @@ const AdminComplaintsPage      = lazy(() => import("./pages/AdminComplaintsPage"
 const ParentConversationsPage  = lazy(() => import("./pages/ParentConversationsPage"));
 const AdminConversationsPage        = lazy(() => import("./pages/AdminConversationsPage"));
 const AdminConversationDetailPage   = lazy(() => import("./pages/AdminConversationDetailPage"));
+const AdminClassChatRoomPage        = lazy(() => import("./pages/AdminClassChatRoomPage"));
+const ClassChatRoomPage             = lazy(() => import("./pages/ClassChatRoomPage"));
 const ParentExamsPage          = lazy(() => import("./pages/ParentExamsPage"));
 const LandingPage              = lazy(() => import("./pages/LandingPage"));
 const PaymentPage              = lazy(() => import("./pages/PaymentPage"));
@@ -128,6 +130,8 @@ function AppRoutes() {
         <Route path="/manage-complaints" element={<ProtectedRoute allowedRoles={['admin']}><AdminComplaintsPage /></ProtectedRoute>} />
         {/* ── New Conversations System ── */}
         <Route path="/conversations"       element={<ProtectedRoute allowedRoles={['parent']}><ParentConversationsPage /></ProtectedRoute>} />
+        <Route path="/conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['parent']}><ClassChatRoomPage /></ProtectedRoute>} />
+        <Route path="/manage-conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['admin']}><AdminClassChatRoomPage /></ProtectedRoute>} />
         <Route path="/manage-conversations" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationsPage /></ProtectedRoute>} />
         <Route path="/manage-conversations/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationDetailPage /></ProtectedRoute>} />
         {/* ── Electronic Exams ── */}

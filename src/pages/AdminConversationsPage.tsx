@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import AppLayout from '@/components/AppLayout';
@@ -21,9 +21,6 @@ import {
 } from '@/hooks/queries/useConversations';
 import {
   useAdminClassChatRooms,
-  useClassChatMessages,
-  useSendClassChatMessage,
-  type ClassChatRoom,
 } from '@/hooks/queries/useClassChat';
 import { useProfiles, useSendMessage, useBranding } from '@/hooks/queries';
 import { useQuery } from '@tanstack/react-query';
@@ -384,35 +381,10 @@ function BroadcastTab() {
 // ─── Class Chat Tab ───────────────────────────────────────────────────────────
 
 function ClassChatTab() {
-  const { user } = useAuth();
-  const [selectedRoom, setSelectedRoom] = useState<ClassChatRoom | null>(null);
-  const [text, setText] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const charCount = text.length;
-  const overLimit = charCount > 500;
+  const navigate = useNavigate();
+  const { data: rooms = [], isLoading } = useAdminClassChatRooms();
 
-  const { data: rooms = [], isLoading: roomsLoading } = useAdminClassChatRooms();
-  const { data: messages = [], isLoading: msgsLoading } = useClassChatMessages(selectedRoom?.id ?? null);
-  const sendMsg = useSendClassChatMessage();
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
-
-  const handleSend = async () => {
-    const t = text.trim();
-    if (!t || !selectedRoom || overLimit) return;
-    setText('');
-    try {
-      await sendMsg.mutateAsync({ roomId: selectedRoom.id, content: t });
-    } catch (_) {}
-  };
-
-  // ارتفاع الحاوية = ارتفاع الشاشة - header الأدمن - tabs bar - padding
-  // نستخدم calc متغير بناءً على breakpoint
-  const containerH = 'calc(100vh - 260px)';
-
-  if (roomsLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
         <Loader2 className="w-6 h-6 animate-spin text-slate-300" />
@@ -427,180 +399,51 @@ function ClassChatTab() {
           <Users className="w-6 h-6 text-slate-300" />
         </div>
         <p className="text-sm font-black text-slate-500">لا توجد غرف دردشة بعد</p>
-        <p className="text-xs text-slate-400">ستظهر الغرف عندما يبدأ أولياء الأمور التحدث</p>
+        <p className="text-xs text-slate-400 max-w-xs">ستظهر الغرف تلقائياً عندما يبدأ أولياء الأمور التحدث في فصولهم</p>
       </div>
     );
   }
 
   return (
-    <div
-      className="flex gap-4 overflow-hidden rounded-3xl border border-slate-100 shadow-sm"
-      style={{ height: 'calc(100vh - 280px)', minHeight: 480 }}
-    >
-      {/* ── Room list ── */}
-      <div className="w-64 xl:w-72 shrink-0 flex flex-col bg-white border-l border-slate-100 rounded-r-3xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-100 shrink-0">
-          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">غرف الفصول</p>
-        </div>
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
-          {rooms.map(room => (
-            <button
-              key={room.id}
-              onClick={() => setSelectedRoom(room)}
-              className={cn(
-                'w-full flex items-center gap-3 px-4 py-3 text-right transition-all',
-                selectedRoom?.id === room.id ? 'bg-emerald-50' : 'hover:bg-slate-50/70',
-              )}
-            >
-              <div className={cn(
-                'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors',
-                selectedRoom?.id === room.id ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500',
-              )}>
-                <Users className="w-4 h-4" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn(
-                  'text-sm truncate',
-                  selectedRoom?.id === room.id ? 'font-black text-emerald-800' : 'font-semibold text-slate-700',
-                )}>
-                  {room.class_name || room.name}
-                </p>
-                <p className="text-[10px] text-slate-400 font-medium">دردشة أولياء الأمور</p>
-              </div>
-              <ChevronLeft className={cn(
-                'w-3.5 h-3.5 shrink-0',
-                selectedRoom?.id === room.id ? 'text-emerald-400' : 'text-slate-200',
-              )} />
-            </button>
-          ))}
-        </div>
+    <div className="space-y-4">
+      {/* Count header */}
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          غرف الفصول
+        </p>
+        <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl">
+          {rooms.length} غرفة
+        </span>
       </div>
 
-      {/* ── Chat panel ── */}
-      {selectedRoom ? (
-        <div className="flex-1 min-w-0 flex flex-col bg-slate-50/30 overflow-hidden rounded-l-3xl">
-          {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100">
-            <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
-              <Users className="w-4 h-4 text-emerald-600" />
+      {/* Cards grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        {rooms.map(room => (
+          <button
+            key={room.id}
+            onClick={() => navigate(`/manage-conversations/class/${room.id}`)}
+            className="group text-right p-5 rounded-[24px] bg-white border border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-50/60 transition-all duration-300 active:scale-[0.98] flex flex-col gap-4"
+          >
+            {/* Icon + arrow */}
+            <div className="flex items-center justify-between">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+                <Users className="w-5 h-5 text-emerald-600" />
+              </div>
+              <ChevronLeft className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
             </div>
+
+            {/* Name */}
             <div>
-              <p className="text-sm font-black text-slate-900">{selectedRoom.class_name || selectedRoom.name}</p>
-              <p className="text-[10px] text-slate-400 font-medium">دردشة الفصل — متابعة كمدير</p>
+              <h3 className="font-black text-slate-900 text-sm leading-snug">
+                {room.class_name || room.name}
+              </h3>
+              <p className="text-[11px] text-slate-400 font-bold mt-1">
+                دردشة أولياء الأمور
+              </p>
             </div>
-          </div>
-
-          {/* Messages — flex-1 + min-h-0 هو السر */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 bg-slate-50/10">
-            {msgsLoading ? (
-              <div className="h-full flex items-center justify-center">
-                <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5 text-slate-300" />
-                </div>
-                <p className="text-xs font-bold text-slate-400">لا توجد رسائل بعد في هذا الفصل</p>
-              </div>
-            ) : (
-              <>
-                {messages.map((msg, i) => {
-                  const isMe = msg.sender_id === user?.id;
-                  const prev = messages[i - 1];
-                  const showDate = i === 0 || (
-                    prev && new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString()
-                  );
-                  const showName = !isMe && prev?.sender_id !== msg.sender_id;
-                  return (
-                    <div key={msg.id}>
-                      {showDate && (
-                        <div className="flex justify-center my-3">
-                          <span className="bg-white text-[10px] font-bold text-slate-400 px-3 py-1 rounded-full shadow-sm border border-slate-100">
-                            {new Date(msg.created_at).toLocaleDateString('ar-EG', {
-                              weekday: 'long', day: 'numeric', month: 'long',
-                            })}
-                          </span>
-                        </div>
-                      )}
-                      <div className={cn('flex mb-1.5', isMe ? 'justify-start' : 'justify-end')}>
-                        <div className="max-w-[70%]">
-                          {showName && (
-                            <p className="text-[10px] font-black text-slate-400 mb-0.5 px-1 text-left">
-                              {msg.sender_name || 'ولي أمر'}
-                            </p>
-                          )}
-                          <div className={cn(
-                            'px-3.5 py-2 rounded-2xl text-sm leading-relaxed',
-                            isMe
-                              ? 'bg-indigo-600 text-white rounded-br-sm'
-                              : 'bg-white text-slate-800 shadow-sm border border-slate-100 rounded-bl-sm',
-                          )}>
-                            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                            <span className={cn('text-[9px] block mt-0.5', isMe ? 'text-indigo-200' : 'text-slate-400')}>
-                              {new Date(msg.created_at).toLocaleTimeString('ar-EG', {
-                                hour: '2-digit', minute: '2-digit',
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={bottomRef} />
-              </>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="shrink-0 px-4 py-3 bg-white border-t border-slate-100">
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <textarea
-                  value={text}
-                  onChange={e => setText(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
-                  }}
-                  placeholder="اكتب رداً كإدارة المدرسة..."
-                  rows={1}
-                  maxLength={520}
-                  className={cn(
-                    'w-full min-h-[40px] max-h-[100px] resize-none rounded-2xl bg-slate-50 text-sm font-medium px-4 py-2.5 transition-all outline-none border focus:bg-white',
-                    overLimit ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-indigo-300',
-                  )}
-                />
-                {charCount > 400 && (
-                  <p className={cn('text-[9px] font-black text-left px-1', overLimit ? 'text-rose-500' : 'text-slate-400')}>
-                    {charCount}/500
-                  </p>
-                )}
-              </div>
-              <Button
-                onClick={handleSend}
-                disabled={!text.trim() || overLimit || sendMsg.isPending}
-                size="icon"
-                className="w-10 h-10 rounded-2xl bg-indigo-600 hover:bg-indigo-700 shrink-0 disabled:opacity-40"
-              >
-                {sendMsg.isPending
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Send className="w-4 h-4 -rotate-45" />}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Placeholder */
-        <div className="flex-1 flex items-center justify-center bg-[#F8FAFC]">
-          <div className="text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto">
-              <Users className="w-5 h-5 text-slate-300" />
-            </div>
-            <p className="text-xs font-bold text-slate-400">اختر فصلاً لعرض الدردشة</p>
-          </div>
-        </div>
-      )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

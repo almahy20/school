@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,12 +17,7 @@ import {
 } from '@/hooks/queries/useConversations';
 import {
   useParentClassChatRooms,
-  useClassChatMessages,
-  useEnsureClassChatRoom,
-  useSendClassChatMessage,
   useClassChatUnreadCounts,
-  useMarkClassChatRoomRead,
-  type ClassChatRoom,
 } from '@/hooks/queries/useClassChat';
 import { useParentChildren } from '@/hooks/queries';
 import PageHeader from '@/components/layout/PageHeader';
@@ -249,114 +245,7 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ─── Class Chat View ──────────────────────────────────────────────────────────
 
-function ClassChatView({ room, onBack }: { room: ClassChatRoom; onBack: () => void }) {
-  const { user } = useAuth();
-  const [text, setText] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const charCount = text.length;
-  const overLimit = charCount > 500;
-
-  const { data: messages = [], isLoading } = useClassChatMessages(room.id);
-  const sendMsg = useSendClassChatMessage();
-  const markRead = useMarkClassChatRoomRead();
-
-  // لما تُفتح الغرفة تُعلَّم الإشعارات كمقروءة
-  useEffect(() => {
-    markRead.mutate(room.id);
-  }, [room.id]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
-
-  const handleSend = async () => {
-    const t = text.trim();
-    if (!t || overLimit) return;
-    setText('');
-    try { await sendMsg.mutateAsync({ roomId: room.id, content: t }); }
-    catch (_) {}
-  };
-
-  return (
-    <ChatView
-      onBack={onBack}
-      headerIcon={<div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center"><Users className="w-4 h-4 text-emerald-600" /></div>}
-      headerTitle={room.class_name || room.name}
-      headerSubtitle="دردشة أولياء الأمور"
-    >
-      {/* Messages */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
-        {isLoading ? (
-          <div className="h-full flex items-center justify-center">
-            <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center">
-              <Users className="w-6 h-6 text-emerald-300" />
-            </div>
-            <p className="text-sm font-bold text-slate-500">لا توجد رسائل بعد</p>
-            <p className="text-xs text-slate-400">كن أول من يبدأ المحادثة</p>
-          </div>
-        ) : (
-          <div className="max-w-[720px] mx-auto">
-            {messages.map((msg, i) => {
-              const prev = messages[i - 1];
-              const showDate = i === 0 || (prev && new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString());
-              const isMe = msg.sender_id === user?.id;
-              const showName = !isMe && prev?.sender_id !== msg.sender_id;
-              return (
-                <div key={msg.id}>
-                  {showDate && (
-                    <div className="flex justify-center my-3">
-                      <span className="bg-white/80 text-[10px] font-bold text-slate-400 px-3 py-1 rounded-full shadow-sm border border-slate-100">
-                        {dateSeparator(msg.created_at)}
-                      </span>
-                    </div>
-                  )}
-                  <Bubble content={msg.content} isMe={isMe} time={msg.created_at}
-                    senderName={msg.sender_name || 'ولي أمر'} showName={showName} />
-                </div>
-              );
-            })}
-            <div ref={bottomRef} />
-          </div>
-        )}
-      </div>
-
-      {/* Input */}
-      <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-3 bg-white border-t border-slate-100">
-        <div className="max-w-[720px] mx-auto space-y-1">
-          <div className="flex items-end gap-2">
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="اكتب رسالتك... (حد أقصى 500 حرف)"
-              rows={1}
-              maxLength={520}
-              className={cn(
-                'flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-slate-50 text-sm font-medium px-4 py-3 outline-none border transition-all focus:bg-white',
-                overLimit ? 'border-rose-300 focus:border-rose-400' : 'border-slate-200 focus:border-emerald-300',
-              )}
-            />
-            <Button onClick={handleSend} disabled={!text.trim() || overLimit || sendMsg.isPending} size="icon"
-              className="w-11 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shrink-0 disabled:opacity-40">
-              {sendMsg.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4 -rotate-45" />}
-            </Button>
-          </div>
-          {charCount > 400 && (
-            <p className={cn('text-[9px] font-black text-left px-1', overLimit ? 'text-rose-500' : 'text-slate-400')}>
-              {charCount}/500
-            </p>
-          )}
-        </div>
-      </div>
-    </ChatView>
-  );
-}
 
 // ─── Chat Card — action card style ───────────────────────────────────────────
 
@@ -411,38 +300,22 @@ function ChatCard({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type ActiveView =
-  | { type: 'none' }
-  | { type: 'admin' }
-  | { type: 'class'; room: ClassChatRoom };
+type ActiveView = { type: 'none' } | { type: 'admin' };
 
 export default function ParentConversationsPage() {
   const [active, setActive] = useState<ActiveView>({ type: 'none' });
+  const navigate = useNavigate();
 
   const { data: conversations = [] } = useParentConversations();
   const { data: classRooms = [], isLoading: roomsLoading } = useParentClassChatRooms();
-  const { data: children = [] } = useParentChildren();
-  const ensureRoom = useEnsureClassChatRoom();
   const { data: classChatUnread = {} } = useClassChatUnreadCounts();
 
   const adminConv = conversations[0] ?? null;
   const adminUnread = adminConv?.unread_by_parent || 0;
 
-  const handleOpenClass = async (classId: string, className: string) => {
-    const existing = classRooms.find(r => r.class_id === classId);
-    if (existing) { setActive({ type: 'class', room: existing }); return; }
-    try {
-      const room = await ensureRoom.mutateAsync({ classId, className });
-      setActive({ type: 'class', room });
-    } catch (_) {}
-  };
-
-  // ── Chat screens — full page ──
+  // ── Admin chat screen — full page ──
   if (active.type === 'admin') {
     return <AdminChatView onBack={() => setActive({ type: 'none' })} />;
-  }
-  if (active.type === 'class') {
-    return <ClassChatView room={active.room} onBack={() => setActive({ type: 'none' })} />;
   }
 
   // ── Cards landing ──
@@ -483,33 +356,27 @@ export default function ParentConversationsPage() {
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
             </div>
-          ) : (children as any[]).filter((c: any) => c.class_id || c.classId).length === 0 ? (
+          ) : classRooms.length === 0 ? (
             <div className="text-center py-10 text-sm font-bold text-slate-400 bg-white rounded-[28px] border border-slate-100">
-              لا يوجد أبناء مرتبطون بفصول حالياً
+              لا توجد غرف دردشة متاحة حالياً
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(children as any[])
-                .filter((c: any) => c.class_id || c.classId)
-                .map((child: any) => {
-                  const classId = child.class_id || child.classId;
-                  const className = child.className || child.class_name || 'الفصل';
-                  // إيجاد الـ room المرتبط بالفصل لمعرفة عدد الرسائل غير المقروءة
-                  const room = classRooms.find(r => r.class_id === classId);
-                  const unread = room ? (classChatUnread[room.id] || 0) : 0;
-                  return (
-                    <ChatCard
-                      key={child.id}
-                      icon={<Users className="w-6 h-6 text-emerald-600" />}
-                      title={className}
-                      desc={`دردشة أولياء أمور فصل ${child.name || className}`}
-                      color="emerald"
-                      badge={unread}
-                      onClick={() => handleOpenClass(classId, className)}
-                      disabled={ensureRoom.isPending}
-                    />
-                  );
-                })}
+              {classRooms.map((room) => {
+                const unread = classChatUnread[room.id] || 0;
+                const roomDisplayName = room.class_name || room.name;
+                return (
+                  <ChatCard
+                    key={room.id}
+                    icon={<Users className="w-6 h-6 text-emerald-600" />}
+                    title={roomDisplayName}
+                    desc="دردشة أولياء الأمور"
+                    color="emerald"
+                    badge={unread}
+                    onClick={() => navigate(`/conversations/class/${room.id}`)}
+                  />
+                );
+              })}
             </div>
           )}
         </section>
