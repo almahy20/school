@@ -1,4 +1,4 @@
-const CACHE_NAME = 'school-cache-v2.0';
+const CACHE_NAME = 'school-cache-v2.1';  // ← bumped to force SW update
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -26,7 +26,7 @@ async function limitCacheSize(cacheName, maxItems) {
 }
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install Event v1.7');
+  console.log('[SW] Install Event v2.1');  // ← updated version
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -48,7 +48,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activate Event v1.7');
+  console.log('[SW] Activate Event v2.1');  // ← updated version
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
@@ -180,25 +180,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// ─── Push Notification Handler (RELIABILITY FIXES) ─────────────────────────
-//
-// WHY PUSH NOTIFICATIONS WERE ARRIVING "SOMETIMES":
-//   1) Any exception inside `showNotification` (bad payload, missing icon,
-//      temporary OS restriction) was silently turning the event into a
-//      success. The browser told FCM/UPNS "we got it" so the push was
-//      ACKed → never retried = LOST NOTIFICATION.
-//   2) `requireInteraction: false` made some OEMs (Xiaomi/Samsung/Huawei)
-//      treat the notification as "low priority" and they suppress the
-//      vibration/sound, sometimes even hide the shade entry while in
-//      Doze / App Standby Bucket → "sometimes" pattern.
-//   3) No explicit retry signal back to the Push Service. When the Promise
-//      passed to waitUntil rejects, Chromium-based browsers will actually
-//      request a "retry later" from the push service. We MUST surface the
-//      error and NOT swallow it when showNotification fails.
-//   4) Apps in Doze mode + not on the Battery Unrestricted list get
-//      deferred pushes. We can not fix Doze from here, but we can signal
-//      "this is important" via the notification priority / requireInteraction
-//      flags and avoid grouping messages into "silent" buckets.
+// ─── Push Notification Handler ─────────────────────────────────────────────
 self.addEventListener('push', function (event) {
   console.log('[SW] Push Event Received at', new Date().toISOString());
 
@@ -208,7 +190,6 @@ self.addEventListener('push', function (event) {
       try {
         data = event.data.json();
       } catch (e) {
-        // Fallback for legacy text-only payloads
         const rawText = event.data.text();
         data = { title: 'إشعار جديد', body: rawText, message: rawText };
       }
@@ -216,26 +197,39 @@ self.addEventListener('push', function (event) {
 
     const title = data.title || 'إشعار من النظام';
     const messageBody = (data.body || data.message || 'يوجد تحديث جديد في النظام').toString();
-    const targetUrl = (data.data && data.data.url) ? data.data.url : (data.url || '/');
 
+    // ✅ FIX #1: استخرج الـ URL من كل الأماكن الممكنة
+    //   Edge function بيبعت: { data: { url: "..." }, url: "..." }
+    //   بنتحقق من كل الأماكن بالترتيب
+    const targetUrl = (data.data && data.data.url)
+      ? data.data.url
+      : (data.url || '/');
+
+    const type = data.type || 'general';
     const isMessage =
-      data.type === 'teacher_message' ||
-      data.type === 'broadcast_message' ||
-      targetUrl === '/messages';
+      type === 'teacher_message' ||
+      type === 'broadcast_message' ||
+      type === 'class_chat_message' ||
+      type === 'conversation_new_message' ||
+      type === 'conversation_admin_reply' ||
+      targetUrl === '/messages' ||
+      targetUrl.startsWith('/conversations');
 
-    // Sanitize icon/badge paths (some browsers throw if these are invalid URLs
-    // or blocked by CORS — especially the case on Android WebAPKs). We
-    // resolve them against the SW origin so relative paths always work.
     const safeIcon = new URL(data.icon || '/icons/badge-72.png', self.location.origin).href;
-    const safeBadge = new URL(data.badge || '/icons/badge-72.png', self.location.origin).href;
+    const safeBadge = new URL('/icons/badge-72.png', self.location.origin).href;
     const safeImage = data.image ? new URL(data.image, self.location.origin).href : undefined;
 
-    // Priority/urgency hints:
-    //   - Messages: HIGH priority + requireInteraction = OEM is less likely
-    //     to silently drop them while in Doze/App-Standy buckets.
-    //   - Generic notifications: still requireInteraction (keeps them visible
-    //     in the shade until the user acts on them → avoids "I didn't see it").
     const isImportant = data.priority === 'high' || data.urgent === true || isMessage;
+
+    // ✅ FIX #2: tag فريد لكل إشعار عشان ما يتلغاش إشعار قديم
+    //   استخدم notification_id لو متاح، وإلا timestamp
+    const tag = data.notification_id
+      ? `notif-${data.notification_id}`
+      : data.conversation_id
+        ? `conv-${data.conversation_id}`
+        : isMessage
+          ? `msg-${Date.now()}`
+          : `notif-${Date.now()}`;
 
     const options = {
       body: messageBody,
@@ -244,31 +238,21 @@ self.addEventListener('push', function (event) {
       image: safeImage,
       dir: 'rtl',
       lang: 'ar-EG',
-      vibrate: isImportant ? [200, 100, 200, 100, 200] : [100, 50, 100],
-      // 🛑 Reliability fix #1: Stable tag but we add `renotify` so newer
-      //    bumps wake the screen even if previous one is there.
-      tag: data.tag || (isMessage ? 'message-' + (data.conversation_id || 'inbox') : 'notification-' + (data.id || Math.random())),
+      vibrate: isImportant ? [300, 100, 300, 100, 300] : [200, 100, 200],
+      tag,
       renotify: true,
-      // 🛑 Reliability fix #2: requireInteraction = true.
-      //    This greatly improves delivery consistency on Chinese ROMs and
-      //    Doze mode because the OS can NOT "fold" the notification into
-      //    the "silent / low priority" bucket as easily.
-      requireInteraction: isImportant ? true : true,
-      // 🛑 Reliability fix #3: explicit priority (Android 8+ uses this,
-      //    iOS uses the push-level header but the browser still reads it).
-      priority: isImportant ? 'max' : 'high',
+      requireInteraction: true, // ✅ FIX #3: دايماً true = يستيقظ الجهاز
       silent: false,
       timestamp: Date.now(),
-      // Pass through data the click handler needs
       data: {
         url: targetUrl,
-        notification_id: data.id || null,
-        type: data.type || 'general',
+        notification_id: data.notification_id || data.id || null,
+        type,
         payload: data,
       },
       actions: isMessage
         ? [
-            { action: 'open', title: 'فتح الرسائل', icon: safeBadge },
+            { action: 'open', title: 'فتح', icon: safeBadge },
             { action: 'dismiss', title: 'تجاهل' },
           ]
         : [
@@ -277,71 +261,63 @@ self.addEventListener('push', function (event) {
           ],
     };
 
-    // Attempt to show the notification. If the browser rejects (for any
-    // reason: permission revoked mid-session, OS restriction, quota for
-    // notifications per app exceeded, etc.) we MUST NOT swallow the error
-    // so that `event.waitUntil` receives a REJECTED promise → Chromium /
-    // FCM will then know the delivery failed and will SCHEDULE A RETRY
-    // later instead of dropping the push forever.
     try {
       await self.registration.showNotification(title, options);
-      console.log('[SW] Notification shown successfully, tag:', options.tag);
+      console.log('[SW] ✅ Notification shown, tag:', tag, 'url:', targetUrl);
     } catch (err) {
-      console.error('[SW] showNotification FAILED — signalling retry.', err);
-      // Re-throw so event.waitUntil propagates the failure -> retry.
-      throw err;
+      console.error('[SW] ❌ showNotification FAILED — signalling retry.', err);
+      throw err; // Re-throw → browser يطلب retry من push service
     }
   })();
 
-  // The Promise MUST be the return value of waitUntil — if it rejects,
-  // the browser marks the push as "undelivered" and asks the push service
-  // to send it again (typically within a few minutes on good networks,
-  // on the next maintenance window in Doze mode — but NEVER lost forever).
   event.waitUntil(work);
 });
 
-// ─── Notification Click Handler (FIXED: always resolve the navigate) ──────
+// ─── Notification Click Handler ──────────────────────────────────────────────
 self.addEventListener('notificationclick', function (event) {
   console.log('[SW] Notification clicked, action:', event.action);
   event.notification.close();
 
   if (event.action === 'dismiss') return;
 
-  const rawUrl = event.notification.data && event.notification.data.url
+  const rawUrl = (event.notification.data && event.notification.data.url)
     ? event.notification.data.url
     : '/';
 
-  // Normalize to an absolute URL
-  const targetUrl = new URL(rawUrl, self.location.origin).href;
+  // تأكد إن الـ URL absolute
+  const targetUrl = rawUrl.startsWith('http')
+    ? rawUrl
+    : new URL(rawUrl, self.location.origin).href;
+
+  console.log('[SW] Opening URL:', targetUrl);
 
   event.waitUntil(
     clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(async function (windowClients) {
-        // Focus exact page if open
-        for (let i = 0; i < windowClients.length; i++) {
-          const client = windowClients[i];
+        // 1. لو في tab مفتوح على نفس الـ URL — focus عليه
+        for (const client of windowClients) {
           if (client.url === targetUrl && 'focus' in client) {
             return client.focus();
           }
         }
 
-        // Navigate existing window if present
-        if (windowClients.length > 0) {
-          const anyClient = windowClients[0];
-          if ('navigate' in anyClient) {
+        // 2. لو في tab مفتوح على أي صفحة من التطبيق — navigate فيه
+        for (const client of windowClients) {
+          const clientOrigin = new URL(client.url).origin;
+          if (clientOrigin === self.location.origin && 'navigate' in client) {
             try {
-              await anyClient.navigate(targetUrl);
-              if ('focus' in anyClient) await anyClient.focus();
+              await client.navigate(targetUrl);
+              if ('focus' in client) await client.focus();
               return;
             } catch (e) {
-              console.warn('[SW] Navigate failed, falling back to openWindow:', e);
+              console.warn('[SW] navigate() failed:', e);
+              // fallthrough to openWindow
             }
           }
-          if ('focus' in anyClient) return anyClient.focus();
         }
 
-        // No open window -> open a new one
+        // 3. التطبيق مقفول تماماً — افتح نافذة جديدة
         if (clients.openWindow) {
           return clients.openWindow(targetUrl);
         }

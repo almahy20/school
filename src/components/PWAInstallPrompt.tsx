@@ -2,163 +2,77 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { Download, X, Smartphone, CheckCircle2 } from 'lucide-react';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 
 export default function PWAInstallPrompt() {
   const { user } = useAuth();
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
+  const { canInstall, isStandalone, promptInstall } = usePWAInstall();
   const [isVisible, setIsVisible] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
-
-  useEffect(() => {
-    // Check if already in PWA mode
-    const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    setIsStandalone(isPWA);
-
-    // Don't show if already installed
-    if (isPWA) {
-      setIsVisible(false);
-      return;
-    }
-
-    // Only show for authenticated users (including pending)
-    if (!user) {
-      setIsVisible(false);
-      return;
-    }
-
-    // Check if already shown/installed/dismissed for THIS user
-    const storageKey = `pwa_install_${user.id}`;
-    const installStatus = localStorage.getItem(storageKey);
-    const lastDismissed = localStorage.getItem(`${storageKey}_dismissed_at`);
-    
-    // If already installed, don't show
-    if (installStatus === 'installed') {
-      setIsVisible(false);
-      return;
-    }
-
-    // If dismissed recently (less than 7 days ago), don't show
-    if (lastDismissed) {
-      const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
-      if (Date.now() - parseInt(lastDismissed) < sevenDaysInMs) {
-        setIsVisible(false);
-        return;
-      }
-    }
-
-    // Listen for the beforeinstallprompt event
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      (window as any).deferredPrompt = e;
-      logger.log('✅ beforeinstallprompt event captured');
-      setIsVisible(true); // Show whenever the event is captured
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    // Check if prompt is already available (captured earlier)
-    if ((window as any).deferredPrompt) {
-      logger.log('✅ deferredPrompt already available');
-      setDeferredPrompt((window as any).deferredPrompt);
-      setIsVisible(true);
-    }
-
-    // Support for Safari and others (Manual detection)
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    
-    if ((isIOS || isSafari) && !isPWA) {
-      // For Safari, we can show the prompt even without the event
-      // but we wait 5 seconds to not annoy the user immediately
-      const timer = setTimeout(() => {
-        setIsVisible(true);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-
-    // Listen for successful installation
-    window.addEventListener('appinstalled', () => {
-      localStorage.setItem(storageKey, 'installed');
-      setDeferredPrompt(null);
-      (window as any).deferredPrompt = null;
-      setIsStandalone(true);
-      setIsVisible(false);
-      setIsInstalling(false);
-      
-      // Clean up signup time
-      sessionStorage.removeItem('user_signup_time');
-      
-      // Reload to open in PWA mode
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    });
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, [user]);
-
   const [showManual, setShowManual] = useState(false);
 
-  const handleInstall = async () => {
-    logger.log('🔵 handleInstall called');
-    
-    // Try MULTIPLE times to get deferredPrompt
-    let promptToUse = deferredPrompt;
-    
-    if (!promptToUse && (window as any).deferredPrompt) {
-      promptToUse = (window as any).deferredPrompt;
-      setDeferredPrompt(promptToUse);
-    }
-    
-    if (!promptToUse) {
-      logger.log('❌ No deferredPrompt available - showing manual instructions');
-      setShowManual(true);
+  useEffect(() => {
+    if (isStandalone || !user) { setIsVisible(false); return; }
+
+    const storageKey = `pwa_install_${user.id}`;
+    if (localStorage.getItem(storageKey) === 'installed') { setIsVisible(false); return; }
+
+    const lastDismissed = localStorage.getItem(`${storageKey}_dismissed_at`);
+    if (lastDismissed && Date.now() - parseInt(lastDismissed) < 7 * 24 * 60 * 60 * 1000) {
+      setIsVisible(false);
       return;
     }
 
-    try {
-      logger.log('🚀 Triggering native install prompt');
-      setIsInstalling(true);
-      
-      // Trigger native install prompt
-      promptToUse.prompt();
-      
-      const { outcome } = await promptToUse.userChoice;
-      
-      logger.log('User choice outcome:', outcome);
-      
-      if (outcome === 'accepted') {
-        // User accepted - mark as installed
-        const storageKey = `pwa_install_${user?.id}`;
-        localStorage.setItem(storageKey, 'installed');
-        setDeferredPrompt(null);
-        (window as any).deferredPrompt = null;
-        setIsInstalling(false);
-        // The appinstalled event will handle the reload
-      } else {
-        // User cancelled - mark as dismissed
-        handleDismiss();
-        setIsInstalling(false);
+    if (canInstall) {
+      setIsVisible(true);
+      return;
+    }
+
+    // Safari / iOS — عرض تعليمات يدوية بعد 5 ثواني
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if ((isIOS || isSafari) && !isStandalone) {
+      const timer = setTimeout(() => setIsVisible(true), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [user, canInstall, isStandalone]);
+
+  // اظهار التلقائي لما يتوفر الـ prompt
+  useEffect(() => {
+    if (canInstall && user && !isStandalone) {
+      const storageKey = `pwa_install_${user.id}`;
+      const isDismissedRecently = (() => {
+        const t = localStorage.getItem(`${storageKey}_dismissed_at`);
+        return t ? Date.now() - parseInt(t) < 7 * 24 * 60 * 60 * 1000 : false;
+      })();
+      if (!isDismissedRecently && localStorage.getItem(storageKey) !== 'installed') {
+        setIsVisible(true);
       }
-    } catch (err) {
-      logger.error('PWA Install error:', err);
-      setIsInstalling(false);
+    }
+  }, [canInstall, user, isStandalone]);
+
+  const handleInstall = async () => {
+    setIsInstalling(true);
+    const result = await promptInstall();
+    setIsInstalling(false);
+
+    if (result === 'accepted') {
+      if (user) localStorage.setItem(`pwa_install_${user.id}`, 'installed');
+      setIsVisible(false);
+    } else if (result === 'dismissed') {
+      handleDismiss();
+    } else {
+      // unavailable — عرض تعليمات يدوية
+      setShowManual(true);
     }
   };
 
   const handleDismiss = () => {
     if (!user) return;
-    
-    const storageKey = `pwa_install_${user.id}`;
-    localStorage.setItem(`${storageKey}_dismissed_at`, Date.now().toString());
+    localStorage.setItem(`pwa_install_${user.id}_dismissed_at`, Date.now().toString());
     setIsVisible(false);
   };
 
-  // Don't show if not visible, already in PWA mode, or no user
   if (!isVisible || isStandalone || !user) return null;
 
   logger.log('🎉 PWAInstallPrompt is rendering!');

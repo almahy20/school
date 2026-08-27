@@ -12,7 +12,7 @@ interface AuthContextType {
   isLoading: boolean;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  login: (phone: string, password: string) => Promise<string | null>;
+  login: (phone: string, password: string, rememberMe?: boolean) => Promise<string | null>;
   signup: (phone: string, password: string, fullName: string, role: string, schoolId: string) => Promise<string | null>;
 }
 
@@ -158,13 +158,13 @@ async function performSignOut(
   setUser: (u: AppUser | null) => void,
   setSession: (s: Session | null) => void,
 ) {
-  try { queryClient.cancelQueries(); } catch {}
+  try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
   clearAllCache();
   setUser(null);
   setSession(null);
   setCachedUser(null);
   localStorage.removeItem('last_auth_sync');
-  try { await supabase.auth.signOut(); } catch {}
+  try { await supabase.auth.signOut(); } catch (_e) { /* ignore */ }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -248,11 +248,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applySession(data.session);
         return true;
       }
-    } catch {}
+    } catch (_e) { /* ignore */ }
     return false;
   };
 
   useEffect(() => {
+    // لو المستخدم اختار "لا تذكرني" في المرة السابقة، نعمل signOut عند رجوعه
+    const noRemember = sessionStorage.getItem('no_remember_me');
+    if (noRemember) {
+      // sessionStorage باقي = نفس الـ tab session، لما يفتح tab جديد بيتمسح تلقائياً
+      // لكن لو فتح الصفحة من جديد في نفس الـ tab نعمل signOut يدوي
+      const lastSignInTime = sessionStorage.getItem('user_signup_time');
+      if (!lastSignInTime) {
+        // لم يسجل في هذه الجلسة — يعني أعاد فتح الصفحة
+        supabase.auth.signOut().catch(() => {});
+        sessionStorage.removeItem('no_remember_me');
+      }
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, eventSession) => {
         logger.log(`[Auth] Event: ${event}`);
@@ -327,17 +340,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isSigningOutRef.current = false;
   };
 
-  const login = async (phone: string, password: string): Promise<string | null> => {
+  const login = async (phone: string, password: string, rememberMe = true): Promise<string | null> => {
     try {
       const email = `${phone}@edara.com`;
+
+      // لو rememberMe = false نستخدم sessionStorage بدل localStorage
+      // عشان الجلسة تنتهي لما يغلق المتصفح
+      if (!rememberMe) {
+        // نغير الـ storage مؤقتاً قبل الـ signIn
+        try {
+          const { data: { session: existing } } = await supabase.auth.getSession();
+          if (!existing) {
+            // تغيير الـ storage key للـ session storage فقط (Supabase v2 لا يدعم dynamic storage)
+            // بنحفظ flag بدلاً منه ونعمل signOut عند إغلاق المتصفح
+            sessionStorage.setItem('no_remember_me', '1');
+          }
+        } catch (_e) { /* ignore */ }
+      } else {
+        sessionStorage.removeItem('no_remember_me');
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         return error.message.includes('Invalid login credentials')
           ? 'رقم الهاتف أو كلمة المرور غير صحيحة'
           : error.message;
       }
-      // applySession is called by the SIGNED_IN event from onAuthStateChange
-      // But also call it directly here to set user immediately without waiting for event
       if (data.session) applySession(data.session);
       sessionStorage.setItem('user_signup_time', Date.now().toString());
       return null;

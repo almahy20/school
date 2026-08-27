@@ -21,6 +21,7 @@ import {
   useUpdateNotificationPrefs, 
   useUpdateMyProfile 
 } from '@/hooks/queries';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -106,33 +107,18 @@ export default function SettingsPage() {
 
   const roleLabel = profile?.role === 'admin' ? 'مدير النظام' : profile?.role === 'teacher' ? 'معلم' : 'ولي أمر';
   
-  const [isPWA, setIsPWA] = useState(false);
-
-  useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    setIsPWA(isStandalone);
-    
-    const handleAppInstalled = () => {
-      setIsPWA(true);
-    };
-    window.addEventListener('appinstalled', handleAppInstalled);
-    return () => window.removeEventListener('appinstalled', handleAppInstalled);
-  }, []);
+  const { canInstall, isStandalone: isPWA, promptInstall } = usePWAInstall();
 
   const handleInstallApp = async () => {
-    const deferredPrompt = (window as any).deferredPrompt;
-    if (deferredPrompt) {
-      try {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-          setIsPWA(true);
-        }
-      } catch (error) {
-        logger.error('Error with PWA install:', error);
-      }
-    } else {
-      logger.warn('Native install prompt is not available.');
+    const result = await promptInstall();
+    if (result === 'accepted') {
+      toast({ title: 'تم التثبيت بنجاح', description: 'يمكنك الآن فتح التطبيق من الشاشة الرئيسية.' });
+    } else if (result === 'unavailable') {
+      toast({
+        title: 'التثبيت غير متاح',
+        description: 'افتح التطبيق في متصفح Chrome أو Edge وأعد المحاولة، أو استخدم قائمة المتصفح ← "تثبيت التطبيق".',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -254,9 +240,12 @@ export default function SettingsPage() {
                             </div>
                          </div>
                          
-                         <Button onClick={handleInstallApp} className="relative z-10 h-14 px-10 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center gap-2 w-full md:w-auto">
+                         <Button
+                           onClick={handleInstallApp}
+                           className="relative z-10 h-14 px-10 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center gap-2 w-full md:w-auto"
+                         >
                             <Download className="w-5 h-5" />
-                            تثبيت الآن
+                            {canInstall ? 'تثبيت الآن' : 'كيفية التثبيت'}
                          </Button>
                       </div>
                    </div>

@@ -17,11 +17,29 @@ export interface Student {
 }
 
 // ─── Arabic text normalizer ───────────────────────────────────────────────────
-// يحوّل ة → ه و ى → ي لتجنب الفرق بين الحرفين عند البحث
-function normalizeArabic(text: string): string {
+// يحوّل أحرف Unicode المتشابهة بصرياً لشكل موحّد:
+//   - ی فارسي (U+06CC) → ي عربي (U+064A)
+//   - ك أردية (U+06A9) → ك عربية (U+0643)
+//   - ة → ه  |  أ إ آ ء ؤ ئ → ا / و / ي
+//   - يزيل التشكيل
+export function normalizeArabic(text: string): string {
   return text
+    .replace(/\u06CC/g, '\u064A')   // ی فارسي → ي
+    .replace(/\u06A9/g, '\u0643')   // ك أردية → ك
+    .replace(/[أإآءؤئ]/g, 'ا')     // همزات → ا  (للبحث فقط)
     .replace(/ة/g, 'ه')
-    .replace(/ى/g, 'ي')
+    .replace(/ى/g, '\u064A')        // ى → ي
+    .replace(/[\u064B-\u0652\u0670]/g, '') // حذف التشكيل
+    .trim();
+}
+
+// نسخة للأسماء المدخلة — تحافظ على الهمزات وتُوحّد فقط Unicode المشابه
+export function normalizeStudentName(text: string): string {
+  return text
+    .replace(/\u06CC/g, '\u064A')   // ی فارسي → ي
+    .replace(/\u06A9/g, '\u0643')   // ك أردية → ك
+    .replace(/[\u064B-\u0652\u0670]/g, '') // حذف التشكيل
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -249,7 +267,8 @@ export function useAddStudent() {
 
   return useMutation({
     mutationFn: async (studentData: Omit<Student, 'id' | 'created_at' | 'classes'>) => {
-      const { data, error } = await supabase.from('students').insert(studentData).select().single();
+      const normalized = { ...studentData, name: normalizeStudentName(studentData.name) };
+      const { data, error } = await supabase.from('students').insert(normalized).select().single();
       if (error) throw error;
       return data;
     },
@@ -268,9 +287,13 @@ export function useUpdateStudent() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Student> & { id: string }) => {
+      const normalized = {
+        ...updates,
+        ...(updates.name ? { name: normalizeStudentName(updates.name) } : {}),
+      };
       const { data, error } = await supabase
         .from('students')
-        .update(updates)
+        .update(normalized)
         .eq('id', id)
         .select()
         .single();

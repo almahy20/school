@@ -132,7 +132,7 @@ serve(async (req) => {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
   }
 
-  const { user_id, title, body, url, type, urgent, ttl, conversation_id, notification_id } = bodyData;
+  const { user_id, title, body, url, type, urgent, ttl, conversation_id, notification_id, room_id } = bodyData;
 
   if (!user_id || !body) {
     return jsonResponse({ error: "user_id and body are required" }, 400);
@@ -180,15 +180,30 @@ serve(async (req) => {
   // ─── Build push payload (matches expected SW data structure) ─────────
   const schoolName = (profile?.schools as any)?.name ?? "إشعار من المدرسة";
   const schoolLogo = (profile?.schools as any)?.logo_url ?? null;
-  const isMessage = type === "teacher_message" || type === "broadcast_message" || url === "/messages";
-  const targetUrl = url ?? (isMessage ? "/messages" : "/notifications");
+
+  // ✅ شمّل كل أنواع الرسائل بما فيها class_chat و conversations
+  const MESSAGE_TYPES = [
+    "teacher_message", "broadcast_message",
+    "conversation_new_message", "conversation_admin_reply",
+    "class_chat_message",
+  ];
+  const isMessage = MESSAGE_TYPES.includes(type ?? "") || url === "/messages" || url?.startsWith?.("/conversations");
+
+  // ✅ استخرج الـ URL الصحيح حسب النوع
+  const targetUrl = url
+    ?? (isMessage ? "/conversations" : "/notifications");
 
   // Fix #1 — Pick TTL / urgency based on message characteristics
   const effectiveUrgent = urgent === true || isMessage;
   const effectiveTtl = typeof ttl === "number" && ttl > 0
     ? ttl
-    : effectiveUrgent ? 60 * 60 * 24   /* 24 hours for messages (will retry many times in Doze) */
+    : effectiveUrgent ? 60 * 60 * 24   /* 24 hours for messages */
                       : 60 * 60 * 72;  /* 3 days otherwise */
+
+  // ✅ استخدم room_id كـ topic لو conversation_id مش موجود
+  const effectiveTopic = conversation_id
+    ? `conv-${conversation_id}`
+    : (bodyData.room_id ? `room-${bodyData.room_id}` : (isMessage ? "messages" : "general"));
 
   const pushOptions: any = {
     vapidDetails: {
@@ -198,13 +213,8 @@ serve(async (req) => {
     },
     TTL: effectiveTtl,
     headers: {
-      // Fix #1 — FCM/UPNS Urgency header: wakes Doze devices immediately for
-      // high-priority payloads instead of queuing them for next maintenance
-      // window (which can be 1+ hours on aggressive ROMs).
       Urgency: effectiveUrgent ? "high" : "normal",
-      Topic: conversation_id
-        ? `conv-${conversation_id}`
-        : isMessage ? "messages" : "general",
+      Topic: effectiveTopic,
     },
   };
 
@@ -214,10 +224,9 @@ serve(async (req) => {
     icon: schoolLogo,
     badge: "/icons/badge-72.png",
     type: type ?? (isMessage ? "teacher_message" : "general"),
-    tag: isMessage ? "new-message" : (conversation_id ? `conv-${conversation_id}` : "general-notification"),
     url: targetUrl,
     notification_id: notification_id ?? null,
-    conversation_id: conversation_id ?? null,
+    conversation_id: conversation_id ?? bodyData.room_id ?? null,
     urgent: effectiveUrgent,
     priority: effectiveUrgent ? "high" : "default",
     data: { url: targetUrl },

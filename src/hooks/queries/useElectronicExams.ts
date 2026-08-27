@@ -365,7 +365,7 @@ export function useParentElectronicExams() {
 
       // جلب محاولات ولي الأمر
       const examIds = (exams || []).map((e: any) => e.id);
-      let attemptsByExam: Record<string, ExamAttempt> = {};
+      const attemptsByExam: Record<string, ExamAttempt> = {};
       if (examIds.length) {
         const { data: attempts } = await db
           .from('exam_attempts')

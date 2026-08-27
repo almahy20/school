@@ -53,7 +53,7 @@ export default function LoginPage() {
     }
     setLoginError('');
     setLoading(true);
-    const err = await login(phone.trim(), password);
+    const err = await login(phone.trim(), password, rememberMe);
     setLoading(false);
     if (err) {
       setLoginError(err);

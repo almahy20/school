@@ -68,48 +68,57 @@ class RealtimeEngine {
     
     try {
       if (table === 'students') {
-        const queryKey = ['students'];
-        
-        queryClient.setQueriesData({ queryKey }, (oldData: any) => {
-          if (Array.isArray(oldData)) {
-            // Format A: direct array (e.g. useClassStudents)
-            if (eventType === 'INSERT') {
-              if (oldData.some(d => d.id === newRec.id)) return oldData;
-              return [newRec, ...oldData];
-            }
-            if (eventType === 'UPDATE') {
-              return oldData.map(d => d.id === newRec.id ? { ...d, ...newRec } : d);
-            }
-            if (eventType === 'DELETE') {
-              return oldData.filter(d => d.id !== oldRec.id);
-            }
-            return oldData;
-          }
+        // نحدّث كل student queries بشكل مخصص بناءً على نوع الـ cache
+        const allStudentQueries = queryClient.getQueryCache().findAll({ queryKey: ['students'] });
 
-          if (oldData && Array.isArray(oldData.data)) {
-            // Format B: { data: Student[], count: number } (e.g. useStudents paginated)
-            let newArr = oldData.data;
+        for (const query of allStudentQueries) {
+          const key = query.queryKey as unknown[];
+          const isClassCache = key[1] === 'class'; // ['students', 'class', classId]
+          const cacheClassId = isClassCache ? (key[2] as string | undefined) : undefined;
 
-            if (eventType === 'INSERT') {
-              if (!newArr.some(d => d.id === newRec.id)) {
-                newArr = [newRec, ...newArr];
+          queryClient.setQueryData(key, (oldData: any) => {
+            if (Array.isArray(oldData)) {
+              // Format A: direct array — useClassStudents(['students', 'class', classId])
+              if (eventType === 'INSERT') {
+                if (oldData.some((d: any) => d.id === newRec.id)) return oldData;
+                // لو الـ cache خاص بفصل معين، نضيف الطالب فقط لو هو من نفس الفصل
+                if (cacheClassId && newRec.class_id && newRec.class_id !== cacheClassId) return oldData;
+                return [...oldData, newRec].sort((a: any, b: any) => (a.name ?? '').localeCompare(b.name ?? '', 'ar'));
               }
-            } else if (eventType === 'UPDATE') {
-              newArr = newArr.map(d => d.id === newRec.id ? { ...d, ...newRec } : d);
-            } else if (eventType === 'DELETE') {
-              newArr = newArr.filter(d => d.id !== oldRec.id);
+              if (eventType === 'UPDATE') {
+                return oldData.map((d: any) => d.id === newRec.id ? { ...d, ...newRec } : d);
+              }
+              if (eventType === 'DELETE') {
+                return oldData.filter((d: any) => d.id !== oldRec.id);
+              }
+              return oldData;
             }
 
-            const prevCount = typeof oldData.count === 'number' ? oldData.count : oldData.data.length;
-            let newCount = prevCount;
-            if (eventType === 'INSERT') newCount = prevCount + 1;
-            else if (eventType === 'DELETE') newCount = Math.max(0, prevCount - 1);
+            if (oldData && Array.isArray(oldData.data)) {
+              // Format B: { data: Student[], count: number } — useStudents paginated
+              let newArr = oldData.data;
 
-            return { ...oldData, data: newArr, count: newCount };
-          }
+              if (eventType === 'INSERT') {
+                if (!newArr.some((d: any) => d.id === newRec.id)) {
+                  newArr = [newRec, ...newArr];
+                }
+              } else if (eventType === 'UPDATE') {
+                newArr = newArr.map((d: any) => d.id === newRec.id ? { ...d, ...newRec } : d);
+              } else if (eventType === 'DELETE') {
+                newArr = newArr.filter((d: any) => d.id !== oldRec.id);
+              }
 
-          return oldData;
-        });
+              const prevCount = typeof oldData.count === 'number' ? oldData.count : oldData.data.length;
+              let newCount = prevCount;
+              if (eventType === 'INSERT') newCount = prevCount + 1;
+              else if (eventType === 'DELETE') newCount = Math.max(0, prevCount - 1);
+
+              return { ...oldData, data: newArr, count: newCount };
+            }
+
+            return oldData;
+          });
+        }
 
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }

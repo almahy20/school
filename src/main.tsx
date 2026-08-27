@@ -36,10 +36,12 @@ if ("serviceWorker" in navigator && !isSWDisabled) {
   });
 }
 
-// 🚀 Capture beforeinstallprompt event early
+// 🚀 Capture beforeinstallprompt event early — قبل React حتى
+// usePWAInstall hook بيلتقطه من window.deferredPrompt عند الـ mount
 window.addEventListener('beforeinstallprompt', (e: any) => {
   e.preventDefault();
   (window as any).deferredPrompt = e;
+  logger.log('✅ [main] beforeinstallprompt captured early');
 });
 
 // 🚀 Fresh start rendered directly (Live-Only Mode)
