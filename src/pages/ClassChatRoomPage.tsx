@@ -4,14 +4,12 @@ import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Send, Loader2, Users, ArrowRight } from 'lucide-react';
+import { Send, Loader2, Users, ArrowRight, MessageSquare } from 'lucide-react';
 import {
   useClassChatMessages,
-  useEnsureClassChatRoom,
   useSendClassChatMessage,
   useMarkClassChatRoomRead,
   useParentClassChatRooms,
-  useAdminClassChatRooms,
 } from '@/hooks/queries/useClassChat';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,11 +58,7 @@ function Bubble({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClassChatRoomPage() {
-  const { roomId, classId, className: classNameParam } = useParams<{
-    roomId?: string;
-    classId?: string;
-    className?: string;
-  }>();
+  const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -74,61 +68,29 @@ export default function ClassChatRoomPage() {
   const charCount = text.length;
   const overLimit = charCount > 500;
 
-  const isParent = user?.role === 'parent';
-  const isAdmin  = user?.role === 'admin' || user?.role === 'teacher';
-
-  // Hook results — always called
   const { data: parentRooms = [] } = useParentClassChatRooms();
-  const { data: adminRooms  = [] } = useAdminClassChatRooms();
-  const ensureRoom = useEnsureClassChatRoom();
 
-  // جلب الرسائل باستخدام الـ roomId المحلول
   const { data: messages = [], isLoading: msgsLoading } = useClassChatMessages(resolvedRoomId);
   const sendMsg = useSendClassChatMessage();
   const markRead = useMarkClassChatRoomRead();
 
-  // إذا جاء classId بدلاً من roomId — نحتاج نعمل ensure room أولاً
+  // إذا لم يكن roomId موجوداً — ارجع للمحادثات
   useEffect(() => {
-    if (resolvedRoomId) return;
-    if (!classId) return;
-
-    const decodedName = classNameParam ? decodeURIComponent(classNameParam) : 'الفصل';
-
-    // ابحث في الـ rooms المجلوبة أولاً
-    const allRooms = isParent ? parentRooms : adminRooms;
-    const existing = allRooms.find(r => r.class_id === classId);
-    if (existing) {
-      setResolvedRoomId(existing.id);
-      return;
-    }
-
-    // إنشاء/جلب الغرفة
-    ensureRoom.mutateAsync({ classId, className: decodedName })
-      .then(room => setResolvedRoomId(room.id))
-      .catch(() => {});
-  }, [classId, parentRooms.length, adminRooms.length, resolvedRoomId]);
+    if (!roomId) { navigate('/conversations', { replace: true }); }
+  }, [roomId]);
 
   // تعليم كمقروء عند فتح الغرفة
   useEffect(() => {
     if (resolvedRoomId) markRead.mutate(resolvedRoomId);
   }, [resolvedRoomId]);
 
-  // scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
   // اسم الغرفة من الكاش
-  const allRooms = isParent ? parentRooms : adminRooms;
-  const currentRoom = resolvedRoomId
-    ? allRooms.find(r => r.id === resolvedRoomId)
-    : classId
-    ? allRooms.find(r => r.class_id === classId)
-    : null;
-
-  const roomName = currentRoom?.class_name
-    || currentRoom?.name
-    || (classNameParam ? decodeURIComponent(classNameParam) : 'دردشة الفصل');
+  const room = parentRooms.find(r => r.id === roomId);
+  const roomName = room?.class_name || room?.name || 'دردشة الفصل';
 
   const handleSend = async () => {
     const t = text.trim();
@@ -137,8 +99,6 @@ export default function ClassChatRoomPage() {
     try { await sendMsg.mutateAsync({ roomId: resolvedRoomId, content: t }); }
     catch (_) {}
   };
-
-  const isInitializing = !resolvedRoomId || ensureRoom.isPending;
 
   return (
     <AppLayout>
@@ -172,7 +132,7 @@ export default function ClassChatRoomPage() {
 
         {/* Messages area */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
-          {isInitializing || msgsLoading ? (
+          {msgsLoading ? (
             <div className="h-full flex items-center justify-center">
               <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
             </div>
@@ -235,18 +195,16 @@ export default function ClassChatRoomPage() {
                 placeholder="اكتب رسالتك... (حد أقصى 500 حرف)"
                 rows={1}
                 maxLength={520}
-                disabled={isInitializing}
                 className={cn(
                   'flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-slate-50 text-sm font-medium px-4 py-3 outline-none border transition-all focus:bg-white',
                   overLimit
                     ? 'border-rose-300 focus:border-rose-400'
                     : 'border-slate-200 focus:border-emerald-300',
-                  isInitializing && 'opacity-50 cursor-not-allowed',
                 )}
               />
               <Button
                 onClick={handleSend}
-                disabled={!text.trim() || overLimit || sendMsg.isPending || isInitializing}
+                disabled={!text.trim() || overLimit || sendMsg.isPending}
                 size="icon"
                 className="w-11 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 shrink-0 disabled:opacity-40"
               >

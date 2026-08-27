@@ -17,6 +17,7 @@ import {
 } from '@/hooks/queries/useConversations';
 import {
   useParentClassChatRooms,
+  useEnsureClassChatRoom,
   useClassChatUnreadCounts,
 } from '@/hooks/queries/useClassChat';
 import { useParentChildren } from '@/hooks/queries';
@@ -304,19 +305,52 @@ type ActiveView = { type: 'none' } | { type: 'admin' };
 
 export default function ParentConversationsPage() {
   const [active, setActive] = useState<ActiveView>({ type: 'none' });
+  const [openingClassId, setOpeningClassId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const { data: conversations = [] } = useParentConversations();
   const { data: classRooms = [], isLoading: roomsLoading } = useParentClassChatRooms();
+  const { data: children = [], isLoading: childrenLoading } = useParentChildren();
   const { data: classChatUnread = {} } = useClassChatUnreadCounts();
+  const ensureRoom = useEnsureClassChatRoom();
 
   const adminConv = conversations[0] ?? null;
   const adminUnread = adminConv?.unread_by_parent || 0;
+
+  // بناء قائمة الفصول من الأبناء — بيضمن ظهور الفصل حتى لو الغرفة ما أُنشئت بعد
+  const classEntries = (children as any[])
+    .filter((c: any) => c.class_id || c.classId)
+    .reduce<{ classId: string; className: string }[]>((acc, c) => {
+      const classId = c.class_id || c.classId;
+      const className = c.className || c.class_name || 'الفصل';
+      if (!acc.find(e => e.classId === classId)) acc.push({ classId, className });
+      return acc;
+    }, []);
+
+  const handleOpenClass = async (classId: string, className: string) => {
+    // لو الغرفة موجودة في الكاش — navigate مباشرة
+    const existing = classRooms.find(r => r.class_id === classId);
+    if (existing) {
+      navigate(`/conversations/class/${existing.id}`);
+      return;
+    }
+    // إلا كدا ensureRoom ثم navigate
+    setOpeningClassId(classId);
+    try {
+      const room = await ensureRoom.mutateAsync({ classId, className });
+      navigate(`/conversations/class/${room.id}`);
+    } catch (_) {
+    } finally {
+      setOpeningClassId(null);
+    }
+  };
 
   // ── Admin chat screen — full page ──
   if (active.type === 'admin') {
     return <AdminChatView onBack={() => setActive({ type: 'none' })} />;
   }
+
+  const isLoadingClasses = roomsLoading || childrenLoading;
 
   // ── Cards landing ──
   return (
@@ -352,28 +386,34 @@ export default function ParentConversationsPage() {
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 px-1">
             دردشة الفصول
           </p>
-          {roomsLoading ? (
+          {isLoadingClasses ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-slate-300" />
             </div>
-          ) : classRooms.length === 0 ? (
+          ) : classEntries.length === 0 ? (
             <div className="text-center py-10 text-sm font-bold text-slate-400 bg-white rounded-[28px] border border-slate-100">
-              لا توجد غرف دردشة متاحة حالياً
+              لا يوجد أبناء مرتبطون بفصول حالياً
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {classRooms.map((room) => {
-                const unread = classChatUnread[room.id] || 0;
-                const roomDisplayName = room.class_name || room.name;
+              {classEntries.map(({ classId, className }) => {
+                const room = classRooms.find(r => r.class_id === classId);
+                const unread = room ? (classChatUnread[room.id] || 0) : 0;
+                const isOpening = openingClassId === classId;
                 return (
                   <ChatCard
-                    key={room.id}
-                    icon={<Users className="w-6 h-6 text-emerald-600" />}
-                    title={roomDisplayName}
+                    key={classId}
+                    icon={
+                      isOpening
+                        ? <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+                        : <Users className="w-6 h-6 text-emerald-600" />
+                    }
+                    title={className}
                     desc="دردشة أولياء الأمور"
                     color="emerald"
                     badge={unread}
-                    onClick={() => navigate(`/conversations/class/${room.id}`)}
+                    onClick={() => handleOpenClass(classId, className)}
+                    disabled={isOpening || ensureRoom.isPending}
                   />
                 );
               })}

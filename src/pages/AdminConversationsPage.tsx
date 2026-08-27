@@ -451,7 +451,9 @@ function ClassChatTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AdminConversationsPage() {
-  const [tab, setTab] = useState<Tab>('conversations');
+  const [searchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as Tab) || 'conversations';
+  const [tab, setTab] = useState<Tab>(initialTab);
   const { data: unreadCount = 0 } = useUnreadConversationsCount();
 
   return (
@@ -459,7 +461,7 @@ export default function AdminConversationsPage() {
       <div
         className={cn(
           'max-w-[900px] mx-auto animate-in fade-in duration-500 px-4 md:px-0',
-          tab === 'class-chat' ? '' : 'pb-20',
+          'pb-20',
         )}
         dir="rtl"
       >

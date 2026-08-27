@@ -162,18 +162,30 @@ export default function PwaManager() {
 
     // فقط نضيف icons لو عندنا لوجو المدرسة — مش بنستخدم static files
     if (cacheBustManifest) {
+      // نحدد نوع الصورة بشكل صحيح — Supabase بترجع JPEG/WebP مش PNG
+      const iconMimeType = rawLogoUrl.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg';
       (manifest as any).icons = [
         {
           src: cacheBustManifest,
-          sizes: "512x512",
-          type: "image/png",
+          sizes: "any",
+          type: iconMimeType,
           purpose: "any maskable"
         },
         {
           src: cacheBustApple || cacheBustManifest,
-          sizes: "192x192",
-          type: "image/png",
+          sizes: "any",
+          type: iconMimeType,
           purpose: "any"
+        }
+      ];
+    } else {
+      // fallback to static badge icon
+      (manifest as any).icons = [
+        {
+          src: "/icons/badge-72.png",
+          sizes: "72x72",
+          type: "image/png",
+          purpose: "any maskable"
         }
       ];
     }
