@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -21,6 +21,8 @@ import {
 } from '@/hooks/queries/useConversations';
 import {
   useAdminClassChatRooms,
+  useEnsureClassChatRoom,
+  type ClassChatRoom,
 } from '@/hooks/queries/useClassChat';
 import { useProfiles, useSendMessage, useBranding } from '@/hooks/queries';
 import { useQuery } from '@tanstack/react-query';
@@ -382,7 +384,40 @@ function BroadcastTab() {
 
 function ClassChatTab() {
   const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [openingClassId, setOpeningClassId] = useState<string | null>(null);
+
   const { data: rooms = [], isLoading } = useAdminClassChatRooms();
+  const ensureRoom = useEnsureClassChatRoom();
+
+  const filteredRooms = useMemo(() => {
+    if (!search.trim()) return rooms;
+    const s = search.trim().toLowerCase();
+    return rooms.filter(r => 
+      (r.class_name && r.class_name.toLowerCase().includes(s)) ||
+      (r.grade_level && r.grade_level.toLowerCase().includes(s)) ||
+      (r.name && r.name.toLowerCase().includes(s))
+    );
+  }, [rooms, search]);
+
+  const handleOpenClassChat = async (room: ClassChatRoom) => {
+    if (room.room_id) {
+      navigate(`/manage-conversations/class/${room.room_id}`);
+      return;
+    }
+
+    setOpeningClassId(room.class_id);
+    try {
+      const created = await ensureRoom.mutateAsync({
+        classId: room.class_id,
+        className: room.class_name || room.name || 'الفصل',
+      });
+      navigate(`/manage-conversations/class/${created.id}`);
+    } catch (_) {
+    } finally {
+      setOpeningClassId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -396,54 +431,100 @@ function ClassChatTab() {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4 text-center bg-white rounded-3xl border border-slate-100 shadow-sm">
         <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center">
-          <Users className="w-6 h-6 text-slate-300" />
+          <School className="w-6 h-6 text-slate-300" />
         </div>
-        <p className="text-sm font-black text-slate-500">لا توجد غرف دردشة بعد</p>
-        <p className="text-xs text-slate-400 max-w-xs">ستظهر الغرف تلقائياً عندما يبدأ أولياء الأمور التحدث في فصولهم</p>
+        <p className="text-base font-black text-slate-700">لا توجد فصول دراسية مسجلة في المدرسة</p>
+        <p className="text-xs text-slate-400 max-w-xs">يمكنك إضافة فصول دراسية من صفحة الفصول لبدء المحادثات مع أولياء الأمور</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Count header */}
-      <div className="flex items-center justify-between px-1">
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          غرف الفصول
-        </p>
-        <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-xl">
-          {rooms.length} غرفة
-        </span>
+      {/* Search & Header */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-4 space-y-3">
+        <div className="relative">
+          <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+          <Input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="بحث باسم الفصل أو المرحلة..."
+            className="h-11 pr-10 rounded-2xl border-slate-100 bg-slate-50 text-sm font-medium focus:bg-white"
+          />
+        </div>
+
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[11px] font-black text-slate-500">
+            فصول المدرسة ({filteredRooms.length})
+          </p>
+          <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-xl">
+            يمكنك بدء محادثة في أي فصل فوراً
+          </span>
+        </div>
       </div>
 
       {/* Cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-        {rooms.map(room => (
-          <button
-            key={room.id}
-            onClick={() => navigate(`/manage-conversations/class/${room.id}`)}
-            className="group text-right p-5 rounded-[24px] bg-white border border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-50/60 transition-all duration-300 active:scale-[0.98] flex flex-col gap-4"
-          >
-            {/* Icon + arrow */}
-            <div className="flex items-center justify-between">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-                <Users className="w-5 h-5 text-emerald-600" />
-              </div>
-              <ChevronLeft className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
-            </div>
+      {filteredRooms.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-3xl border border-slate-100 text-sm font-bold text-slate-400">
+          لم يتم العثور على فصول تطابق البحث
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {filteredRooms.map(room => {
+            const isOpening = openingClassId === room.class_id;
+            const hasExistingRoom = !!room.room_id;
 
-            {/* Name */}
-            <div>
-              <h3 className="font-black text-slate-900 text-sm leading-snug">
-                {room.class_name || room.name}
-              </h3>
-              <p className="text-[11px] text-slate-400 font-bold mt-1">
-                دردشة أولياء الأمور
-              </p>
-            </div>
-          </button>
-        ))}
-      </div>
+            return (
+              <button
+                key={room.class_id}
+                onClick={() => handleOpenClassChat(room)}
+                disabled={isOpening || ensureRoom.isPending}
+                className="group text-right p-5 rounded-[24px] bg-white border border-slate-100 hover:border-emerald-200 hover:shadow-lg hover:shadow-emerald-50/60 transition-all duration-300 active:scale-[0.98] flex flex-col gap-4 cursor-pointer disabled:opacity-60"
+              >
+                {/* Icon + arrow */}
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors shrink-0">
+                    {isOpening ? (
+                      <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+                    ) : (
+                      <Users className="w-5 h-5 text-emerald-600" />
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {room.grade_level && (
+                      <Badge variant="outline" className="text-[10px] font-bold border-slate-200 text-slate-500 rounded-lg px-2">
+                        {room.grade_level}
+                      </Badge>
+                    )}
+                    <ChevronLeft className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                  </div>
+                </div>
+
+                {/* Name & status */}
+                <div>
+                  <h3 className="font-black text-slate-900 text-base leading-snug">
+                    {room.class_name || room.name}
+                  </h3>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[11px] text-slate-400 font-bold">
+                      دردشة أولياء الأمور
+                    </p>
+                    <span className={cn(
+                      'text-[9px] font-black px-2 py-0.5 rounded-md',
+                      hasExistingRoom
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-slate-100 text-slate-500'
+                    )}>
+                      {hasExistingRoom ? 'محادثة نشطة' : 'جاهز للبدء'}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -425,14 +425,21 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
 }
 
 export function EditStudentModal({ student, classes, user, onClose, onSuccess }: any) {
-    const { toast } = useToast();
-    const [name, setName] = useState(student.name);
-    const [classId, setClassId] = useState(student.class_id || '');
-    const [parentPhone, setParentPhone] = useState(student.parent_phone || '');
+    const [name, setName] = useState(student?.name || '');
+    const [classId, setClassId] = useState(student?.class_id || '');
+    const [parentPhone, setParentPhone] = useState(student?.parent_phone || '');
     const updateMutation = useUpdateStudent();
   
     // Normalize classes to always be an array
     const normalizedClasses = Array.isArray(classes) ? classes : [];
+
+    useEffect(() => {
+      if (student) {
+        setName(student.name || '');
+        setClassId(student.class_id || '');
+        setParentPhone(student.parent_phone || '');
+      }
+    }, [student?.id, student?.name, student?.class_id, student?.parent_phone]);
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -447,11 +454,8 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
           parent_phone: normalizedPhone || null
         });
 
-        toast({ title: 'تم التحديث بنجاح' });
-        onSuccess();
-      } catch (err: any) {
-        toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-      }
+        if (onSuccess) onSuccess();
+      } catch (_) {}
     };
   
     return (

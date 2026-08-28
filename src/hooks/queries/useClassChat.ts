@@ -16,6 +16,8 @@ export interface ClassChatRoom {
   created_at: string;
   // joined
   class_name?: string;
+  grade_level?: string | null;
+  room_id?: string | null;
   unread_count?: number;
   last_message?: string;
   last_message_at?: string;
@@ -32,7 +34,7 @@ export interface ClassChatMessage {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-/** كل غرف الدردشة في مدرسة الأدمن */
+/** كل فصول المدرسة مع غرف الدردشة الخاصة بها للأدمن/المدير والمعلمين */
 export function useAdminClassChatRooms() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
@@ -58,16 +60,51 @@ export function useAdminClassChatRooms() {
     queryKey,
     queryFn: async () => {
       if (!user?.schoolId) return [];
-      const { data, error } = await db
-        .from('class_chat_rooms')
-        .select(`*, classes!class_chat_rooms_class_id_fkey(name)`)
+
+      // 1. جلب جميع فصول المدرسة
+      const { data: classesData, error: classesErr } = await db
+        .from('classes')
+        .select('id, name, grade_level, school_id, created_at')
         .eq('school_id', user.schoolId)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data || []).map((r: any) => ({
-        ...r,
-        class_name: r.classes?.name || r.name,
-      })) as ClassChatRoom[];
+        .order('name', { ascending: true });
+
+      if (classesErr) throw classesErr;
+
+      // 2. جلب الغرف الموجودة حالياً
+      const { data: existingRooms, error: roomsErr } = await db
+        .from('class_chat_rooms')
+        .select('*')
+        .eq('school_id', user.schoolId);
+
+      if (roomsErr) throw roomsErr;
+
+      const roomsMap = new Map<string, any>();
+      (existingRooms || []).forEach((r: any) => {
+        roomsMap.set(r.class_id, r);
+      });
+
+      // 3. دمج الفصول مع الغرف — يضمن ظهور كل فصل في المدرسة للمدير
+      return (classesData || []).map((cls: any) => {
+        const room = roomsMap.get(cls.id);
+        if (room) {
+          return {
+            ...room,
+            class_name: cls.name || room.name,
+            grade_level: cls.grade_level || null,
+            room_id: room.id,
+          };
+        }
+        return {
+          id: cls.id,
+          school_id: cls.school_id || user.schoolId,
+          class_id: cls.id,
+          name: `دردشة فصل ${cls.name}`,
+          class_name: cls.name,
+          grade_level: cls.grade_level || null,
+          room_id: null,
+          created_at: cls.created_at,
+        };
+      }) as ClassChatRoom[];
     },
     enabled: !!(session && user?.schoolId && (user?.role === 'admin' || user?.role === 'teacher')),
     staleTime: 60 * 1000,

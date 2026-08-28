@@ -35,7 +35,7 @@ export default function AdminClassChatRoomPage() {
   const { data: messages = [], isLoading } = useClassChatMessages(roomId ?? null);
   const sendMsg = useSendClassChatMessage();
 
-  const room = rooms.find(r => r.id === roomId);
+  const room = rooms.find(r => r.id === roomId || r.room_id === roomId || r.class_id === roomId);
   const roomName = room?.class_name || room?.name || 'دردشة الفصل';
 
   useEffect(() => {

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import AppLayout from '@/components/AppLayout';
-import { ArrowRight, ArrowLeft, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Send } from 'lucide-react';
+import {
+  ArrowRight, ArrowLeft, Clock, CheckCircle2, XCircle,
+  AlertCircle, Loader2, Send, Check, Sparkles, BookOpen, HelpCircle
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
@@ -14,6 +17,7 @@ import {
   AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 
 interface ExamTakingViewProps {
   exam: ElectronicExam;
@@ -101,41 +105,64 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
   if (screen === 'confirm') {
     return (
       <AppLayout>
-        <div className="max-w-[600px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
+        <div className="max-w-[650px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-colors mb-6"
+            className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-colors mb-6 group"
           >
-            <ArrowRight className="w-4 h-4" />
-            العودة للاختبارات
+            <ArrowRight className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+            العودة لقائمة الاختبارات
           </button>
-          <div className="bg-white border border-slate-100 rounded-[32px] p-8 space-y-6 shadow-sm">
-            <div className="w-16 h-16 rounded-[24px] bg-violet-50 flex items-center justify-center">
-              <Clock className="w-8 h-8 text-violet-600" />
+
+          <div className="bg-white border border-slate-100 rounded-[36px] p-7 md:p-10 space-y-7 shadow-xl shadow-slate-100/70 relative overflow-hidden">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-[24px] bg-violet-100/80 flex items-center justify-center text-violet-600 shadow-inner shrink-0">
+                <Clock className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black text-slate-900 leading-tight">{exam.title}</h1>
+                <p className="text-sm text-violet-600 font-black mt-1 flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4" />
+                  مادة {exam.subject}
+                </p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h1 className="text-xl font-black text-slate-900">{exam.title}</h1>
-              <p className="text-sm text-slate-500 font-bold">{exam.subject}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <InfoRow label="الطالب" value={studentName} />
+
+            <div className="grid grid-cols-2 gap-3.5">
+              <InfoRow label="اسم الطالب" value={studentName} />
               <InfoRow label="عدد الأسئلة" value={`${exam.questions_count || questions.length} سؤال`} />
               <InfoRow label="المدة الزمنية" value={`${exam.duration_minutes} دقيقة`} />
-              <InfoRow label="النوع" value="تصحيح تلقائي" />
+              <InfoRow label="طريقة التصحيح" value="تصحيح فوري تلقائي" />
             </div>
+
             {exam.instructions && (
-              <div className="bg-slate-50 rounded-2xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">تعليمات</p>
-                <p className="text-sm font-medium text-slate-700 leading-relaxed">{exam.instructions}</p>
+              <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-5 space-y-2">
+                <div className="flex items-center gap-2 text-amber-700">
+                  <AlertCircle className="w-4 h-4" />
+                  <p className="text-xs font-black uppercase tracking-wider">تعليمات هامة للاختبار</p>
+                </div>
+                <p className="text-sm font-bold text-amber-900 leading-relaxed whitespace-pre-wrap">{exam.instructions}</p>
               </div>
             )}
+
             <button
               onClick={handleStart}
-              disabled={qLoading}
-              className="w-full h-13 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-black text-base flex items-center justify-center gap-3 transition-colors disabled:opacity-50"
-              style={{ height: '52px' }}
+              disabled={qLoading || (questions.length === 0 && !qLoading)}
+              className="w-full h-14 rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-black text-lg flex items-center justify-center gap-3 transition-all shadow-lg shadow-violet-200 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {qLoading ? <><Loader2 className="w-5 h-5 animate-spin" /> جاري التحميل...</> : 'ابدأ الاختبار الآن'}
+              {qLoading ? (
+                <>
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                  جاري تجهيز الأسئلة...
+                </>
+              ) : questions.length === 0 ? (
+                'لا توجد أسئلة مضافة في هذا الاختبار'
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  ابدأ الاختبار الآن
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -147,64 +174,134 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
   if (screen === 'taking') {
     const q = questions[currentQ];
     const isLowTime = timeLeft < 120;
-    const answered = Object.keys(answers).length;
+    const answeredCount = Object.keys(answers).filter(k => answers[k]?.trim() !== '').length;
+    const isAnsweredCurrent = answers[q?.id] !== undefined && answers[q?.id]?.trim() !== '';
 
     if (!q) return null;
 
+    const questionTypeLabels: Record<string, string> = {
+      true_false: 'صح أو خطأ',
+      multiple_choice: 'اختيار من متعدد',
+      fill_blank: 'إكمال الفراغ',
+    };
+
     return (
       <AppLayout>
-        <div className="max-w-[700px] mx-auto px-4 md:px-0 pb-20 pt-4 animate-in fade-in duration-300" dir="rtl">
-          {/* Timer bar */}
-          <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 py-3 -mx-4 mb-6 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-slate-500">{exam.title}</span>
-              <span className="text-[10px] font-black text-slate-300">
-                {answered}/{questions.length} مجاب
-              </span>
+        <div className="max-w-[780px] mx-auto px-4 md:px-0 pb-24 pt-2 animate-in fade-in duration-300" dir="rtl">
+          
+          {/* Header Bar */}
+          <div className="sticky top-2 z-30 bg-white/95 backdrop-blur-md border border-slate-100 rounded-3xl px-5 py-3.5 mb-6 shadow-sm flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center font-black text-sm shrink-0">
+                {currentQ + 1}/{questions.length}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-slate-900 truncate">{exam.title}</p>
+                <p className="text-[11px] font-bold text-slate-400">
+                  تمت الإجابة على <span className="text-violet-600 font-black">{answeredCount}</span> من {questions.length}
+                </p>
+              </div>
             </div>
-            <div className={cn(
-              'flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm transition-all',
-              isLowTime ? 'bg-rose-50 text-rose-600 animate-pulse' : 'bg-slate-50 text-slate-700'
-            )}>
-              <Clock className="w-4 h-4" />
-              {formatTime(timeLeft)}
+
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                'flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm md:text-base transition-all border',
+                isLowTime
+                  ? 'bg-rose-50 border-rose-200 text-rose-600 animate-pulse ring-2 ring-rose-300/50'
+                  : 'bg-slate-50 border-slate-200/80 text-slate-800'
+              )}>
+                <Clock className={cn('w-4 h-4', isLowTime ? 'text-rose-600' : 'text-slate-500')} />
+                <span className="font-mono tracking-wider">{formatTime(timeLeft)}</span>
+              </div>
+
+              <button
+                onClick={() => setShowEndDialog(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 text-xs font-black transition-colors"
+                title="إنهاء الاختبار"
+              >
+                إنهاء
+              </button>
             </div>
           </div>
 
-          {/* Progress */}
-          <div className="mb-5 space-y-2">
-            <div className="flex justify-between text-xs font-black text-slate-400">
+          {/* Progress Bar */}
+          <div className="mb-6 space-y-2 bg-white border border-slate-100 rounded-2xl p-3 shadow-sm">
+            <div className="flex justify-between items-center text-xs font-black text-slate-500">
               <span>السؤال {currentQ + 1} من {questions.length}</span>
-              <span>{Math.round(((currentQ + 1) / questions.length) * 100)}%</span>
+              <span className="text-violet-600 font-black">{Math.round(((currentQ + 1) / questions.length) * 100)}% مكتمل</span>
             </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-violet-500 rounded-full transition-all duration-500"
+                className="h-full bg-gradient-to-l from-violet-500 to-indigo-600 rounded-full transition-all duration-500"
                 style={{ width: `${((currentQ + 1) / questions.length) * 100}%` }}
               />
             </div>
           </div>
 
-          {/* Question */}
-          <div className="bg-white border border-slate-100 rounded-[28px] p-6 space-y-5">
-            <p className="text-base font-black text-slate-900 leading-relaxed">{q.question_text}</p>
+          {/* Question Card */}
+          <div className="bg-white border border-slate-100 rounded-[32px] p-6 sm:p-8 space-y-7 shadow-xl shadow-slate-100/60">
+            {/* Question Header & Badges */}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-violet-600 text-white font-black text-xs px-3 py-1 rounded-xl">
+                  السؤال {currentQ + 1}
+                </Badge>
+                <Badge variant="outline" className="border-slate-200 text-slate-500 font-bold text-xs px-3 py-1 rounded-xl">
+                  {questionTypeLabels[q.question_type] || 'سؤال'}
+                </Badge>
+              </div>
 
+              {isAnsweredCurrent ? (
+                <span className="flex items-center gap-1 text-emerald-600 text-xs font-black bg-emerald-50 px-2.5 py-1 rounded-lg">
+                  <Check className="w-3.5 h-3.5" />
+                  تمت الإجابة
+                </span>
+              ) : (
+                <span className="text-slate-400 text-xs font-bold bg-slate-50 px-2.5 py-1 rounded-lg">
+                  لم تتم الإجابة بعد
+                </span>
+              )}
+            </div>
+
+            {/* Question Text - LARGE, CRISP, LEGIBLE ARABIC FONT */}
+            <div className="py-2">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-relaxed md:leading-loose whitespace-pre-wrap select-text tracking-normal">
+                {q.question_text}
+              </h2>
+            </div>
+
+            {/* Answers Form Controls */}
             {q.question_type === 'true_false' && (
-              <div className="flex gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 {(['true', 'false'] as const).map(val => {
                   const isSelected = answers[q.id] === val;
+                  const isTrue = val === 'true';
                   return (
                     <button
                       key={val}
                       onClick={() => setAnswers(prev => ({ ...prev, [q.id]: val }))}
                       className={cn(
-                        'flex-1 flex items-center justify-center gap-2 h-12 rounded-2xl text-sm font-black border-2 transition-all',
+                        'flex items-center justify-center gap-3 h-16 sm:h-20 rounded-2xl text-lg sm:text-xl font-black border-2 transition-all duration-200 cursor-pointer',
                         isSelected
-                          ? val === 'true' ? 'bg-emerald-500 border-emerald-500 text-white' : 'bg-rose-500 border-rose-500 text-white'
-                          : 'bg-slate-50 border-slate-100 text-slate-600 hover:border-violet-300'
+                          ? isTrue
+                            ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200 scale-[1.02]'
+                            : 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-[1.02]'
+                          : isTrue
+                            ? 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/40'
+                            : 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-rose-300 hover:bg-rose-50/40'
                       )}
                     >
-                      {val === 'true' ? '✓ صح' : '✗ غلط'}
+                      {isTrue ? (
+                        <>
+                          <CheckCircle2 className="w-6 h-6" />
+                          <span>صح</span>
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-6 h-6" />
+                          <span>خطأ</span>
+                        </>
+                      )}
                     </button>
                   );
                 })}
@@ -212,7 +309,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             )}
 
             {q.question_type === 'multiple_choice' && (
-              <div className="space-y-2">
+              <div className="space-y-3.5 pt-2">
                 {(q.options as string[]).map((opt, oi) => {
                   const letters = ['أ', 'ب', 'ج', 'د'];
                   const isSelected = answers[q.id] === opt;
@@ -221,19 +318,28 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                       key={oi}
                       onClick={() => setAnswers(prev => ({ ...prev, [q.id]: opt }))}
                       className={cn(
-                        'w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold border-2 text-right transition-all',
+                        'w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 text-right transition-all duration-200 cursor-pointer group',
                         isSelected
-                          ? 'bg-violet-600 border-violet-600 text-white'
-                          : 'bg-slate-50 border-slate-100 text-slate-700 hover:border-violet-300 hover:bg-violet-50/40'
+                          ? 'bg-violet-50 border-violet-600 text-violet-950 shadow-md shadow-violet-100 scale-[1.01]'
+                          : 'bg-slate-50/70 border-slate-200/80 text-slate-800 hover:border-violet-300 hover:bg-violet-50/30'
                       )}
                     >
                       <span className={cn(
-                        'w-7 h-7 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border',
-                        isSelected ? 'bg-white/20 border-white/30 text-white' : 'bg-white border-slate-200 text-slate-500'
+                        'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-sm sm:text-base font-black shrink-0 border-2 transition-colors',
+                        isSelected
+                          ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
+                          : 'bg-white border-slate-200 text-slate-600 group-hover:border-violet-300 group-hover:text-violet-600'
                       )}>
                         {letters[oi]}
                       </span>
-                      {opt}
+                      <span className="text-base sm:text-lg font-bold flex-1 leading-relaxed">
+                        {opt}
+                      </span>
+                      {isSelected && (
+                        <div className="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0">
+                          <Check className="w-4 h-4" />
+                        </div>
+                      )}
                     </button>
                   );
                 })}
@@ -241,85 +347,121 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             )}
 
             {q.question_type === 'fill_blank' && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">إجابتك</label>
+              <div className="space-y-3 pt-2">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                  <HelpCircle className="w-4 h-4 text-violet-500" />
+                  اكتب إجابتك هنا بدقة:
+                </label>
                 <input
                   value={answers[q.id] || ''}
                   onChange={e => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
-                  placeholder="اكتب إجابتك هنا..."
-                  className="w-full h-12 rounded-2xl border-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-violet-400 px-4 text-sm font-bold text-right outline-none transition-colors"
+                  placeholder="اكتب الإجابة هنا..."
+                  className="w-full h-14 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-violet-500 px-5 text-base sm:text-lg font-bold text-right outline-none transition-all shadow-inner"
+                  autoFocus
                 />
               </div>
             )}
           </div>
 
-          {/* Navigation */}
-          <div className="flex items-center gap-3 mt-5">
-            <button
-              onClick={() => setCurrentQ(p => Math.max(0, p - 1))}
-              disabled={currentQ === 0}
-              className="flex-1 h-11 rounded-2xl border border-slate-200 text-slate-600 font-black text-sm hover:bg-slate-50 disabled:opacity-30 transition-colors flex items-center justify-center gap-2"
-            >
-              <ArrowRight className="w-4 h-4" />
-              السابق
-            </button>
-            {currentQ < questions.length - 1 ? (
+          {/* Navigation Controls (RTL Proper Layout) */}
+          <div className="mt-8 space-y-6">
+            <div className="flex items-center gap-3">
+              {/* Previous Button (Right Side in RTL) */}
               <button
-                onClick={() => setCurrentQ(p => Math.min(questions.length - 1, p + 1))}
-                className="flex-1 h-11 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white font-black text-sm transition-colors flex items-center justify-center gap-2"
+                onClick={() => setCurrentQ(p => Math.max(0, p - 1))}
+                disabled={currentQ === 0}
+                className="flex-1 h-13 sm:h-14 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-black text-sm sm:text-base disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
-                التالي
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowRight className="w-5 h-5" />
+                السابق
               </button>
-            ) : (
-              <button
-                onClick={() => setShowEndDialog(true)}
-                className="flex-1 h-11 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm transition-colors flex items-center justify-center gap-2"
-              >
-                <Send className="w-4 h-4" />
-                إنهاء الاختبار
-              </button>
-            )}
-          </div>
 
-          {/* Question dots */}
-          <div className="flex flex-wrap gap-1.5 justify-center mt-5">
-            {questions.map((question, i) => (
-              <button
-                key={question.id}
-                onClick={() => setCurrentQ(i)}
-                className={cn(
-                  'w-7 h-7 rounded-lg text-[10px] font-black transition-all',
-                  i === currentQ ? 'bg-violet-600 text-white' :
-                  answers[question.id] ? 'bg-emerald-100 text-emerald-700' :
-                  'bg-slate-100 text-slate-400 hover:bg-slate-200'
-                )}
-              >
-                {i + 1}
-              </button>
-            ))}
+              {/* Next / Finish Button (Left Side in RTL) */}
+              {currentQ < questions.length - 1 ? (
+                <button
+                  onClick={() => setCurrentQ(p => Math.min(questions.length - 1, p + 1))}
+                  className="flex-[2] h-13 sm:h-14 rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-200 cursor-pointer"
+                >
+                  التالي
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowEndDialog(true)}
+                  className="flex-[2] h-13 sm:h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 cursor-pointer"
+                >
+                  <Send className="w-5 h-5" />
+                  إنهاء وتسليم الاختبار
+                </button>
+              )}
+            </div>
+
+            {/* Quick Question Jump Dots Navigator */}
+            <div className="bg-white border border-slate-100 rounded-3xl p-4 shadow-sm">
+              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center mb-3">
+                الانتقال السريع للأسئلة
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {questions.map((question, i) => {
+                  const isCurrent = i === currentQ;
+                  const isDone = answers[question.id] !== undefined && answers[question.id]?.trim() !== '';
+
+                  return (
+                    <button
+                      key={question.id}
+                      onClick={() => setCurrentQ(i)}
+                      className={cn(
+                        'w-9 h-9 sm:w-11 sm:h-11 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 flex items-center justify-center cursor-pointer',
+                        isCurrent
+                          ? 'bg-violet-600 text-white shadow-md shadow-violet-200 ring-2 ring-violet-400 ring-offset-2 scale-105'
+                          : isDone
+                            ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      )}
+                    >
+                      {i + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* End confirmation */}
+        {/* End confirmation Modal */}
         <AlertDialog open={showEndDialog} onOpenChange={setShowEndDialog}>
-          <AlertDialogContent dir="rtl" className="rounded-[28px]">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="font-black text-slate-900">إنهاء الاختبار؟</AlertDialogTitle>
-              <AlertDialogDescription className="text-slate-500 font-medium">
-                أجبت على {answered} من {questions.length} سؤال.
-                {answered < questions.length && ` الأسئلة غير المجابة (${questions.length - answered}) ستُعدّ خطأ.`}
-                <br />هل تريد إرسال الاختبار الآن؟
+          <AlertDialogContent dir="rtl" className="rounded-[32px] p-7 max-w-md">
+            <AlertDialogHeader className="space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center mx-auto sm:mx-0">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <AlertDialogTitle className="font-black text-slate-900 text-xl">هل أنت متأكد من إنهاء الاختبار؟</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-600 font-bold text-sm leading-relaxed">
+                لقد أجبت على <span className="text-violet-600 font-black">{answeredCount}</span> من إجمالي <span className="font-black">{questions.length}</span> سؤال.
+                {answeredCount < questions.length && (
+                  <div className="mt-2 text-rose-600 font-black bg-rose-50 p-2.5 rounded-xl border border-rose-100">
+                    ⚠️ لديك ({questions.length - answeredCount}) أسئلة غير مجابة وستُعتبر إجاباتها خاطئة.
+                  </div>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter className="flex-row-reverse gap-2">
-              <AlertDialogCancel className="rounded-2xl font-black">العودة للاختبار</AlertDialogCancel>
+            <AlertDialogFooter className="flex-row-reverse gap-3 mt-4">
+              <AlertDialogCancel className="rounded-2xl font-black h-12 flex-1 border-slate-200">
+                العودة للمراجعة
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => handleSubmit(false)}
                 disabled={submitAttempt.isPending}
-                className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black"
+                className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 text-white shadow-lg shadow-emerald-200"
               >
-                {submitAttempt.isPending ? <><Loader2 className="w-4 h-4 animate-spin ml-2" />جاري الإرسال...</> : 'نعم، إرسال'}
+                {submitAttempt.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                    جاري الإرسال...
+                  </>
+                ) : (
+                  'نعم، إرسال الاختبار'
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -335,63 +477,78 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
 
     return (
       <AppLayout>
-        <div className="max-w-[700px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
-          {/* Result header */}
+        <div className="max-w-[780px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
+          {/* Result Header Card */}
           <div className={cn(
-            'rounded-[32px] p-8 text-white text-center space-y-3 mb-6',
-            pct >= 80 ? 'bg-emerald-600' : pct >= 60 ? 'bg-amber-500' : 'bg-rose-500'
+            'rounded-[36px] p-8 md:p-10 text-white text-center space-y-4 mb-8 shadow-2xl relative overflow-hidden',
+            pct >= 80 ? 'bg-gradient-to-br from-emerald-500 to-teal-700 shadow-emerald-200' :
+            pct >= 60 ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-200' :
+            'bg-gradient-to-br from-rose-500 to-red-700 shadow-rose-200'
           )}>
-            <div className="text-5xl font-black">{pct}%</div>
-            <div className="text-xl font-black">{score} / {totalScore}</div>
-            <div className="text-white/80 text-sm font-bold">
-              {pct >= 80 ? '🎉 ممتاز!' : pct >= 60 ? '👍 جيد' : '💪 حاول مرة أخرى'}
+            <div className="text-6xl md:text-7xl font-black tracking-tight">{pct}%</div>
+            <div className="text-2xl font-black">الدرجة: {score} من {totalScore}</div>
+            <div className="text-white/95 text-base font-black bg-white/20 backdrop-blur-md px-6 py-2 rounded-2xl w-fit mx-auto">
+              {pct >= 80 ? '🎉 نتيجة ممتازة! أحسنت صنعاً' : pct >= 60 ? '👍 نتيجة جيدة! استمر في المحاولة' : '💪 لا بأس، حاول مرة أخرى لتحسين نتيجتك'}
             </div>
           </div>
 
-          {/* Detailed correction */}
-          <div className="space-y-3 mb-6">
-            <h3 className="font-black text-slate-900">التصحيح التفصيلي</h3>
-            {qs.map((q, i) => {
-              const given = ans[q.id] || '';
-              const isCorrect = given.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
-              return (
-                <div
-                  key={q.id}
-                  className={cn(
-                    'rounded-[24px] p-4 border-2 space-y-2',
-                    isCorrect ? 'bg-emerald-50/50 border-emerald-200' : 'bg-rose-50/50 border-rose-200'
-                  )}
-                >
-                  <div className="flex items-start gap-2">
-                    {isCorrect
-                      ? <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-                      : <XCircle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-                    }
-                    <p className="text-sm font-bold text-slate-900">
-                      <span className="text-slate-400 ml-1">{i + 1}.</span>
-                      {q.question_text}
-                    </p>
-                  </div>
-                  {!isCorrect && (
-                    <div className="mr-7 space-y-1">
-                      <p className="text-xs font-bold text-rose-600">
-                        إجابتك: {renderAnswer(q, given)}
-                      </p>
-                      <p className="text-xs font-bold text-emerald-700">
-                        الإجابة الصحيحة: {renderAnswer(q, q.correct_answer)}
+          {/* Detailed Correction Breakdown */}
+          <div className="bg-white border border-slate-100 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-sm mb-6">
+            <h3 className="font-black text-slate-900 text-lg border-b border-slate-100 pb-4">
+              التصحيح التفصيلي للإجابات ({qs.length} أسئلة)
+            </h3>
+
+            <div className="space-y-4">
+              {qs.map((q, i) => {
+                const given = ans[q.id] || '';
+                const isCorrect = given.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+                return (
+                  <div
+                    key={q.id}
+                    className={cn(
+                      'rounded-[24px] p-5 border-2 space-y-3 transition-all',
+                      isCorrect
+                        ? 'bg-emerald-50/40 border-emerald-200/90'
+                        : 'bg-rose-50/40 border-rose-200/90'
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      {isCorrect ? (
+                        <div className="w-7 h-7 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="w-4 h-4" />
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-xl bg-rose-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+                          <XCircle className="w-4 h-4" />
+                        </div>
+                      )}
+                      <p className="text-base font-black text-slate-900 leading-relaxed flex-1">
+                        <span className="text-slate-400 ml-2 font-mono">#{i + 1}</span>
+                        {q.question_text}
                       </p>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+
+                    <div className="mr-10 space-y-1.5 pt-1">
+                      <p className={cn('text-sm font-bold', isCorrect ? 'text-emerald-700' : 'text-rose-700')}>
+                        إجابتك: {renderAnswer(q, given)}
+                      </p>
+                      {!isCorrect && (
+                        <p className="text-sm font-black text-emerald-800 bg-emerald-100/70 px-3 py-1.5 rounded-xl w-fit">
+                          الإجابة الصحيحة: {renderAnswer(q, q.correct_answer)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <button
             onClick={onFinish}
-            className="w-full h-12 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm transition-colors"
+            className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base transition-colors shadow-lg shadow-slate-200 cursor-pointer"
           >
-            العودة للاختبارات
+            العودة لصفحة الاختبارات
           </button>
         </div>
       </AppLayout>
@@ -402,17 +559,19 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
 }
 
 function renderAnswer(q: ExamQuestion, value: string): string {
+  if (!value || value.trim() === '') return '(لم تتم الإجابة)';
   if (q.question_type === 'true_false') {
-    return value === 'true' ? 'صح ✓' : value === 'false' ? 'غلط ✗' : '(لم يجب)';
+    return value === 'true' ? 'صح ✓' : value === 'false' ? 'خطأ ✗' : '(لم تتم الإجابة)';
   }
-  return value || '(لم يجب)';
+  return value;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-slate-50 rounded-2xl p-3">
-      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-      <p className="text-sm font-black text-slate-900">{value}</p>
+    <div className="bg-slate-50/80 border border-slate-100 rounded-2xl p-4">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-base font-black text-slate-900">{value}</p>
     </div>
   );
 }
+

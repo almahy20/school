@@ -300,21 +300,64 @@ export function useUpdateStudent() {
 
       if (error) throw error;
 
-      // Log action to audit logs
-      await (supabase as any).rpc('log_action', {
-        p_action: 'UPDATE_STUDENT',
-        p_entity_type: 'students',
-        p_entity_id: id,
-        p_details: `تحديث بيانات الطالب: ${Object.keys(updates).join(', ')}`
+      // Log action to audit logs (safely handled)
+      try {
+        await (supabase as any).rpc('log_action', {
+          p_action: 'UPDATE_STUDENT',
+          p_entity_type: 'students',
+          p_entity_id: id,
+          p_details: `تحديث بيانات الطالب: ${Object.keys(updates).join(', ')}`
+        });
+      } catch (_) {}
+
+      return data as Student;
+    },
+    onSuccess: (updatedData, variables) => {
+      // 1. Direct synchronous cache update for list queries
+      queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map(s => s.id === variables.id ? { ...s, ...updatedData } : s);
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((s: any) => s.id === variables.id ? { ...s, ...updatedData } : s),
+          };
+        }
+        return old;
       });
 
-      return data;
-    },
-    onSuccess: (_, variables) => {
+      // 2. Direct cache update for single student query
+      queryClient.setQueryData(['student', variables.id], (old: any) => {
+        if (!old) return updatedData;
+        return { ...old, ...updatedData };
+      });
+
+      // 3. Direct cache update for child full details query
+      queryClient.setQueriesData({ queryKey: ['child-full-details', variables.id] }, (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          name: updatedData?.name || old.name,
+          class_id: updatedData?.class_id !== undefined ? updatedData.class_id : old.class_id,
+          parent_phone: updatedData?.parent_phone !== undefined ? updatedData.parent_phone : old.parent_phone,
+          classes: updatedData?.classes || old.classes,
+        };
+      });
+
+      // 4. Invalidate all related student & class queries
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['student', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['student'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-      toast.success('تم تحديث الطالب بنجاح');
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      
+      toast.success('تم تحديث بيانات الطالب بنجاح');
+    },
+    onError: (err: any) => {
+      toast.error('فشل تحديث بيانات الطالب', { description: err.message });
     },
   });
 }
