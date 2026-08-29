@@ -160,32 +160,41 @@ export function usePendingParents() {
     queryFn: async () => {
       if (!user?.schoolId) return [];
 
-      const { data, error } = await supabase
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
-        .select(`
-          id,
-          created_at,
-          approval_status,
-          profiles:user_id (
-            id,
-            full_name,
-            phone
-          )
-        `)
+        .select('id, user_id, created_at, approval_status')
         .eq('school_id', user.schoolId)
         .eq('role', 'parent')
         .eq('approval_status', 'pending');
 
-      if (error) throw error;
+      if (rolesError) throw rolesError;
+      if (!rolesData || rolesData.length === 0) return [];
 
-      return (data || []).map((item: any) => ({
-        id: item.profiles?.id,
-        full_name: item.profiles?.full_name || 'بدون اسم',
-        phone: item.profiles?.phone || 'بدون هاتف',
-        created_at: item.created_at,
-        user_role_id: item.id,
-        approval_status: item.approval_status,
-      })) as PendingParent[];
+      const userIds = rolesData.map((r: any) => r.user_id).filter(Boolean);
+      let profilesMap = new Map<string, any>();
+
+      if (userIds.length > 0) {
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, phone')
+          .in('id', userIds);
+
+        if (!profilesError && profilesData) {
+          profilesData.forEach((p: any) => profilesMap.set(p.id, p));
+        }
+      }
+
+      return rolesData.map((roleRecord: any) => {
+        const profile = profilesMap.get(roleRecord.user_id);
+        return {
+          id: profile?.id || roleRecord.user_id,
+          full_name: profile?.full_name || 'بدون اسم',
+          phone: profile?.phone || 'بدون هاتف',
+          created_at: roleRecord.created_at,
+          user_role_id: roleRecord.id,
+          approval_status: roleRecord.approval_status,
+        };
+      }) as PendingParent[];
     },
     enabled: !!session && !!user?.schoolId,
     staleTime: 10 * 1000,
