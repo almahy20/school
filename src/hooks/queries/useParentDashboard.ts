@@ -204,8 +204,10 @@ export function useParentChildren() {
       }
     },
     enabled: !!session && !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    staleTime: 10 * 60 * 1000,
+    staleTime: 10 * 1000,
     gcTime: 30 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
   });
@@ -378,10 +380,10 @@ export function useChildFullDetails(studentId: string | undefined) {
       }
     },
     enabled: !!(studentId && user?.schoolId),
-    staleTime: 15 * 60 * 1000,   // 15 min — detailed data doesn't change often
-    gcTime: 60 * 60 * 1000,       // 1 hour in memory
-    refetchOnMount: false,         // prevent background refetch when navigating back
-    refetchOnWindowFocus: false,   // no refetch on tab focus
+    staleTime: 15 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error: any) => {
       if (error?.code === 'PGRST202' || (error?.status >= 400 && error?.status < 500)) {
         return false;

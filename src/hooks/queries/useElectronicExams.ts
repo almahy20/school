@@ -33,6 +33,9 @@ export interface ElectronicExam {
   duration_minutes: number;
   instructions: string | null;
   status: ExamStatus;
+  available_from?: string | null;
+  available_until?: string | null;
+  language?: 'ar' | 'en';
   created_at: string;
   updated_at: string;
   // joined
@@ -40,6 +43,14 @@ export interface ElectronicExam {
   questions_count?: number;
   attempts_count?: number;
   avg_score?: number;
+}
+
+/** فحص ما إذا كان النص مكتوباً بالإنجليزية لتحديد اتجاه LTR وترقيم A/B/C/D */
+export function isEnglishText(text?: string | null): boolean {
+  if (!text) return false;
+  const cleaned = text.replace(/[^a-zA-Z\u0600-\u06FF]/g, '').trim();
+  if (!cleaned) return false;
+  return /^[a-zA-Z]/.test(cleaned);
 }
 
 export interface ExamAttempt {
@@ -165,6 +176,9 @@ export function useCreateElectronicExam() {
       subject: string;
       duration_minutes: number;
       instructions?: string;
+      available_from?: string | null;
+      available_until?: string | null;
+      language?: 'ar' | 'en';
     }) => {
       if (!user?.schoolId || !user?.id) throw new Error('بيانات المستخدم غير مكتملة');
       const { data: exam, error } = await db
@@ -177,6 +191,9 @@ export function useCreateElectronicExam() {
           subject:          data.subject.trim(),
           duration_minutes: data.duration_minutes,
           instructions:     data.instructions?.trim() || null,
+          available_from:   data.available_from || new Date().toISOString(),
+          available_until:  data.available_until || null,
+          language:         data.language || 'ar',
           status:           'draft',
         })
         .select()
@@ -205,6 +222,9 @@ export function useUpdateElectronicExam() {
       subject?: string;
       duration_minutes?: number;
       instructions?: string | null;
+      available_from?: string | null;
+      available_until?: string | null;
+      language?: 'ar' | 'en';
       status?: ExamStatus;
     }) => {
       const { id, class_id, ...updates } = data;

@@ -16,6 +16,7 @@ import {
   useUpdateElectronicExam,
   useSaveExamQuestions,
   useExamQuestions,
+  isEnglishText,
   type ElectronicExam,
   type QuestionType,
   type ExamQuestion,
@@ -32,6 +33,8 @@ const examSchema = z.object({
   title:            z.string().min(1, 'العنوان مطلوب').max(200, 'الحد الأقصى 200 حرف'),
   subject:          z.string().min(1, 'المادة مطلوبة').max(100, 'الحد الأقصى 100 حرف'),
   duration_minutes: z.coerce.number().min(1, 'المدة لا تقل عن دقيقة').max(180, 'المدة لا تزيد عن 180 دقيقة'),
+  available_until:  z.string().optional(),
+  language:         z.enum(['ar', 'en']).default('ar'),
   instructions:     z.string().max(1000, 'الحد الأقصى 1000 حرف').optional(),
 });
 type ExamFormData = z.infer<typeof examSchema>;
@@ -101,17 +104,26 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
       title:            editExam?.title || '',
       subject:          editExam?.subject || '',
       duration_minutes: editExam?.duration_minutes || 30,
+      available_until:  editExam?.available_until ? new Date(editExam.available_until).toISOString().slice(0, 16) : '',
+      language:         (editExam?.language as 'ar' | 'en') || 'ar',
       instructions:     editExam?.instructions || '',
     },
   });
 
+  const currentLanguage = form.watch('language');
+
   // ── Step 1: Save exam info ─────────────────────────────────────────────────
   const handleSaveInfo = form.handleSubmit(async (data) => {
     try {
+      const payload = {
+        ...data,
+        available_until: data.available_until ? new Date(data.available_until).toISOString() : null,
+      };
+
       if (examId) {
-        await updateExam.mutateAsync({ id: examId, class_id: classId, ...data });
+        await updateExam.mutateAsync({ id: examId, class_id: classId, ...payload });
       } else {
-        const exam = await createExam.mutateAsync({ class_id: classId, ...data });
+        const exam = await createExam.mutateAsync({ class_id: classId, ...payload });
         setExamId(exam.id);
       }
       setStep('questions');
@@ -281,35 +293,79 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
             >
               <Input
                 {...form.register('title')}
-                placeholder="مثال: اختبار الفصل الأول - العلوم"
+                placeholder="مثال: اختبار الفصل الأول - العلوم / English Quiz 1"
                 className="h-11 rounded-2xl text-right"
                 maxLength={200}
               />
             </FormField>
-            <FormField
-              label="المادة *"
-              error={form.formState.errors.subject?.message}
-            >
-              <Input
-                {...form.register('subject')}
-                placeholder="مثال: العلوم، الرياضيات، اللغة العربية..."
-                className="h-11 rounded-2xl text-right"
-                maxLength={100}
-              />
-            </FormField>
-            <FormField
-              label="المدة الزمنية (بالدقائق) *"
-              error={form.formState.errors.duration_minutes?.message}
-            >
-              <Input
-                {...form.register('duration_minutes')}
-                type="number"
-                min={1}
-                max={180}
-                placeholder="30"
-                className="h-11 rounded-2xl text-right"
-              />
-            </FormField>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                label="المادة *"
+                error={form.formState.errors.subject?.message}
+              >
+                <Input
+                  {...form.register('subject')}
+                  placeholder="مثال: العلوم، English، الرياضيات..."
+                  className="h-11 rounded-2xl text-right"
+                  maxLength={100}
+                />
+              </FormField>
+              <FormField
+                label="لغة الاختبار *"
+              >
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => form.setValue('language', 'ar')}
+                    className={cn(
+                      'flex-1 h-11 rounded-2xl text-xs font-black border-2 transition-all',
+                      currentLanguage === 'ar'
+                        ? 'bg-violet-50 border-violet-600 text-violet-900 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                    )}
+                  >
+                    🇸🇦 عربي (RTL)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => form.setValue('language', 'en')}
+                    className={cn(
+                      'flex-1 h-11 rounded-2xl text-xs font-black border-2 transition-all',
+                      currentLanguage === 'en'
+                        ? 'bg-violet-50 border-violet-600 text-violet-900 shadow-sm'
+                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'
+                    )}
+                  >
+                    🇬🇧 English (LTR)
+                  </button>
+                </div>
+              </FormField>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                label="المدة الزمنية لحل الاختبار (بالدقائق) *"
+                error={form.formState.errors.duration_minutes?.message}
+              >
+                <Input
+                  {...form.register('duration_minutes')}
+                  type="number"
+                  min={1}
+                  max={180}
+                  placeholder="30"
+                  className="h-11 rounded-2xl text-right"
+                />
+              </FormField>
+              <FormField
+                label="موعد إغلاق وانتهاء الاختبار (اختياري / Deadline)"
+                error={form.formState.errors.available_until?.message}
+              >
+                <Input
+                  {...form.register('available_until')}
+                  type="datetime-local"
+                  className="h-11 rounded-2xl text-right bg-slate-50"
+                />
+              </FormField>
+            </div>
             <FormField
               label="تعليمات الاختبار (اختياري)"
               error={form.formState.errors.instructions?.message}
@@ -347,6 +403,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
               index={idx}
               total={questions.length}
               question={q}
+              examLanguage={currentLanguage}
               onChange={patch => updateQuestion(idx, patch)}
               onChangeType={type => changeType(idx, type)}
               onMoveUp={() => moveUp(idx)}
@@ -415,7 +472,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
             </div>
             <div className="space-y-4">
               {questions.map((q, idx) => (
-                <PreviewQuestion key={q._key} index={idx} question={q} />
+                <PreviewQuestion key={q._key} index={idx} question={q} examLanguage={currentLanguage} />
               ))}
             </div>
           </div>
@@ -467,30 +524,41 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
 // ─── Question Editor ──────────────────────────────────────────────────────────
 
 function QuestionEditor({
-  index, total, question, onChange, onChangeType, onMoveUp, onMoveDown, onDelete,
+  index, total, question, examLanguage, onChange, onChangeType, onMoveUp, onMoveDown, onDelete,
 }: {
   index: number;
   total: number;
   question: LocalQuestion;
+  examLanguage: 'ar' | 'en';
   onChange: (patch: Partial<LocalQuestion>) => void;
   onChangeType: (type: QuestionType) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
 }) {
+  const isEn = examLanguage === 'en' || isEnglishText(question.question_text);
+  const letters = isEn ? ['A', 'B', 'C', 'D'] : ['أ', 'ب', 'ج', 'د'];
+
   const TYPES: { value: QuestionType; label: string }[] = [
-    { value: 'true_false',      label: 'صح / غلط' },
-    { value: 'multiple_choice', label: 'اختيار متعدد' },
-    { value: 'fill_blank',      label: 'إكمال فراغ' },
+    { value: 'true_false',      label: isEn ? 'True / False' : 'صح / غلط' },
+    { value: 'multiple_choice', label: isEn ? 'Multiple Choice' : 'اختيار متعدد' },
+    { value: 'fill_blank',      label: isEn ? 'Fill in Blank' : 'إكمال فراغ' },
   ];
 
   return (
     <div className="bg-white border border-slate-100 rounded-[28px] p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-black text-slate-500 bg-slate-50 rounded-xl px-3 py-1">
-          سؤال {index + 1}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-black text-slate-500 bg-slate-50 rounded-xl px-3 py-1">
+            {isEn ? `Question ${index + 1}` : `سؤال ${index + 1}`}
+          </span>
+          {isEn && (
+            <Badge variant="outline" className="text-[10px] font-bold text-violet-600 border-violet-200 bg-violet-50">
+              LTR / English
+            </Badge>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <button
             onClick={onMoveUp}
@@ -536,33 +604,42 @@ function QuestionEditor({
       {/* Question text */}
       <div className="space-y-1.5">
         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          نص السؤال *
+          {isEn ? 'Question Text *' : 'نص السؤال *'}
           {question.question_type === 'fill_blank' && (
-            <span className="mr-2 text-violet-500 normal-case">استخدم ___ للفراغ</span>
+            <span className="mr-2 text-violet-500 normal-case">
+              {isEn ? 'Use ___ for the blank' : 'استخدم ___ للفراغ'}
+            </span>
           )}
         </label>
         <textarea
+          dir={isEn ? 'ltr' : 'rtl'}
           value={question.question_text}
           onChange={e => onChange({ question_text: e.target.value })}
           placeholder={
             question.question_type === 'fill_blank'
-              ? 'مثال: العاصمة المصرية هي ___ '
-              : 'اكتب نص السؤال هنا...'
+              ? (isEn ? 'e.g. The capital of Egypt is ___' : 'مثال: العاصمة المصرية هي ___ ')
+              : (isEn ? 'Write question here...' : 'اكتب نص السؤال هنا...')
           }
           rows={2}
           maxLength={500}
-          className="w-full rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white px-4 py-3 text-sm font-medium text-right resize-none outline-none focus:border-violet-400 transition-colors"
+          className={cn(
+            "w-full rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white px-4 py-3 text-sm font-medium resize-none outline-none focus:border-violet-400 transition-colors",
+            isEn ? "text-left" : "text-right"
+          )}
         />
       </div>
 
       {/* Type-specific fields */}
       {question.question_type === 'true_false' && (
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الإجابة الصحيحة *</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {isEn ? 'Correct Answer *' : 'الإجابة الصحيحة *'}
+          </label>
           <div className="flex gap-3">
             {(['true', 'false'] as const).map(val => (
               <button
                 key={val}
+                type="button"
                 onClick={() => onChange({ correct_answer: val })}
                 className={cn(
                   'flex-1 flex items-center justify-center gap-2 h-10 rounded-2xl text-sm font-black border-2 transition-all',
@@ -571,7 +648,10 @@ function QuestionEditor({
                     : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
                 )}
               >
-                {val === 'true' ? <><CheckCircle2 className="w-4 h-4" /> صح</> : <><XCircle className="w-4 h-4" /> غلط</>}
+                {val === 'true' 
+                  ? <><CheckCircle2 className="w-4 h-4" /> {isEn ? 'True' : 'صح'}</> 
+                  : <><XCircle className="w-4 h-4" /> {isEn ? 'False' : 'غلط'}</>
+                }
               </button>
             ))}
           </div>
@@ -580,13 +660,15 @@ function QuestionEditor({
 
       {question.question_type === 'multiple_choice' && (
         <div className="space-y-3">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الخيارات (أ، ب، ج، د) *</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {isEn ? 'Options (A, B, C, D) *' : 'الخيارات (أ، ب، ج، د) *'}
+          </label>
           {question.options.map((opt, oi) => {
-            const letters = ['أ', 'ب', 'ج', 'د'];
             const isCorrect = question.correct_answer === opt && opt.trim() !== '';
             return (
-              <div key={oi} className="flex items-center gap-2">
+              <div key={oi} dir={isEn ? 'ltr' : 'rtl'} className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => opt.trim() && onChange({ correct_answer: opt })}
                   className={cn(
                     'w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border-2 transition-all',
@@ -594,43 +676,48 @@ function QuestionEditor({
                       ? 'bg-emerald-500 border-emerald-500 text-white'
                       : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-violet-300'
                   )}
-                  title="اضغط لتحديد كإجابة صحيحة"
+                  title={isEn ? 'Click to mark as correct answer' : 'اضغط لتحديد كإجابة صحيحة'}
                 >
                   {letters[oi]}
                 </button>
                 <Input
+                  dir={isEn ? 'ltr' : 'rtl'}
                   value={opt}
                   onChange={e => {
                     const newOpts = [...question.options] as [string, string, string, string];
                     newOpts[oi] = e.target.value;
-                    // إذا كان هذا الخيار هو الصحيح، حدّث correct_answer
                     const newCorrect = question.correct_answer === question.options[oi]
                       ? e.target.value
                       : question.correct_answer;
                     onChange({ options: newOpts, correct_answer: newCorrect });
                   }}
-                  placeholder={`الخيار ${letters[oi]}`}
+                  placeholder={isEn ? `Option ${letters[oi]}` : `الخيار ${letters[oi]}`}
                   maxLength={200}
-                  className="h-9 rounded-2xl text-right text-sm flex-1"
+                  className={cn("h-9 rounded-2xl text-sm flex-1", isEn ? "text-left" : "text-right")}
                 />
               </div>
             );
           })}
           {!question.correct_answer && (
-            <p className="text-[10px] text-violet-500 font-bold">اضغط على حرف الخيار لتحديده كإجابة صحيحة</p>
+            <p className="text-[10px] text-violet-500 font-bold">
+              {isEn ? 'Click the option letter to mark it as the correct answer' : 'اضغط على حرف الخيار لتحديده كإجابة صحيحة'}
+            </p>
           )}
         </div>
       )}
 
       {question.question_type === 'fill_blank' && (
         <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">الإجابة الصحيحة *</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            {isEn ? 'Correct Answer *' : 'الإجابة الصحيحة *'}
+          </label>
           <Input
+            dir={isEn ? 'ltr' : 'rtl'}
             value={question.correct_answer}
             onChange={e => onChange({ correct_answer: e.target.value })}
-            placeholder="الإجابة الصحيحة للفراغ"
+            placeholder={isEn ? 'Correct answer for the blank' : 'الإجابة الصحيحة للفراغ'}
             maxLength={200}
-            className="h-10 rounded-2xl text-right"
+            className={cn("h-10 rounded-2xl", isEn ? "text-left" : "text-right")}
           />
         </div>
       )}
@@ -640,14 +727,15 @@ function QuestionEditor({
 
 // ─── Preview Question ──────────────────────────────────────────────────────────
 
-function PreviewQuestion({ index, question }: { index: number; question: LocalQuestion }) {
-  const letters = ['أ', 'ب', 'ج', 'د'];
+function PreviewQuestion({ index, question, examLanguage }: { index: number; question: LocalQuestion; examLanguage: 'ar' | 'en' }) {
+  const isEn = examLanguage === 'en' || isEnglishText(question.question_text);
+  const letters = isEn ? ['A', 'B', 'C', 'D'] : ['أ', 'ب', 'ج', 'د'];
 
   return (
-    <div className="border border-slate-100 rounded-2xl p-4 space-y-3">
-      <p className="text-sm font-black text-slate-900">
-        <span className="text-violet-500 ml-2">{index + 1}.</span>
-        {question.question_text || '(نص السؤال)'}
+    <div dir={isEn ? 'ltr' : 'rtl'} className="border border-slate-100 rounded-2xl p-4 space-y-3">
+      <p className={cn("text-sm font-black text-slate-900", isEn ? "text-left" : "text-right")}>
+        <span className={cn("text-violet-500", isEn ? "mr-2" : "ml-2")}>{index + 1}.</span>
+        {question.question_text || (isEn ? '(Question text)' : '(نص السؤال)')}
       </p>
 
       {question.question_type === 'true_false' && (
@@ -662,9 +750,11 @@ function PreviewQuestion({ index, question }: { index: number; question: LocalQu
                   : 'bg-slate-50 border-slate-100 text-slate-400'
               )}
             >
-              {val === 'true' ? '✓ صح' : '✗ غلط'}
+              {val === 'true' ? (isEn ? '✓ True' : '✓ صح') : (isEn ? '✗ False' : '✗ غلط')}
               {question.correct_answer === val && (
-                <span className="text-[9px] font-black bg-white/60 px-1 rounded">✓ صحيحة</span>
+                <span className="text-[9px] font-black bg-white/60 px-1 rounded">
+                  {isEn ? '✓ Correct' : '✓ صحيحة'}
+                </span>
               )}
             </div>
           ))}
@@ -684,9 +774,9 @@ function PreviewQuestion({ index, question }: { index: number; question: LocalQu
               )}
             >
               <span className="text-xs font-black text-slate-400">{letters[oi]}</span>
-              {opt || '—'}
+              <span className="flex-1">{opt || '—'}</span>
               {question.correct_answer === opt && opt.trim() && (
-                <span className="text-[9px] mr-auto text-emerald-600 font-black">✓</span>
+                <span className="text-[9px] text-emerald-600 font-black">✓</span>
               )}
             </div>
           ))}
@@ -695,7 +785,7 @@ function PreviewQuestion({ index, question }: { index: number; question: LocalQu
 
       {question.question_type === 'fill_blank' && (
         <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2">
-          <span className="text-xs font-bold text-slate-500">الإجابة:</span>
+          <span className="text-xs font-bold text-slate-500">{isEn ? 'Answer:' : 'الإجابة:'}</span>
           <span className="text-sm font-black text-emerald-700">{question.correct_answer || '—'}</span>
         </div>
       )}

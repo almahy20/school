@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -135,9 +135,9 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!session && !!user?.schoolId,
     placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 15 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     retry: 1,
   });
 }
@@ -149,63 +149,54 @@ export interface PendingParent {
   created_at: string;
   user_role_id?: string;
   approval_status?: string;
+  children_count?: number;
 }
 
-export function usePendingParents(limit = 100) {
+export function usePendingParents() {
   const { user, session } = useAuth();
-  const queryKey = ['pending-parents', user?.schoolId, limit];
 
   return useQuery({
-    queryKey,
-    queryFn: async (): Promise<PendingParent[]> => {
+    queryKey: ['pending-parents', user?.schoolId],
+    queryFn: async () => {
       if (!user?.schoolId) return [];
 
-      const { data: userRoles, error: rolesError } = await supabase
+      const { data, error } = await supabase
         .from('user_roles')
-        .select('user_id, id, approval_status')
-        .eq('role', 'parent')
+        .select(`
+          id,
+          created_at,
+          approval_status,
+          profiles:user_id (
+            id,
+            full_name,
+            phone
+          )
+        `)
         .eq('school_id', user.schoolId)
-        .eq('approval_status', 'pending')
-        .limit(limit);
+        .eq('role', 'parent')
+        .eq('approval_status', 'pending');
 
-      if (rolesError) throw rolesError;
-      if (!userRoles || userRoles.length === 0) return [];
+      if (error) throw error;
 
-      const userIds = userRoles.map(ur => ur.user_id);
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, created_at')
-        .in('id', userIds)
-        .order('created_at', { ascending: false });
-
-      if (profilesError) throw profilesError;
-      if (!profiles) return [];
-
-      const rolesMap = new Map<string, any>();
-      userRoles.forEach(ur => rolesMap.set(ur.user_id, ur));
-
-      return (profiles as any[]).map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name,
-        phone: profile.phone,
-        created_at: profile.created_at,
-        user_role_id: rolesMap.get(profile.id)?.id,
-        approval_status: rolesMap.get(profile.id)?.approval_status,
+      return (data || []).map((item: any) => ({
+        id: item.profiles?.id,
+        full_name: item.profiles?.full_name || 'بدون اسم',
+        phone: item.profiles?.phone || 'بدون هاتف',
+        created_at: item.created_at,
+        user_role_id: item.id,
+        approval_status: item.approval_status,
       })) as PendingParent[];
     },
     enabled: !!session && !!user?.schoolId,
-    staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 10 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: true,
-    retry: 1,
   });
 }
 
 export function useParent(id: string | undefined | null) {
-  const queryKey = useMemo(() => ['parent', id], [id]);
-
   return useQuery({
-    queryKey,
+    queryKey: ['parent', id],
     queryFn: async () => {
       if (!id) return null;
       const { data, error } = await supabase
@@ -217,12 +208,13 @@ export function useParent(id: string | undefined | null) {
       return data as Parent;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 60,
+    staleTime: 15 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: true,
   });
 }
+
+export const useParentDetails = useParent;
 
 export function useAdminParentChildren(parentId: string | undefined | null) {
   const { user, session } = useAuth();
@@ -267,10 +259,9 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
         });
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 1000 * 60 * 60,
+    staleTime: 15 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -306,10 +297,9 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
         }));
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 1000 * 60 * 10,
+    staleTime: 15 * 1000,
     gcTime: 1000 * 60 * 30,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnWindowFocus: true,
   });
 }
 

@@ -63,6 +63,8 @@ function MetaChip({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => void }) {
   const isDone = !!exam.attempt;
+  const isExpired = !isDone && exam.available_until ? new Date() > new Date(exam.available_until) : false;
+  const isNotStarted = !isDone && exam.available_from ? new Date() < new Date(exam.available_from) : false;
   const pct = isDone && exam.attempt
     ? Math.round((exam.attempt.score / (exam.attempt.total_score || 1)) * 100)
     : null;
@@ -72,19 +74,31 @@ function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => voi
       'group bg-white border rounded-[28px] p-5 transition-all duration-300 space-y-4',
       isDone
         ? 'border-emerald-100 hover:shadow-md hover:shadow-emerald-50'
-        : 'border-slate-100 hover:border-violet-200 hover:shadow-md hover:shadow-violet-50/60',
+        : isExpired
+          ? 'border-rose-100 bg-rose-50/20'
+          : 'border-slate-100 hover:border-violet-200 hover:shadow-md hover:shadow-violet-50/60',
     )}>
       {/* Top */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="font-black text-slate-900 text-sm leading-snug">{exam.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-black text-slate-900 text-sm leading-snug">{exam.title}</p>
+            {exam.language === 'en' && (
+              <Badge variant="outline" className="text-[9px] font-bold text-violet-600 border-violet-200 bg-violet-50 px-1.5 py-0.5">
+                EN
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-slate-400 font-bold mt-1">{exam.subject}</p>
         </div>
         <Badge className={cn(
           'text-[10px] font-black border-none rounded-xl px-2.5 py-1 shrink-0',
-          isDone ? 'bg-emerald-50 text-emerald-600' : 'bg-violet-50 text-violet-600',
+          isDone ? 'bg-emerald-50 text-emerald-600' :
+          isExpired ? 'bg-rose-100 text-rose-700 font-bold' :
+          isNotStarted ? 'bg-amber-100 text-amber-800 font-bold' :
+          'bg-violet-50 text-violet-600',
         )}>
-          {isDone ? 'تم الحل' : 'متاح'}
+          {isDone ? 'تم الحل' : isExpired ? 'منتهي' : isNotStarted ? 'يبدأ قريباً' : 'متاح'}
         </Badge>
       </div>
 
@@ -102,6 +116,12 @@ function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => voi
               </span>
             }
             label={exam.student_name}
+          />
+        )}
+        {exam.available_until && !isDone && (
+          <MetaChip
+            icon={<Clock className={cn("w-3 h-3", isExpired ? "text-rose-500" : "text-amber-500")} />}
+            label={`متاح حتى: ${new Date(exam.available_until).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}`}
           />
         )}
       </div>
@@ -135,11 +155,19 @@ function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => voi
       ) : (
         <button
           onClick={onStart}
-          className="w-full h-11 rounded-[18px] bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white text-sm font-black transition-all flex items-center justify-center gap-2"
+          disabled={isExpired || isNotStarted}
+          className={cn(
+            "w-full h-11 rounded-[18px] text-sm font-black transition-all flex items-center justify-center gap-2",
+            isExpired
+              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+              : isNotStarted
+                ? "bg-amber-50 text-amber-700 cursor-not-allowed border border-amber-200"
+                : "bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white shadow-md shadow-violet-100 cursor-pointer"
+          )}
         >
           <ClipboardList className="w-4 h-4" />
-          ابدأ الاختبار
-          <ChevronLeft className="w-4 h-4" />
+          {isExpired ? 'انتهت فترة الاختبار' : isNotStarted ? 'يبدأ الاختبار قريباً' : 'ابدأ الاختبار'}
+          {!isExpired && !isNotStarted && <ChevronLeft className="w-4 h-4" />}
         </button>
       )}
     </div>

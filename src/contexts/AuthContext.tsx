@@ -243,12 +243,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const silentRefresh = async (): Promise<boolean> => {
     try {
+      // إذا كان الجهاز غير متصل بالإنترنت، نحافظ على الجلسة الحالية ولا نسجل خروج
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return true;
+      }
       const { data, error } = await supabase.auth.refreshSession();
       if (!error && data.session) {
         applySession(data.session);
         return true;
       }
-    } catch (_e) { /* ignore */ }
+      // في حال وجود خلل مؤقت في الاتصال بالسيرفر (Network Error / Failed to fetch)، لا نسجل خروج
+      if (error && (
+        error.message?.includes('Failed to fetch') || 
+        error.message?.includes('NetworkError') || 
+        (error as any)?.status === 0
+      )) {
+        return true;
+      }
+    } catch (_e) { 
+      // أخطاء الشبكة غير المتوقعة لا تفقد المستخدم حسابه
+      return true;
+    }
     return false;
   };
 
@@ -261,8 +276,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const lastSignInTime = sessionStorage.getItem('user_signup_time');
       if (!lastSignInTime) {
         // لم يسجل في هذه الجلسة — يعني أعاد فتح الصفحة
-        supabase.auth.signOut().catch(() => {});
         sessionStorage.removeItem('no_remember_me');
+        performSignOut(setUser, setSession);
       }
     }
 
@@ -273,10 +288,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'INITIAL_SESSION') {
           if (eventSession) {
             applySession(eventSession);
+            setIsLoading(false);
           } else {
-            silentRefresh();
+            silentRefresh().then((success) => {
+              if (!success) {
+                // لا توجد جلسة صالحة وفشل التجديد — تصفير المستخدم ومسح الكاش لمنع الجلسة الشبحية
+                setUser(null);
+                setCachedUser(null);
+                setSession(null);
+              }
+              setIsLoading(false);
+            });
           }
-          setIsLoading(false);
           return;
         }
 
@@ -291,15 +314,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           supabase.auth.getSession().then(({ data: { session: current } }) => {
             if (current) {
               logger.log('[Auth] SIGNED_OUT ignored — active session exists (token rotation)');
+              applySession(current);
             } else {
-              silentRefresh();
+              silentRefresh().then((success) => {
+                if (!success) {
+                  setUser(null);
+                  setCachedUser(null);
+                  setSession(null);
+                }
+              });
             }
-          }).catch(() => { /* offline */ });
+          }).catch(() => {
+            setUser(null);
+            setCachedUser(null);
+            setSession(null);
+          });
           return;
         }
 
         if (event === 'TOKEN_REFRESH_FAILED') {
-          silentRefresh();
+          silentRefresh().then((success) => {
+            if (!success) {
+              setUser(null);
+              setCachedUser(null);
+              setSession(null);
+            }
+          });
           return;
         }
       }

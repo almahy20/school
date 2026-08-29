@@ -23,19 +23,17 @@ if (typeof window !== 'undefined') {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ✅ Optimization: Rely on Realtime Sync for updates instead of frequent polling
-      staleTime: 5 * 60 * 1000, // 5 minutes - Navigation stays fast, background refetch only for truly stale data
-      gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for fast starts
-      refetchOnWindowFocus: true, // Silent background refetch when user returns to tab after 5+ min
-      refetchOnMount: true, // Refetch on mount when stale — fixes persisted IndexedDB being served forever old
+      // ✅ Stale-While-Revalidate: Instant UI from IndexedDB cache, silent background refetch after 10s
+      staleTime: 10 * 1000, // 10 seconds - fast navigation without data staleness
+      gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for instant UI hydration
+      refetchOnWindowFocus: true, // Silent background refetch when user returns to tab/window
+      refetchOnMount: true, // Refetch on component mount when stale
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },
     mutations: {
       onSuccess: () => {
-        // ✅ Optimization: Remove global invalidation. 
-        // Mutations should handle their own cache invalidation for better control and performance.
-        // queryClient.invalidateQueries({ refetchType: 'all' });
+        // Individual mutations manage their targeted cache invalidation
       },
     }
   },
@@ -50,7 +48,7 @@ export const queryClient = new QueryClient({
 // ✅ Optimization: IndexedDB Query Persistence with Versioning
 if (typeof window !== 'undefined') {
   // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v1.3'; // bumped: exclude child-full-details from persistence
+  const CACHE_VERSION = 'v2.0'; // bumped: fresh cache reset with fast SWR defaults
 
   const idbPersister = {
     persistClient: async (client: any) => {
