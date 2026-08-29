@@ -75,23 +75,43 @@ serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // ─── Auth / Caller verification (unchanged) ──────────────────────────
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const apiKey = req.headers.get("apikey") ?? "";
+  // ─── Helper: parse JWT payload defensively ──────────────────────────
+  const parseJwtPayload = (jwtToken: string): any => {
+    try {
+      const parts = jwtToken.trim().split(".");
+      if (parts.length < 2) return null;
+      const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+      const decoded = atob(base64);
+      return JSON.parse(decoded);
+    } catch {
+      return null;
+    }
+  };
+
+  // ─── Auth / Caller verification ───────────────────────────────────────
+  const authHeader = (req.headers.get("Authorization") ?? "").trim();
+  const apiKey = (req.headers.get("apikey") ?? "").trim();
   let callerUserId: string | null = null;
   let callerSchoolId: string | null = null;
   let callerIsSuperAdmin = false;
   let callerIsPrivileged = false;
   let callerIsInternal = false;
 
-  if (authHeader.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
+  const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : apiKey;
 
-    if (token === supabaseServiceKey) {
+  if (rawToken) {
+    const jwtPayload = parseJwtPayload(rawToken);
+    const isServiceRoleJwt = jwtPayload?.role === "service_role" || jwtPayload?.iss === "supabase" && jwtPayload?.role === "service_role";
+
+    if (
+      rawToken === supabaseServiceKey.trim() ||
+      apiKey === supabaseServiceKey.trim() ||
+      isServiceRoleJwt
+    ) {
       callerIsInternal = true;
       callerIsPrivileged = true;
     } else {
-      const { data: { user }, error } = await supabase.auth.getUser(token);
+      const { data: { user }, error } = await supabase.auth.getUser(rawToken);
       if (error || !user) {
         console.error("[Push] Invalid JWT:", error?.message);
         return jsonResponse({ error: "Unauthorized", message: "Invalid or expired token" }, 401);
@@ -117,9 +137,6 @@ serve(async (req) => {
         return jsonResponse({ error: "Forbidden", message: "Caller has no school scope" }, 403);
       }
     }
-  } else if (apiKey === supabaseServiceKey) {
-    callerIsInternal = true;
-    callerIsPrivileged = true;
   } else {
     return jsonResponse({ error: "Unauthorized", message: "Missing or invalid Authorization header" }, 401);
   }
