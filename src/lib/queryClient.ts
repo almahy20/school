@@ -23,11 +23,11 @@ if (typeof window !== 'undefined') {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ✅ Stale-While-Revalidate: Instant UI from IndexedDB cache, silent background refetch after 10s
-      staleTime: 10 * 1000, // 10 seconds - fast navigation without data staleness
-      gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in IndexedDB for instant UI hydration
-      refetchOnWindowFocus: true, // Silent background refetch when user returns to tab/window
-      refetchOnMount: true, // Refetch on component mount when stale
+      // ✅ Stale-While-Revalidate: Serve from cache, background refresh only when needed
+      staleTime: 60 * 1000, // 1 minute (prevents spamming Supabase API on rapid page switches)
+      gcTime: 24 * 60 * 60 * 1000, // 24 hours (IndexedDB cache)
+      refetchOnWindowFocus: false, // Prevents request storm when user tabs switch
+      refetchOnMount: true, // Refetch only when component mounts and data is stale (>60s)
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },

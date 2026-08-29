@@ -382,7 +382,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (phone: string, password: string, rememberMe = true): Promise<string | null> => {
     try {
-      const email = `${phone}@edara.com`;
+      const cleanInput = phone.trim();
+      const isEmail = cleanInput.includes('@');
+      const primaryEmail = isEmail ? cleanInput : `${cleanInput}@edara.com`;
+      const fallbackEmail = isEmail ? null : `${cleanInput}@school.local`;
 
       // لو rememberMe = false نستخدم sessionStorage بدل localStorage
       // عشان الجلسة تنتهي لما يغلق المتصفح
@@ -400,7 +403,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionStorage.removeItem('no_remember_me');
       }
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      let { data, error } = await supabase.auth.signInWithPassword({ email: primaryEmail, password });
+
+      // إذا فشل بالدومين الأساسي وله دومين بديل (@school.local للحسابات القديمة/المُنشأة من لوحة الإدارة)
+      if (error && fallbackEmail && error.message.includes('Invalid login credentials')) {
+        const fallbackRes = await supabase.auth.signInWithPassword({ email: fallbackEmail, password });
+        if (!fallbackRes.error) {
+          data = fallbackRes.data;
+          error = null;
+        }
+      }
+
       if (error) {
         return error.message.includes('Invalid login credentials')
           ? 'رقم الهاتف أو كلمة المرور غير صحيحة'

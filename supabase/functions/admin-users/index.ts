@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
           return jsonResponse(req, { error: "School ID is required" }, 400);
         }
 
-        const email = `${phone}@school.local`;
+        const email = `${phone}@edara.com`;
         const { data: newUser, error: createErr } = await adminClient.auth.admin.createUser({
           email,
           password: data.password,
