@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -204,12 +204,13 @@ export function useParentChildren() {
       }
     },
     enabled: !!session && !!(user?.id && user?.schoolId && user?.role === 'parent'),
-    staleTime: 10 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 30 * 60 * 1000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
-    retry: 2,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: 1,
+    retryDelay: 1000,
   });
 }
 
@@ -380,10 +381,11 @@ export function useChildFullDetails(studentId: string | undefined) {
       }
     },
     enabled: !!(studentId && user?.schoolId),
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: (failureCount, error: any) => {
       if (error?.code === 'PGRST202' || (error?.status >= 400 && error?.status < 500)) {
         return false;

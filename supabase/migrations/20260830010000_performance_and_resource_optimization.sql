@@ -48,8 +48,21 @@ ON public.user_roles (user_id, school_id, role);
 -- ─────────────────────────────────────────────────────────────────────────
 -- 5. تنظيف سجلات الـ Push Delivery القديمة لتوفير المساحة وموارد القرص
 -- ─────────────────────────────────────────────────────────────────────────
-DELETE FROM public.push_delivery_log 
-WHERE created_at < NOW() - INTERVAL '7 days';
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'push_delivery_log' AND column_name = 'queued_at'
+  ) THEN
+    DELETE FROM public.push_delivery_log WHERE queued_at < NOW() - INTERVAL '7 days';
+  ELSIF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'push_delivery_log' AND column_name = 'created_at'
+  ) THEN
+    DELETE FROM public.push_delivery_log WHERE created_at < NOW() - INTERVAL '7 days';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 6. تحديث إحصائيات المحرك (Query Planner Optimizer)

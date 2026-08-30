@@ -163,8 +163,9 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'Ø§Ù
     queryFn: () => fetchStudents(user, page, pageSize, search, classId),
     enabled: !!(session && user?.id), 
     placeholderData: keepPreviousData,
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -199,8 +200,9 @@ export function useStudent(id: string | undefined) {
 
     enabled: !!id,
     placeholderData: keepPreviousData,
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -392,8 +394,10 @@ export function useStudentParent(studentId: string | null | undefined) {
       return parentProfile;
     },
     enabled: !!studentId,
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -414,8 +418,10 @@ export function useClassStudents(classId: string | null | undefined) {
       return data || [];
     },
     enabled: !!classId,
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: false,
   });
 }
 

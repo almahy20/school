@@ -1,8 +1,8 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect } from 'react';
 
 const db = supabase as any;
 
@@ -62,6 +62,7 @@ export interface ExamAttempt {
   score: number;
   total_score: number;
   time_spent_seconds: number;
+  tab_switches_count: number; // anti-cheat: number of tab/window switches during exam
   started_at: string;
   completed_at: string | null;
   // joined
@@ -432,12 +433,14 @@ export function useSubmitExamAttempt() {
       answers,
       timeSpentSeconds,
       questions,
+      tabSwitchesCount = 0,
     }: {
       examId: string;
       studentId: string;
       answers: Record<string, string>;
       timeSpentSeconds: number;
       questions: ExamQuestion[];
+      tabSwitchesCount?: number;
     }) => {
       if (!user?.id) throw new Error('المستخدم غير مسجّل الدخول');
 
@@ -453,14 +456,15 @@ export function useSubmitExamAttempt() {
       const { data, error } = await db
         .from('exam_attempts')
         .insert({
-          exam_id:            examId,
-          student_id:         studentId,
-          parent_id:          user.id,
+          exam_id:              examId,
+          student_id:           studentId,
+          parent_id:            user.id,
           answers,
           score,
-          total_score:        totalScore,
-          time_spent_seconds: timeSpentSeconds,
-          completed_at:       new Date().toISOString(),
+          total_score:          totalScore,
+          time_spent_seconds:   timeSpentSeconds,
+          tab_switches_count:   tabSwitchesCount,
+          completed_at:         new Date().toISOString(),
         })
         .select()
         .single();

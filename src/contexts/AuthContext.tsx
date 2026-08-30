@@ -177,7 +177,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadingUserIdRef = useRef<string | null>(null);
 
   const applySession = (s: Session) => {
-    setSession(s);
+    setSession(prev => {
+      if (prev?.access_token === s.access_token && prev?.user?.id === s.user?.id) {
+        return prev;
+      }
+      return s;
+    });
 
     // Read last_auth_sync BEFORE updating it — used later to decide if RPC can be skipped
     const lastSync = parseInt(localStorage.getItem('last_auth_sync') || '0', 10);
@@ -185,7 +190,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Step 1: Set user immediately from JWT (instant, zero network)
     const jwtUser = buildUserFromJwt(s.user);
     if (jwtUser) {
-      setUser(jwtUser);
+      setUser(prev => {
+        if (
+          prev &&
+          prev.id === jwtUser.id &&
+          prev.role === jwtUser.role &&
+          prev.schoolId === jwtUser.schoolId &&
+          prev.approvalStatus === jwtUser.approvalStatus &&
+          prev.fullName === jwtUser.fullName &&
+          prev.phone === jwtUser.phone
+        ) {
+          return prev;
+        }
+        return jwtUser;
+      });
       setCachedUser(jwtUser);
       localStorage.setItem('last_auth_sync', Date.now().toString());
     }

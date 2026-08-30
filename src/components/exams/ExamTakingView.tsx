@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
   ArrowRight, ArrowLeft, Clock, CheckCircle2, XCircle,
-  AlertCircle, Loader2, Send, Check, Sparkles, BookOpen, HelpCircle
+  AlertCircle, Loader2, Send, Check, Sparkles, HelpCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -19,6 +20,19 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+
+// ── Seeded Shuffle (deterministic per student+exam, consistent across renders)
+function seededShuffle<T>(arr: T[], seed: string): T[] {
+  const out = [...arr];
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  for (let i = out.length - 1; i > 0; i--) {
+    h = (Math.imul(h ^ (h >>> 16), 0x45d9f3b)) | 0;
+    const j = Math.abs(h) % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
 
 interface ExamTakingViewProps {
   exam: ElectronicExam;
@@ -46,12 +60,120 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const answersRef = useRef<Record<string, string>>({});
+  const isSubmittingRef = useRef<boolean>(false);
 
-  const { data: questions = [], isLoading: qLoading } = useExamQuestions(exam.id);
+  // ── Anti-Cheat State ────────────────────────────────────────────────────────
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [showCheatWarning, setShowCheatWarning] = useState(false);
+  const [cheatWarningMsg, setCheatWarningMsg] = useState('');
+  const tabSwitchCountRef = useRef(0);
+  const MAX_TAB_SWITCHES = 3;
+
+  const { data: rawQuestions = [], isLoading: qLoading } = useExamQuestions(exam.id);
   const submitAttempt = useSubmitExamAttempt();
+
+  // Shuffle questions and options deterministically per student
+  const questions = useMemo(() => {
+    if (rawQuestions.length === 0) return rawQuestions;
+    const seed = `${exam.id}-${studentId}`;
+    return seededShuffle(rawQuestions, seed).map(q => {
+      if (q.question_type === 'multiple_choice' && Array.isArray(q.options)) {
+        return { ...q, options: seededShuffle(q.options as string[], seed + q.id) };
+      }
+      return q;
+    });
+  }, [rawQuestions, exam.id, studentId]);
 
   const isExpired = exam.available_until ? new Date() > new Date(exam.available_until) : false;
   const isNotStarted = exam.available_from ? new Date() < new Date(exam.available_from) : false;
+
+  const storageKey = `exam_progress_${exam.id}_${studentId}`;
+
+  // Restore active session on page reload if exam is still in progress
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const spent = Math.floor((Date.now() - parsed.startTime) / 1000);
+        const remaining = (exam.duration_minutes * 60) - spent;
+        if (remaining > 5 && parsed.answers) {
+          startTimeRef.current = parsed.startTime;
+          setTimeLeft(remaining);
+          answersRef.current = parsed.answers;
+          setAnswers(parsed.answers);
+          if (parsed.tabSwitchCount) {
+            tabSwitchCountRef.current = parsed.tabSwitchCount;
+            setTabSwitchCount(parsed.tabSwitchCount);
+          }
+          setScreen('taking');
+          toast.info('تم استعادة إجاباتك ومتابعة الاختبار 🔄');
+        } else {
+          sessionStorage.removeItem(storageKey);
+        }
+      }
+    } catch (_) {}
+  }, [storageKey, exam.duration_minutes]);
+
+  // Always keep answersRef in sync with latest answers and auto-save
+  const updateAnswer = useCallback((questionId: string, value: string) => {
+    setAnswers(prev => {
+      const next = { ...prev, [questionId]: value };
+      answersRef.current = next;
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          startTime: startTimeRef.current,
+          answers: next,
+          tabSwitchCount: tabSwitchCountRef.current,
+        }));
+      } catch (_) {}
+      return next;
+    });
+  }, [storageKey]);
+
+  const handleSubmit = useCallback(async (auto = false) => {
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    const spent = Math.round((Date.now() - startTimeRef.current) / 1000);
+    // Always use the latest answers from answersRef to prevent stale closure data loss
+    const currentAnswers = { ...answersRef.current };
+
+    try {
+      const result = await submitAttempt.mutateAsync({
+        examId: exam.id,
+        studentId,
+        answers: currentAnswers,
+        timeSpentSeconds: spent,
+        questions,
+        tabSwitchesCount: tabSwitchCountRef.current,
+      });
+      try {
+        sessionStorage.removeItem(storageKey);
+      } catch (_) {}
+      setSubmitResult({
+        score: result.score,
+        totalScore: result.totalScore,
+        questions: result.questions,
+        answers: currentAnswers,
+      });
+      setScreen('result');
+      if (auto) {
+        toast.info('انتهى وقت الاختبار — تم إرسال وتصحيح جميع إجاباتك التي قمت بحلها تلقائياً');
+      }
+    } catch (err: any) {
+      toast.error('حدث خطأ أثناء إرسال الاختبار', { description: err.message });
+      isSubmittingRef.current = false;
+    }
+    setShowEndDialog(false);
+  }, [exam.id, studentId, submitAttempt, questions, storageKey]);
+
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  }, [handleSubmit]);
 
   // Timer
   useEffect(() => {
@@ -59,14 +181,63 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     timerRef.current = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timerRef.current!);
-          handleSubmit(true);
+          if (timerRef.current) clearInterval(timerRef.current);
+          handleSubmitRef.current(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(timerRef.current!);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [screen]);
+
+  // ── Anti-Cheat: Tab-switch / visibility detection ────────────────────────
+  useEffect(() => {
+    if (screen !== 'taking') return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        tabSwitchCountRef.current += 1;
+        const count = tabSwitchCountRef.current;
+        setTabSwitchCount(count);
+
+        if (count >= MAX_TAB_SWITCHES) {
+          toast.error('⚠️ تم رصد 3 محاولات مغادرة — سيتم تسليم الاختبار تلقائياً!');
+          handleSubmitRef.current(true);
+        } else {
+          const remaining = MAX_TAB_SWITCHES - count;
+          setCheatWarningMsg(`⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count} من ${MAX_TAB_SWITCHES}). تبقّى لك ${remaining} تحذير${remaining > 1 ? 'ات' : ''} قبل التسليم التلقائي.`);
+          setShowCheatWarning(true);
+        }
+      }
+    };
+
+    const handleBlur = () => {
+      // Only count if not already counted by visibilitychange
+      if (document.visibilityState === 'visible') {
+        tabSwitchCountRef.current += 1;
+        const count = tabSwitchCountRef.current;
+        setTabSwitchCount(count);
+
+        if (count >= MAX_TAB_SWITCHES) {
+          toast.error('⚠️ تم رصد 3 محاولات مغادرة — سيتم تسليم الاختبار تلقائياً!');
+          handleSubmitRef.current(true);
+        } else {
+          const remaining = MAX_TAB_SWITCHES - count;
+          setCheatWarningMsg(`⚠️ تنبيه: تم رصد خروج من نافذة الاختبار! (مخالفة ${count} من ${MAX_TAB_SWITCHES}). تبقّى ${remaining} تحذير${remaining > 1 ? 'ات' : ''}.`);
+          setShowCheatWarning(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
   }, [screen]);
 
   const formatTime = (secs: number) => {
@@ -77,34 +248,29 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
 
   const handleStart = () => {
     if (isExpired || isNotStarted) return;
-    startTimeRef.current = Date.now();
+    const now = Date.now();
+    startTimeRef.current = now;
     setTimeLeft(exam.duration_minutes * 60);
+    answersRef.current = {};
+    setAnswers({});
+    isSubmittingRef.current = false;
+    tabSwitchCountRef.current = 0;
+    setTabSwitchCount(0);
+    setShowCheatWarning(false);
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify({
+        startTime: now,
+        answers: {},
+        tabSwitchCount: 0,
+      }));
+    } catch (_) {}
+    try {
+      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    } catch (_) {}
     setScreen('taking');
   };
-
-  const handleSubmit = useCallback(async (auto = false) => {
-    clearInterval(timerRef.current!);
-    const spent = Math.round((Date.now() - startTimeRef.current) / 1000);
-
-    try {
-      const result = await submitAttempt.mutateAsync({
-        examId: exam.id,
-        studentId,
-        answers,
-        timeSpentSeconds: spent,
-        questions,
-      });
-      setSubmitResult({
-        score: result.score,
-        totalScore: result.totalScore,
-        questions: result.questions,
-        answers,
-      });
-      setScreen('result');
-      if (auto) toast.info('انتهى وقت الاختبار — تم إرسال إجاباتك تلقائياً');
-    } catch (_) {}
-    setShowEndDialog(false);
-  }, [answers, questions, exam.id, studentId, submitAttempt]);
 
   // ── Confirm Screen ────────────────────────────────────────────────────────
   if (screen === 'confirm') {
@@ -233,9 +399,33 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     };
 
     return (
-      <AppLayout>
-        <div className="max-w-[780px] mx-auto px-4 md:px-0 pb-24 pt-2 animate-in fade-in duration-300" dir="rtl">
-          
+      <div
+        className="min-h-screen bg-slate-50/80 text-slate-900 flex flex-col justify-start py-4 px-4 sm:px-6 select-none"
+        dir="rtl"
+        onCopy={e => e.preventDefault()}
+        onCut={e => e.preventDefault()}
+        onPaste={e => e.preventDefault()}
+        onContextMenu={e => e.preventDefault()}
+        style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+      >
+        {/* Anti-Cheat Warning Banner (shows after each tab switch) */}
+        {showCheatWarning && (
+          <div className="max-w-[800px] w-full mx-auto mb-4 bg-rose-50 border-2 border-rose-400 rounded-2xl p-4 flex items-start gap-3 animate-in slide-in-from-top duration-300 z-50 shadow-lg shadow-rose-100">
+            <ShieldAlert className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-black text-rose-800">{cheatWarningMsg}</p>
+            </div>
+            <button
+              onClick={() => setShowCheatWarning(false)}
+              className="text-rose-500 hover:text-rose-700 font-black text-xs shrink-0 cursor-pointer"
+            >
+              ✕ إغلاق
+            </button>
+          </div>
+        )}
+
+        <div className="max-w-[800px] w-full mx-auto pb-24 pt-2 animate-in fade-in duration-300">
+
           {/* Header Bar */}
           <div className="sticky top-2 z-30 bg-white/95 backdrop-blur-md border border-slate-100 rounded-3xl px-5 py-3.5 mb-6 shadow-sm flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -251,6 +441,19 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Tab-switch integrity badge */}
+              {tabSwitchCount > 0 && (
+                <div className={cn(
+                  'hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black border',
+                  tabSwitchCount >= 2
+                    ? 'bg-rose-50 text-rose-700 border-rose-300'
+                    : 'bg-amber-50 text-amber-700 border-amber-200'
+                )}>
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {tabSwitchCount} مخالفة
+                </div>
+              )}
+
               <div className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm md:text-base transition-all border',
                 isLowTime
@@ -338,7 +541,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                         <button
                           key={val}
                           type="button"
-                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: val }))}
+                          onClick={() => updateAnswer(q.id, val)}
                           className={cn(
                             'flex items-center justify-center gap-3 h-16 sm:h-20 rounded-2xl text-lg sm:text-xl font-black border-2 transition-all duration-200 cursor-pointer',
                             isSelected
@@ -375,7 +578,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                         <button
                           key={oi}
                           type="button"
-                          onClick={() => setAnswers(prev => ({ ...prev, [q.id]: opt }))}
+                          onClick={() => updateAnswer(q.id, opt)}
                           className={cn(
                             'w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer group',
                             isEn ? 'text-left' : 'text-right',
@@ -415,7 +618,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                     <input
                       dir={isEn ? 'ltr' : 'rtl'}
                       value={answers[q.id] || ''}
-                      onChange={e => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      onChange={e => updateAnswer(q.id, e.target.value)}
                       placeholder={isEn ? 'Write answer here...' : 'اكتب الإجابة هنا...'}
                       className={cn(
                         "w-full h-14 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-violet-500 px-5 text-base sm:text-lg font-bold outline-none transition-all shadow-inner",
@@ -532,7 +735,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </AppLayout>
+      </div>
     );
   }
 
@@ -557,6 +760,31 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               {pct >= 80 ? '🎉 نتيجة ممتازة! أحسنت صنعاً' : pct >= 60 ? '👍 نتيجة جيدة! استمر في المحاولة' : '💪 لا بأس، حاول مرة أخرى لتحسين نتيجتك'}
             </div>
           </div>
+
+          {/* Integrity Report Badge — Only displayed if student committed infractions */}
+          {tabSwitchCount > 0 && (() => {
+            const isSevere = tabSwitchCount >= 3;
+            return (
+              <div className={cn(
+                'rounded-[24px] p-5 text-white flex items-center gap-4 mb-4 shadow-lg',
+                isSevere ? 'bg-gradient-to-l from-rose-600 to-red-700' : 'bg-gradient-to-l from-amber-500 to-orange-600'
+              )}>
+                <span className="text-3xl">{isSevere ? '🚨' : '⚠️'}</span>
+                <div className="flex-1">
+                  <p className="font-black text-base">{isSevere ? 'اشتباه بمحاولة غش' : 'تنبيه أمني أثناء الاختبار'}</p>
+                  <p className="text-sm text-white/90 font-bold mt-0.5">
+                    {isSevere
+                      ? `تم رصد ${tabSwitchCount} محاولات مغادرة لشاشة الاختبار`
+                      : `تم رصد مغادرة شاشة الاختبار (${tabSwitchCount} مرة)`}
+                  </p>
+                </div>
+                <div className="bg-white/20 backdrop-blur-sm rounded-2xl px-4 py-2 text-center border border-white/20">
+                  <p className="text-xl font-black">{tabSwitchCount}</p>
+                  <p className="text-[10px] font-bold text-white/80">مخالفات</p>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Detailed Correction Breakdown */}
           <div className="bg-white border border-slate-100 rounded-[32px] p-6 sm:p-8 space-y-6 shadow-sm mb-6">
@@ -613,7 +841,12 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
           </div>
 
           <button
-            onClick={onFinish}
+            onClick={() => {
+              if (typeof document !== 'undefined' && document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+              }
+              onFinish();
+            }}
             className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-base transition-colors shadow-lg shadow-slate-200 cursor-pointer"
           >
             العودة لصفحة الاختبارات

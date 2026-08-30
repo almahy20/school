@@ -1,4 +1,4 @@
-import { Download, Users, BarChart3, Clock, Trophy, ChevronRight, Medal, Timer } from 'lucide-react';
+import { Download, Users, BarChart3, Clock, Trophy, ChevronRight, Medal, Timer, ShieldAlert, ShieldOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useExamAttempts, type ElectronicExam, type ExamAttempt } from '@/hooks/queries/useElectronicExams';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
@@ -22,11 +22,28 @@ function getScoreConfig(pct: number) {
   return           { bg: 'bg-rose-50',   text: 'text-rose-700',   ring: 'ring-rose-200',   bar: 'bg-rose-400',   label: 'ضعيف'   };
 }
 
+function IntegrityBadge({ count }: { count: number }) {
+  if (count <= 0) return null; // Do not show anything if the student did not commit any infractions
+  if (count <= 2) return (
+    <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-xl text-[10px] font-black" title={`تم رصد ${count} خروج من شاشة الاختبار`}>
+      <ShieldAlert className="w-3 h-3" />
+      <span>{count} مخالفة</span>
+    </div>
+  );
+  return (
+    <div className="flex items-center gap-1 bg-rose-50 text-rose-700 px-2 py-1 rounded-xl text-[10px] font-black border border-rose-200" title={`تم رصد ${count} محاولة مغادرة شاشة الاختبار — اشتباه بمحاولة غش`}>
+      <ShieldOff className="w-3 h-3" />
+      <span>اشتباه غش ({count})</span>
+    </div>
+  );
+}
+
 // ─── Student Result Card ──────────────────────────────────────────────────────
 
 function StudentResultCard({ attempt, rank }: { attempt: ExamAttempt; rank: number }) {
   const pct = Math.round((attempt.score / (attempt.total_score || 1)) * 100);
   const cfg = getScoreConfig(pct);
+  const tabCount = attempt.tab_switches_count ?? 0;
 
   const rankColors = ['bg-amber-400 text-white', 'bg-slate-300 text-white', 'bg-orange-400 text-white'];
   const rankColor = rank <= 3 ? rankColors[rank - 1] : 'bg-slate-100 text-slate-500';
@@ -34,7 +51,7 @@ function StudentResultCard({ attempt, rank }: { attempt: ExamAttempt; rank: numb
   return (
     <div className={cn(
       'bg-white rounded-[24px] border p-5 space-y-4 transition-all duration-200 hover:shadow-md',
-      rank === 1 ? 'border-amber-200 shadow-amber-50/80' : 'border-slate-100',
+      rank === 1 ? 'border-amber-200 shadow-amber-50/80' : tabCount >= 3 ? 'border-rose-200' : 'border-slate-100',
     )}>
       {/* Top row: rank + name + score badge */}
       <div className="flex items-center gap-3">
@@ -80,6 +97,9 @@ function StudentResultCard({ attempt, rank }: { attempt: ExamAttempt; rank: numb
           </div>
         </div>
       </div>
+
+      {/* Integrity Badge */}
+      <IntegrityBadge count={tabCount} />
     </div>
   );
 }

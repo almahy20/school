@@ -2,7 +2,7 @@ import { useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
   ClipboardList, Clock, CheckCircle2, BookOpen,
-  ChevronLeft, Timer, BarChart3,
+  ChevronLeft, Timer, Brain,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { useParentElectronicExams, type ElectronicExam, type ExamAttempt } from '@/hooks/queries/useElectronicExams';
 import PageHeader from '@/components/layout/PageHeader';
 import ExamTakingView from '@/components/exams/ExamTakingView';
+import ExamReviewView from '@/components/exams/ExamReviewView';
 
 type ExamWithStudent = ElectronicExam & {
   student_id: string;
@@ -61,7 +62,15 @@ function MetaChip({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 // ─── Exam Card ────────────────────────────────────────────────────────────────
 
-function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => void }) {
+function ExamCard({
+  exam,
+  onStart,
+  onReview
+}: {
+  exam: ExamWithStudent;
+  onStart: () => void;
+  onReview: () => void;
+}) {
   const isDone = !!exam.attempt;
   const isExpired = !isDone && exam.available_until ? new Date() > new Date(exam.available_until) : false;
   const isNotStarted = !isDone && exam.available_from ? new Date() < new Date(exam.available_from) : false;
@@ -128,29 +137,40 @@ function ExamCard({ exam, onStart }: { exam: ExamWithStudent; onStart: () => voi
 
       {/* Bottom: result or action */}
       {isDone && exam.attempt && pct !== null ? (
-        <div className="flex items-center gap-4 bg-slate-50 rounded-[20px] p-3">
-          <ScoreRing pct={pct} />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-slate-900">
-              {exam.attempt.score} <span className="text-slate-400 font-bold text-xs">من {exam.attempt.total_score}</span>
-            </p>
-            <p className={cn(
-              'text-[11px] font-bold mt-0.5',
-              pct >= 80 ? 'text-emerald-600' : pct >= 60 ? 'text-amber-600' : 'text-rose-600',
-            )}>
-              {pct >= 80 ? 'ممتاز 🌟' : pct >= 60 ? 'جيد 👍' : 'يحتاج مراجعة 📖'}
-            </p>
-            {exam.attempt.time_spent_seconds > 0 && (
-              <div className="flex items-center gap-1 mt-1 text-slate-400">
-                <Timer className="w-3 h-3" />
-                <span className="text-[10px] font-bold">
-                  {Math.floor(exam.attempt.time_spent_seconds / 60)}د{' '}
-                  {exam.attempt.time_spent_seconds % 60 > 0 ? exam.attempt.time_spent_seconds % 60 + 'ث' : ''}
-                </span>
-              </div>
-            )}
+        <div className="space-y-3">
+          <div className="flex items-center gap-4 bg-slate-50 rounded-[20px] p-3">
+            <ScoreRing pct={pct} />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-slate-900">
+                {exam.attempt.score} <span className="text-slate-400 font-bold text-xs">من {exam.attempt.total_score}</span>
+              </p>
+              <p className={cn(
+                'text-[11px] font-bold mt-0.5',
+                pct >= 80 ? 'text-emerald-600' : pct >= 60 ? 'text-amber-600' : 'text-rose-600',
+              )}>
+                {pct >= 80 ? 'ممتاز 🌟' : pct >= 60 ? 'جيد 👍' : 'يحتاج مراجعة 📖'}
+              </p>
+              {exam.attempt.time_spent_seconds > 0 && (
+                <div className="flex items-center gap-1 mt-1 text-slate-400">
+                  <Timer className="w-3 h-3" />
+                  <span className="text-[10px] font-bold">
+                    {Math.floor(exam.attempt.time_spent_seconds / 60)}د{' '}
+                    {exam.attempt.time_spent_seconds % 60 > 0 ? exam.attempt.time_spent_seconds % 60 + 'ث' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+            <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
           </div>
-          <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+
+          <button
+            onClick={onReview}
+            className="w-full h-11 rounded-[18px] text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white shadow-md shadow-violet-100 cursor-pointer active:scale-[0.98]"
+          >
+            <Brain className="w-4 h-4" />
+            مراجعة الأسئلة وتثبيت المعلومة 👨‍👦
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
       ) : (
         <button
@@ -180,14 +200,6 @@ function StatsBar({ exams }: { exams: ExamWithStudent[] }) {
   if (exams.length === 0) return null;
   const done    = exams.filter(e => !!e.attempt).length;
   const pending = exams.length - done;
-  const avgPct  = done > 0
-    ? Math.round(
-        exams
-          .filter(e => !!e.attempt)
-          .reduce((sum, e) => sum + Math.round((e.attempt!.score / (e.attempt!.total_score || 1)) * 100), 0)
-        / done,
-      )
-    : null;
 
   return (
     <div className="grid grid-cols-3 gap-3 mb-6">
@@ -210,6 +222,7 @@ function StatsBar({ exams }: { exams: ExamWithStudent[] }) {
 export default function ParentExamsPage() {
   const { data: exams = [], isLoading, error, refetch } = useParentElectronicExams();
   const [activeExam, setActiveExam] = useState<ExamWithStudent | null>(null);
+  const [reviewExam, setReviewExam] = useState<ExamWithStudent | null>(null);
 
   if (activeExam) {
     return (
@@ -219,6 +232,15 @@ export default function ParentExamsPage() {
         studentName={activeExam.student_name}
         onFinish={() => { setActiveExam(null); refetch(); }}
         onBack={() => setActiveExam(null)}
+      />
+    );
+  }
+
+  if (reviewExam) {
+    return (
+      <ExamReviewView
+        exam={reviewExam}
+        onBack={() => setReviewExam(null)}
       />
     );
   }
@@ -260,7 +282,12 @@ export default function ParentExamsPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {pending.map(exam => (
-                  <ExamCard key={exam.id} exam={exam} onStart={() => setActiveExam(exam)} />
+                  <ExamCard
+                    key={exam.id}
+                    exam={exam}
+                    onStart={() => setActiveExam(exam)}
+                    onReview={() => setReviewExam(exam)}
+                  />
                 ))}
               </div>
             </section>
@@ -277,7 +304,12 @@ export default function ParentExamsPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {done.map(exam => (
-                  <ExamCard key={exam.id} exam={exam} onStart={() => setActiveExam(exam)} />
+                  <ExamCard
+                    key={exam.id}
+                    exam={exam}
+                    onStart={() => setActiveExam(exam)}
+                    onReview={() => setReviewExam(exam)}
+                  />
                 ))}
               </div>
             </section>

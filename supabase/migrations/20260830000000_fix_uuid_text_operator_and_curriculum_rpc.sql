@@ -1,8 +1,9 @@
 -- ==========================================================================
 -- Migration: 20260830000000_fix_uuid_text_operator_and_curriculum_rpc.sql
 -- Purpose  : 
---   1. Fix potential "operator does not exist: uuid = text" (42883) errors
---      by ensuring all comparisons and filters strictly cast types.
+--   1. Fix PostgreSQL error 42883 ("operator does not exist: uuid = text")
+--      by defining universal immutable equality and inequality operators
+--      between UUID and TEXT in public schema.
 --   2. Define get_class_curriculum_status(uuid) RPC function with robust type casting.
 --   3. Ensure proper permissions and reload PostgREST schema cache.
 -- ==========================================================================
@@ -10,7 +11,109 @@
 SET search_path TO public;
 
 -- ─────────────────────────────────────────────────────────────────────────
--- 1. Create or Replace get_class_curriculum_status RPC
+-- 1. Create Universal Safe Comparison Operators for UUID = TEXT & TEXT = UUID
+-- ─────────────────────────────────────────────────────────────────────────
+
+-- Safe UUID vs Text Equality
+CREATE OR REPLACE FUNCTION public.uuid_eq_text(p_uuid uuid, p_text text)
+RETURNS boolean AS $$
+BEGIN
+  IF p_text IS NULL THEN
+    RETURN NULL;
+  END IF;
+  RETURN p_uuid::text = p_text;
+EXCEPTION WHEN OTHERS THEN
+  RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = public;
+
+-- Safe Text vs UUID Equality
+CREATE OR REPLACE FUNCTION public.text_eq_uuid(p_text text, p_uuid uuid)
+RETURNS boolean AS $$
+BEGIN
+  IF p_text IS NULL THEN
+    RETURN NULL;
+  END IF;
+  RETURN p_text = p_uuid::text;
+EXCEPTION WHEN OTHERS THEN
+  RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = public;
+
+-- Safe UUID vs Text Inequality
+CREATE OR REPLACE FUNCTION public.uuid_ne_text(p_uuid uuid, p_text text)
+RETURNS boolean AS $$
+BEGIN
+  IF p_text IS NULL THEN
+    RETURN NULL;
+  END IF;
+  RETURN p_uuid::text <> p_text;
+EXCEPTION WHEN OTHERS THEN
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = public;
+
+-- Safe Text vs UUID Inequality
+CREATE OR REPLACE FUNCTION public.text_ne_uuid(p_text text, p_uuid uuid)
+RETURNS boolean AS $$
+BEGIN
+  IF p_text IS NULL THEN
+    RETURN NULL;
+  END IF;
+  RETURN p_text <> p_uuid::text;
+EXCEPTION WHEN OTHERS THEN
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE SET search_path = public;
+
+-- Register Equality Operators
+DROP OPERATOR IF EXISTS = (uuid, text);
+CREATE OPERATOR = (
+  LEFTARG = uuid,
+  RIGHTARG = text,
+  PROCEDURE = public.uuid_eq_text,
+  COMMUTATOR = =,
+  NEGATOR = <>,
+  RESTRICT = eqsel,
+  JOIN = eqjoinsel
+);
+
+DROP OPERATOR IF EXISTS = (text, uuid);
+CREATE OPERATOR = (
+  LEFTARG = text,
+  RIGHTARG = uuid,
+  PROCEDURE = public.text_eq_uuid,
+  COMMUTATOR = =,
+  NEGATOR = <>,
+  RESTRICT = eqsel,
+  JOIN = eqjoinsel
+);
+
+-- Register Inequality Operators
+DROP OPERATOR IF EXISTS <> (uuid, text);
+CREATE OPERATOR <> (
+  LEFTARG = uuid,
+  RIGHTARG = text,
+  PROCEDURE = public.uuid_ne_text,
+  COMMUTATOR = <>,
+  NEGATOR = =,
+  RESTRICT = neqsel,
+  JOIN = neqjoinsel
+);
+
+DROP OPERATOR IF EXISTS <> (text, uuid);
+CREATE OPERATOR <> (
+  LEFTARG = text,
+  RIGHTARG = uuid,
+  PROCEDURE = public.text_ne_uuid,
+  COMMUTATOR = <>,
+  NEGATOR = =,
+  RESTRICT = neqsel,
+  JOIN = neqjoinsel
+);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- 2. Create or Replace get_class_curriculum_status RPC
 -- ─────────────────────────────────────────────────────────────────────────
 
 DROP FUNCTION IF EXISTS public.get_class_curriculum_status(uuid);
@@ -53,7 +156,7 @@ GRANT EXECUTE ON FUNCTION public.get_class_curriculum_status(uuid) TO authentica
 REVOKE EXECUTE ON FUNCTION public.get_class_curriculum_status(uuid) FROM anon;
 
 -- ─────────────────────────────────────────────────────────────────────────
--- 2. Validate & Enhance Class Chat Notification Trigger (Strict Type Safety)
+-- 3. Validate & Enhance Class Chat Notification Trigger (Strict Type Safety)
 -- ─────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION public.notify_class_chat_message()
@@ -113,7 +216,15 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS tr_notify_class_chat_message ON public.class_chat_messages;
+CREATE TRIGGER tr_notify_class_chat_message
+  AFTER INSERT ON public.class_chat_messages
+  FOR EACH ROW EXECUTE FUNCTION public.notify_class_chat_message();
+
+REVOKE EXECUTE ON FUNCTION public.notify_class_chat_message() FROM public, anon;
+GRANT  EXECUTE ON FUNCTION public.notify_class_chat_message() TO service_role;
+
 -- ─────────────────────────────────────────────────────────────────────────
--- 3. Reload PostgREST Cache
+-- 4. Reload PostgREST Cache
 -- ─────────────────────────────────────────────────────────────────────────
 NOTIFY pgrst, 'reload schema';

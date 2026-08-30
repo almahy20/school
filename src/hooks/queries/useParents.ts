@@ -135,9 +135,9 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!session && !!user?.schoolId,
     placeholderData: keepPreviousData,
-    staleTime: 15 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: true,
+    refetchOnWindowFocus: false,
     retry: 1,
   });
 }
@@ -197,9 +197,10 @@ export function usePendingParents() {
       }) as PendingParent[];
     },
     enabled: !!session && !!user?.schoolId,
-    staleTime: 10 * 1000,
+    placeholderData: keepPreviousData,
+    staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -217,9 +218,10 @@ export function useParent(id: string | undefined | null) {
       return data as Parent;
     },
     enabled: !!id,
-    staleTime: 15 * 1000,
+    placeholderData: keepPreviousData,
+    staleTime: 3 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   });
 }
 
