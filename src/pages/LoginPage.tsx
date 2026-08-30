@@ -10,7 +10,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotPhone, setForgotPhone] = useState('');
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -115,41 +117,33 @@ export default function LoginPage() {
              )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <label className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] mr-1">رقم الهاتف</label>
-              <div className="relative group">
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-indigo-400 transition-colors">
-                  <Phone className="w-full h-full" />
-                </div>
-                <input
-                  type="tel"
-                  value={phone}
+              <input
+                type="tel"
+                value={phone}
                 onChange={e => { setPhone(e.target.value); setLoginError(''); }}
-                  className="w-full h-14 px-5 pr-13 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold"
-                  placeholder="05xxxxxxxx"
-                  dir="ltr"
-                />
-              </div>
+                className="w-full h-14 px-5 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold text-base"
+                placeholder="01xxxxxxxxx"
+                dir="ltr"
+              />
             </div>
 
             <div className="space-y-2">
               <label className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] mr-1">كلمة المرور</label>
-              <div className="relative group">
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20 group-focus-within:text-indigo-400 transition-colors">
-                  <Lock className="w-full h-full" />
-                </div>
+              <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                onChange={e => { setPassword(e.target.value); setLoginError(''); }}
-                  className="w-full h-14 px-5 pr-13 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold"
+                  onChange={e => { setPassword(e.target.value); setLoginError(''); }}
+                  className="w-full h-14 px-5 pl-14 rounded-2xl border border-white/5 bg-white/[0.02] text-white focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:bg-white/[0.05] focus:border-indigo-500/30 transition-all placeholder:text-white/10 font-bold text-base"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors p-2"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 hover:text-white transition-colors p-2 cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -157,11 +151,19 @@ export default function LoginPage() {
             </div>
 
             <div className="flex items-center justify-between gap-4">
-              <button type="button" className="text-xs font-bold text-white/30 hover:text-indigo-400 transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotPhone(phone);
+                  setShowForgotModal(true);
+                }}
+                className="text-xs font-bold text-indigo-400/80 hover:text-indigo-300 transition-colors cursor-pointer"
+              >
                 هل نسيت كلمة المرور؟
               </button>
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <span className="text-xs font-bold text-white/30 group-hover:text-white transition-colors">تذكرني</span>
+              
+              <label className="flex items-center gap-2.5 cursor-pointer group" title="تفعيل هذا الخيار يحفظ تسجيل دخولك على هذا الجهاز حتى بعد إغلاق المتصفح">
+                <span className="text-xs font-bold text-white/50 group-hover:text-white transition-colors">تذكرني</span>
                 <div className="relative">
                   <input
                     type="checkbox"
@@ -169,8 +171,8 @@ export default function LoginPage() {
                     onChange={e => setRememberMe(e.target.checked)}
                     className="peer sr-only"
                   />
-                  <div className="w-9 h-5 bg-white/5 rounded-full peer peer-checked:bg-indigo-600 transition-colors" />
-                  <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white/20 rounded-full transition-all peer-checked:translate-x-4 peer-checked:bg-white shadow-sm" />
+                  <div className="w-9 h-5 bg-white/10 rounded-full peer peer-checked:bg-indigo-600 transition-colors" />
+                  <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white/40 rounded-full transition-all peer-checked:translate-x-4 peer-checked:bg-white shadow-sm" />
                 </div>
               </label>
             </div>
@@ -184,7 +186,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black text-base shadow-2xl shadow-indigo-600/20 hover:bg-indigo-500 hover:translate-y-[-2px] active:scale-[0.98] transition-all disabled:opacity-50 mt-2"
+              className="w-full h-14 rounded-2xl bg-indigo-600 text-white font-black text-base shadow-2xl shadow-indigo-600/20 hover:bg-indigo-500 hover:translate-y-[-2px] active:scale-[0.98] transition-all disabled:opacity-50 mt-2 cursor-pointer"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-3">
@@ -196,19 +198,74 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* Support Section */}
-        <div className="mt-10 text-center space-y-6">
-          <p className="text-sm font-bold text-white/30">
+        {/* Support & Signup Section */}
+        <div className="mt-8 text-center space-y-4">
+          <p className="text-sm font-bold text-white/40">
             ليس لديك حساب حالياً؟{' '}
-            <Link to="/signup" className="text-indigo-400 font-black hover:underline underline-offset-8 decoration-2">تواصل مع الإدارة</Link>
+            <Link to="/signup" className="text-indigo-400 font-black hover:underline underline-offset-8 decoration-2 mr-1">
+              إنشاء حساب ولي أمر جديد 📝
+            </Link>
           </p>
           
           <div className="h-[1px] w-20 bg-white/5 mx-auto" />
           
-          <p className="text-[10px] font-black text-white/10 uppercase tracking-[0.4em]">
-            E D A R A · A R A B I Y A · 2 0 2 5
+          <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.3em]">
+            نظام إدارة المدارس الإلكتروني الذكي
           </p>
         </div>
+
+        {/* Forgot Password Modal */}
+        {showForgotModal && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200" dir="rtl">
+            <div className="bg-[#121829] border border-white/10 rounded-[32px] p-7 sm:p-8 max-w-md w-full space-y-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
+              
+              <div className="text-center space-y-2">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto text-2xl">
+                  🔑
+                </div>
+                <h3 className="text-xl font-black text-white">استعادة كلمة المرور</h3>
+                <p className="text-xs font-bold text-white/60 leading-relaxed">
+                  حرصاً على أمان بيانات الطلاب، يتم تعيين وتحديث كلمات المرور بالتواصل المباشر مع إدارة المدرسة.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-white/40">رقم الهاتف المسجل به الحساب:</label>
+                <input
+                  type="tel"
+                  value={forgotPhone}
+                  onChange={e => setForgotPhone(e.target.value)}
+                  placeholder="01xxxxxxxxx"
+                  dir="ltr"
+                  className="w-full h-12 px-4 rounded-xl border border-white/10 bg-white/[0.03] text-white text-sm font-bold focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const phoneText = forgotPhone ? ` (رقم هاتفي المسجل: ${forgotPhone})` : '';
+                    const message = `السلام عليكم ورحمة الله، أرغب في استعادة كلمة المرور لحسابي في منصة المدرسة${phoneText}`;
+                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+                  }}
+                  className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-900/30"
+                >
+                  <span>📲 تواصل مع الإدارة عبر واتساب</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowForgotModal(false)}
+                  className="w-full h-11 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  إغلاق
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

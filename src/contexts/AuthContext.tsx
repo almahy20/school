@@ -163,8 +163,30 @@ async function performSignOut(
   setUser(null);
   setSession(null);
   setCachedUser(null);
-  localStorage.removeItem('last_auth_sync');
-  try { await supabase.auth.signOut(); } catch (_e) { /* ignore */ }
+  
+  // 1. Explicitly remove the Supabase session token (custom storageKey from client.ts)
+  try {
+    localStorage.removeItem('school_auth_token');
+    localStorage.removeItem('app_user_cache_v2');
+    localStorage.removeItem('last_auth_sync');
+  } catch (_e) { /* ignore */ }
+
+  // 2. Sign out from Supabase (local first to clear in-memory state, then global to invalidate refresh token)
+  try { await supabase.auth.signOut({ scope: 'local' }); } catch (_e) { /* ignore */ }
+  try { await supabase.auth.signOut({ scope: 'global' }); } catch (_e) { /* ignore */ }
+
+  // 3. Final sweep — remove any leftover auth-related keys
+  try {
+    const keysToRemove = Object.keys(localStorage).filter(k => 
+      k.startsWith('sb-') || 
+      k.includes('supabase') || 
+      k.includes('auth') || 
+      k.includes('school_auth') ||
+      k.startsWith('branding_')
+    );
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+    sessionStorage.clear();
+  } catch (_e) { /* ignore */ }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -279,8 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return true;
       }
     } catch (_e) { 
-      // أخطاء الشبكة غير المتوقعة لا تفقد المستخدم حسابه
-      return true;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return true;
+      }
+      return false;
     }
     return false;
   };
@@ -308,8 +332,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             applySession(eventSession);
             setIsLoading(false);
           } else {
-            // إنهاء حالة التحميل فوراً لمنع الشاشة البيضاء المؤقتة عند فتح التطبيق
-            setIsLoading(false);
             silentRefresh().then((success) => {
               if (!success) {
                 // لا توجد جلسة صالحة وفشل التجديد — تصفير المستخدم ومسح الكاش لمنع الجلسة الشبحية
@@ -317,10 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setCachedUser(null);
                 setSession(null);
               }
-            }).catch(() => {
-              setUser(null);
-              setCachedUser(null);
-              setSession(null);
+              setIsLoading(false);
             });
           }
           return;

@@ -80,17 +80,17 @@ function AppRoutes() {
     <Suspense fallback={<div className="fixed inset-0 bg-transparent" />}>
       <Routes>
         {/* ── Public Routes ── */}
-        <Route path="/home" element={<LandingPage />} />
+        <Route path="/home" element={<Navigate to="/login" replace />} />
         <Route path="/payment/:orderId" element={<PaymentPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
-        <Route path="/signup" element={<Navigate to="/login" replace />} />
+        <Route path="/signup" element={user ? <Navigate to="/" replace /> : <ParentSignupPage />} />
         <Route path="/register/teachers/:school_slug" element={user ? <Navigate to="/" replace /> : <TeacherSignupPage />} />
         <Route path="/register/parents/:school_slug" element={user ? <Navigate to="/" replace /> : <ParentSignupPage />} />
         {isDev && DeveloperSecretLogin && (
           <Route path="/dev-secret-portal" element={<DeveloperSecretLogin />} />
         )}
 
-        {/* ── Root: Landing for guests, Dashboard for logged-in users ── */}
+        {/* ── Root: Dashboard for logged-in users, Login for guests ── */}
         <Route
           path="/"
           element={
@@ -101,7 +101,7 @@ function AppRoutes() {
             ) : loading ? (
               <div className="fixed inset-0 bg-transparent" />
             ) : (
-              <Navigate to="/home" replace />
+              <Navigate to="/login" replace />
             )
           }
         />

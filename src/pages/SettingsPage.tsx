@@ -228,24 +228,27 @@ export default function SettingsPage() {
                  {/* PWA Install App (Hidden if already installed) */}
                  {!isPWA && (
                    <div className="grid grid-cols-1 gap-6 pt-2">
-                      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-10 rounded-[48px] shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
+                      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-8 sm:p-10 rounded-[48px] shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group">
                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
-                         <div className="flex items-center gap-6 relative z-10">
-                            <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shrink-0 shadow-xl">
-                               <Smartphone className="w-8 h-8" />
+                         
+                         <div className="flex items-center gap-5 relative z-10">
+                            <div className="w-14 h-14 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white shrink-0 shadow-xl">
+                               <Smartphone className="w-7 h-7" />
                             </div>
                             <div>
-                               <h4 className="text-xl font-black text-white mb-1">تثبيت التطبيق على الجهاز</h4>
-                               <p className="text-sm font-medium text-white/80">احصل على تجربة أسرع وأفضل عبر تثبيت النظام كتطبيق.</p>
+                               <h4 className="text-lg sm:text-xl font-black text-white mb-1">تثبيت التطبيق على الهاتف</h4>
+                               <p className="text-xs sm:text-sm font-medium text-white/85">
+                                 احصل على تجربة أسرع وأفضل عبر تثبيت المنصة كتطبيق على جهازك.
+                               </p>
                             </div>
                          </div>
-                         
+
                          <Button
                            onClick={handleInstallApp}
-                           className="relative z-10 h-14 px-10 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center gap-2 w-full md:w-auto"
+                           className="relative z-10 h-12 px-8 rounded-2xl bg-white text-indigo-600 font-black hover:bg-slate-50 transition-all shadow-xl hover:scale-105 active:scale-95 flex items-center justify-center gap-2 w-full md:w-auto shrink-0 cursor-pointer"
                          >
-                            <Download className="w-5 h-5" />
-                            {canInstall ? 'تثبيت الآن' : 'كيفية التثبيت'}
+                            <Download className="w-4 h-4" />
+                            {canInstall ? 'تثبيت الآن' : 'تثبيت التطبيق'}
                          </Button>
                       </div>
                    </div>

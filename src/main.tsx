@@ -9,10 +9,9 @@ if ('scrollRestoration' in window.history) {
 }
 
 // Service Worker registration logic
-const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
-const isSWDisabled = isNative || new URLSearchParams(window.location.search).has('disable-sw');
+const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 
-// ✅ Registration: Enabled on Web/PWA, bypassed in native app to prevent WebView intercept stalls
+// ✅ Registration: Enabled in all environments but handled carefully in sw.js
 if ("serviceWorker" in navigator && !isSWDisabled) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(
