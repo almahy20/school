@@ -308,6 +308,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             applySession(eventSession);
             setIsLoading(false);
           } else {
+            // إنهاء حالة التحميل فوراً لمنع الشاشة البيضاء المؤقتة عند فتح التطبيق
+            setIsLoading(false);
             silentRefresh().then((success) => {
               if (!success) {
                 // لا توجد جلسة صالحة وفشل التجديد — تصفير المستخدم ومسح الكاش لمنع الجلسة الشبحية
@@ -315,7 +317,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setCachedUser(null);
                 setSession(null);
               }
-              setIsLoading(false);
+            }).catch(() => {
+              setUser(null);
+              setCachedUser(null);
+              setSession(null);
             });
           }
           return;

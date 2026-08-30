@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">مدرستي</string>
-    <string name="title_activity_main">مدرستي</string>
+    <string name="app_name">الجيل الجديد</string>
+    <string name="title_activity_main">الجيل الجديد</string>
     <string name="package_name">com.school.app</string>
     <string name="custom_url_scheme">com.school.app</string>
 </resources>
