@@ -103,7 +103,7 @@ export default function ParentSignupPage() {
       logger.log('✅ Parent signup - stored signup time:', signupTime);
       
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك للمنصة...');
-      setTimeout(() => navigate('/waiting-approval'), 1500);
+      setTimeout(() => navigate('/', { replace: true }), 1500);
     }
   };
 

@@ -47,8 +47,8 @@ export default function TeacherSignupPage() {
       sessionStorage.setItem('user_signup_time', signupTime);
       logger.log('✅ Teacher signup - stored signup time:', signupTime);
       
-      setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك لصفحة الانتظار لحين موافقة الإدارة...');
-      setTimeout(() => navigate('/'), 3000);
+      setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك للمنصة...');
+      setTimeout(() => navigate('/', { replace: true }), 1500);
     }
   };
 
@@ -155,7 +155,7 @@ export default function TeacherSignupPage() {
                 disabled={loading}
                 className="w-full h-16 rounded-2xl bg-slate-900 text-white font-bold text-base shadow-xl mt-4 hover:bg-primary transition-colors"
               >
-                {loading ? 'جاري المعالجة...' : 'تسجيل حساب وطلب انضمام'}
+                {loading ? 'جاري المعالجة...' : 'إنشاء الحساب'}
               </button>
             </form>
           )}

@@ -39,7 +39,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
   const wrongQuestions = useMemo(() => {
     return questions.filter(q => {
       const given = (userAnswers[q.id] || '').trim().toLowerCase();
-      const correct = q.correct_answer.trim().toLowerCase();
+      const correct = (q.correct_answer || '').trim().toLowerCase();
       return given !== correct;
     });
   }, [questions, userAnswers]);
@@ -224,7 +224,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                 {(() => {
                   const q = currentQ;
                   const given = userAnswers[q.id] || '';
-                  const isOriginallyCorrect = given.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+                  const isOriginallyCorrect = given.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
                   const isEn = exam.language === 'en' || isEnglishText(q.question_text);
                   const isMastered = !!masteredMap[q.id];
 
@@ -270,9 +270,9 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                       {/* Interactive Choices (for multiple choice) */}
                       {q.question_type === 'multiple_choice' && (
                         <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3 pt-2">
-                          {(q.options as string[]).map((opt, oi) => {
+                          {(q.options as string[] || []).map((opt, oi) => {
                             const isStudentPick = given === opt;
-                            const isCorrectOpt = opt.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+                            const isCorrectOpt = (opt || '').trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
 
                             return (
                               <div
@@ -354,7 +354,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                               <span>الحل النموذجي المعتمد:</span>
                             </div>
                             <span className="text-emerald-700 font-black text-sm bg-emerald-100 px-3 py-1 rounded-xl">
-                              {renderAnswer(q, q.correct_answer, isEn)}
+                              {renderAnswer(q, q.correct_answer || '', isEn)}
                             </span>
                           </div>
 
@@ -422,7 +422,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                   <div className="flex flex-wrap gap-2 justify-center">
                     {activeList.map((question, i) => {
                       const isCurrent = i === currentIdx;
-                      const isGivenCorrect = (userAnswers[question.id] || '').trim().toLowerCase() === question.correct_answer.trim().toLowerCase();
+                      const isGivenCorrect = (userAnswers[question.id] || '').trim().toLowerCase() === (question.correct_answer || '').trim().toLowerCase();
                       const isMastered = !!masteredMap[question.id];
 
                       return (
@@ -466,7 +466,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
               <div className="space-y-4">
                 {questions.map((q, i) => {
                   const given = userAnswers[q.id] || '';
-                  const isCorrect = given.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+                  const isCorrect = given.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
                   const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
                   return (
@@ -501,7 +501,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                         </p>
                         {!isCorrect && (
                           <p className="text-sm font-black text-emerald-800 bg-emerald-100/70 px-3 py-1.5 rounded-xl w-fit">
-                            {qIsEn ? 'Correct answer: ' : 'الإجابة النموذجية الصحيحة: '} {renderAnswer(q, q.correct_answer, qIsEn)}
+                            {qIsEn ? 'Correct answer: ' : 'الإجابة النموذجية الصحيحة: '} {renderAnswer(q, q.correct_answer || '', qIsEn)}
                           </p>
                         )}
                       </div>
@@ -519,7 +519,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
 }
 
 function renderAnswer(q: ExamQuestion, value: string, isEn = false): string {
-  if (!value || value.trim() === '') return isEn ? '(No answer)' : '(لم تتم الإجابة)';
+  if (!value || typeof value !== 'string' || value.trim() === '') return isEn ? '(No answer)' : '(لم تتم الإجابة)';
   if (q.question_type === 'true_false') {
     if (isEn) {
       return value === 'true' ? 'True ✓' : value === 'false' ? 'False ✗' : '(No answer)';

@@ -119,7 +119,7 @@ export function useClassElectronicExams(classId: string | null) {
 
 /** أسئلة اختبار واحد */
 export function useExamQuestions(examId: string | null) {
-  const { user, session } = useAuth();
+  const { session } = useAuth();
 
   return useQuery<ExamQuestion[]>({
     queryKey: ['exam-questions', examId],
@@ -127,18 +127,11 @@ export function useExamQuestions(examId: string | null) {
       if (!examId) return [];
       const { data, error } = await db
         .from('exam_questions')
-        // ⚠️ SECURITY: correct_answer intentionally excluded during exam.
-        // It is only returned server-side via RPC after the attempt is submitted.
-        .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
+        .select('*')
         .eq('exam_id', examId)
         .order('order_index', { ascending: true });
       if (error) throw error;
-      // Belt-and-suspenders: strip any correct_answer the server might return
-      return (data || []).map((q: any) => {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { correct_answer: _hidden, ...safe } = q;
-        return safe as ExamQuestion;
-      });
+      return (data || []) as ExamQuestion[];
     },
     enabled: !!(session && examId),
     staleTime: 30 * 1000,
@@ -476,27 +469,35 @@ export function useSubmitExamAttempt() {
         };
       }
 
-      // Fallback: RPC not yet deployed → insert manually.
-      // Since client has no correct_answer, score will be 0 (safe by design).
-      console.warn('[Exam] Server RPC unavailable, fallback insert (score=0):', rpcError?.message);
+      // Fallback: RPC not yet deployed → compute score and insert directly
+      let score = 0;
       const totalScore = questions.length;
+      questions.forEach(q => {
+        const given = (answers[q.id] || '').trim().toLowerCase();
+        const correct = (q.correct_answer || '').trim().toLowerCase();
+        if (given && correct && given === correct) score++;
+      });
+
       const { data, error } = await db
         .from('exam_attempts')
-        .insert({
-          exam_id:              examId,
-          student_id:           studentId,
-          parent_id:            user.id,
-          answers,
-          score:                0,
-          total_score:          totalScore,
-          time_spent_seconds:   timeSpentSeconds,
-          tab_switches_count:   tabSwitchesCount,
-          completed_at:         new Date().toISOString(),
-        })
+        .upsert(
+          {
+            exam_id:              examId,
+            student_id:           studentId,
+            parent_id:            user.id,
+            answers,
+            score,
+            total_score:          totalScore,
+            time_spent_seconds:   timeSpentSeconds,
+            tab_switches_count:   tabSwitchesCount,
+            completed_at:         new Date().toISOString(),
+          },
+          { onConflict: 'exam_id,student_id' }
+        )
         .select()
         .single();
       if (error) throw error;
-      return { score: 0, totalScore, questions, answers };
+      return { score, totalScore, questions, answers };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'parent'] });

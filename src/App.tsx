@@ -54,7 +54,6 @@ const LandingPage              = lazy(() => import("./pages/LandingPage"));
 const PaymentPage              = lazy(() => import("./pages/PaymentPage"));
 const SubscriptionExpiredPage  = lazy(() => import("./pages/SubscriptionExpiredPage"));
 const SettingsPage             = lazy(() => import("./pages/SettingsPage"));
-const WaitingApprovalPage      = lazy(() => import("./pages/WaitingApprovalPage"));
 const StudentGradesPage        = lazy(() => import("./pages/StudentGradesPage"));
 const StudentAttendancePage    = lazy(() => import("./pages/StudentAttendancePage"));
 const StudentFinancialPage     = lazy(() => import("./pages/StudentDetailPages").then((m: any) => ({ default: m.StudentFinancialPage })));
@@ -118,7 +117,7 @@ function AppRoutes() {
         />
 
         {/* ── Protected Routes ── */}
-        <Route path="/waiting-approval" element={<ProtectedRoute><WaitingApprovalPage /></ProtectedRoute>} />
+        <Route path="/waiting-approval" element={<Navigate to="/" replace />} />
         <Route path="/onboarding"       element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
         <Route path="/super-admin"      element={<ProtectedRoute isSuperAdminOnly><SuperAdminPage /></ProtectedRoute>} />
 

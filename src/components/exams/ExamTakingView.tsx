@@ -103,6 +103,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
           setTimeLeft(remaining);
           answersRef.current = parsed.answers;
           setAnswers(parsed.answers);
+          if (typeof parsed.currentQ === 'number' && parsed.currentQ >= 0) {
+            setCurrentQ(parsed.currentQ);
+          }
           if (parsed.tabSwitchCount) {
             tabSwitchCountRef.current = parsed.tabSwitchCount;
             setTabSwitchCount(parsed.tabSwitchCount);
@@ -125,11 +128,27 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
         sessionStorage.setItem(storageKey, JSON.stringify({
           startTime: startTimeRef.current,
           answers: next,
+          currentQ,
           tabSwitchCount: tabSwitchCountRef.current,
         }));
       } catch (_) {}
       return next;
     });
+  }, [storageKey, currentQ]);
+
+  // Update currentQ in storage on change
+  const navigateToQ = useCallback((idx: number) => {
+    setCurrentQ(idx);
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        sessionStorage.setItem(storageKey, JSON.stringify({
+          ...parsed,
+          currentQ: idx,
+        }));
+      }
+    } catch (_) {}
   }, [storageKey]);
 
   const handleSubmit = useCallback(async (auto = false) => {
@@ -193,50 +212,31 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     };
   }, [screen]);
 
-  // ── Anti-Cheat: Tab-switch / visibility detection ────────────────────────
+  // ── Anti-Cheat: Visibility change detection only (safe for mobile) ────────
   useEffect(() => {
     if (screen !== 'taking') return;
 
     const handleVisibilityChange = () => {
+      // Only count true tab/app hidden states, never trigger on keyboard focus / blur
       if (document.visibilityState === 'hidden') {
         tabSwitchCountRef.current += 1;
         const count = tabSwitchCountRef.current;
         setTabSwitchCount(count);
 
-        if (count >= MAX_TAB_SWITCHES) {
-          toast.error('⚠️ تم رصد 3 محاولات مغادرة — سيتم تسليم الاختبار تلقائياً!');
+        if (count >= 5) {
+          toast.error('⚠️ تم رصد مغادرة متكررة لشاشة الاختبار — سيتم تسليم الاختبار تلقائياً!');
           handleSubmitRef.current(true);
         } else {
-          const remaining = MAX_TAB_SWITCHES - count;
-          setCheatWarningMsg(`⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count} من ${MAX_TAB_SWITCHES}). تبقّى لك ${remaining} تحذير${remaining > 1 ? 'ات' : ''} قبل التسليم التلقائي.`);
-          setShowCheatWarning(true);
-        }
-      }
-    };
-
-    const handleBlur = () => {
-      // Only count if not already counted by visibilitychange
-      if (document.visibilityState === 'visible') {
-        tabSwitchCountRef.current += 1;
-        const count = tabSwitchCountRef.current;
-        setTabSwitchCount(count);
-
-        if (count >= MAX_TAB_SWITCHES) {
-          toast.error('⚠️ تم رصد 3 محاولات مغادرة — سيتم تسليم الاختبار تلقائياً!');
-          handleSubmitRef.current(true);
-        } else {
-          const remaining = MAX_TAB_SWITCHES - count;
-          setCheatWarningMsg(`⚠️ تنبيه: تم رصد خروج من نافذة الاختبار! (مخالفة ${count} من ${MAX_TAB_SWITCHES}). تبقّى ${remaining} تحذير${remaining > 1 ? 'ات' : ''}.`);
+          const remaining = 5 - count;
+          setCheatWarningMsg(`⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count} من 5). يرجى البقاء في صفحة الاختبار.`);
           setShowCheatWarning(true);
         }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('blur', handleBlur);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('blur', handleBlur);
     };
   }, [screen]);
 
@@ -253,6 +253,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     setTimeLeft(exam.duration_minutes * 60);
     answersRef.current = {};
     setAnswers({});
+    setCurrentQ(0);
     isSubmittingRef.current = false;
     tabSwitchCountRef.current = 0;
     setTabSwitchCount(0);
@@ -261,6 +262,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
       sessionStorage.setItem(storageKey, JSON.stringify({
         startTime: now,
         answers: {},
+        currentQ: 0,
         tabSwitchCount: 0,
       }));
     } catch (_) {}
@@ -271,6 +273,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     } catch (_) {}
     setScreen('taking');
   };
+
 
   // ── Confirm Screen ────────────────────────────────────────────────────────
   if (screen === 'confirm') {
@@ -637,7 +640,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             <div className="flex items-center gap-3">
               {/* Previous Button (Right Side in RTL) */}
               <button
-                onClick={() => setCurrentQ(p => Math.max(0, p - 1))}
+                onClick={() => navigateToQ(Math.max(0, currentQ - 1))}
                 disabled={currentQ === 0}
                 className="flex-1 h-13 sm:h-14 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-black text-sm sm:text-base disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
@@ -648,10 +651,10 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               {/* Next / Finish Button (Left Side in RTL) */}
               {currentQ < questions.length - 1 ? (
                 <button
-                  onClick={() => setCurrentQ(p => Math.min(questions.length - 1, p + 1))}
+                  onClick={() => navigateToQ(Math.min(questions.length - 1, currentQ + 1))}
                   className="flex-[2] h-13 sm:h-14 rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-200 cursor-pointer"
                 >
-                  التالي
+                  السؤال التالي
                   <ArrowLeft className="w-5 h-5" />
                 </button>
               ) : (
@@ -667,9 +670,17 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
 
             {/* Quick Question Jump Dots Navigator */}
             <div className="bg-white border border-slate-100 rounded-3xl p-4 shadow-sm">
-              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest text-center mb-3">
-                الانتقال السريع للأسئلة
-              </p>
+              <div className="flex items-center justify-between mb-3 px-1">
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                  الانتقال السريع للأسئلة ({questions.length} سؤال)
+                </p>
+                {answeredCount === questions.length && (
+                  <span className="text-emerald-600 font-black text-xs flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" />
+                    أجبت على جميع الأسئلة
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2 justify-center">
                 {questions.map((question, i) => {
                   const isCurrent = i === currentQ;
@@ -678,13 +689,13 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                   return (
                     <button
                       key={question.id}
-                      onClick={() => setCurrentQ(i)}
+                      onClick={() => navigateToQ(i)}
                       className={cn(
-                        'w-9 h-9 sm:w-11 sm:h-11 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 flex items-center justify-center cursor-pointer',
+                        'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 flex items-center justify-center cursor-pointer',
                         isCurrent
                           ? 'bg-violet-600 text-white shadow-md shadow-violet-200 ring-2 ring-violet-400 ring-offset-2 scale-105'
                           : isDone
-                            ? 'bg-emerald-100/90 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       )}
                     >

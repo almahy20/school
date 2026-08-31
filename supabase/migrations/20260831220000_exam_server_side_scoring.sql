@@ -1,9 +1,8 @@
 -- ==========================================================================
 -- Migration: 20260831220000_exam_server_side_scoring.sql
 -- Purpose  : إنشاء دالة RPC تستقبل إجابات الطالب وتصحح الاختبار
---            على السيرفر وتحفظ النتيجة في exam_attempts
+--            على السيرفر وتحفظ / تحدث النتيجة في exam_attempts (UPSERT)
 --            ثم تُرجع الدرجة والأسئلة مع الإجابات الصحيحة
---            (الإجابات الصحيحة لا تُرسل أبداً للعميل قبل التسليم)
 -- ==========================================================================
 
 SET search_path TO public;
@@ -41,14 +40,6 @@ BEGIN
     RAISE EXCEPTION 'الاختبار غير موجود أو غير منشور';
   END IF;
 
-  -- التحقق من عدم وجود محاولة سابقة لنفس الطالب
-  IF EXISTS (
-    SELECT 1 FROM public.exam_attempts
-    WHERE exam_id = p_exam_id AND student_id = p_student_id
-  ) THEN
-    RAISE EXCEPTION 'لقد قمت بتسليم هذا الاختبار مسبقاً';
-  END IF;
-
   -- تصحيح الإجابات وبناء قائمة الأسئلة مع الإجابات الصحيحة
   FOR v_question IN
     SELECT id, question_type, question_text, options, correct_answer, order_index
@@ -76,7 +67,7 @@ BEGIN
     v_questions_json := v_questions_json || jsonb_build_array(v_question_obj);
   END LOOP;
 
-  -- حفظ المحاولة في قاعدة البيانات
+  -- حفظ أو تحديث المحاولة في قاعدة البيانات بسلاسة (UPSERT)
   INSERT INTO public.exam_attempts (
     exam_id,
     student_id,
@@ -98,13 +89,20 @@ BEGIN
     p_tab_switches_count,
     NOW()
   )
+  ON CONFLICT (exam_id, student_id) DO UPDATE SET
+    answers            = EXCLUDED.answers,
+    score              = EXCLUDED.score,
+    total_score        = EXCLUDED.total_score,
+    time_spent_seconds = EXCLUDED.time_spent_seconds,
+    tab_switches_count = EXCLUDED.tab_switches_count,
+    completed_at       = NOW()
   RETURNING id INTO v_attempt_id;
 
-  -- إرجاع النتيجة مع الأسئلة والإجابات الصحيحة (بعد الحفظ)
+  -- إرجاع النتيجة مع الأسئلة والإجابات الصحيحة
   RETURN jsonb_build_object(
-    'attempt_id',           v_attempt_id,
-    'score',                v_score,
-    'total_score',          v_total,
+    'attempt_id',             v_attempt_id,
+    'score',                  v_score,
+    'total_score',            v_total,
     'questions_with_answers', v_questions_json
   );
 END;
