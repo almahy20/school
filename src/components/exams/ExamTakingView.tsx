@@ -543,14 +543,14 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
                           type="button"
                           onClick={() => updateAnswer(q.id, val)}
                           className={cn(
+                            // ⚠️ SECURITY: Both options use the SAME neutral/violet color.
+                            // Never use green=correct or red=wrong during the exam itself,
+                            // as this would visually reveal the correct answer to the student.
+                            // Correct/wrong colors are only shown in the result screen AFTER submission.
                             'flex items-center justify-center gap-3 h-16 sm:h-20 rounded-2xl text-lg sm:text-xl font-black border-2 transition-all duration-200 cursor-pointer',
                             isSelected
-                              ? isTrue
-                                ? 'bg-emerald-500 border-emerald-500 text-white shadow-lg shadow-emerald-200 scale-[1.02]'
-                                : 'bg-rose-500 border-rose-500 text-white shadow-lg shadow-rose-200 scale-[1.02]'
-                              : isTrue
-                                ? 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/40'
-                                : 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-rose-300 hover:bg-rose-50/40'
+                              ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-200 scale-[1.02]'
+                              : 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-violet-300 hover:bg-violet-50/40'
                           )}
                         >
                           {isTrue ? (
@@ -878,4 +878,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

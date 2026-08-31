@@ -28,7 +28,7 @@ export default function LoginPage() {
     if (schoolBranding.cleanName) {
       document.title = `${schoolBranding.cleanName} — تسجيل الدخول`;
     } else {
-      document.title = "النظام الذكي — تسجيل الدخول";
+      document.title = "مدرسة الجيل الجديد — تسجيل الدخول";
     }
   }, [schoolBranding.cleanName]);
 
@@ -94,9 +94,9 @@ export default function LoginPage() {
             )}
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight mb-2">
-            {schoolBranding.cleanName}
+            {schoolBranding.cleanName || 'الجيل الجديد'}
           </h1>
-          <p className="text-sm font-bold text-white/40 tracking-wider">نظام الإدارة المدرسية الذكي</p>
+          <p className="text-sm font-bold text-white/40 tracking-wider">مدرسة الجيل الجديد</p>
         </div>
 
         {/* Login Card (Glassmorphism) */}

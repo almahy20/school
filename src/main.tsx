@@ -4,6 +4,9 @@ import "./index.css";
 import { logger } from "./utils/logger";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 
+// Lets the HTML boot screen know that the React bundle loaded successfully.
+window.__schoolAppMounted = true;
+
 // Disable browser scroll restoration — we handle it ourselves via ScrollToTop
 if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';

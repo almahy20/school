@@ -1,5 +1,5 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
-const CACHE_NAME = 'school-cache-v3.0';
+const CACHE_NAME = 'school-cache-v3.2';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -25,7 +25,7 @@ async function limitCacheSize(cacheName, maxItems) {
 }
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install Event v3.0');  // ← updated version
+  console.log('[SW] Install Event v3.2');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -47,7 +47,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activate Event v3.0');  // ← updated version
+  console.log('[SW] Activate Event v3.2');
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
@@ -75,12 +75,25 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put('/offline-shell', response.clone()));
+          if (response && response.ok) {
+            try {
+              const clone = response.clone();
+              caches.open(CACHE_NAME)
+                .then((cache) => cache.put('/offline-shell', clone))
+                .catch((e) => console.warn('[SW] Cache put failed:', e));
+            } catch (e) {
+              console.warn('[SW] Clone failed:', e);
+            }
+          }
           return response;
         })
         .catch(async () => {
-          const cache = await caches.open(CACHE_NAME);
-          return (await cache.match('/offline-shell')) || new Response('Offline', { status: 503 });
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            const cached = await cache.match('/offline-shell');
+            if (cached) return cached;
+          } catch (_e) {}
+          return new Response('Offline', { status: 503 });
         })
     );
     return;
@@ -107,8 +120,13 @@ self.addEventListener('fetch', (event) => {
             if (cached) return cached;
             return fetch(event.request).then((networkResponse) => {
               if (networkResponse && networkResponse.status === 200) {
-                cache.put(cacheKey, networkResponse.clone());
-                limitCacheSize(BRANDING_CACHE, MAX_BRANDING_ITEMS);
+                try {
+                  const clone = networkResponse.clone();
+                  cache.put(cacheKey, clone).catch((e) => console.warn('[SW] Branding put failed:', e));
+                  limitCacheSize(BRANDING_CACHE, MAX_BRANDING_ITEMS);
+                } catch (e) {
+                  console.warn('[SW] Branding clone failed:', e);
+                }
               }
               return networkResponse;
             }).catch(() => cached);
@@ -132,9 +150,14 @@ self.addEventListener('fetch', (event) => {
         if (cached) return cached;
         const response = await fetch(event.request);
         const contentType = response.headers.get('content-type') || '';
-        if (response.ok && !contentType.includes('text/html')) {
-          cache.put(event.request, response.clone());
-          limitCacheSize(CACHE_NAME, MAX_CACHE_ITEMS);
+        if (response && response.ok && !contentType.includes('text/html')) {
+          try {
+            const clone = response.clone();
+            cache.put(event.request, clone).catch((e) => console.warn('[SW] Asset cache put failed:', e));
+            limitCacheSize(CACHE_NAME, MAX_CACHE_ITEMS);
+          } catch (e) {
+            console.warn('[SW] Asset clone failed:', e);
+          }
         }
         return response;
       }).catch(() => new Response('Network Error', { status: 503 }))

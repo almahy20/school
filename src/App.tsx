@@ -107,7 +107,10 @@ function AppRoutes() {
                 <DashboardPage />
               </ProtectedRoute>
             ) : loading ? (
-              <div className="fixed inset-0 bg-transparent" />
+              <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-3">
+                <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+                <p className="text-sm font-bold text-muted-foreground">جاري التحميل...</p>
+              </div>
             ) : (
               <Navigate to="/login" replace />
             )

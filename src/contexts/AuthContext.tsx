@@ -1,10 +1,10 @@
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
-import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
-import { logger } from '@/utils/logger';
-import { getCachedUser, setCachedUser } from '@/lib/userCache';
+import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { queryClient, clearAllCache } from '@/lib/queryClient';
+import { getCachedUser, setCachedUser } from '@/lib/userCache';
+import { logger } from '@/utils/logger';
 
 interface AuthContextType {
   session: Session | null;
@@ -18,25 +18,19 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ── Build a partial AppUser instantly from JWT claims (zero network) ──────────
 function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
   try {
     const app = supaUser.app_metadata as any;
     const meta = supaUser.user_metadata as any;
     const role: AppRole = (app?.role || meta?.role || 'parent') as AppRole;
-    // school_id comes from app_metadata when the custom JWT hook is active,
-    // falling back to user_metadata for older tokens / first-login before hook fires
     const schoolId: string | undefined =
       (app?.school_id ? String(app.school_id) : undefined) ||
       (meta?.school_id ? String(meta.school_id) : undefined);
     const fullName: string = meta?.full_name || '';
     const phone: string = meta?.phone || '';
     const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin);
-    // approval_status is now embedded in the JWT by the custom hook,
-    // so we can use it immediately instead of defaulting to 'approved'
-    const approvalStatus = (app?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected';
+    const approvalStatus = (app?.approval_status || (role === 'parent' ? 'pending' : 'approved')) as 'approved' | 'pending' | 'rejected';
 
-    // Load cached branding so dashboard renders with the correct logo immediately
     let schoolStatus = 'active';
     if (schoolId) {
       try {
@@ -58,7 +52,7 @@ function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
       isSuperAdmin,
       schoolId,
       schoolStatus,
-      approvalStatus, // from JWT when hook is active, else 'approved' default
+      approvalStatus,
       subscriptionExpired: false,
     };
   } catch {
@@ -175,28 +169,22 @@ async function performSignOut(
   setSession(null);
   setCachedUser(null);
   
-  // 1. Explicitly remove the Supabase session token (custom storageKey from client.ts)
   try {
     localStorage.removeItem('school_auth_token');
     localStorage.removeItem('app_user_cache_v2');
     localStorage.removeItem('last_auth_sync');
   } catch (_e) { /* ignore */ }
 
-  // 2. Sign out from Supabase (local first to clear in-memory state, then global to invalidate refresh token)
   try { await supabase.auth.signOut({ scope: 'local' }); } catch (_e) { /* ignore */ }
   try { await supabase.auth.signOut({ scope: 'global' }); } catch (_e) { /* ignore */ }
 
-  // 3. Final sweep — remove any leftover auth-related keys
   try {
     const keysToRemove = Object.keys(localStorage).filter(k => 
       k.startsWith('sb-') || 
       k.includes('supabase') || 
-      k.includes('auth') || 
-      k.includes('school_auth') ||
       k.startsWith('branding_')
     );
     keysToRemove.forEach(k => localStorage.removeItem(k));
-    sessionStorage.clear();
   } catch (_e) { /* ignore */ }
 }
 
@@ -206,7 +194,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(() => getCachedUser() === null);
 
   const isSigningOutRef = useRef(false);
-  // Tracks the user ID currently being loaded — prevents duplicate RPC calls for same user
   const loadingUserIdRef = useRef<string | null>(null);
 
   const applySession = (s: Session) => {
@@ -217,10 +204,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return s;
     });
 
-    // Read last_auth_sync BEFORE updating it — used later to decide if RPC can be skipped
     const lastSync = parseInt(localStorage.getItem('last_auth_sync') || '0', 10);
 
-    // Step 1: Set user immediately from JWT (instant, zero network)
     const jwtUser = buildUserFromJwt(s.user);
     if (jwtUser) {
       setUser(prev => {
@@ -241,60 +226,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('last_auth_sync', Date.now().toString());
     }
 
-    // Step 2: Background RPC to get accurate approval_status / school data
-    // Guard: don't fire if the session token is just the anon key (no real user auth)
     if (!s.access_token || s.access_token === s.refresh_token) {
       logger.warn('[Auth] Skipping background RPC — no valid access token');
       return;
     }
 
-    // Skip if already loading for this user (prevents duplicate calls)
     if (loadingUserIdRef.current === s.user.id) {
       logger.log('[Auth] Background RPC skipped — already loading for this user');
       return;
     }
 
-    // Skip if JWT has role + school_id AND we synced recently (within 30 min).
-    // approval_status is optional — if the custom JWT hook isn't enabled yet we still
-    // skip as long as the cached user has a valid approvalStatus from a previous RPC call.
     const cachedUser = getCachedUser();
-    const jwtHasEssentials = !!(
-      s.user.app_metadata?.role &&
-      s.user.app_metadata?.school_id
-    );
-    const approvalKnown = !!(
-      s.user.app_metadata?.approval_status ||   // JWT hook is active
-      (cachedUser?.approvalStatus && cachedUser.id === s.user.id) // previous RPC result cached
-    );
-    const syncedRecently = (Date.now() - lastSync) < 30 * 60 * 1000 && lastSync > 0;
+    const isJwtComplete = !!(jwtUser?.role && jwtUser?.schoolId);
+    const hasApprovalStatus = !!(jwtUser?.approvalStatus || cachedUser?.approvalStatus);
+    const isRecentlySynced = Date.now() - lastSync < 30 * 60 * 1000;
 
-    if (jwtHasEssentials && approvalKnown && syncedRecently) {
+    if (isJwtComplete && hasApprovalStatus && isRecentlySynced) {
       logger.log('[Auth] Background RPC skipped — JWT complete + recently synced');
+      if (cachedUser) {
+        prefetchCommonQueries(cachedUser);
+      }
       return;
     }
-    loadingUserIdRef.current = s.user.id;
 
-    getAppUserData(s.user)
-      .then((appUser) => {
-        if (!appUser) return;
-        setUser(appUser);
-        setCachedUser(appUser);
-        localStorage.setItem('last_auth_sync', Date.now().toString());
-        if ('requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(() => prefetchCommonQueries(appUser), { timeout: 2000 });
-        } else {
-          setTimeout(() => prefetchCommonQueries(appUser), 1000);
+    loadingUserIdRef.current = s.user.id;
+    getAppUserData(s.user).then(appUser => {
+      loadingUserIdRef.current = null;
+      if (!appUser) return;
+      setUser(prev => {
+        if (
+          prev &&
+          prev.id === appUser.id &&
+          prev.role === appUser.role &&
+          prev.schoolId === appUser.schoolId &&
+          prev.approvalStatus === appUser.approvalStatus &&
+          prev.schoolStatus === appUser.schoolStatus &&
+          prev.subscriptionExpired === appUser.subscriptionExpired &&
+          prev.fullName === appUser.fullName &&
+          prev.phone === appUser.phone
+        ) {
+          return prev;
         }
-      })
-      .catch(() => { /* keep JWT user */ })
-      .finally(() => {
-        loadingUserIdRef.current = null;
+        return appUser;
       });
+      setCachedUser(appUser);
+      localStorage.setItem('last_auth_sync', Date.now().toString());
+      prefetchCommonQueries(appUser);
+    }).catch(err => {
+      loadingUserIdRef.current = null;
+      logger.error('[Auth] getAppUserData failed:', err);
+    });
   };
 
   const silentRefresh = async (): Promise<boolean> => {
     try {
-      // إذا كان الجهاز غير متصل بالإنترنت، نحافظ على الجلسة الحالية ولا نسجل خروج
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         return true;
       }
@@ -303,7 +288,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         applySession(data.session);
         return true;
       }
-      // في حال وجود خلل مؤقت في الاتصال بالسيرفر (Network Error / Failed to fetch)، لا نسجل خروج
       if (error && (
         error.message?.includes('Failed to fetch') || 
         error.message?.includes('NetworkError') || 
@@ -321,14 +305,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // لو المستخدم اختار "لا تذكرني" في المرة السابقة، نعمل signOut عند رجوعه
     const noRemember = sessionStorage.getItem('no_remember_me');
     if (noRemember) {
-      // sessionStorage باقي = نفس الـ tab session، لما يفتح tab جديد بيتمسح تلقائياً
-      // لكن لو فتح الصفحة من جديد في نفس الـ tab نعمل signOut يدوي
       const lastSignInTime = sessionStorage.getItem('user_signup_time');
       if (!lastSignInTime) {
-        // لم يسجل في هذه الجلسة — يعني أعاد فتح الصفحة
         sessionStorage.removeItem('no_remember_me');
         performSignOut(setUser, setSession);
       }
@@ -345,7 +325,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             silentRefresh().then((success) => {
               if (!success) {
-                // لا توجد جلسة صالحة وفشل التجديد — تصفير المستخدم ومسح الكاش لمنع الجلسة الشبحية
                 setUser(null);
                 setCachedUser(null);
                 setSession(null);
@@ -358,12 +337,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           if (eventSession) applySession(eventSession);
+          setIsLoading(false);
           return;
         }
 
         if (event === 'SIGNED_OUT') {
-          if (isSigningOutRef.current) return; // manual sign-out, already handled
-          // Supabase sends SIGNED_OUT during token rotation — check if session still exists
+          if (isSigningOutRef.current) return;
           supabase.auth.getSession().then(({ data: { session: current } }) => {
             if (current) {
               logger.log('[Auth] SIGNED_OUT ignored — active session exists (token rotation)');
@@ -382,6 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setCachedUser(null);
             setSession(null);
           });
+          setIsLoading(false);
           return;
         }
 
@@ -393,10 +373,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               setSession(null);
             }
           });
+          setIsLoading(false);
           return;
         }
       }
     );
+
+    // Timeout safety: Ensure isLoading is never stuck forever
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 2500);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
@@ -420,6 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 4 * 60 * 1000);
 
     return () => {
+      clearTimeout(timeout);
       subscription.unsubscribe();
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(refreshInterval);
@@ -440,15 +427,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const primaryEmail = isEmail ? cleanInput : `${cleanInput}@edara.com`;
       const fallbackEmail = isEmail ? null : `${cleanInput}@school.local`;
 
-      // لو rememberMe = false نستخدم sessionStorage بدل localStorage
-      // عشان الجلسة تنتهي لما يغلق المتصفح
       if (!rememberMe) {
-        // نغير الـ storage مؤقتاً قبل الـ signIn
         try {
           const { data: { session: existing } } = await supabase.auth.getSession();
           if (!existing) {
-            // تغيير الـ storage key للـ session storage فقط (Supabase v2 لا يدعم dynamic storage)
-            // بنحفظ flag بدلاً منه ونعمل signOut عند إغلاق المتصفح
             sessionStorage.setItem('no_remember_me', '1');
           }
         } catch (_e) { /* ignore */ }
@@ -458,7 +440,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let { data, error } = await supabase.auth.signInWithPassword({ email: primaryEmail, password });
 
-      // إذا فشل بالدومين الأساسي وله دومين بديل (@school.local للحسابات القديمة/المُنشأة من لوحة الإدارة)
       if (error && fallbackEmail && error.message.includes('Invalid login credentials')) {
         const fallbackRes = await supabase.auth.signInWithPassword({ email: fallbackEmail, password });
         if (!fallbackRes.error) {

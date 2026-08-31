@@ -127,16 +127,24 @@ export function useExamQuestions(examId: string | null) {
       if (!examId) return [];
       const { data, error } = await db
         .from('exam_questions')
-        .select('*')
+        // ⚠️ SECURITY: correct_answer intentionally excluded during exam.
+        // It is only returned server-side via RPC after the attempt is submitted.
+        .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
         .eq('exam_id', examId)
         .order('order_index', { ascending: true });
       if (error) throw error;
-      return (data || []) as ExamQuestion[];
+      // Belt-and-suspenders: strip any correct_answer the server might return
+      return (data || []).map((q: any) => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { correct_answer: _hidden, ...safe } = q;
+        return safe as ExamQuestion;
+      });
     },
     enabled: !!(session && examId),
     staleTime: 30 * 1000,
   });
 }
+
 
 /** محاولات اختبار واحد — للأدمن */
 export function useExamAttempts(examId: string | null) {
@@ -421,7 +429,7 @@ export function useParentElectronicExams() {
   });
 }
 
-/** إرسال إجابات الاختبار */
+/** إرسال إجابات الاختبار — التصحيح يتم بالكامل على السيرفر (server-side scoring) */
 export function useSubmitExamAttempt() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -444,15 +452,34 @@ export function useSubmitExamAttempt() {
     }) => {
       if (!user?.id) throw new Error('المستخدم غير مسجّل الدخول');
 
-      // حساب الدرجة محلياً
-      let score = 0;
-      const totalScore = questions.length;
-      questions.forEach(q => {
-        const given = (answers[q.id] || '').trim().toLowerCase();
-        const correct = q.correct_answer.trim().toLowerCase();
-        if (given === correct) score++;
+      // ⚠️ SECURITY: Call server-side RPC for scoring.
+      // The client never has correct_answer (stripped in useExamQuestions),
+      // so scoring must happen on the server which has full access.
+      const { data: rpcResult, error: rpcError } = await db.rpc('submit_exam_attempt', {
+        p_exam_id:            examId,
+        p_student_id:         studentId,
+        p_parent_id:          user.id,
+        p_answers:            answers,
+        p_time_spent_seconds: timeSpentSeconds,
+        p_tab_switches_count: tabSwitchesCount,
       });
 
+      if (!rpcError && rpcResult) {
+        // Server returned: { score, total_score, questions_with_answers }
+        const { score, total_score: totalScore, questions: scoredQs } = rpcResult as any;
+        return {
+          score,
+          totalScore,
+          // correct_answer is revealed only AFTER server saves the attempt
+          questions: (scoredQs || questions) as ExamQuestion[],
+          answers,
+        };
+      }
+
+      // Fallback: RPC not yet deployed → insert manually.
+      // Since client has no correct_answer, score will be 0 (safe by design).
+      console.warn('[Exam] Server RPC unavailable, fallback insert (score=0):', rpcError?.message);
+      const totalScore = questions.length;
       const { data, error } = await db
         .from('exam_attempts')
         .insert({
@@ -460,7 +487,7 @@ export function useSubmitExamAttempt() {
           student_id:           studentId,
           parent_id:            user.id,
           answers,
-          score,
+          score:                0,
           total_score:          totalScore,
           time_spent_seconds:   timeSpentSeconds,
           tab_switches_count:   tabSwitchesCount,
@@ -468,9 +495,8 @@ export function useSubmitExamAttempt() {
         })
         .select()
         .single();
-
       if (error) throw error;
-      return { attempt: data, score, totalScore, questions };
+      return { score: 0, totalScore, questions, answers };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'parent'] });
