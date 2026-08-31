@@ -42,6 +42,7 @@ type ExamFormData = z.infer<typeof examSchema>;
 // ─── Local question type ──────────────────────────────────────────────────────
 
 interface LocalQuestion {
+  id?: string; // DB UUID
   _key: string; // local unique id
   question_type: QuestionType;
   question_text: string;
@@ -89,6 +90,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
   useEffect(() => {
     if (existingQuestions.length > 0) {
       setQuestions(existingQuestions.map(q => ({
+        id:            q.id,
         _key:          makeKey(),
         question_type: q.question_type,
         question_text: q.question_text,
@@ -161,6 +163,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
       await saveQuestions.mutateAsync({
         examId,
         questions: questions.map((q, i) => ({
+          id:             q.id,
           question_type:  q.question_type,
           question_text:  q.question_text,
           options:        q.question_type === 'multiple_choice' ? q.options : null,
@@ -173,9 +176,10 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
         setIsPublishing(true);
         await updateExam.mutateAsync({ id: examId, class_id: classId, status: 'published' });
         setIsPublishing(false);
-        toast.success('تم نشر الاختبار بنجاح');
+        toast.success('تم حفظ التعديلات وإعادة تصحيح درجات الطلاب تلقائياً 🎉');
         onBack();
       } else {
+        toast.success('تم حفظ الأسئلة وإعادة تصحيح نتائج الاختبار 🎯');
         setStep('preview');
       }
     } catch (_) {

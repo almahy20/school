@@ -290,34 +290,65 @@ export function useSaveExamQuestions() {
     }) => {
       if (!user?.schoolId) throw new Error('school_id مفقود');
 
-      // حذف الأسئلة القديمة ثم إدراج الجديدة
-      const { error: delErr } = await db
-        .from('exam_questions')
-        .delete()
-        .eq('exam_id', examId);
-      if (delErr) throw delErr;
+      const keptIds = questions.filter(q => !!q.id).map(q => q.id as string);
+
+      // 1. حذف فقط الأسئلة التي قام المعلم بإزالتها
+      if (keptIds.length > 0) {
+        await db
+          .from('exam_questions')
+          .delete()
+          .eq('exam_id', examId)
+          .not('id', 'in', `(${keptIds.join(',')})`);
+      } else {
+        await db
+          .from('exam_questions')
+          .delete()
+          .eq('exam_id', examId);
+      }
 
       if (questions.length === 0) return [];
 
-      const rows = questions.map((q, i) => ({
-        exam_id:       examId,
-        school_id:     user.schoolId,
-        question_type: q.question_type,
-        question_text: q.question_text.trim(),
-        options:       q.options,
-        correct_answer: q.correct_answer.trim(),
-        order_index:   i,
-      }));
+      // 2. حفظ الأسئلة (تحديث الموجودة بالـ ID نفسه وإضافة الجديدة)
+      const rows = questions.map((q, i) => {
+        const row: any = {
+          exam_id:        examId,
+          school_id:      user.schoolId,
+          question_type:  q.question_type,
+          question_text:  q.question_text.trim(),
+          options:        q.options,
+          correct_answer: q.correct_answer.trim(),
+          order_index:    i,
+        };
+        if (q.id) {
+          row.id = q.id;
+        }
+        return row;
+      });
 
       const { data, error } = await db
         .from('exam_questions')
-        .insert(rows)
+        .upsert(rows)
         .select();
       if (error) throw error;
+
+      // 3. 🎯 إعادة تصحيح وحساب درجات الطلاب تلقائياً عند تغيير الإجابة
+      try {
+        const { data: rescoreData, error: rescoreErr } = await db.rpc('recalculate_exam_scores', {
+          p_exam_id: examId,
+        });
+        if (!rescoreErr && rescoreData?.attempts_updated > 0) {
+          console.log(`[Exam] Recalculated ${rescoreData.attempts_updated} student attempt(s) automatically!`);
+        }
+      } catch (rErr) {
+        console.warn('[Exam] Server rescore skipped:', rErr);
+      }
+
       return data;
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['exam-questions', vars.examId] });
+      queryClient.invalidateQueries({ queryKey: ['exam-attempts'] });
+      queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
     },
     onError: (err: any) => {
       toast.error('فشل حفظ الأسئلة', { description: err.message });
