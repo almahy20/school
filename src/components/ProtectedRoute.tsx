@@ -37,15 +37,8 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
-  // 1. Check Approval Status
-  if (user.approvalStatus === 'pending' && location.pathname !== '/waiting-approval') {
-    return <Navigate to="/waiting-approval" replace />;
-  }
-  
-  // If user is approved but trying to access waiting page, send them back
-  if (user.approvalStatus === 'approved' && location.pathname === '/waiting-approval') {
-    return <Navigate to="/" replace />;
-  }
+  // Approval check removed — all registered users are auto-approved.
+  // If a specific school wants manual approval, re-enable this per school_id.
 
   if (isSuperAdminOnly && !user.isSuperAdmin) return <Navigate to="/" replace />;
 

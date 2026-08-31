@@ -29,7 +29,7 @@ function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
     const fullName: string = meta?.full_name || '';
     const phone: string = meta?.phone || '';
     const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin);
-    const approvalStatus = (app?.approval_status || (role === 'parent' ? 'pending' : 'approved')) as 'approved' | 'pending' | 'rejected';
+    const approvalStatus = (app?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected';
 
     let schoolStatus = 'active';
     if (schoolId) {
@@ -97,7 +97,7 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
       isSuperAdmin: role?.is_super_admin || false,
       schoolId: profile?.school_id,
       schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || (userRole === 'parent' ? 'pending' : 'approved'),
+      approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
       subscriptionExpired: checkSubscriptionExpired(school),
     };
   } catch (err) {
@@ -126,7 +126,7 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
       isSuperAdmin: role?.is_super_admin || false,
       schoolId: profile?.school_id,
       schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || (userRole === 'parent' ? 'pending' : 'approved'),
+      approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
       subscriptionExpired: checkSubscriptionExpired(school),
     };
   } catch {
