@@ -422,7 +422,7 @@ export function useParentElectronicExams() {
   });
 }
 
-/** إرسال إجابات الاختبار — التصحيح يتم بالكامل على السيرفر (server-side scoring) */
+/** إرسال إجابات الاختبار — التصحيح يتم بالكامل على السيرفر مع تجديد التوكن التلقائي */
 export function useSubmitExamAttempt() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -445,17 +445,62 @@ export function useSubmitExamAttempt() {
     }) => {
       if (!user?.id) throw new Error('المستخدم غير مسجّل الدخول');
 
-      // ⚠️ SECURITY: Call server-side RPC for scoring.
-      // The client never has correct_answer (stripped in useExamQuestions),
-      // so scoring must happen on the server which has full access.
-      const { data: rpcResult, error: rpcError } = await db.rpc('submit_exam_attempt', {
-        p_exam_id:            examId,
-        p_student_id:         studentId,
-        p_parent_id:          user.id,
-        p_answers:            answers,
-        p_time_spent_seconds: timeSpentSeconds,
-        p_tab_switches_count: tabSwitchesCount,
-      });
+      // 🔄 1. التأكد من صلاحية الـ Session وتجديد التوكن إذا كان منتهياً قبل الإرسال
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const currentSession = sessionData?.session;
+        // إذا كان التوكن ينتهي خلال أقل من دقيقتين أو منتهي، نجدده فوراً
+        if (!currentSession || (currentSession.expires_at && currentSession.expires_at * 1000 < Date.now() + 120000)) {
+          console.log('[Exam] Proactively refreshing auth session before submit...');
+          await supabase.auth.refreshSession();
+        }
+      } catch (e) {
+        console.warn('[Exam] Proactive session check warning:', e);
+      }
+
+      // 🔄 2. محاولة الإرسال عبر الـ RPC
+      let rpcResult: any = null;
+      let rpcError: any = null;
+
+      try {
+        const res = await db.rpc('submit_exam_attempt', {
+          p_exam_id:            examId,
+          p_student_id:         studentId,
+          p_parent_id:          user.id,
+          p_answers:            answers,
+          p_time_spent_seconds: timeSpentSeconds,
+          p_tab_switches_count: tabSwitchesCount,
+        });
+        rpcResult = res.data;
+        rpcError = res.error;
+      } catch (err) {
+        rpcError = err;
+      }
+
+      // 🔄 3. إذا حدث خطأ JWT expired أثناء الـ RPC — نجدد التوكن ونعيد المحاولة فوراً
+      if (
+        rpcError &&
+        (rpcError.message?.includes('JWT') ||
+         rpcError.message?.includes('expired') ||
+         rpcError.message?.includes('token') ||
+         rpcError.code === 'PGRST301' ||
+         rpcError.status === 401)
+      ) {
+        console.warn('[Exam] JWT expired during submit_exam_attempt RPC, refreshing session and retrying...');
+        const { error: refreshErr } = await supabase.auth.refreshSession();
+        if (!refreshErr) {
+          const retryRes = await db.rpc('submit_exam_attempt', {
+            p_exam_id:            examId,
+            p_student_id:         studentId,
+            p_parent_id:          user.id,
+            p_answers:            answers,
+            p_time_spent_seconds: timeSpentSeconds,
+            p_tab_switches_count: tabSwitchesCount,
+          });
+          rpcResult = retryRes.data;
+          rpcError = retryRes.error;
+        }
+      }
 
       if (!rpcError && rpcResult) {
         // Server returned: { score, total_score, questions_with_answers }
@@ -469,7 +514,8 @@ export function useSubmitExamAttempt() {
         };
       }
 
-      // Fallback: RPC not yet deployed → compute score and insert directly
+      // Fallback: direct UPSERT in database if RPC not deployed
+      console.warn('[Exam] RPC not available or failed, falling back to direct upsert:', rpcError?.message);
       let score = 0;
       const totalScore = questions.length;
       questions.forEach(q => {
@@ -478,7 +524,7 @@ export function useSubmitExamAttempt() {
         if (given && correct && given === correct) score++;
       });
 
-      const { data, error } = await db
+      let upsertRes = await db
         .from('exam_attempts')
         .upsert(
           {
@@ -496,7 +542,36 @@ export function useSubmitExamAttempt() {
         )
         .select()
         .single();
-      if (error) throw error;
+
+      // Retry direct upsert on JWT expired as well
+      if (
+        upsertRes.error &&
+        (upsertRes.error.message?.includes('JWT') ||
+         upsertRes.error.message?.includes('expired') ||
+         upsertRes.error.code === 'PGRST301')
+      ) {
+        await supabase.auth.refreshSession();
+        upsertRes = await db
+          .from('exam_attempts')
+          .upsert(
+            {
+              exam_id:              examId,
+              student_id:           studentId,
+              parent_id:            user.id,
+              answers,
+              score,
+              total_score:          totalScore,
+              time_spent_seconds:   timeSpentSeconds,
+              tab_switches_count:   tabSwitchesCount,
+              completed_at:         new Date().toISOString(),
+            },
+            { onConflict: 'exam_id,student_id' }
+          )
+          .select()
+          .single();
+      }
+
+      if (upsertRes.error) throw upsertRes.error;
       return { score, totalScore, questions, answers };
     },
     onSuccess: () => {

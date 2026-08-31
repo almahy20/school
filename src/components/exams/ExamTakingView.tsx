@@ -20,6 +20,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { supabase } from '@/integrations/supabase/client';
 
 // ── Seeded Shuffle (deterministic per student+exam, consistent across renders)
 function seededShuffle<T>(arr: T[], seed: string): T[] {
@@ -210,6 +211,17 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
+  }, [screen]);
+
+  // Keep Supabase session fresh during the exam so JWT never expires
+  useEffect(() => {
+    if (screen !== 'taking') return;
+    const keepAliveTimer = setInterval(async () => {
+      try {
+        await supabase.auth.getSession();
+      } catch (_) {}
+    }, 3 * 60 * 1000); // Check/refresh every 3 minutes
+    return () => clearInterval(keepAliveTimer);
   }, [screen]);
 
   // ── Anti-Cheat: Visibility change detection only (safe for mobile) ────────
