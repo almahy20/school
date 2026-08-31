@@ -7,6 +7,7 @@ interface ExamResultsViewProps {
   exam: ElectronicExam;
   classId: string;
   onBack: () => void;
+  onEdit?: () => void;
 }
 
 function formatTime(seconds: number): string {
@@ -130,7 +131,7 @@ function StatCard({ icon, label, value, color }: {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ExamResultsView({ exam, classId, onBack }: ExamResultsViewProps) {
+export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamResultsViewProps) {
   const { data: attempts = [], isLoading, error, refetch } = useExamAttempts(exam.id);
 
   // Sort by score descending
@@ -185,6 +186,16 @@ export default function ExamResultsView({ exam, classId, onBack }: ExamResultsVi
           <h2 className="font-black text-slate-900 text-base truncate">{exam.title}</h2>
           <p className="text-xs text-slate-400 font-bold mt-0.5">نتائج الطلاب</p>
         </div>
+        
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-2xl bg-violet-50 text-violet-700 text-xs font-black hover:bg-violet-100 transition-colors shrink-0"
+          >
+            تعديل الأسئلة
+          </button>
+        )}
+
         <button
           onClick={handleExportCSV}
           disabled={!attempts.length}

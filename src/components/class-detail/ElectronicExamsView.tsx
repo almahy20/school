@@ -60,6 +60,7 @@ export default function ElectronicExamsView({ classId, className }: ElectronicEx
         exam={selectedExam}
         classId={classId}
         onBack={() => { setSubView('list'); setSelectedExam(null); }}
+        onEdit={() => { setSubView('create'); }}
       />
     );
   }
@@ -192,18 +193,23 @@ function ExamCard({
             النتائج
           </button>
         )}
-        {exam.status === 'draft' && (
-          <button
-            onClick={onEdit}
-            className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-2xl bg-slate-50 text-slate-700 text-xs font-black hover:bg-slate-100 transition-colors"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            تعديل
-          </button>
-        )}
+        <button
+          onClick={onEdit}
+          className={cn(
+            "flex items-center justify-center gap-1.5 h-9 rounded-2xl text-xs font-black transition-colors",
+            exam.status === 'published'
+              ? "px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700"
+              : "flex-1 bg-slate-50 text-slate-700 hover:bg-slate-100"
+          )}
+          title="تعديل الاختبار والأسئلة"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          تعديل
+        </button>
         <button
           onClick={onDelete}
-          className="w-9 h-9 rounded-2xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors"
+          className="w-9 h-9 rounded-2xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-colors shrink-0"
+          title="حذف الاختبار"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
