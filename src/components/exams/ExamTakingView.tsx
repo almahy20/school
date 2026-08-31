@@ -3,7 +3,7 @@ import AppLayout from '@/components/AppLayout';
 import {
   ArrowRight, ArrowLeft, Clock, CheckCircle2, XCircle,
   AlertCircle, Loader2, Send, Check, Sparkles, HelpCircle,
-  ShieldAlert
+  ShieldAlert, BookOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';

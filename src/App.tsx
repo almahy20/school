@@ -10,6 +10,14 @@ import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
+function RouteLoadingScreen() {
+  return (
+    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#0a0f1e] text-white" dir="rtl">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-indigo-400" />
+      <p className="text-sm font-bold text-white/60">جاري فتح الصفحة...</p>
+    </div>
+  );
+}
 
 // ── Eagerly loaded (critical path) ──────────────────────────────────────────
 import DashboardPage from "./pages/DashboardPage";
@@ -77,7 +85,7 @@ function AppRoutes() {
 
   // Sync school favicon with branding — handled by PwaManager
   return (
-    <Suspense fallback={<div className="fixed inset-0 bg-transparent" />}>
+    <Suspense fallback={<RouteLoadingScreen />}>
       <Routes>
         {/* ── Public Routes ── */}
         <Route path="/home" element={<Navigate to="/login" replace />} />

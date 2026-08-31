@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { logger } from "./utils/logger";
+import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 
 // Disable browser scroll restoration — we handle it ourselves via ScrollToTop
 if ('scrollRestoration' in window.history) {
@@ -45,4 +46,8 @@ window.addEventListener('beforeinstallprompt', (e: any) => {
 });
 
 // 🚀 Fresh start rendered directly (Live-Only Mode)
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <GlobalErrorBoundary>
+    <App />
+  </GlobalErrorBoundary>
+);

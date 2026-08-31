@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -14,6 +14,21 @@ export interface School {
   logo_url?: string;
   address?: string;
   phone?: string;
+}
+
+export interface SchoolOrder {
+  id: string;
+  school_name: string;
+  admin_name: string;
+  admin_email: string;
+  admin_phone: string;
+  admin_whatsapp?: string;
+  plan?: 'monthly' | 'half_yearly' | 'yearly';
+  package_type?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'active' | 'expired';
+  receipt_url?: string | null;
+  receipt_note?: string | null;
+  created_at: string;
 }
 
 

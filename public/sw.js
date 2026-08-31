@@ -1,9 +1,8 @@
-const CACHE_NAME = 'school-cache-v2.1';  // ← bumped to force SW update
+// Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
+const CACHE_NAME = 'school-cache-v3.0';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icons/badge-72.png',
   '/placeholder.svg'
@@ -26,7 +25,7 @@ async function limitCacheSize(cacheName, maxItems) {
 }
 
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install Event v2.1');  // ← updated version
+  console.log('[SW] Install Event v3.0');  // ← updated version
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -48,7 +47,7 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activate Event v2.1');  // ← updated version
+  console.log('[SW] Activate Event v3.0');  // ← updated version
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
@@ -67,8 +66,23 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   if (event.request.method !== 'GET') return;
+  if (event.request.cache === 'only-if-cached' && event.request.mode !== 'same-origin') return;
 
-  if (event.request.cache === 'only-if-cached' && event.request.mode !== 'same-origin') {
+  // A shared/deep link must receive the latest index.html. It will then refer
+  // to JavaScript bundles produced by that same deployment. The cache is used
+  // only when the device is genuinely offline.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put('/offline-shell', response.clone()));
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match('/offline-shell')) || new Response('Offline', { status: 503 });
+        })
+    );
     return;
   }
 
@@ -79,26 +93,20 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('.ts') ||
     url.pathname.endsWith('.tsx') ||
     url.hostname === 'localhost'
-  ) {
-    return;
-  }
+  ) return;
 
   if (url.origin.includes('supabase.co')) {
-    // Cache both /object/public/ and /render/image/public/ (optimized) variants
     if (
       url.pathname.includes('/storage/v1/object/public/') ||
       url.pathname.includes('/storage/v1/render/image/public/')
     ) {
       event.respondWith(
         caches.open(BRANDING_CACHE).then((cache) => {
-          // ✅ Cache keyed by pathname only (ignores query params like ?v=, ?width=, etc.)
-          // This prevents the same image being fetched multiple times when URL params differ slightly
           const cacheKey = new Request(url.origin + url.pathname);
           return cache.match(cacheKey).then((cached) => {
-            if (cached) return cached; // cache-first for images
+            if (cached) return cached;
             return fetch(event.request).then((networkResponse) => {
               if (networkResponse && networkResponse.status === 200) {
-                // Store with pathname-only key so future requests with different params hit cache
                 cache.put(cacheKey, networkResponse.clone());
                 limitCacheSize(BRANDING_CACHE, MAX_BRANDING_ITEMS);
               }
@@ -110,76 +118,32 @@ self.addEventListener('fetch', (event) => {
       return;
     }
 
-    if (url.pathname.includes('/auth/v1/')) return;
+    // API and authentication requests must not be cached.
+    event.respondWith(fetch(event.request));
+    return;
+  }
 
+  // Content-hashed Vite assets are safe to cache. Do not cache HTML responses
+  // returned by the host's catch-all rewrite under a missing asset URL.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/assets/')) {
     event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          if (response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(async (error) => {
-          console.warn('[SW] Supabase fetch failed, trying fallback cache:', error);
-
-          const cached = await caches.match(event.request);
-          if (cached) {
-            const newHeaders = new Headers(cached.headers);
-            newHeaders.set('x-sw-cache', 'true');
-
-            return new Response(cached.body, {
-              status: cached.status,
-              statusText: cached.statusText,
-              headers: newHeaders
-            });
-          }
-
-          return new Response(
-            JSON.stringify({
-              error: 'offline',
-              message: 'أنت غير متصل بالإنترنت حالياً'
-            }),
-            { status: 503, headers: { 'Content-Type': 'application/json' } }
-          );
-        })
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        const response = await fetch(event.request);
+        const contentType = response.headers.get('content-type') || '';
+        if (response.ok && !contentType.includes('text/html')) {
+          cache.put(event.request, response.clone());
+          limitCacheSize(CACHE_NAME, MAX_CACHE_ITEMS);
+        }
+        return response;
+      }).catch(() => new Response('Network Error', { status: 503 }))
     );
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-            limitCacheSize(CACHE_NAME, MAX_CACHE_ITEMS);
-          });
-        }
-        return networkResponse;
-      }).catch(() => undefined);
-
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetchPromise.then((networkResponse) => {
-        if (networkResponse) return networkResponse;
-
-        const isHtml = event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html');
-        if (event.request.mode === 'navigate' || isHtml) {
-          return caches.match('/index.html').then((res) => {
-            return res || new Response('Offline Fallback', { status: 503, statusText: 'Offline Fallback' });
-          });
-        }
-        return new Response('Network Error', { status: 503, statusText: 'Offline Fallback' });
-      });
-    })
-  );
+  event.respondWith(fetch(event.request));
 });
-
 // ─── Push Notification Handler ─────────────────────────────────────────────
 self.addEventListener('push', function (event) {
   console.log('[SW] Push Event Received at', new Date().toISOString());

@@ -478,19 +478,27 @@ export function useUnreadConversationsParentCount() {
       if (!user?.id) return 0;
 
       // عدد محادثات الإدارة غير المقروءة
-      const { count: convCount } = await db
+      const { count: convCount, error: convErr } = await db
         .from('conversations')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('parent_id', user.id)
         .gt('unread_by_parent', 0);
 
+      if (convErr) {
+        // Fallback gracefully without breaking UI
+      }
+
       // عدد إشعارات دردشة الفصل غير المقروءة
-      const { count: chatCount } = await db
+      const { count: chatCount, error: notifErr } = await db
         .from('notifications')
-        .select('*', { count: 'exact', head: true })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('type', 'class_chat_message')
         .eq('is_read', false);
+
+      if (notifErr) {
+        // Fallback gracefully without breaking UI
+      }
 
       return (convCount || 0) + (chatCount || 0);
     },

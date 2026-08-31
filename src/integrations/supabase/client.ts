@@ -39,11 +39,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     detectSessionInUrl: false,
     storageKey: 'school_auth_token',
     storage: window.localStorage,
-    flowType: 'implicit',
-    // نستخدم custom lock بيشتغل فوراً بدون انتظار — يحل مشكلة "Lock was not released"
-    lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => {
-      return fn();
-    },
+    flowType: 'pkce',
   },
   realtime: {
     params: {

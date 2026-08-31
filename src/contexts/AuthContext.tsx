@@ -66,6 +66,15 @@ function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
   }
 }
 
+function checkSubscriptionExpired(school: any): boolean {
+  if (!school) return false;
+  if (school.status === 'suspended') return true;
+  if (school.subscription_end_date) {
+    return new Date(school.subscription_end_date).getTime() < Date.now();
+  }
+  return false;
+}
+
 async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<AppUser | null> {
   try {
     const [profileRes, roleRes] = await Promise.all([
@@ -80,21 +89,22 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
       school = schoolRes.data;
     }
     if (school && profile?.school_id) {
-      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug };
+      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
       queryClient.setQueryData(['school-branding', profile.school_id], b);
       try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
+    const userRole = (role?.role || 'parent') as AppRole;
     return {
       id: supaUser.id,
       email: supaUser.email || '',
       phone: profile?.phone || '',
       fullName: profile?.full_name || '',
-      role: (role?.role || 'parent') as AppRole,
+      role: userRole,
       isSuperAdmin: role?.is_super_admin || false,
       schoolId: profile?.school_id,
       schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || 'approved',
-      subscriptionExpired: false,
+      approvalStatus: role?.approval_status || (userRole === 'parent' ? 'pending' : 'approved'),
+      subscriptionExpired: checkSubscriptionExpired(school),
     };
   } catch (err) {
     logger.error('[Auth] Direct fallback query failed:', err);
@@ -108,21 +118,22 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
     if (error || !userData) throw new Error('rpc_failed');
     const { profile, role, school } = userData as any;
     if (school && profile?.school_id) {
-      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug };
+      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
       queryClient.setQueryData(['school-branding', profile.school_id], b);
       try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
+    const userRole = (role?.role || 'parent') as AppRole;
     return {
       id: supaUser.id,
       email: supaUser.email || '',
       phone: profile?.phone || '',
       fullName: profile?.full_name || '',
-      role: (role?.role || 'parent') as AppRole,
+      role: userRole,
       isSuperAdmin: role?.is_super_admin || false,
       schoolId: profile?.school_id,
       schoolStatus: school?.status || 'active',
-      approvalStatus: role?.approval_status || 'approved',
-      subscriptionExpired: false,
+      approvalStatus: role?.approval_status || (userRole === 'parent' ? 'pending' : 'approved'),
+      subscriptionExpired: checkSubscriptionExpired(school),
     };
   } catch {
     return buildAppUserFromDirectQueries(supaUser);

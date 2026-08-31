@@ -1,21 +1,9 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-export interface SchoolOrder {
-  id: string;
-  school_name: string;
-  admin_name: string;
-  admin_email: string;
-  admin_phone: string;
-  admin_whatsapp?: string;
-  plan?: 'monthly' | 'half_yearly' | 'yearly';
-  package_type?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'active' | 'expired';
-  receipt_url?: string | null;
-  receipt_note?: string | null;
-  created_at: string;
-}
+export { type SchoolOrder, useSchoolOrders } from './useSuperAdmin';
+import type { SchoolOrder } from './useSuperAdmin';
 
 export function useOrder(id: string | undefined) {
   const queryKey = ['order', id];
@@ -33,28 +21,7 @@ export function useOrder(id: string | undefined) {
       return data as SchoolOrder;
     },
     enabled: !!id,
-    staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
-    refetchOnWindowFocus: false,
-  });
-}
-
-export function useSchoolOrders() {
-  const { user, session } = useAuth();
-  const queryKey = ['school-orders'];
-  
-  return useQuery({
-    queryKey,
-    queryFn: async () => {
-      if (!user?.isSuperAdmin) return [];
-      const { data, error } = await supabase
-        .from('school_orders')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as SchoolOrder[];
-    },
-    enabled: !!session && !!user?.isSuperAdmin,
-    staleTime: 2 * 60 * 1000, // 2 دقائق — يتم تحديثه via Realtime عند التغيير
+    staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }
