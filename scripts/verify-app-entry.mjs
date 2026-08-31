@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, writeFile, stat } from 'node:fs/promises';
 
 const requiredFiles = [
   ['src/main.tsx', 'createRoot'],
@@ -20,4 +20,28 @@ for (const [file, requiredText] of requiredFiles) {
   }
 }
 
-console.log('Entry-point integrity check passed.');
+console.log('✅ Entry-point integrity check passed.');
+
+// ── Auto-version Service Worker on every build ──────────────────────────────
+const buildTimestamp = Date.now();
+const swPath = 'public/sw.js';
+
+try {
+  let swContent = await readFile(swPath, 'utf8');
+  // Replace CACHE_NAME with unique build timestamp
+  swContent = swContent.replace(
+    /const CACHE_NAME = ['"][^'"]+['"];/,
+    `const CACHE_NAME = 'school-cache-v${buildTimestamp}';`
+  );
+  await writeFile(swPath, swContent, 'utf8');
+  console.log(`✅ Updated Service Worker cache version: school-cache-v${buildTimestamp}`);
+
+  // Write version.json for client version tracking
+  const versionData = {
+    version: buildTimestamp,
+    builtAt: new Date().toISOString(),
+  };
+  await writeFile('public/version.json', JSON.stringify(versionData, null, 2), 'utf8');
+} catch (err) {
+  console.warn('⚠️ Could not update SW cache version:', err.message);
+}

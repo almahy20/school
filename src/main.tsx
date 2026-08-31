@@ -12,24 +12,36 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
 
-// Service Worker registration logic
+// Service Worker registration & auto-update logic
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 
-// ✅ Registration: Enabled in all environments but handled carefully in sw.js
 if ("serviceWorker" in navigator && !isSWDisabled) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(
       (registration) => {
         logger.log("✅ PWA Ready");
+
+        // 🔄 Periodically check for updates and on window focus/tab visibility
+        const checkForUpdate = () => {
+          registration.update().catch(() => {});
+        };
+
+        window.addEventListener("focus", checkForUpdate);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") checkForUpdate();
+        });
+
+        // Check every 10 minutes in background
+        setInterval(checkForUpdate, 10 * 60 * 1000);
         
-        // Handle updates
+        // Handle incoming new versions
         registration.onupdatefound = () => {
           const installingWorker = registration.installing;
           if (installingWorker) {
             installingWorker.onstatechange = () => {
               if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                // New content is available; please refresh.
-                logger.log("🔄 New PWA content available, will update on next load");
+                logger.log("🔄 New version installed, activating immediately...");
+                installingWorker.postMessage({ type: 'SKIP_WAITING' });
               }
             };
           }
@@ -37,6 +49,16 @@ if ("serviceWorker" in navigator && !isSWDisabled) {
       },
       (err) => logger.error("❌ PWA Startup failure: ", err)
     );
+  });
+
+  // Smoothly reload when new service worker takes control (seamless update)
+  let isRefreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      logger.log("⚡ New Service Worker activated — refreshing page with latest assets");
+      window.location.reload();
+    }
   });
 }
 

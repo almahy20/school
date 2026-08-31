@@ -1,5 +1,5 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
-const CACHE_NAME = 'school-cache-v3.2';
+const CACHE_NAME = 'school-cache-v1788205927296';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -24,8 +24,14 @@ async function limitCacheSize(cacheName, maxItems) {
   }
 }
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('install', (event) => {
-  console.log('[SW] Install Event v3.2');
+  console.log('[SW] Install Event:', CACHE_NAME);
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return Promise.all(
@@ -47,12 +53,13 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activate Event v3.2');
+  console.log('[SW] Activate Event:', CACHE_NAME);
   event.waitUntil(
     caches.keys().then((cacheNames) =>
       Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME && cacheName !== BRANDING_CACHE) {
+            console.log('[SW] Deleting obsolete cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
