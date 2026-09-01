@@ -73,7 +73,7 @@ export function useAdminClassChatRooms() {
       // 2. جلب الغرف الموجودة حالياً
       const { data: existingRooms, error: roomsErr } = await db
         .from('class_chat_rooms')
-        .select('*')
+        .select('id, school_id, class_id, name, created_at')
         .eq('school_id', user.schoolId);
 
       if (roomsErr) throw roomsErr;
@@ -215,7 +215,7 @@ export function useClassChatMessages(roomId: string | null) {
 
       const { data, error } = await db
         .from('class_chat_messages')
-        .select('*')
+        .select('id, room_id, sender_id, sender_name, content, created_at')
         .eq('room_id', roomId)
         .order('created_at', { ascending: true })
         .limit(100);
@@ -251,7 +251,7 @@ export function useEnsureClassChatRoom() {
       // اجلب الغرفة
       const { data, error } = await db
         .from('class_chat_rooms')
-        .select('*')
+        .select('id, school_id, class_id, name, created_at')
         .eq('school_id', user.schoolId)
         .eq('class_id', classId)
         .single();

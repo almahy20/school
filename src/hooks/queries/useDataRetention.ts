@@ -45,7 +45,7 @@ export function useRetentionPolicies() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('data_retention_policies')
-        .select('*')
+        .select('id, table_name, retention_period, enabled, description, created_at, updated_at')
         .order('table_name');
 
       if (error) throw error;
@@ -131,7 +131,7 @@ export function useDatabaseSizeInfo() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('database_size_info')
-        .select('*')
+        .select('table_name, row_count, size, oldest_record, newest_record')
         .order('row_count', { ascending: false });
 
       if (error) throw error;
@@ -158,7 +158,7 @@ export function useCleanupEstimate() {
       // Get policies
       const { data: policies } = await supabase
         .from('data_retention_policies')
-        .select('*')
+        .select('id, table_name, retention_period, enabled')
         .eq('enabled', true);
 
       if (!policies) return estimates;

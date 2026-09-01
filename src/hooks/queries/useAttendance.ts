@@ -32,7 +32,7 @@ export function useClassAttendance(classId: string | null, date: string) {
 
       const { data: records, error: rError } = await supabase
         .from('attendance')
-        .select('*')
+        .select('id, student_id, status')
         .eq('school_id', user.schoolId)
         .eq('class_id', classId)
         .eq('date', date);
@@ -118,9 +118,10 @@ export function useStudentAttendance(studentId: string | null) {
       if (!studentId) return [];
       const { data, error } = await supabase
         .from('attendance')
-        .select('*')
+        .select('id, student_id, status, date, school_id, class_id, created_at')
         .eq('student_id', studentId)
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .limit(365); // حد معقول: سنة دراسية كاملة
       
       if (error) throw error;
       return data || [];
@@ -172,7 +173,7 @@ export function useTeacherAttendance(date: string) {
 
       const { data: records, error: rError } = await (supabase as any)
         .from('teacher_attendance')
-        .select('*')
+        .select('id, teacher_id, status, date, school_id')
         .eq('school_id', user.schoolId)
         .eq('date', date);
       

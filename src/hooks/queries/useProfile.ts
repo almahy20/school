@@ -26,7 +26,7 @@ export function useProfile() {
       if (!user?.id) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, phone, role, school_id, notification_prefs, created_at')
         .eq('id', user.id)
         .maybeSingle(); 
       

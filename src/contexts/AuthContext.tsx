@@ -72,14 +72,14 @@ function checkSubscriptionExpired(school: any): boolean {
 async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<AppUser | null> {
   try {
     const [profileRes, roleRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', supaUser.id).maybeSingle(),
-      supabase.from('user_roles').select('*').eq('user_id', supaUser.id).maybeSingle(),
+      supabase.from('profiles').select('id, full_name, phone, school_id').eq('id', supaUser.id).maybeSingle(),
+      (supabase as any).from('user_roles').select('id, user_id, role, school_id, approval_status, is_super_admin').eq('user_id', supaUser.id).maybeSingle(),
     ]);
     const profile = profileRes.data as any;
     const role = roleRes.data as any;
     let school: any = null;
     if (profile?.school_id) {
-      const schoolRes = await supabase.from('schools').select('*').eq('id', profile.school_id).maybeSingle();
+      const schoolRes = await supabase.from('schools').select('id, name, slug, status, logo_url, subscription_end_date').eq('id', profile.school_id).maybeSingle();
       school = schoolRes.data;
     }
     if (school && profile?.school_id) {
@@ -139,7 +139,7 @@ async function prefetchCommonQueries(appUser: AppUser) {
     queryClient.prefetchQuery({
       queryKey: ['profile', appUser.id],
       queryFn: async () => {
-        const { data } = await supabase.from('profiles').select('*').eq('id', appUser.id).maybeSingle();
+        const { data } = await supabase.from('profiles').select('id, full_name, phone, role, school_id, notification_prefs, created_at').eq('id', appUser.id).maybeSingle();
         return data;
       },
       staleTime: 5 * 60 * 1000,

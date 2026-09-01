@@ -27,7 +27,7 @@ export function useCurriculums() {
       if (!user?.schoolId) return [];
       const { data, error } = await supabase
         .from('curriculums')
-        .select('*')
+        .select('id, name, status, school_id, created_at')
         .eq('school_id', user.schoolId)
         .order('created_at', { ascending: true });
       if (error) throw error;
@@ -51,7 +51,7 @@ export function useCurriculumSubjects(curriculumId: string | null) {
       if (!curriculumId) return [];
       const { data, error } = await supabase
         .from('curriculum_subjects')
-        .select('*')
+        .select('id, curriculum_id, subject_name, content')
         .eq('curriculum_id', curriculumId)
         .order('subject_name', { ascending: true });
       if (error) throw error;

@@ -85,7 +85,7 @@ export function useParentComplaints(page = 1, pageSize = 10) {
 
       const { data, error, count } = await supabase
         .from('complaints')
-        .select('*', { count: 'exact' })
+        .select('id, parent_id, student_id, content, status, created_at, school_id, admin_response', { count: 'exact' })
         .eq('school_id', user.schoolId)
         .eq('parent_id', user.id)
         .order('created_at', { ascending: false })

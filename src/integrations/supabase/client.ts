@@ -51,7 +51,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
       'x-client-info': 'school-app'
     },
     fetch: async (url, options = {}) => {
-      const res = await fetch(url, options);
+      // لا نترك طلبات الشبكة البطيئة معلقة للأبد على اتصال الهاتف الضعيف.
+      const controller = new AbortController();
+      const externalSignal = options.signal;
+      const abortFromCaller = () => controller.abort();
+      externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
+      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
 
       if (res.status === 400 && isAuthEndpoint(url)) {
         try {
@@ -95,7 +103,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
           }
         } catch {}
       }
-      return res;
+        return res;
+      } finally {
+        window.clearTimeout(timeoutId);
+        externalSignal?.removeEventListener('abort', abortFromCaller);
+      }
     },
   },
   db: {

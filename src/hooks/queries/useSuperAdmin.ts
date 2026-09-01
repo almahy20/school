@@ -41,7 +41,7 @@ export function useSchools() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('schools')
-        .select('*')
+        .select('id, name, status, created_at, subscription_end_date, slug, plan, logo_url, address, phone')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as School[];
@@ -60,7 +60,7 @@ export function useSchoolOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('school_orders')
-        .select('*')
+        .select('id, school_name, admin_name, admin_email, admin_phone, admin_whatsapp, plan, package_type, status, receipt_url, receipt_note, created_at')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as SchoolOrder[];
@@ -122,7 +122,7 @@ export function useOrder(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('school_orders')
-        .select('*')
+        .select('id, school_name, admin_name, admin_email, admin_phone, admin_whatsapp, plan, package_type, status, receipt_url, receipt_note, created_at')
         .eq('id', id)
         .single();
       if (error) throw error;

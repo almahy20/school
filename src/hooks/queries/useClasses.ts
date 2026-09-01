@@ -26,7 +26,7 @@ async function fetchClasses(
 
   let q = supabase
     .from('classes')
-    .select('*', { count: 'exact' });
+    .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at', { count: 'exact' });
 
   if (!user.isSuperAdmin && user.schoolId) {
     q = q.eq('school_id', user.schoolId);
@@ -76,7 +76,7 @@ export function useAllClasses() {
     queryKey,
     queryFn: async () => {
       if (!user?.isSuperAdmin && !user?.schoolId) return [];
-      let q = supabase.from('classes').select('*');
+      let q = supabase.from('classes').select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at');
       if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
       const { data, error } = await q.order('name');
       if (error) throw error;
@@ -98,7 +98,7 @@ export function useClass(id: string | undefined | null) {
       
       const { data, error } = await supabase
         .from('classes')
-        .select('*')
+        .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at')
         .eq('id', id)
         .maybeSingle();
       
@@ -121,7 +121,7 @@ export function useTeacherClasses(teacherId: string | undefined) {
       if (!teacherId || !user?.schoolId) return [];
       const { data, error } = await supabase
         .from('classes')
-        .select('*')
+        .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at')
         .eq('school_id', user.schoolId)
         .eq('teacher_id', teacherId)
         .order('name');

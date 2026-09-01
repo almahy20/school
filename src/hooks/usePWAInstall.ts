@@ -72,7 +72,14 @@ export function usePWAInstall(): PWAInstallState {
 
     try {
       prompt.prompt();
-      const { outcome } = await prompt.userChoice;
+
+      // بعض المتصفحات لا تُكمل userChoice؛ لا نترك واجهة التثبيت معلقة.
+      let timeoutId: number | undefined;
+      const timeout = new Promise<{ outcome: 'dismissed' }>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve({ outcome: 'dismissed' }), 5000);
+      });
+      const { outcome } = await Promise.race([Promise.resolve(prompt.userChoice), timeout]);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       logger.log('[usePWAInstall] User choice:', outcome);
 
       if (outcome === 'accepted') {

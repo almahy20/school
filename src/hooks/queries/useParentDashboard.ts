@@ -122,21 +122,23 @@ export function useParentChildren() {
           const studentIds = fallbackData.map((item: any) => item.students?.id).filter(Boolean);
           
           const [gradesResult, attendanceResult, feesResult] = await Promise.all([
-            // Get grades
+            // Get grades — الحقول المطلوبة فقط
             supabase
               .from('grades')
               .select('student_id, score, max_score')
               .eq('school_id', user.schoolId)
               .in('student_id', studentIds),
             
-            // Get attendance
+            // Get attendance — status فقط لحساب النسبة
             supabase
               .from('attendance')
               .select('student_id, status')
               .eq('school_id', user.schoolId)
-              .in('student_id', studentIds),
+              .in('student_id', studentIds)
+              .order('date', { ascending: false })
+              .limit(1000), // آخر 1000 سجل كافية لحساب النسبة
             
-            // Get fees
+            // Get fees — الحقول المطلوبة فقط
             supabase
               .from('fees')
               .select('student_id, amount_due, amount_paid')
@@ -285,14 +287,15 @@ export function useChildFullDetails(studentId: string | undefined) {
 
             supabase
               .from('attendance')
-              .select('*')
+              .select('id, student_id, status, date, school_id')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
-              .order('date', { ascending: false }),
+              .order('date', { ascending: false })
+              .limit(365),
 
             supabase
               .from('fees')
-              .select('*')
+              .select('id, student_id, amount_due, amount_paid, status, term, created_at')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
               .order('created_at', { ascending: false }),
@@ -308,7 +311,7 @@ export function useChildFullDetails(studentId: string | undefined) {
               if (!curriculumId) return { data: [], error: null };
               return supabase
                 .from('curriculum_subjects')
-                .select('*')
+                .select('id, curriculum_id, subject_name, content')
                 .eq('curriculum_id', curriculumId)
                 .order('subject_name');
             })(),
@@ -351,7 +354,7 @@ export function useChildFullDetails(studentId: string | undefined) {
         if (feeIds.length > 0) {
           const { data: pData } = await supabase
             .from('fee_payments')
-            .select('*')
+            .select('id, fee_id, amount, payment_date, notes, school_id')
             .eq('school_id', user.schoolId)
             .in('fee_id', feeIds)
             .order('payment_date', { ascending: false });

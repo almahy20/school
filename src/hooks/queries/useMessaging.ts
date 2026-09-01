@@ -158,12 +158,13 @@ export function useMessages() {
       const { data, error } = await supabase
         .from('messages')
         .select(`
-          *,
+          id, sender_id, receiver_id, content, is_read, created_at, school_id, student_id,
           sender:profiles!messages_sender_id_fkey(full_name),
           receiver:profiles!messages_receiver_id_fkey(full_name)
         `)
         .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200); // آخر 200 رسالة كافية للعرض
       if (error) throw error;
       return data;
     },

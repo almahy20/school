@@ -74,10 +74,14 @@ if (typeof window !== 'undefined') {
       // ✅ Don't persist queries that are marked as 'no-persist' in their meta
       if (query.meta?.persist === false) return false;
 
-      // ✅ Don't persist child-full-details — they're heavy and cause unwanted
-      // background refetches on every page load via the persist client restore
-      const key = query.queryKey[0];
-      if (key === 'child-full-details') return false;
+      // لا نحفظ القوائم والرسائل الكبيرة في IndexedDB؛ بقاؤها في الذاكرة يكفي للتنقل،
+      // وتخزينها الدائم يبطئ الأجهزة الضعيفة عند بدء التطبيق وتحديث الكاش.
+      const key = String(query.queryKey[0]);
+      const heavyQueryKeys = new Set([
+        'child-full-details', 'students', 'parents', 'teachers', 'notifications',
+        'conversation-messages', 'class-chat-messages', 'database', 'parent-dashboard',
+      ]);
+      if (heavyQueryKeys.has(key)) return false;
 
       return true;
     },

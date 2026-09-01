@@ -113,12 +113,6 @@ export default function SettingsPage() {
     const result = await promptInstall();
     if (result === 'accepted') {
       toast({ title: 'تم التثبيت بنجاح', description: 'يمكنك الآن فتح التطبيق من الشاشة الرئيسية.' });
-    } else if (result === 'unavailable') {
-      toast({
-        title: 'التثبيت غير متاح',
-        description: 'افتح التطبيق في متصفح Chrome أو Edge وأعد المحاولة، أو استخدم قائمة المتصفح ← "تثبيت التطبيق".',
-        variant: 'destructive',
-      });
     }
   };
 
@@ -226,7 +220,7 @@ export default function SettingsPage() {
                  </div>
                  
                  {/* PWA Install App (Hidden if already installed) */}
-                 {!isPWA && (
+                 {!isPWA && canInstall && (
                    <div className="grid grid-cols-1 gap-6 pt-2">
                       <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-8 sm:p-10 rounded-[48px] shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden group">
                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />

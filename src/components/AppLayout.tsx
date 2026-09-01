@@ -59,7 +59,7 @@ export default function AppLayout({ children }: Props) {
                 queryFn: async () => {
                   const { data, error } = await supabase
                     .from('classes')
-                    .select('*')
+                    .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at')
                     .eq('school_id', user.schoolId)
                     .order('name');
                   if (error) throw error;

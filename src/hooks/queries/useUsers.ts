@@ -35,7 +35,7 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
     queryFn: async () => {
       let query = supabase
         .from('profiles')
-        .select('*, user_roles(role, approval_status, school_id, is_super_admin)', { count: 'exact' });
+        .select('id, full_name, email, phone, school_id, created_at, updated_at, user_roles(role, approval_status, school_id, is_super_admin)', { count: 'exact' });
 
       if (search) {
         query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);

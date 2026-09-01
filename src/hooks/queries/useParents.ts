@@ -211,7 +211,7 @@ export function useParent(id: string | undefined | null) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, phone, email, school_id, created_at')
         .eq('id', id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
@@ -237,8 +237,8 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
       const [linksRes, classesRes, curriculumsRes, subjectsRes] = await Promise.all([
         supabase.from('student_parents').select('parent_id, students(id, name, class_id)').eq('parent_id', parentId).eq('school_id', user.schoolId),
         supabase.from('classes').select('id, name, curriculum_id').eq('school_id', user.schoolId),
-        supabase.from('curriculums').select('*').eq('school_id', user.schoolId),
-        supabase.from('curriculum_subjects').select('*, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
+        supabase.from('curriculums').select('id, name, status, school_id').eq('school_id', user.schoolId),
+        supabase.from('curriculum_subjects').select('id, curriculum_id, subject_name, content, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
       ]);
 
       const links = linksRes.data || [];

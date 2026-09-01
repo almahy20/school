@@ -127,7 +127,7 @@ export function useExamQuestions(examId: string | null) {
       if (!examId) return [];
       const { data, error } = await db
         .from('exam_questions')
-        .select('*')
+        .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
         .eq('exam_id', examId)
         .order('order_index', { ascending: true });
       if (error) throw error;
@@ -422,7 +422,7 @@ export function useParentElectronicExams() {
       if (examIds.length) {
         const { data: attempts } = await db
           .from('exam_attempts')
-          .select('*')
+          .select('id, exam_id, student_id, parent_id, score, total_score, completed_at')
           .eq('parent_id', user.id)
           .in('exam_id', examIds);
         (attempts || []).forEach((a: any) => {

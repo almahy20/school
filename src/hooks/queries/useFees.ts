@@ -45,16 +45,17 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       const studentIds = (students || []).map(s => s.id);
       const { data: monthFees, error: fErr } = await supabase
         .from('fees')
-        .select('*')
+        .select('id, student_id, amount_paid, status, term')
         .eq('school_id', user.schoolId)
         .eq('term', term)
         .in('student_id', studentIds);
 
       if (fErr) throw fErr;
 
+      // حساب إجمالي الرسوم عبر RPC أو aggregate بدل جلب كل الطلاب
       let allStudentsQ = supabase
         .from('students')
-        .select('*')
+        .select('id, monthly_fee')
         .eq('school_id', user.schoolId);
       if (classId !== 'all') allStudentsQ = allStudentsQ.eq('class_id', classId);
       const { data: allStudents } = await allStudentsQ;

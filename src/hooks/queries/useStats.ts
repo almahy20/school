@@ -154,8 +154,10 @@ export function useTeacherStats() {
       const [studentsCountRes, attendanceRes] = await Promise.all([
         supabase.from('students').select('id', { count: 'exact', head: true })
           .eq('school_id', user.schoolId).in('class_id', classIds),
+        // نجلب فقط status للحساب، مع حد 5000 سجل لآخر الفترة
         supabase.from('attendance').select('status')
-          .eq('school_id', user.schoolId).in('class_id', classIds),
+          .eq('school_id', user.schoolId).in('class_id', classIds)
+          .order('date', { ascending: false }).limit(5000),
       ]);
 
       const rows = attendanceRes.data || [];

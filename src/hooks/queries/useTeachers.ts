@@ -126,7 +126,7 @@ export function useTeacher(id: string | undefined | null) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, full_name, phone, email, school_id, created_at')
         .eq('id', id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;

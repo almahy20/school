@@ -37,7 +37,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
       
       let q = supabase
         .from('exam_templates')
-        .select('*', { count: 'exact' })
+        .select('id, class_id, subject, exam_type, max_score, weight, term, title, teacher_id, created_at, school_id, score_type, expected_results', { count: 'exact' })
         .eq('school_id', user.schoolId)
         .eq('class_id', classId);
       
@@ -234,14 +234,17 @@ export function useGrades(studentId: string | null) {
       if (!studentId) return [];
       const { data, error } = await supabase
         .from('grades')
-        .select('*')
+        .select('id, student_id, score, max_score, subject, term, exam_template_id, created_at')
         .eq('student_id', studentId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500);
       
       if (error) throw error;
       return data || [];
     },
     enabled: !!studentId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }
 
@@ -255,18 +258,22 @@ export function useStudentDetailedGrades(studentId: string | null) {
       const { data, error } = await supabase
         .from('grades')
         .select(`
-          *,
+          id, student_id, score, max_score, subject, term, exam_template_id, school_id, created_at,
           exam_templates (
             subject,
             max_score,
             title
           )
         `)
-        .eq('student_id', studentId);
+        .eq('student_id', studentId)
+        .order('created_at', { ascending: false })
+        .limit(500);
       
       if (error) throw error;
       return data || [];
     },
     enabled: !!studentId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }
