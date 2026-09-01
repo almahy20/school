@@ -170,6 +170,13 @@ export function usePushNotifications() {
       checkSubscription();
     }
     
+    // Register background sync لضمان وصول الإشعارات المؤجلة (Android Doze)
+    if ('serviceWorker' in navigator && 'SyncManager' in window) {
+      navigator.serviceWorker.ready.then(registration => {
+        (registration as any).sync?.register('sync-notifications').catch(() => {});
+      }).catch(() => {});
+    }
+    
     // ✅ Listen for permission changes
     const handlePermissionChange = () => {
       setPermission(Notification.permission);

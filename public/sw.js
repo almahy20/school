@@ -1,5 +1,5 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
-const CACHE_NAME = 'school-cache-v1788284474437';
+const CACHE_NAME = 'school-cache-v1788301945361';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -328,8 +328,25 @@ self.addEventListener('sync', function (event) {
   if (event.tag === 'sync-data') {
     event.waitUntil(syncData());
   }
+  // Background sync for deferred notifications (Android Doze Mode)
+  if (event.tag === 'sync-notifications') {
+    event.waitUntil(syncPendingNotifications());
+  }
 });
 
 async function syncData() {
   console.log('[SW] Background sync triggered');
+}
+
+// يُعيد تحميل الإشعارات غير المقروءة عند استيقاظ الجهاز من Doze Mode
+async function syncPendingNotifications() {
+  console.log('[SW] Syncing pending notifications after Doze wake-up');
+  try {
+    const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windowClients) {
+      client.postMessage({ type: 'SYNC_NOTIFICATIONS' });
+    }
+  } catch (err) {
+    console.warn('[SW] syncPendingNotifications failed:', err);
+  }
 }
