@@ -105,7 +105,12 @@ export default function SettingsPage() {
     }
   };
 
-  const roleLabel = profile?.role === 'admin' ? 'مدير النظام' : profile?.role === 'teacher' ? 'معلم' : 'ولي أمر';
+  // البيانات الأساسية من user (متاحة فوراً من الـ cache)
+  // profile يُستخدم فقط لـ notification_prefs
+  const displayName = profile?.full_name || user?.fullName || '';
+  const displayPhone = profile?.phone || user?.phone || '';
+  const displayRole = profile?.role || user?.role || '';
+  const roleLabel = displayRole === 'admin' ? 'مدير النظام' : displayRole === 'teacher' ? 'معلم' : 'ولي أمر';
   
   const { canInstall, isStandalone: isPWA, promptInstall } = usePWAInstall();
 
@@ -137,15 +142,15 @@ export default function SettingsPage() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
                 <div className="relative">
                   <div className="w-32 h-32 rounded-[40px] bg-slate-900 flex items-center justify-center text-4xl font-black text-white shadow-2xl transition-all group-hover:rotate-3 duration-500">
-                    {profile?.full_name?.[0] || '?'}
+                    {displayName?.[0] || '?'}
                   </div>
                 </div>
                 <div className="text-center">
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">{profile?.full_name}</h2>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">{displayName}</h2>
                   <Badge className="bg-indigo-50 text-indigo-600 font-black text-[9px] uppercase tracking-widest px-4 py-1 rounded-full border-none mb-4">
                     {roleLabel}
                   </Badge>
-                  <p className="text-xs font-bold text-slate-300 tracking-tighter" dir="ltr">{profile?.phone}</p>
+                  <p className="text-xs font-bold text-slate-300 tracking-tighter" dir="ltr">{displayPhone}</p>
                 </div>
              </div>
 
