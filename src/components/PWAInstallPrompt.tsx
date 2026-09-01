@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Download, Smartphone, CheckCircle2, X } from 'lucide-react';
+import { Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { IOSPwaGuideModal } from '@/components/IOSPwaGuideModal';
 
-// الـ key ثابت — لا يعتمد على user.id عشان يظهر حتى قبل تسجيل الدخول
-const DISMISSED_KEY = 'pwa_install_dismissed';
+// يُحفظ فقط عند التثبيت الفعلي
+const INSTALLED_KEY = 'pwa_installed';
 
 // iOS detection
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -15,14 +15,14 @@ export default function PWAInstallPrompt() {
   const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
-    // لو التطبيق مثبت بالفعل → لا تظهر
+    // لو التطبيق مثبت بالفعل (standalone mode) → لا تظهر
     if (isStandalone) {
       setIsVisible(false);
       return;
     }
 
-    // لو سبق وأُغلقت النافذة أو ثبّت المستخدم التطبيق → لا تظهر
-    if (localStorage.getItem(DISMISSED_KEY) === '1') {
+    // لو ثبّت المستخدم التطبيق من قبل → لا تظهر
+    if (localStorage.getItem(INSTALLED_KEY) === '1') {
       setIsVisible(false);
       return;
     }
@@ -39,8 +39,8 @@ export default function PWAInstallPrompt() {
     }
   }, [canInstall, isStandalone]);
 
+  // مؤقت فقط — لا يحفظ في localStorage
   const handleDismiss = () => {
-    localStorage.setItem(DISMISSED_KEY, '1');
     setIsVisible(false);
   };
 
@@ -50,10 +50,10 @@ export default function PWAInstallPrompt() {
     setIsInstalling(false);
 
     if (result === 'accepted') {
-      localStorage.setItem(DISMISSED_KEY, '1');
+      // ثُبِّت التطبيق — لا داعي لإظهار النافذة مستقبلاً
+      localStorage.setItem(INSTALLED_KEY, '1');
     }
-    // سواء قبل أو رفض أو لم يستجب المتصفح → أغلق النافذة
-    handleDismiss();
+    setIsVisible(false);
   };
 
   if (!isVisible || isStandalone) return null;
@@ -71,21 +71,9 @@ export default function PWAInstallPrompt() {
   // Android/Chrome: نافذة التثبيت العادية
   return (
     <>
-      <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300"
-        onClick={handleDismiss}
-      />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9998] animate-in fade-in duration-300" />
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-300">
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden" dir="rtl">
-          {/* زر الإغلاق */}
-          <button
-            onClick={handleDismiss}
-            className="absolute top-4 left-4 z-10 w-8 h-8 rounded-full bg-black/10 flex items-center justify-center hover:bg-black/20 transition-colors"
-            aria-label="إغلاق"
-          >
-            <X className="w-4 h-4 text-white" />
-          </button>
-
           <div className="bg-gradient-to-br from-indigo-600 to-violet-600 p-8 text-center relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
             <div className="relative z-10">
