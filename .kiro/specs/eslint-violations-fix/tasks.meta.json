@@ -1,0 +1,188 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "Bug condition confirmed. ESLint scan found 21 react-hooks/exhaustive-deps violations currently suppressed by undocumented eslint-disable-next-line comments (with allowInlineConfig: false):\n\n1. CreateExamWizard.tsx:102 — missing 'existingQuestions' dep\n2. ClassExamsView.tsx:163 — missing 'setCustomOrder' dep  \n3. ClassExamsView.tsx:179 — missing 'setCustomOrder' dep\n4. ClassExamsView.tsx:191 — missing 'setCustomOrder' dep\n5. ClassExamsView.tsx:198 — missing 'setCustomOrder' dep\n6. GlobalAnnouncement.tsx:157 — missing 'senderProfiles' dep\n7. AuthContext.tsx:415 — missing 'silentRefresh' dep\n8. useClassChat.ts:58 — missing 'queryKey' dep\n9. useClassChat.ts:138 — missing 'queryKey' dep\n10. useClassChat.ts:212 — missing 'queryKey' dep\n11. useClassChat.ts:308 — missing 'queryKey' dep\n12. useConversations.ts:207 — missing 'queryKey' dep\n13. useElectronicExams.ts:383 — missing 'queryKey' dep\n14. AdminConversationDetailPage.tsx:130 — missing 'queryClient' dep\n15. AdminConversationDetailPage.tsx:137 — missing 'conversation?.unread_by_admin' and 'markRead' deps\n16. ClassChatRoomPage.tsx:81 — missing 'navigate' dep\n17. ClassChatRoomPage.tsx:87 — missing 'markRead' dep\n18. GradesPage.tsx:100 — missing 'setSelectedClassId' dep\n19. GradesPage.tsx:109 — missing 'setSelectedMonthFolder' dep\n20. ParentConversationsPage.tsx:139 — missing 'conversation?.unread_by_parent', 'markRead', and 'userId' deps\n21. StudentsPage.tsx:443 — missing 'student' dep\n\nNote: no-empty (0) and prefer-const (0) violations were already fixed prior to this scan. The 'void err' pattern in catch blocks does NOT trigger no-empty since those blocks are not truly empty (they contain an expression statement). profilesMap already uses const.",
+      "lastRunTimestamp": 1788291281085
+    }
+  },
+  "executionHistory": {
+    "1. Write bug condition exploration test": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290436383
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290447850
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291311343
+      }
+    ],
+    "2. Write preservation property tests (BEFORE implementing fix)": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290436560
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291318664
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291507890
+      }
+    ],
+    "3.1 Fix `no-empty` violations — add explanatory comments to catch blocks": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290436740
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291521211
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291622011
+      }
+    ],
+    "3.2 Fix `react-hooks/exhaustive-deps` — stable references (add directly to deps)": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290436840
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788291630067
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788295552765
+      }
+    ],
+    "3.3 Fix `react-hooks/exhaustive-deps` — mutation objects and complex deps (use eslint-disable with documentation)": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290436943
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788295558495
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296167447
+      }
+    ],
+    "3.4 Fix `react-hooks/exhaustive-deps` — queryKey in realtime hooks": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290437067
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788295566208
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296168233
+      }
+    ],
+    "3.5 Fix `prefer-const` violation in useParents.ts": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290437162
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296175994
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296290566
+      }
+    ],
+    "3.6 Verify bug condition exploration test now passes": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290437265
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296298513
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296336796
+      }
+    ],
+    "3.7 Verify preservation tests still pass": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290437394
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296344685
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296371031
+      }
+    ],
+    "4. Checkpoint — Ensure all tests pass": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788290437501
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296681346
+      },
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296942688
+      }
+    ],
+    "3. Fix ESLint violations across 14 files": [
+      {
+        "executionId": "63473845-559a-46b4-9f8d-8e397c798dd2",
+        "chatSessionId": "sess_1502d93e-2f52-48a1-886f-5fcb67130314",
+        "timestamp": 1788296371146
+      }
+    ]
+  }
+}

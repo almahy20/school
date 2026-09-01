@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+﻿import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
@@ -139,7 +139,7 @@ async function prefetchCommonQueries(appUser: AppUser) {
     queryClient.prefetchQuery({
       queryKey: ['profile', appUser.id],
       queryFn: async () => {
-        const { data } = await supabase.from('profiles').select('id, full_name, phone, role, school_id, notification_prefs, created_at').eq('id', appUser.id).maybeSingle();
+        const { data } = await supabase.from('profiles').select('id, full_name, phone, school_id, notification_prefs, created_at').eq('id', appUser.id).maybeSingle();
         return data;
       },
       staleTime: 5 * 60 * 1000,
@@ -227,12 +227,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!s.access_token || s.access_token === s.refresh_token) {
-      logger.warn('[Auth] Skipping background RPC — no valid access token');
+      logger.warn('[Auth] Skipping background RPC â€” no valid access token');
       return;
     }
 
     if (loadingUserIdRef.current === s.user.id) {
-      logger.log('[Auth] Background RPC skipped — already loading for this user');
+      logger.log('[Auth] Background RPC skipped â€” already loading for this user');
       return;
     }
 
@@ -242,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isRecentlySynced = Date.now() - lastSync < 30 * 60 * 1000;
 
     if (isJwtComplete && hasApprovalStatus && isRecentlySynced) {
-      logger.log('[Auth] Background RPC skipped — JWT complete + recently synced');
+      logger.log('[Auth] Background RPC skipped â€” JWT complete + recently synced');
       if (cachedUser) {
         prefetchCommonQueries(cachedUser);
       }
@@ -345,7 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isSigningOutRef.current) return;
           supabase.auth.getSession().then(({ data: { session: current } }) => {
             if (current) {
-              logger.log('[Auth] SIGNED_OUT ignored — active session exists (token rotation)');
+              logger.log('[Auth] SIGNED_OUT ignored â€” active session exists (token rotation)');
               applySession(current);
             } else {
               silentRefresh().then((success) => {
@@ -450,14 +450,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (error) {
         return error.message.includes('Invalid login credentials')
-          ? 'رقم الهاتف أو كلمة المرور غير صحيحة'
+          ? 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø£Ùˆ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ØºÙŠØ± ØµØ­ÙŠØ­Ø©'
           : error.message;
       }
       if (data.session) applySession(data.session);
       sessionStorage.setItem('user_signup_time', Date.now().toString());
       return null;
     } catch {
-      return 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
+      return 'Ø­Ø¯Ø« Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹ Ø£Ø«Ù†Ø§Ø¡ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„';
     }
   };
 
@@ -493,3 +493,4 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
+
