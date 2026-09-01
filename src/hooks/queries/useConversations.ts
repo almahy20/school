@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData, useInfiniteQue
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 const db = supabase as any;
 
@@ -168,7 +168,7 @@ export function useParentConversations() {
 export function useConversationMessages(conversationId: string | null) {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['conversation-messages', conversationId];
+  const queryKey = useMemo(() => ['conversation-messages', conversationId], [conversationId]);
 
   // Realtime للرسائل
   useEffect(() => {
@@ -203,7 +203,7 @@ export function useConversationMessages(conversationId: string | null) {
       .subscribe();
 
     return () => { db.removeChannel(channel); };
-  }, [conversationId, user?.id, queryClient]);
+  }, [conversationId, user?.id, queryClient, queryKey]);
 
   return useQuery<ConversationMessage[]>({
     queryKey,

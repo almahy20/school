@@ -47,7 +47,7 @@ export default function AdminClassChatRoomPage() {
     if (!t || !roomId || overLimit) return;
     setText('');
     try { await sendMsg.mutateAsync({ roomId, content: t }); }
-    catch (_) {}
+    catch (err: unknown) { void err; } // toast shown by mutation onError
   };
 
   return (

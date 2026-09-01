@@ -43,6 +43,17 @@ export interface PWAInstallState {
 export function usePWAInstall(): PWAInstallState {
   const [, forceUpdate] = useState(0);
 
+  // تحقق من SW registration — لو مش مسجّل، الـ PWA install لن يعمل
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (!reg) {
+          logger.warn('[usePWAInstall] No SW registration found — PWA install may not work');
+        }
+      });
+    }
+  }, []);
+
   const isStandalone =
     window.matchMedia('(display-mode: standalone)').matches ||
     (window.navigator as any).standalone === true;

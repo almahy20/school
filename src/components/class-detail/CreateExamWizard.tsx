@@ -98,7 +98,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
         correct_answer: q.correct_answer,
       })));
     }
-  }, [existingQuestions.length]);
+  }, [existingQuestions]);
 
   const form = useForm<ExamFormData>({
     resolver: zodResolver(examSchema),
@@ -129,7 +129,10 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
         setExamId(exam.id);
       }
       setStep('questions');
-    } catch (_) {}
+    } catch (err: unknown) {
+      // react-hook-form handleSubmit already surfaces errors via form state
+      void err;
+    }
   });
 
   // ── Step 2: Save questions ─────────────────────────────────────────────────
@@ -194,7 +197,10 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
       await updateExam.mutateAsync({ id: examId, class_id: classId, status: 'published' });
       toast.success('تم نشر الاختبار بنجاح');
       onBack();
-    } catch (_) {}
+    } catch (err: unknown) {
+      // toast error already shown by mutation onError
+      void err;
+    }
     setIsPublishing(false);
   };
 

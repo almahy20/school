@@ -171,7 +171,7 @@ export function usePendingParents() {
       if (!rolesData || rolesData.length === 0) return [];
 
       const userIds = rolesData.map((r: any) => r.user_id).filter(Boolean);
-      let profilesMap = new Map<string, any>();
+      const profilesMap = new Map<string, any>();
 
       if (userIds.length > 0) {
         const { data: profilesData, error: profilesError } = await supabase

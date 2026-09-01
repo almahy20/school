@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -362,7 +362,7 @@ export function useSaveExamQuestions() {
 export function useParentElectronicExams() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['electronic-exams', 'parent', user?.id];
+  const queryKey = useMemo(() => ['electronic-exams', 'parent', user?.id], [user?.id]);
 
   // Realtime: لما يُنشر اختبار جديد يظهر فوراً
   useEffect(() => {
@@ -379,7 +379,7 @@ export function useParentElectronicExams() {
       })
       .subscribe();
     return () => { db.removeChannel(channel); };
-  }, [user?.id, user?.schoolId, queryClient]);
+  }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>>({
     queryKey,

@@ -135,6 +135,9 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
         .in('type', ['conversation_admin_reply', 'conversation_new_message'])
         .contains('metadata', { conversation_id: conversation.id });
     }
+    // markRead.mutate intentionally excluded — TanStack mutation object reference changes on every render;
+    // conversation.id and unread status are the meaningful triggers
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation?.id]);
 
   useEffect(() => {
@@ -153,7 +156,9 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
         await create.mutateAsync({ subject, firstMessage: t, studentId: selectedChild || undefined });
         setSelectedChild('');
       }
-    } catch (_) {}
+    } catch (err: unknown) {
+      void err; // toast shown by mutation onError
+    }
   };
 
   const isSending = sendMessage.isPending || create.isPending;
@@ -339,7 +344,8 @@ export default function ParentConversationsPage() {
     try {
       const room = await ensureRoom.mutateAsync({ classId, className });
       navigate(`/conversations/class/${room.id}`);
-    } catch (_) {
+    } catch (err: unknown) {
+      void err; // toast shown by mutation onError
     } finally {
       setOpeningClassId(null);
     }

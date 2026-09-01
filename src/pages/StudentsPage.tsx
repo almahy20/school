@@ -439,7 +439,7 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
         setClassId(student.class_id || '');
         setParentPhone(student.parent_phone || '');
       }
-    }, [student?.id, student?.name, student?.class_id, student?.parent_phone]);
+    }, [student]);
   
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -455,7 +455,9 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
         });
 
         if (onSuccess) onSuccess();
-      } catch (_) {}
+      } catch (err: unknown) {
+        void err; // toast shown by mutation onError
+      }
     };
   
     return (

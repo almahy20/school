@@ -77,11 +77,14 @@ export default function ClassChatRoomPage() {
   // إذا لم يكن roomId موجوداً — ارجع للمحادثات
   useEffect(() => {
     if (!roomId) { navigate('/conversations', { replace: true }); }
-  }, [roomId]);
+  }, [roomId, navigate]);
 
   // تعليم كمقروء عند فتح الغرفة
   useEffect(() => {
     if (resolvedRoomId) markRead.mutate(resolvedRoomId);
+    // markRead.mutate intentionally excluded — TanStack mutation object reference changes on every render;
+    // resolvedRoomId is the meaningful trigger for this effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedRoomId]);
 
   useEffect(() => {
@@ -97,7 +100,7 @@ export default function ClassChatRoomPage() {
     if (!t || !resolvedRoomId || overLimit) return;
     setText('');
     try { await sendMsg.mutateAsync({ roomId: resolvedRoomId, content: t }); }
-    catch (_) {}
+    catch (err: unknown) { void err; } // toast shown by mutation onError
   };
 
   return (

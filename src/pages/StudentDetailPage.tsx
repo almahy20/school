@@ -51,9 +51,9 @@ export default function StudentDetailPage() {
 
   const { data: fullData, isLoading, error, refetch } = useChildFullDetails(id);
   const student = fullData;
-  const grades = fullData?.grades || [];
-  const attendance = fullData?.attendance || [];
-  const curriculumSubjects = fullData?.curriculum || [];
+  const grades = useMemo(() => fullData?.grades || [], [fullData]);
+  const attendance = useMemo(() => fullData?.attendance || [], [fullData]);
+  const curriculumSubjects = useMemo(() => fullData?.curriculum || [], [fullData]);
 
   // Group curriculum by month (term)
   const curriculumByMonth = useMemo(() => {

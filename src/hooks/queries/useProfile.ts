@@ -17,7 +17,7 @@ export interface Profile {
 }
 
 export function useProfile() {
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const queryKey = useMemo(() => ['profile', user?.id], [user?.id]);
   
   return useQuery({
@@ -36,7 +36,8 @@ export function useProfile() {
       
       return (data as unknown) as Profile;
     },
-    enabled: !!session && !!user?.id,
+    // ✅ لا نشترط session — يبدأ null حتى بعد تحميل user من cache. user?.id يكفي.
+    enabled: !!user?.id,
     staleTime: 30 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnMount: true,

@@ -63,7 +63,7 @@ export function QueryStateHandler({
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [loading, isRefetching, showTimeoutError]); // Removed loadingStartTime from dependencies
+  }, [loading, isRefetching, showTimeoutError, error]); // error included to reset timer when error appears
 
   // Use either the real error or the timeout error
   const finalError = error || (showTimeoutError ? new Error('تأخرت الاستجابة من السيرفر') : null);

@@ -117,7 +117,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
           sessionStorage.removeItem(storageKey);
         }
       }
-    } catch (_) {}
+    } catch {
+      // sessionStorage unavailable or corrupted — start fresh
+    }
   }, [storageKey, exam.duration_minutes]);
 
   // Always keep answersRef in sync with latest answers and auto-save
@@ -132,7 +134,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
           currentQ,
           tabSwitchCount: tabSwitchCountRef.current,
         }));
-      } catch (_) {}
+      } catch {
+        // sessionStorage write failed — non-critical
+      }
       return next;
     });
   }, [storageKey, currentQ]);
@@ -149,7 +153,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
           currentQ: idx,
         }));
       }
-    } catch (_) {}
+    } catch {
+      // sessionStorage unavailable — non-critical
+    }
   }, [storageKey]);
 
   const handleSubmit = useCallback(async (auto = false) => {
@@ -172,7 +178,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
       });
       try {
         sessionStorage.removeItem(storageKey);
-      } catch (_) {}
+      } catch {
+        // sessionStorage unavailable — non-critical
+      }
       setSubmitResult({
         score: result.score,
         totalScore: result.totalScore,
@@ -219,7 +227,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     const keepAliveTimer = setInterval(async () => {
       try {
         await supabase.auth.getSession();
-      } catch (_) {}
+      } catch {
+        // session check failed — will retry on next interval
+      }
     }, 3 * 60 * 1000); // Check/refresh every 3 minutes
     return () => clearInterval(keepAliveTimer);
   }, [screen]);
@@ -277,12 +287,16 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
         currentQ: 0,
         tabSwitchCount: 0,
       }));
-    } catch (_) {}
+    } catch {
+      // sessionStorage unavailable — non-critical
+    }
     try {
       if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
       }
-    } catch (_) {}
+    } catch {
+      // fullscreen API not available — non-critical
+    }
     setScreen('taking');
   };
 

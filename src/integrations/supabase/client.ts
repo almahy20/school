@@ -77,7 +77,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
               handleAuthFailure(`refresh token 400: ${JSON.stringify(body)}`);
             }
           }
-        } catch {}
+        } catch {
+          // response body unreadable — skip auth failure detection
+        }
       }
 
       if (res.status === 401 || (res.status === 403 && isAuthEndpoint(url))) {
@@ -101,7 +103,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
               }
             }
           }
-        } catch {}
+        } catch {
+          // response body unreadable — skip auth failure detection
+        }
       }
         return res;
       } finally {

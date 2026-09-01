@@ -2,16 +2,32 @@ import { useEffect, useState } from 'react';
 import { Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { IOSPwaGuideModal } from '@/components/IOSPwaGuideModal';
+
+// iOS detection — لا يطلق beforeinstallprompt أبداً
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+const isIOSStandalone = (window.navigator as any).standalone === true;
 
 export default function PWAInstallPrompt() {
   const { user } = useAuth();
   const { canInstall, isStandalone, promptInstall } = usePWAInstall();
   const [isVisible, setIsVisible] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
 
   useEffect(() => {
-    // لا نمنع الدخول إلا إذا كان المتصفح قد أتاح نافذة تثبيت رسمية فعلًا.
-    if (isStandalone || !user || !canInstall) {
+    if (isStandalone || isIOSStandalone || !user) {
+      setIsVisible(false);
+      return;
+    }
+
+    // على iOS: لا يوجد beforeinstallprompt — اعرض دليل يدوي
+    if (isIOS && !isIOSStandalone) {
+      setIsVisible(localStorage.getItem(`pwa_install_${user.id}`) !== 'installed');
+      return;
+    }
+
+    if (!canInstall) {
       setIsVisible(false);
       return;
     }
@@ -33,6 +49,22 @@ export default function PWAInstallPrompt() {
     // لا يبقى الموقع مقفولًا إذا رفض المستخدم النافذة أو لم يستجب المتصفح.
     setIsVisible(false);
   };
+
+  const handleDismiss = () => {
+    if (user) localStorage.setItem(`pwa_install_${user.id}`, 'installed');
+    setIsVisible(false);
+    setShowIOSGuide(false);
+  };
+
+  // حالة iOS — اعرض دليل Add to Home Screen
+  if (isIOS && !isIOSStandalone && isVisible && user) {
+    return (
+      <IOSPwaGuideModal
+        open={showIOSGuide || isVisible}
+        onClose={handleDismiss}
+      />
+    );
+  }
 
   if (!isVisible || isStandalone || !user) return null;
 

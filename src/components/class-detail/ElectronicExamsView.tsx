@@ -40,7 +40,10 @@ export default function ElectronicExamsView({ classId, className }: ElectronicEx
       await deleteExam.mutateAsync({ id: deleteTarget.id, classId });
       toast.success('تم حذف الاختبار');
       setDeleteTarget(null);
-    } catch (_) {}
+    } catch (err: unknown) {
+      // toast error already shown by mutation onError
+      void err;
+    }
   };
 
   if (subView === 'create') {

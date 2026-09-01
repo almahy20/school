@@ -114,7 +114,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   const { data: templatesData, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } =
     useExamTemplates(classId, null, 1, 100);
 
-  const templates = templatesData?.data || [];
+  const templates = useMemo(() => templatesData?.data || [], [templatesData]);
 
   const monthFolders = useMemo(() => {
     const folders: Record<string, any[]> = {};
@@ -159,7 +159,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
       setCustomOrder([]);
       prevClassId.current = classId;
     }
-  }, [classId]);
+  }, [classId, setCustomOrder]);
 
   const handleGradeChange = (studentId: string, score: string) => {
     setLocalGrades(prev => prev.map(g => g.studentId === studentId ? { ...g, score } : g));
@@ -174,7 +174,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
       setCustomOrder(next.map(g => g.studentId));
       return next;
     });
-  }, []);
+  }, [setCustomOrder]);
 
   // تحريك طالب لأسفل
   const moveDown = useCallback((idx: number) => {
@@ -185,13 +185,13 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
       setCustomOrder(next.map(g => g.studentId));
       return next;
     });
-  }, []);
+  }, [setCustomOrder]);
 
   // إعادة الترتيب الافتراضي
   const resetOrder = useCallback(() => {
     setCustomOrder([]);
     setLocalGrades(studentGrades);
-  }, [studentGrades]);
+  }, [studentGrades, setCustomOrder]);
 
   const isCustomOrdered = customOrder.length > 0;
 

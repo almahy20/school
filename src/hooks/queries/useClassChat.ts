@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 const db = supabase as any;
 
@@ -38,7 +38,7 @@ export interface ClassChatMessage {
 export function useAdminClassChatRooms() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['class-chat-rooms', 'admin', user?.schoolId];
+  const queryKey = useMemo(() => ['class-chat-rooms', 'admin', user?.schoolId], [user?.schoolId]);
 
   useEffect(() => {
     if (!user?.schoolId) return;
@@ -54,7 +54,7 @@ export function useAdminClassChatRooms() {
       })
       .subscribe();
     return () => { db.removeChannel(channel); };
-  }, [user?.schoolId, queryClient]);
+  }, [user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
     queryKey,
@@ -116,7 +116,7 @@ export function useAdminClassChatRooms() {
 export function useParentClassChatRooms() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['class-chat-rooms', 'parent', user?.id];
+  const queryKey = useMemo(() => ['class-chat-rooms', 'parent', user?.id], [user?.id]);
 
   // Realtime: لما تُنشأ غرفة جديدة
   useEffect(() => {
@@ -133,7 +133,7 @@ export function useParentClassChatRooms() {
       })
       .subscribe();
     return () => { db.removeChannel(channel); };
-  }, [user?.id, user?.schoolId, queryClient]);
+  }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
     queryKey,
@@ -182,7 +182,7 @@ export function useParentClassChatRooms() {
 export function useClassChatMessages(roomId: string | null) {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['class-chat-messages', roomId];
+  const queryKey = useMemo(() => ['class-chat-messages', roomId], [roomId]);
 
   // Realtime subscription
   useEffect(() => {
@@ -206,7 +206,7 @@ export function useClassChatMessages(roomId: string | null) {
       .subscribe();
 
     return () => { db.removeChannel(channel); };
-  }, [roomId, user?.id, queryClient]);
+  }, [roomId, user?.id, queryClient, queryKey]);
 
   return useQuery<ClassChatMessage[]>({
     queryKey,
@@ -272,7 +272,7 @@ export function useEnsureClassChatRoom() {
 export function useClassChatUnreadCounts() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = ['class-chat-unread', user?.id];
+  const queryKey = useMemo(() => ['class-chat-unread', user?.id], [user?.id]);
 
   // Realtime: لما يجي إشعار جديد من نوع class_chat_message
   useEffect(() => {
@@ -301,7 +301,7 @@ export function useClassChatUnreadCounts() {
       })
       .subscribe();
     return () => { db.removeChannel(channel); };
-  }, [user?.id, queryClient]);
+  }, [user?.id, queryClient, queryKey]);
 
   return useQuery<Record<string, number>>({
     queryKey,

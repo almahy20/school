@@ -413,7 +413,8 @@ function ClassChatTab() {
         className: room.class_name || room.name || 'الفصل',
       });
       navigate(`/manage-conversations/class/${created.id}`);
-    } catch (_) {
+    } catch (err: unknown) {
+      void err; // toast shown by mutation onError
     } finally {
       setOpeningClassId(null);
     }

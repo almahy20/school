@@ -126,12 +126,16 @@ export default function AdminConversationDetailPage() {
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
         queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
       });
-  }, [id, user?.id]);
+  }, [id, user?.id, queryClient]);
 
   useEffect(() => {
     if (conversation?.unread_by_admin > 0) {
       markRead.mutate({ conversationId: conversation.id, asRole: 'admin' });
     }
+    // markRead.mutate intentionally excluded — TanStack mutation object reference changes on every render;
+    // conversation.id is the meaningful trigger for this effect
+    // conversation?.unread_by_admin intentionally excluded (checked only when conversation.id changes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation?.id]);
 
   useEffect(() => {
@@ -143,7 +147,7 @@ export default function AdminConversationDetailPage() {
     if (!t || sendMessage.isPending || !id) return;
     setText('');
     try { await sendMessage.mutateAsync({ conversationId: id, content: t }); }
-    catch (_) {}
+    catch (err: unknown) { void err; } // toast shown by mutation onError
   };
 
   if (convsLoading) {

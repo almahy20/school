@@ -310,7 +310,9 @@ export function useUpdateStudent() {
           p_entity_id: id,
           p_details: `تحديث بيانات الطالب: ${Object.keys(updates).join(', ')}`
         });
-      } catch (_) {}
+      } catch {
+        // audit log is non-critical — ignore failures
+      }
 
       return data as Student;
     },

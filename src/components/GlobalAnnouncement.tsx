@@ -153,6 +153,10 @@ export function GlobalAnnouncement() {
     return () => {
       void supabase.removeChannel(channel);
     };
+    // senderProfiles is intentionally excluded: adding it would re-subscribe the realtime
+    // channel on every profile update. The handler uses whatever profiles are cached at
+    // message-arrival time — stale-closure is acceptable here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, queryClient]);
 
   const markCurrentAsRead = async (id: string) => {

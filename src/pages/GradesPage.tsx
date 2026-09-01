@@ -78,7 +78,7 @@ export default function GradesPage() {
 
   const { data: subjects = [], isLoading: subjectsLoading, error: subjectsError } = useCurriculumSubjects(selectedClass?.curriculum_id || null);
   const { data: templatesResponse, isLoading: templatesLoading, error: templatesError } = useExamTemplates(selectedClassId, null, 1, 100);
-  const allTemplates = templatesResponse?.data || [];
+  const allTemplates = useMemo(() => templatesResponse?.data || [], [templatesResponse]);
 
   // Group templates by Month Card / Term (e.g. "تقييم شهر 7", "تقييم شهر 8")
   const monthFolders = useMemo(() => {
@@ -96,7 +96,7 @@ export default function GradesPage() {
     if (classes.length > 0 && !selectedClassId) {
       setSelectedClassId(classes[0].id);
     }
-  }, [classes, selectedClassId]);
+  }, [classes, selectedClassId, setSelectedClassId]);
 
   // Auto select first month folder
   const monthFolderKeys = Object.keys(monthFolders);
@@ -104,7 +104,7 @@ export default function GradesPage() {
     if (monthFolderKeys.length > 0 && !selectedMonthFolder) {
       setSelectedMonthFolder(monthFolderKeys[0]);
     }
-  }, [monthFolderKeys, selectedMonthFolder]);
+  }, [monthFolderKeys, selectedMonthFolder, setSelectedMonthFolder]);
 
   // Active templates for current month folder
   const currentMonthTemplates = useMemo(() => {
