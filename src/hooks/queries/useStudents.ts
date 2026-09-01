@@ -412,7 +412,7 @@ export function useClassStudents(classId: string | null | undefined) {
       if (!classId) return [];
       const { data, error } = await supabase
         .from('students')
-        .select('id, name, class_id, parent_phone, school_id, created_at, birth_date, notes')
+        .select('id, name, class_id, parent_phone, school_id, created_at')
         .eq('class_id', classId)
         .order('name')
         .limit(200); // حد أمان: لا مدرسة لديها أكثر من 200 طالب في فصل واحد

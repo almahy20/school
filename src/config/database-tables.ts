@@ -14,8 +14,6 @@ export const TABLES: TableConfig[] = [
       { key: 'id', label: 'المعرف', editable: false },
       { key: 'name', label: 'الاسم', editable: true },
       { key: 'class_id', label: 'معرف الفصل', editable: true },
-      { key: 'birth_date', label: 'تاريخ الميلاد', editable: true },
-      { key: 'notes', label: 'ملاحظات', editable: true },
       { key: 'created_at', label: 'تاريخ الإنشاء', editable: false },
     ],
   },
