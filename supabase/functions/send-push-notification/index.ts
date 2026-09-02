@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.6";
 
@@ -411,7 +411,7 @@ serve(async (req) => {
     try {
       const noDeviceYet = sent === 0 && transientFailures === 0 && endpointsToDelete.length === total;
       const allTransient = sent === 0 && transientFailures > 0;
-      await supabase.from('notification_delivery_logs').insert({
+      await supabase.from('push_delivery_log').insert({
         notification_id,
         sent_count: sent,
         total_subscriptions: total,
@@ -443,3 +443,4 @@ serve(async (req) => {
 
   return jsonResponse(responseBody, httpStatus);
 });
+
