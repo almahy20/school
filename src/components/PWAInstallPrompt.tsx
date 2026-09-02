@@ -33,10 +33,22 @@ export default function PWAInstallPrompt() {
       return;
     }
 
-    // Android/Chrome: يحتاج beforeinstallprompt
+    // لو canInstall موجود فوراً → اعرض
     if (canInstall) {
       setIsVisible(true);
+      return;
     }
+
+    // لو مش موجود بعد → انتظر 3 ثواني وتحقق تاني
+    // beforeinstallprompt بياخد وقت على بعض الأجهزة
+    const timer = setTimeout(() => {
+      const prompt = (window as any).deferredPrompt;
+      if (prompt && !isStandalone && localStorage.getItem(INSTALLED_KEY) !== '1') {
+        setIsVisible(true);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, [canInstall, isStandalone]);
 
   // مؤقت فقط — لا يحفظ في localStorage
