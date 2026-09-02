@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import {
   useParentConversations,
-  useConversationMessages,
+  useConversationMessagesFlat,
   useCreateConversation,
   useSendConversationMessage,
   useMarkConversationRead,
@@ -116,7 +116,7 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
   const { data: conversations = [], isLoading: convsLoading } = useParentConversations();
   const { data: children = [] } = useParentChildren();
   const conversation = conversations[0] ?? null;
-  const { data: messages = [], isLoading: msgsLoading } = useConversationMessages(conversation?.id ?? null);
+  const { data: messages = [], isLoading: msgsLoading, hasPreviousPage, fetchPreviousPage, isFetchingPreviousPage } = useConversationMessagesFlat(conversation?.id ?? null);
   const sendMessage = useSendConversationMessage();
   const markRead = useMarkConversationRead();
   const create = useCreateConversation();
@@ -188,6 +188,22 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
           </div>
         ) : (
           <div className="max-w-[720px] mx-auto">
+            {/* زر تحميل الرسائل الأقدم */}
+            {hasPreviousPage && (
+              <div className="flex justify-center mb-3">
+                <button
+                  onClick={() => fetchPreviousPage()}
+                  disabled={isFetchingPreviousPage}
+                  className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 hover:text-indigo-500 px-3 py-1.5 rounded-xl bg-white/80 border border-slate-100 shadow-sm transition-colors disabled:opacity-50"
+                >
+                  {isFetchingPreviousPage
+                    ? <Loader2 className="w-3 h-3 animate-spin" />
+                    : '↑'
+                  }
+                  رسائل أقدم
+                </button>
+              </div>
+            )}
             {messages.map((msg, i) => {
               const prev = messages[i - 1];
               const showDate = i === 0 || (prev && new Date(msg.created_at).toDateString() !== new Date(prev.created_at).toDateString());

@@ -95,9 +95,12 @@ export default function TeacherDetailPage() {
           loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
-            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-indigo-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative group">
+            {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
+            <div className="absolute inset-0 rounded-[48px] overflow-hidden pointer-events-none">
+              <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 mix-blend-screen" />
+              <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-indigo-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 mix-blend-screen" />
+            </div>
             
             <div className="flex items-center gap-6 md:gap-8 relative z-10 text-right w-full lg:w-2/3">
               <button 
@@ -109,12 +112,12 @@ export default function TeacherDetailPage() {
               
               <div className="flex items-center gap-5 md:gap-8 min-w-0">
                  <Avatar className="w-16 h-16 md:w-24 md:h-24 rounded-[28px] md:rounded-[40px] border-[3px] border-white/20 shadow-2xl shadow-emerald-900/30 shrink-0 group-hover:rotate-3 transition-transform duration-700">
-                    <AvatarFallback className="bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white text-2xl md:text-4xl font-black rounded-none">
+                    <AvatarFallback className="bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white text-xl md:text-2xl font-black rounded-none">
                        {teacher?.full_name?.[0]}
                     </AvatarFallback>
                  </Avatar>
                  <div className="space-y-2 min-w-0">
-                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{teacher?.full_name}</h1>
+                    <h1 className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{teacher?.full_name}</h1>
                     <div className="flex items-center gap-3 flex-wrap">
                        <Badge className="bg-white/10 text-white border border-white/10 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md shadow-sm">
                           {teacher?.specialization || 'التخصص التعليمي'}
@@ -319,7 +322,7 @@ function StatsCard({ title, value, sub, icon: Icon, color, smallValue }: any) {
        <div className="mt-6 md:mt-8 text-right">
           <p className={cn("text-[8px] md:text-[10px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-1 md:mb-2 opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{title}</p>
           <div className="flex flex-col">
-             <h3 className={cn("font-black tracking-tighter leading-none mb-1 md:mb-2", smallValue ? "text-xl md:text-2xl" : "text-3xl md:text-5xl")}>{value}</h3>
+             <h3 className={cn("font-black tracking-tighter leading-none mb-1 md:mb-2", smallValue ? "text-lg md:text-xl" : "text-2xl md:text-3xl")}>{value}</h3>
              <span className={cn("text-[9px] md:text-[11px] font-bold opacity-60", color === 'emerald' ? "text-slate-400" : "text-white/40")}>{sub}</span>
           </div>
        </div>

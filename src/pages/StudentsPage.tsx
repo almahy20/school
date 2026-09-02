@@ -26,9 +26,41 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/layout/PageHeader';
 
 const PAGE_SIZE = 15;
+
+// ── Skeleton لشبكة الطلاب (يُعرض بدل الـ spinner في أول تحميل) ───────────────
+function StudentsGridSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 px-1">
+        <Skeleton className="w-2 h-2 rounded-full" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-[24px] p-5 space-y-4 shadow-sm border border-slate-50">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-11 h-11 rounded-2xl shrink-0" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+              </div>
+              <Skeleton className="w-16 h-6 rounded-xl" />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Skeleton className="h-8 flex-1 rounded-xl" />
+              <Skeleton className="h-8 flex-1 rounded-xl" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-10 w-full rounded-2xl" />
+    </div>
+  );
+}
 
 export default function StudentsPage() {
   const { user } = useAuth();
@@ -226,6 +258,10 @@ export default function StudentsPage() {
 
         {/* Students Grid */}
         <div className="flex-1 min-w-0 w-full">
+            {/* أول تحميل حقيقي (لا يوجد cached data) → skeleton بدل spinner */}
+            {loading && students.length === 0 ? (
+              <StudentsGridSkeleton />
+            ) : (
             <QueryStateHandler
               loading={loading}
               error={error}
@@ -261,6 +297,7 @@ export default function StudentsPage() {
                 />
               </div>
             </QueryStateHandler>
+            )}
           </div>
       </div>
 

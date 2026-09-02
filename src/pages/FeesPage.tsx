@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { useStudents, useFees, useUpsertFee, useGenerateFees, useBranding, useAllClasses, useClearTermFees, useUpdateStudentMonthlyFee } from '@/hooks/queries';
 import DataPagination from '@/components/ui/DataPagination';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { Skeleton } from '@/components/ui/skeleton';
 import PageHeader from '@/components/layout/PageHeader';
 import {
   AlertDialog,
@@ -28,6 +29,47 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+
+// ── Skeleton لشبكة الرسوم (يُعرض بدل الـ spinner في أول تحميل) ───────────────
+function FeesGridSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* stats cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 rounded-[24px]" />
+        ))}
+      </div>
+      {/* toolbar */}
+      <Skeleton className="h-16 w-full rounded-[24px]" />
+      {/* cards grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-[24px] p-5 space-y-4 shadow-sm border border-slate-50">
+            <div className="flex items-center justify-between">
+              <div className="space-y-2 flex-1">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-3 w-1/3" />
+              </div>
+              <Skeleton className="w-20 h-7 rounded-xl" />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1 space-y-1">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-24" />
+              </div>
+              <div className="flex-1 space-y-1">
+                <Skeleton className="h-3 w-16" />
+                <Skeleton className="h-5 w-24" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-full rounded-xl" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function FeesPage() {
   const { user } = useAuth();
@@ -169,6 +211,10 @@ export default function FeesPage() {
           }
         />
 
+        {/* أول تحميل حقيقي → skeleton، وعند وجود cached data → QueryStateHandler يعرضها فوراً مع شريط تحديث */}
+        {loading && studentsData.length === 0 ? (
+          <FeesGridSkeleton />
+        ) : (
         <QueryStateHandler
           loading={loading}
           error={error}
@@ -250,6 +296,7 @@ export default function FeesPage() {
             </div>
           </div>
         </QueryStateHandler>
+        )}
       </div>
 
       {showPaymentModal && selectedStudent && (

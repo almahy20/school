@@ -42,6 +42,26 @@ export default function AppLayout({ children }: Props) {
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
   const { permission } = usePushNotifications();
 
+  // 🔔 استقبال رسالة SYNC_NOTIFICATIONS من الـ Service Worker
+  // تُرسَل عند استيقاظ Android من Doze Mode عبر Background Sync
+  // → تُعيد جلب عداد الإشعارات وبيانات المحادثات لتحديث الـ badge فوراً
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'SYNC_NOTIFICATIONS') {
+        logger.log('[AppLayout] SYNC_NOTIFICATIONS received — refetching unread counts');
+        // إعادة جلب عداد الإشعارات غير المقروءة
+        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'] });
+        // إعادة جلب الإشعارات نفسها لو المستخدم في صفحتها
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+  }, [queryClient]);
+
   // 🚀 تحسين السرعة عبر جلب البيانات في الخلفية (Prefetching)
   useEffect(() => {
     if (user?.schoolId) {

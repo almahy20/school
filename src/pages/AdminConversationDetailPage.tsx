@@ -15,8 +15,8 @@ import {
   Loader2, User, School, XCircle, Trash2, MessageCircle, Phone,
 } from 'lucide-react';
 import {
-  useAdminConversations,
-  useConversationMessages,
+  useConversation,
+  useConversationMessagesFlat,
   useSendConversationMessage,
   useMarkConversationRead,
   useDeleteConversationMessage,
@@ -105,9 +105,8 @@ export default function AdminConversationDetailPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: conversations = [], isLoading: convsLoading } = useAdminConversations('all', '');
-  const conversation = conversations.find(c => c.id === id) ?? null;
-  const { data: messages = [], isLoading: msgsLoading } = useConversationMessages(id ?? null);
+  const { data: conversation, isLoading: convsLoading } = useConversation(id ?? null);
+  const { data: messages = [], isLoading: msgsLoading, hasPreviousPage, fetchPreviousPage, isFetchingPreviousPage } = useConversationMessagesFlat(id ?? null);
   const sendMessage = useSendConversationMessage();
   const markRead = useMarkConversationRead();
   const deleteMessage = useDeleteConversationMessage();
@@ -122,22 +121,19 @@ export default function AdminConversationDetailPage() {
       .eq('is_read', false)
       .contains('metadata', { conversation_id: id })
       .then(() => {
-        // refresh unread counts
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
         queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
       });
   }, [id, user?.id, queryClient]);
 
   useEffect(() => {
-    if (conversation?.unread_by_admin > 0) {
+    if (conversation?.unread_by_admin && conversation.unread_by_admin > 0) {
       markRead.mutate({ conversationId: conversation.id, asRole: 'admin' });
     }
-    // markRead.mutate intentionally excluded — TanStack mutation object reference changes on every render;
-    // conversation.id is the meaningful trigger for this effect
-    // conversation?.unread_by_admin intentionally excluded (checked only when conversation.id changes).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversation?.id]);
 
+  // scroll للأسفل عند وصول رسائل جديدة
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
@@ -147,9 +143,10 @@ export default function AdminConversationDetailPage() {
     if (!t || sendMessage.isPending || !id) return;
     setText('');
     try { await sendMessage.mutateAsync({ conversationId: id, content: t }); }
-    catch (err: unknown) { void err; } // toast shown by mutation onError
+    catch (err: unknown) { void err; }
   };
 
+  // ── حالات التحميل والخطأ ─────────────────────────────────────────────────
   if (convsLoading) {
     return (
       <AppLayout>
@@ -177,29 +174,43 @@ export default function AdminConversationDetailPage() {
   const cfg = STATUS_CONFIG[conversation.status];
   const StatusIcon = cfg.icon;
 
-  // ── Layout strategy:
-  // نستخدم negative margins لإلغاء الـ padding بتاع AppLayout
-  // وبعدين نبني flex column يملأ الشاشة بالكامل
-  // الـ AppLayout content div عنده: px-4 sm:px-6 md:px-8 lg:px-10, py-5 sm:py-6, pb-24 md:pb-6
-  // desktop header: h-16 xl:h-20
+  // ── Chat Layout ───────────────────────────────────────────────────────────
+  //
+  // نستخدم AppLayout عشان نحتفظ بالـ sidebar والـ header العلوي.
+  // داخل الـ content area نبني flex column يملأ المساحة المتاحة بالكامل
+  // بدون negative margins.
+  //
+  // AppLayout content div:
+  //   flex-1 w-full px-4..lg:px-10 py-5..py-6 pb-24 md:pb-6
+  //
+  // الحل: نعطي الـ content wrapper h-full + overflow-hidden ونبني
+  // flex column بداخله. نستغل أن AppLayout > main > content div هو flex-1
+  // وبالتالي h-full يشتغل.
 
   return (
     <AppLayout>
+      {/*
+        هذا الـ wrapper يملأ كل الـ content area المتاحة من AppLayout.
+        overflow-hidden يمنع الـ scroll على مستوى الصفحة —
+        الـ scroll يحدث فقط في div الرسائل الداخلي.
+      */}
       <div
         dir="rtl"
         className={[
-          // إلغاء الـ padding الأفقي والعمودي بتاع AppLayout
+          // إلغاء الـ padding بتاع AppLayout content div وإعادة بناء المساحة
           '-mx-4 sm:-mx-6 md:-mx-8 lg:-mx-10',
           '-mt-5 sm:-mt-6',
-          // إلغاء الـ pb-24 md:pb-6 من الأسفل
           '-mb-24 md:-mb-6',
-          // ارتفاع كامل: الـ viewport ناقص desktop header (64px أو 80px)
-          'flex flex-col',
-          'h-[calc(100vh-64px)] xl:h-[calc(100vh-80px)]',
+          // ارتفاع ثابت = viewport - mobile header (64px/80px) أو desktop header (64px/80px)
+          // على موبايل نطرح كمان BottomNav (≈64px)
+          'h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-80px)]',
+          // flex column — header ثابت + messages تملأ الباقي + input ثابت
+          'flex flex-col overflow-hidden',
+          'bg-slate-50',
         ].join(' ')}
       >
-        {/* ── Top bar — fixed header ── */}
-        <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm">
+        {/* ── Top bar ─────────────────────────────────────────────────────── */}
+        <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
           <button
             onClick={() => navigate('/manage-conversations')}
             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors shrink-0"
@@ -207,13 +218,13 @@ export default function AdminConversationDetailPage() {
             <ChevronRight className="w-5 h-5" />
           </button>
 
-          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-black text-sm shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-600 font-black text-sm shrink-0">
             {conversation.parent_name?.[0] ?? <User className="w-4 h-4" />}
           </div>
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-base font-black text-slate-900 leading-none">{conversation.parent_name}</p>
+              <p className="text-sm font-black text-slate-900 leading-none">{conversation.parent_name}</p>
               {conversation.parent_phone && (
                 <span className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
                   <Phone className="w-3 h-3" />
@@ -236,8 +247,8 @@ export default function AdminConversationDetailPage() {
           </div>
         </div>
 
-        {/* ── Messages — يملأ الباقي ويتسكرل داخلياً ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-12 lg:px-20 py-6 bg-slate-50/40">
+        {/* ── Messages area — flex-1 + overflow-y-auto = الـ scroll هنا فقط ── */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-8 md:px-12 lg:px-20 py-6">
           {msgsLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
@@ -249,7 +260,24 @@ export default function AdminConversationDetailPage() {
             </div>
           ) : (
             <div className="max-w-[760px] mx-auto">
-              {/* Date separator — first message */}
+              {/* زر تحميل رسائل أقدم */}
+              {hasPreviousPage && (
+                <div className="flex justify-center mb-4">
+                  <button
+                    onClick={() => fetchPreviousPage()}
+                    disabled={isFetchingPreviousPage}
+                    className="flex items-center gap-2 text-xs font-bold text-indigo-500 hover:text-indigo-700 px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                  >
+                    {isFetchingPreviousPage
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <ChevronRight className="w-3.5 h-3.5 rotate-90" />
+                    }
+                    تحميل رسائل أقدم
+                  </button>
+                </div>
+              )}
+
+              {/* فاصل التاريخ — أول رسالة */}
               <div className="flex items-center gap-3 mb-5">
                 <div className="h-px flex-1 bg-slate-200" />
                 <span className="text-[9px] font-bold text-slate-400 px-2">
@@ -282,7 +310,7 @@ export default function AdminConversationDetailPage() {
           )}
         </div>
 
-        {/* ── Input — ثابت في الأسفل ── */}
+        {/* ── Input bar ── ثابت في الأسفل ──────────────────────────────────── */}
         {conversation.status !== 'closed' ? (
           <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-3 bg-white border-t border-slate-100">
             <div className="max-w-[760px] mx-auto flex items-end gap-2">
@@ -290,7 +318,12 @@ export default function AdminConversationDetailPage() {
                 ref={textareaRef}
                 value={text}
                 onChange={e => setText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
                 placeholder="اكتب ردك هنا..."
                 rows={1}
                 className="flex-1 min-h-[44px] max-h-[120px] resize-none rounded-2xl border-slate-200 bg-slate-50 focus:bg-white text-sm font-medium px-4 py-3 transition-all"

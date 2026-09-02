@@ -138,8 +138,12 @@ export function QueryStateHandler({
     );
   }
 
-  // 2. Loading State (checked after error so errors show immediately)
-  if (loading && !isRefetching && !showTimeoutError) {
+  // 2. Loading State — يُظهر spinner فقط إذا لم تكن هناك بيانات بعد (أول جلب حقيقي)
+  //    إذا كانت هناك بيانات قديمة (placeholder/cache) نعرضها فوراً مع شريط تحديث خفيف
+  //    ملاحظة: array فاضي [] = data وصلت بالفعل، مش "loading"
+  // البيانات وصلت لو: data مش null/undefined، أو array فيها عناصر، أو object كامل
+  const dataArrived = data !== undefined && data !== null;
+  if (loading && !isRefetching && !showTimeoutError && !dataArrived) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -156,9 +160,9 @@ export function QueryStateHandler({
   }
 
   // 3. Empty State
-  const isDataEmpty = isEmpty || (Array.isArray(data) && data.length === 0) || !data;
+  const isDataEmpty = isEmpty || (Array.isArray(data) && data.length === 0) || !dataArrived;
   
-  if (isDataEmpty && !isRefetching) {
+  if (isDataEmpty && !loading && !isRefetching) {
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-8 p-12 text-center bg-white/60 backdrop-blur-3xl rounded-[40px] border border-slate-100/80 shadow-2xl shadow-indigo-900/5 animate-in fade-in zoom-in-95 duration-700 relative overflow-hidden">
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-slate-100 rounded-full blur-3xl opacity-50"></div>
@@ -183,10 +187,20 @@ export function QueryStateHandler({
     );
   }
 
-  // 4. Success State (Clean children render)
+  // 4. Success State — يعرض المحتوى مع شريط تحديث خفيف في الأعلى عند إعادة الجلب
+  const isBackgroundRefetching = (loading || isRefetching) && dataArrived;
   return (
-    <>
+    <div className="relative">
+      {/* شريط تحديث شفاف في الأعلى — لا يحجب المحتوى */}
+      {isBackgroundRefetching && (
+        <div
+          className="absolute top-0 left-0 right-0 h-0.5 z-50 overflow-hidden rounded-full"
+          aria-hidden="true"
+        >
+          <div className="h-full bg-indigo-500 animate-[shimmer_1.2s_ease-in-out_infinite] origin-left" />
+        </div>
+      )}
       {children}
-    </>
+    </div>
   );
 }

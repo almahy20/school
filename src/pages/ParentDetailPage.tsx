@@ -37,7 +37,9 @@ export default function ParentDetailPage() {
   const queryClient = useQueryClient();
   const [notificationStats] = useState<any>(null);
   const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
+  const [plainPassword, setPlainPassword] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showPlainPassword, setShowPlainPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -53,15 +55,16 @@ export default function ParentDetailPage() {
     queryFn: async () => {
       if (!id) return null;
         
-      // جلب last_seen من profiles
+      // جلب last_seen و plain_password من profiles
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('last_seen')
+        .select('last_seen, plain_password')
         .eq('id', id)
         .maybeSingle();
 
       return {
         lastSeen: profileData?.last_seen,
+        plainPassword: profileData?.plain_password ?? null,
       };
     },
     enabled: !!id,
@@ -72,6 +75,9 @@ export default function ParentDetailPage() {
   useEffect(() => {
     if (parentExtraData?.lastSeen) {
       setParentLastSeen(parentExtraData.lastSeen);
+    }
+    if (parentExtraData?.plainPassword !== undefined) {
+      setPlainPassword(parentExtraData.plainPassword);
     }
   }, [parentExtraData]);
 
@@ -107,6 +113,7 @@ export default function ParentDetailPage() {
       if (!result?.success) throw new Error(result?.error || 'فشل في تغيير كلمة المرور');
 
       toast({ title: 'تم بنجاح', description: 'تم تحديث كلمة المرور. يمكن لولي الأمر الدخول بالكلمة الجديدة.' });
+      setPlainPassword(newPassword);
       setNewPassword('');
       setShowPassword(false);
     } catch (err: any) {
@@ -129,9 +136,12 @@ export default function ParentDetailPage() {
           loadingMessage="جاري مزامنة بيانات حساب ولي الأمر..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-amber-500/15 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
-            <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative group mb-2">
+            {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
+            <div className="absolute inset-0 rounded-[48px] overflow-hidden pointer-events-none">
+              <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-amber-500/15 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 mix-blend-screen" />
+              <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 mix-blend-screen" />
+            </div>
             
             <div className="flex items-center gap-6 md:gap-8 relative z-10 w-full lg:w-2/3">
               <button 
@@ -146,7 +156,7 @@ export default function ParentDetailPage() {
                     <User className="w-8 h-8 md:w-12 md:h-12" />
                  </div>
                  <div className="space-y-2 min-w-0">
-                    <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{parent?.full_name}</h1>
+                    <h1 className="text-xl md:text-3xl font-black text-white tracking-tighter drop-shadow-sm mb-1 truncate">{parent?.full_name}</h1>
                     <div className="flex items-center gap-3 flex-wrap">
                        <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold text-[10px] md:text-xs uppercase tracking-widest px-4 py-1.5 md:px-5 md:py-2 rounded-2xl backdrop-blur-md">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block ml-2" />
@@ -167,7 +177,7 @@ export default function ParentDetailPage() {
             </div>
           </header>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-4">
             {/* Main Information Section */}
             <div className="lg:col-span-8 space-y-8">
                 <section className="bg-white border border-slate-50 p-6 md:p-8 rounded-3xl shadow-sm space-y-6">
@@ -181,7 +191,7 @@ export default function ParentDetailPage() {
                       </div>
                    </header>
 
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                       <ContactCard 
                         icon={Phone} 
                         label="رقم الهاتف الأساسي" 
@@ -191,58 +201,74 @@ export default function ParentDetailPage() {
                       />
                       
                       {/* Password Card */}
-                      <div className="p-6 rounded-2xl border bg-slate-900 text-white shadow-sm">
-                         <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center mb-4">
-                            <Key className="w-5 h-5" />
-                         </div>
-                         <div className="space-y-3">
-                            <div>
-                               <p className="text-[10px] font-medium text-white/40 mb-2">كلمة المرور</p>
-                               
-                               {showPassword ? (
-                                  <div className="space-y-2">
-                                     <div className="relative">
-                                        <input
-                                          type="text"
-                                          value={newPassword}
-                                          onChange={(e) => setNewPassword(e.target.value)}
-                                          placeholder="أدخل كلمة المرور الجديدة"
-                                          className="w-full h-10 pr-3 pl-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-xs font-medium focus:outline-none focus:border-indigo-500 transition-colors"
-                                          autoFocus
-                                        />
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setShowPassword(false);
-                                            setNewPassword('');
-                                          }}
-                                          className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
-                                        >
-                                           <Key className="w-3 h-3 text-white/50" />
-                                        </button>
-                                     </div>
-                                     <Button
-                                       onClick={handleResetPassword}
-                                       disabled={!newPassword || newPassword.length < 6 || resettingPassword}
-                                       className="w-full h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-sm disabled:opacity-50"
-                                     >
-                                       {resettingPassword ? 'جاري التحديث...' : 'حفظ كلمة المرور'}
-                                     </Button>
-                                     <p className="text-[9px] text-white/40 text-center font-medium">
-                                        يجب أن تكون 6 أحرف على الأقل
-                                     </p>
-                                  </div>
-                               ) : (
-                                  <button
-                                    onClick={() => setShowPassword(true)}
-                                    className="w-full h-10 rounded-lg border-2 border-dashed border-white/20 hover:border-indigo-500/50 hover:bg-white/5 flex items-center justify-center gap-2 transition-all text-white/30 hover:text-indigo-400"
-                                  >
-                                     <Key className="w-3 h-3" />
-                                     <span className="text-xs font-medium">إعادة تعيين كلمة المرور</span>
-                                  </button>
-                               )}
+                      <div className="p-6 rounded-2xl border bg-slate-900 text-white shadow-sm flex flex-col gap-4">
+                         <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+                               <Key className="w-5 h-5" />
                             </div>
+                            <p className="text-[10px] font-medium text-white/40">كلمة المرور الحالية</p>
                          </div>
+
+                         {/* ── عرض كلمة المرور دايماً ── */}
+                         <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2 min-h-[44px]">
+                           {plainPassword ? (
+                             <>
+                               <span className="text-sm font-mono font-bold tracking-widest text-white/90 select-all" dir="ltr">
+                                 {showPlainPassword ? plainPassword : '•'.repeat(Math.min(plainPassword.length, 12))}
+                               </span>
+                               <button
+                                 type="button"
+                                 onClick={() => setShowPlainPassword(v => !v)}
+                                 className="text-[10px] font-bold text-white/40 hover:text-white/80 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-white/10"
+                               >
+                                 {showPlainPassword ? 'إخفاء' : 'إظهار'}
+                               </button>
+                             </>
+                           ) : (
+                             <span className="text-xs text-white/25 italic">غير متاحة — سجّل ولي الأمر بنفسه</span>
+                           )}
+                         </div>
+
+                         {/* ── نموذج إعادة التعيين ── */}
+                         {showPassword ? (
+                           <div className="space-y-2">
+                             <div className="relative">
+                               <input
+                                 type="text"
+                                 value={newPassword}
+                                 onChange={(e) => setNewPassword(e.target.value)}
+                                 placeholder="أدخل كلمة المرور الجديدة"
+                                 className="w-full h-10 pr-3 pl-10 rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 text-xs font-medium focus:outline-none focus:border-indigo-500 transition-colors"
+                                 autoFocus
+                               />
+                               <button
+                                 type="button"
+                                 onClick={() => { setShowPassword(false); setNewPassword(''); }}
+                                 className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors"
+                               >
+                                 <Key className="w-3 h-3 text-white/50" />
+                               </button>
+                             </div>
+                             <Button
+                               onClick={handleResetPassword}
+                               disabled={!newPassword || newPassword.length < 6 || resettingPassword}
+                               className="w-full h-10 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-xs shadow-sm disabled:opacity-50"
+                             >
+                               {resettingPassword ? 'جاري التحديث...' : 'حفظ كلمة المرور'}
+                             </Button>
+                             <p className="text-[9px] text-white/40 text-center font-medium">
+                               يجب أن تكون 6 أحرف على الأقل
+                             </p>
+                           </div>
+                         ) : (
+                           <button
+                             onClick={() => setShowPassword(true)}
+                             className="w-full h-10 rounded-lg border-2 border-dashed border-white/20 hover:border-indigo-500/50 hover:bg-white/5 flex items-center justify-center gap-2 transition-all text-white/30 hover:text-indigo-400"
+                           >
+                             <Key className="w-3 h-3" />
+                             <span className="text-xs font-medium">إعادة تعيين كلمة المرور</span>
+                           </button>
+                         )}
                       </div>
                    </div>
                 </section>

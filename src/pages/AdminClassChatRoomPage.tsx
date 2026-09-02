@@ -58,8 +58,9 @@ export default function AdminClassChatRoomPage() {
           '-mx-4 sm:-mx-6 md:-mx-8 lg:-mx-10',
           '-mt-5 sm:-mt-6',
           '-mb-24 md:-mb-6',
-          'flex flex-col',
-          'h-[calc(100vh-64px)] xl:h-[calc(100vh-80px)]',
+          'flex flex-col overflow-hidden',
+          'h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-80px)]',
+          'bg-slate-50',
         ].join(' ')}
       >
         {/* ── Header ── */}
@@ -81,7 +82,7 @@ export default function AdminClassChatRoomPage() {
         </div>
 
         {/* ── Messages ── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-8 md:px-16 lg:px-24 py-4 bg-slate-50/30">
           {isLoading ? (
             <div className="h-full flex items-center justify-center">
               <Loader2 className="w-5 h-5 animate-spin text-slate-300" />

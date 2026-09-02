@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -40,6 +40,7 @@ export function useAdminStats() {
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 2 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
+    placeholderData: keepPreviousData,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -178,12 +179,13 @@ export function useTeacherStats() {
 export function useAdminActivities() {
   const { user, session } = useAuth();
   return useQuery({
-    queryKey: ['admin-activities', user?.schoolId],
+    queryKey: ['admin-activities', user?.schoolId, user?.id],
     queryFn: async () => {
-      if (!user?.schoolId) return [];
+      if (!user?.schoolId || !user?.id) return [];
       
       const { data, error } = await (supabase as any).rpc('get_admin_dashboard_activities', {
-        p_school_id: user.schoolId
+        p_school_id: user.schoolId,
+        p_caller_id: user.id   // ← إضافة user.id صريحاً
       });
 
       if (error) {
@@ -193,8 +195,9 @@ export function useAdminActivities() {
 
       return data || [];
     },
-    enabled: !!(session && user?.schoolId && user?.role === 'admin'),
+    enabled: !!(session && user?.schoolId && user?.id && user?.role === 'admin'),
     staleTime: 3 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }

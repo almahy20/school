@@ -58,7 +58,7 @@ export default function ClassDetailPage() {
   // Queries
   const { data: classItem, isLoading: classLoading, error: classError, refetch: refetchClass } = useClass(id);
   const { data: students = [] } = useClassStudents(id);
-  const { data: allTeachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
+  const { data: allTeachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل', { enabled: showEdit });
   const allTeachers = useMemo(() => Array.isArray(allTeachersData?.data) ? allTeachersData.data : [], [allTeachersData]);
   const { data: curriculums = [], refetch: refetchCurriculums } = useCurriculums();
   const { refetch: refetchSubjects } = useCurriculumSubjects(classItem?.curriculum_id || null);
@@ -142,7 +142,7 @@ export default function ClassDetailPage() {
       <div className="flex flex-col gap-6 max-w-[1400px] mx-auto text-right pb-24 animate-in fade-in duration-500 px-3 md:px-0" dir="rtl">
 
         <QueryStateHandler
-          loading={classLoading || teachersLoading}
+          loading={classLoading}
           error={classError}
           data={classItem}
           onRetry={refetchClass}

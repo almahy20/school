@@ -110,8 +110,11 @@ export default function ParentChildDetailPage() {
           loadingMessage="جاري مزامنة بيانات الطالب بالكامل..."
         >
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm relative group">
+            {/* blob خفيف — wrapper منفصل بدون قطع الـ shadow */}
+            <div className="absolute inset-0 rounded-[32px] overflow-hidden pointer-events-none">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+            </div>
             <div className="flex items-center gap-4 md:gap-6 text-right relative z-10">
               <button
                 onClick={() => navigate('/')}
@@ -147,7 +150,7 @@ export default function ParentChildDetailPage() {
           </header>
 
           {/* Interactive Cards Grid */}
-          <section className="mt-2">
+          <section>
             <h2 className="text-xl font-black text-slate-900 mb-5">التفاصيل الكاملة</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {/* Grades Card */}

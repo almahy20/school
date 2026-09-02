@@ -103,7 +103,7 @@ async function fetchParents(
   const parentIds = profilesRaw.map((p: any) => p.id);
   const [{ data: links }, { data: classes }] = await Promise.all([
     supabase.from('student_parents').select('parent_id, students(id, name, class_id)').in('parent_id', parentIds),
-    supabase.from('classes').select('id, name').eq('school_id', schoolId),
+    supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
   ]);
 
   const data = (profilesRaw as any[]).map((profile) => {
@@ -235,7 +235,7 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
       if (!parentId || !user?.schoolId) return [];
 
       const [linksRes, classesRes, curriculumsRes, subjectsRes] = await Promise.all([
-        supabase.from('student_parents').select('parent_id, students(id, name, class_id)').eq('parent_id', parentId).eq('school_id', user.schoolId),
+        supabase.from('student_parents').select('parent_id, students(id, name, class_id)').eq('parent_id', parentId),
         supabase.from('classes').select('id, name, curriculum_id').eq('school_id', user.schoolId),
         supabase.from('curriculums').select('id, name, status, school_id').eq('school_id', user.schoolId),
         supabase.from('curriculum_subjects').select('id, curriculum_id, subject_name, content, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
@@ -286,8 +286,7 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
       const { data: links } = await supabase
         .from('student_parents')
         .select('students(id, name, class_id)')
-        .eq('parent_id', parentId)
-        .eq('school_id', user.schoolId);
+        .eq('parent_id', parentId);
 
       if (!links || links.length === 0) return [];
 

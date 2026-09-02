@@ -1,4 +1,9 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
+// ─── Constants ────────────────────────────────────────────────────────────────
+/** الحد الأقصى لعدد المحادثات المُحمَّلة دفعة واحدة في القائمة */
+const CONVERSATIONS_PAGE_SIZE = 50;
+/** عدد الرسائل المُحمَّلة في كل صفحة داخل المحادثة الواحدة */
+const MESSAGES_PAGE_SIZE = 50;
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -93,7 +98,9 @@ export function useAdminConversations(status: string = 'all', search: string = '
         q = q.ilike('subject', `%${search}%`);
       }
 
-      const { data, error } = await q.order('last_message_at', { ascending: false });
+      const { data, error } = await q
+        .order('last_message_at', { ascending: false })
+        .limit(CONVERSATIONS_PAGE_SIZE);
       if (error) throw error;
 
       return (data || []).map((c: any) => ({
@@ -106,6 +113,60 @@ export function useAdminConversations(status: string = 'all', search: string = '
     enabled: !!(session && user?.schoolId),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
+    placeholderData: (prev: any) => prev,
+  });
+}
+
+/** محادثة واحدة بالـ ID — للأدمن */
+export function useConversation(conversationId: string | null | undefined) {
+  const { session } = useAuth();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!conversationId) return;
+    const channel = db
+      .channel(`conv-detail-${conversationId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'conversations',
+        filter: `id=eq.${conversationId}`,
+      }, (payload: any) => {
+        queryClient.setQueryData(
+          ['conversation', conversationId],
+          (old: Conversation | null | undefined) => old ? { ...old, ...payload.new } : old
+        );
+      })
+      .subscribe();
+    return () => { db.removeChannel(channel); };
+  }, [conversationId, queryClient]);
+
+  return useQuery<Conversation | null>({
+    queryKey: ['conversation', conversationId],
+    queryFn: async () => {
+      if (!conversationId) return null;
+      const { data, error } = await db
+        .from('conversations')
+        .select(`
+          *,
+          parent:profiles!conversations_parent_id_fkey(full_name, phone),
+          student:students!conversations_student_id_fkey(name)
+        `)
+        .eq('id', conversationId)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) return null;
+      return {
+        ...data,
+        parent_name:  data.parent?.full_name || 'ولي أمر',
+        parent_phone: data.parent?.phone || '',
+        student_name: data.student?.name || null,
+      } as Conversation;
+    },
+    enabled: !!(session && conversationId),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    placeholderData: (prev: any) => prev,
   });
 }
 
@@ -120,7 +181,6 @@ export function useParentConversations() {
     if (!user?.id) return;
 
     const channelName = `parent-conversations-${user.id}`;
-    db.removeChannel(db.channel(channelName));
 
     const channel = db
       .channel(channelName)
@@ -149,7 +209,8 @@ export function useParentConversations() {
           student:students!conversations_student_id_fkey(name)
         `)
         .eq('parent_id', user.id)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false })
+        .limit(CONVERSATIONS_PAGE_SIZE);
 
       if (error) throw error;
 
@@ -161,22 +222,21 @@ export function useParentConversations() {
     enabled: !!(session && user?.id),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
+    placeholderData: (prev: any) => prev,
   });
 }
 
-/** رسائل محادثة واحدة */
+/** رسائل محادثة واحدة — infinite scroll من الأقدم للأحدث */
 export function useConversationMessages(conversationId: string | null) {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['conversation-messages', conversationId], [conversationId]);
 
-  // Realtime للرسائل
+  // Realtime للرسائل الجديدة — يُضاف مباشرة بدون refetch
   useEffect(() => {
     if (!conversationId || !user?.id) return;
 
     const channelName = `conv-messages-${conversationId}`;
-    // أزل أي channel قديم بنفس الاسم قبل الإنشاء
-    db.removeChannel(db.channel(channelName));
 
     const channel = db
       .channel(channelName)
@@ -186,10 +246,15 @@ export function useConversationMessages(conversationId: string | null) {
         table: 'conversation_messages',
         filter: `conversation_id=eq.${conversationId}`,
       }, (payload: any) => {
-        queryClient.setQueryData(queryKey, (old: ConversationMessage[] | undefined) => {
-          const msgs = old || [];
-          if (msgs.some(m => m.id === payload.new.id)) return msgs;
-          return [...msgs, payload.new as ConversationMessage];
+        // أضف الرسالة الجديدة لآخر صفحة في الـ cache مباشرة
+        queryClient.setQueryData(queryKey, (old: any) => {
+          if (!old?.pages?.length) return old;
+          const pages = [...old.pages];
+          const lastPage = pages[pages.length - 1];
+          // تجنب التكرار
+          if (lastPage.some((m: ConversationMessage) => m.id === payload.new.id)) return old;
+          pages[pages.length - 1] = [...lastPage, payload.new as ConversationMessage];
+          return { ...old, pages };
         });
       })
       .on('postgres_changes', {
@@ -205,12 +270,16 @@ export function useConversationMessages(conversationId: string | null) {
     return () => { db.removeChannel(channel); };
   }, [conversationId, user?.id, queryClient, queryKey]);
 
-  return useQuery<ConversationMessage[]>({
+  const infiniteQuery = useInfiniteQuery<ConversationMessage[]>({
     queryKey,
-    queryFn: async () => {
+    initialPageParam: null as string | null,
+    // cursor = created_at لآخر رسالة في الصفحة السابقة (تحميل تنازلياً ثم نعكس)
+    getNextPageParam: (firstPage) =>
+      firstPage.length === MESSAGES_PAGE_SIZE ? firstPage[0].created_at : undefined,
+    queryFn: async ({ pageParam }) => {
       if (!conversationId) return [];
 
-      const { data, error } = await db
+      let q = db
         .from('conversation_messages')
         .select(`
           *,
@@ -218,19 +287,51 @@ export function useConversationMessages(conversationId: string | null) {
         `)
         .eq('conversation_id', conversationId)
         .eq('deleted_by_admin', false)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })   // أحدث أولاً لجلب الصفحة الأخيرة
+        .limit(MESSAGES_PAGE_SIZE);
 
+      // cursor-based pagination: أجلب الرسائل الأقدم من cursor
+      if (pageParam) {
+        q = q.lt('created_at', pageParam);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
 
-      return (data || []).map((m: any) => ({
-        ...m,
-        sender_name: m.sender?.full_name || 'مجهول',
-      })) as ConversationMessage[];
+      // أعِد الترتيب تصاعدياً (الأقدم أولاً) للعرض الصحيح في الـ chat
+      return (data || [])
+        .reverse()
+        .map((m: any) => ({
+          ...m,
+          sender_name: m.sender?.full_name || 'مجهول',
+        })) as ConversationMessage[];
     },
     enabled: !!(session && conversationId),
     staleTime: 0,
     gcTime: 5 * 60 * 1000,
   });
+
+  // دمج كل الصفحات في array واحد مرتب تصاعدياً
+  const allMessages = useMemo(
+    () => (infiniteQuery.data?.pages ?? []).flat(),
+    [infiniteQuery.data]
+  );
+
+  return { ...infiniteQuery, allMessages };
+}
+
+/**
+ * Helper: للـ components التي تتوقع `data: ConversationMessage[]` مباشرة (backward-compat)
+ * تُرجع نفس object مع `data` كـ alias لـ `allMessages`
+ */
+export function useConversationMessagesFlat(conversationId: string | null) {
+  const query = useConversationMessages(conversationId);
+  return {
+    ...query,
+    data: query.allMessages,
+    isLoading: query.isLoading,
+    error: query.error,
+  };
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────

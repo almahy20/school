@@ -15,7 +15,8 @@ export function useTableData(tableName: TableName) {
       const { data, error } = await supabase
         .from(tableName)
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500); // Super Admin data browser — 500 صف كافية للعرض
       
       if (error) throw error;
       return data || [];

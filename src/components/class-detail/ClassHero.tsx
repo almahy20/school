@@ -23,11 +23,13 @@ export function ClassHero({
   const navigate = useNavigate();
 
   return (
-    <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-gradient-to-l from-slate-900 via-indigo-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-7 md:p-10 rounded-[40px] relative overflow-hidden group">
-      {/* Ambient Animated Glows */}
-      <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-screen" />
-      <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 pointer-events-none mix-blend-screen" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'4\' height=\'4\'%3E%3Crect width=\'2\' height=\'2\' fill=\'rgba(255,255,255,0.03)\'/%3E%3Crect x=\'2\' y=\'2\' width=\'2\' height=\'2\' fill=\'rgba(255,255,255,0.03)\'/%3E%3C/svg%3E')] opacity-10 pointer-events-none mix-blend-overlay" />
+    <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-gradient-to-l from-slate-900 via-indigo-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-7 md:p-10 rounded-[40px] relative group">
+      {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
+      <div className="absolute inset-0 rounded-[40px] overflow-hidden pointer-events-none">
+        <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 mix-blend-screen" />
+        <div className="absolute bottom-0 left-0 w-[30rem] h-[30rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 mix-blend-screen" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'4\' height=\'4\'%3E%3Crect width=\'2\' height=\'2\' fill=\'rgba(255,255,255,0.03)\'/%3E%3Crect x=\'2\' y=\'2\' width=\'2\' height=\'2\' fill=\'rgba(255,255,255,0.03)\'/%3E%3C/svg%3E')] opacity-10 mix-blend-overlay" />
+      </div>
       
       <div className="flex items-start lg:items-center gap-6 md:gap-8 relative z-10 w-full lg:w-2/3">
         <button 

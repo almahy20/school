@@ -66,7 +66,8 @@ export function useAdminClassChatRooms() {
         .from('classes')
         .select('id, name, grade_level, school_id, created_at')
         .eq('school_id', user.schoolId)
-        .order('name', { ascending: true });
+        .order('name', { ascending: true })
+        .limit(200); // مدرسة واحدة — 200 فصل أكثر من كافٍ
 
       if (classesErr) throw classesErr;
 
@@ -74,7 +75,8 @@ export function useAdminClassChatRooms() {
       const { data: existingRooms, error: roomsErr } = await db
         .from('class_chat_rooms')
         .select('id, school_id, class_id, name, created_at')
-        .eq('school_id', user.schoolId);
+        .eq('school_id', user.schoolId)
+        .limit(200);
 
       if (roomsErr) throw roomsErr;
 

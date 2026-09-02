@@ -106,8 +106,7 @@ export function useParentChildren() {
                 classes (name)
               )
             `)
-            .eq('parent_id', user.id)
-            .eq('school_id', user.schoolId);
+            .eq('parent_id', user.id);
           
           if (fallbackError) {
             logger.error('[useParentChildren] Fallback Error:', fallbackError);
@@ -283,7 +282,8 @@ export function useChildFullDetails(studentId: string | undefined) {
               .select('*, exam_templates(id, title, term, subject)')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
-              .order('created_at', { ascending: true }),
+              .order('created_at', { ascending: true })
+              .limit(500), // درجات طالب واحد — 500 تكفي كل المسيرة الدراسية
 
             supabase
               .from('attendance')

@@ -100,14 +100,14 @@ async function fetchTeachers(
   return { data, count: count || 0 };
 }
 
-export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل') {
+export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل', options?: { enabled?: boolean }) {
   const { user, session } = useAuth();
   const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
 
   return useQuery({
     queryKey,
     queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
-    enabled: !!session && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: (options?.enabled ?? true) && !!session && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,

@@ -131,13 +131,15 @@ export default function StudentDetailPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-5xl mx-auto pb-24 px-2 md:px-0 space-y-6 text-right animate-in fade-in duration-500" dir="rtl">
+      <div className="max-w-5xl mx-auto pb-24 px-2 md:px-0 space-y-8 text-right animate-in fade-in duration-500" dir="rtl">
 
         {/* ── Hero Banner ── */}
-        <header className="relative bg-slate-900 rounded-[40px] overflow-hidden p-8 md:p-10 min-h-[200px] flex flex-col justify-between border border-white/5 shadow-2xl">
-          {/* Background blobs */}
-          <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4 pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/15 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4 pointer-events-none" />
+        <header className="relative bg-slate-900 rounded-[40px] p-8 md:p-10 min-h-[200px] flex flex-col justify-between border border-white/5 shadow-2xl">
+          {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
+          <div className="absolute inset-0 rounded-[40px] overflow-hidden pointer-events-none">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/15 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/4" />
+          </div>
 
           {/* Top row */}
           <div className="flex items-center justify-between gap-4 relative z-10">

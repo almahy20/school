@@ -43,35 +43,32 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       if (sErr) throw sErr;
 
       const studentIds = (students || []).map(s => s.id);
-      const { data: monthFees, error: fErr } = await supabase
-        .from('fees')
-        .select('id, student_id, amount_paid, status, term')
-        .eq('school_id', user.schoolId)
-        .eq('term', term)
-        .in('student_id', studentIds);
 
-      if (fErr) throw fErr;
+      // ── جلب رسوم الصفحة الحالية + الإجماليات بـ RPC في آنٍ واحد (parallel) ──
+      // get_fees_summary يحسب SUM داخل Postgres بدل تنزيل كل الصفوف
+      const [monthFeesResult, summaryResult] = await Promise.all([
+        studentIds.length > 0
+          ? supabase
+              .from('fees')
+              .select('id, student_id, amount_paid, status, term')
+              .eq('school_id', user.schoolId)
+              .eq('term', term)
+              .in('student_id', studentIds)
+          : Promise.resolve({ data: [], error: null }),
 
-      // حساب إجمالي الرسوم عبر RPC أو aggregate بدل جلب كل الطلاب
-      let allStudentsQ = supabase
-        .from('students')
-        .select('id, monthly_fee')
-        .eq('school_id', user.schoolId);
-      if (classId !== 'all') allStudentsQ = allStudentsQ.eq('class_id', classId);
-      const { data: allStudents } = await allStudentsQ;
+        supabase.rpc('get_fees_summary', {
+          p_school_id: user.schoolId,
+          p_class_id:  classId !== 'all' ? classId : null,
+          p_term:      term ?? '',
+        }),
+      ]);
 
-      let allFeesQ = supabase
-        .from('fees')
-        .select('amount_paid')
-        .eq('school_id', user.schoolId)
-        .eq('term', term);
-      if (classId !== 'all' && allStudents) {
-        allFeesQ = allFeesQ.in('student_id', allStudents.map(s => s.id));
-      }
-      const { data: allTermFees } = await allFeesQ;
+      if (monthFeesResult.error) throw monthFeesResult.error;
 
-      const total_due = (allStudents || []).reduce((sum, s) => sum + (Number(s.monthly_fee) || 0), 0);
-      const total_paid = (allTermFees || []).reduce((sum, f) => sum + (Number(f.amount_paid) || 0), 0);
+      const monthFees = monthFeesResult.data || [];
+      const summaryRow = (summaryResult.data as any)?.[0] ?? summaryResult.data ?? {};
+      const total_due  = Number(summaryRow?.total_due  ?? 0);
+      const total_paid = Number(summaryRow?.total_paid ?? 0);
 
       const enrichedData = (students || []).map((s: any) => {
         const feeRecord = (monthFees || []).find(f => f.student_id === s.id);

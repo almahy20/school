@@ -37,7 +37,6 @@ export default function ClassesPage() {
 
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
@@ -56,8 +55,9 @@ export default function ClassesPage() {
     isRefetching 
   } = useClasses(page, PAGE_SIZE, debouncedSearch, 'الكل');
 
-  // جلب كافة المعلمين والطلاب (لأغراض العرض التكميلي)
-  const { data: teachersData, isLoading: teachersLoading } = useTeachers(1, 1000, '', 'الكل');
+  // جلب كافة المعلمين — فقط لما تُفتح نافذة الإضافة
+  const [showAdd, setShowAdd] = useState(false);
+  const { data: teachersData } = useTeachers(1, 1000, '', 'الكل', { enabled: showAdd });
   const teachers = useMemo(() => teachersData?.data || [], [teachersData]);
   
   // For student count, we fetch only the necessary columns to be fast
@@ -97,7 +97,7 @@ export default function ClassesPage() {
   }, [classesData, teachers, students]);
 
   const totalItems = classesData?.count || 0;
-  const loading = classesLoading || (teachersLoading && !classesData) || (studentsLoading && !classesData);
+  const loading = classesLoading || (studentsLoading && !classesData);
 
   // نستخدم قائمة المراحل من الخادم أو ثابتة بدلاً من استنتاجها من البيانات المجزأة
 

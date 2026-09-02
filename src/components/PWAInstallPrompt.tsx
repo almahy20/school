@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Download, Smartphone, CheckCircle2 } from 'lucide-react';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { IOSPwaGuideModal } from '@/components/IOSPwaGuideModal';
 
 // يُحفظ فقط عند التثبيت الفعلي
 const INSTALLED_KEY = 'pwa_installed';
+// مفتاح تأجيل "ليس الآن" — يُعرض مرة واحدة كل 3 أيام
+const SNOOZED_KEY = 'pwa_install_snoozed_until';
 
 // iOS detection
 const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
@@ -14,45 +16,55 @@ export default function PWAInstallPrompt() {
   const [isVisible, setIsVisible] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
 
-  useEffect(() => {
+  const checkAndShow = useCallback(() => {
     // لو التطبيق مثبت بالفعل (standalone mode) → لا تظهر
-    if (isStandalone) {
-      setIsVisible(false);
-      return;
-    }
+    if (isStandalone) return;
 
-    // لو ثبّت المستخدم التطبيق من قبل → لا تظهر
-    if (localStorage.getItem(INSTALLED_KEY) === '1') {
-      setIsVisible(false);
-      return;
-    }
+    // لو ثبّت المستخدم التطبيق من قبل → لا تظهر أبداً
+    if (localStorage.getItem(INSTALLED_KEY) === '1') return;
 
-    // iOS: يدعم PWA لكن بدون beforeinstallprompt — اعرض الدليل اليدوي
-    if (isIOS) {
-      setIsVisible(true);
-      return;
-    }
+    // لو المستخدم أجّل → تحقق هل انتهى وقت التأجيل
+    const snoozedUntil = Number(localStorage.getItem(SNOOZED_KEY) ?? 0);
+    if (snoozedUntil && Date.now() < snoozedUntil) return;
 
-    // لو canInstall موجود فوراً → اعرض
-    if (canInstall) {
-      setIsVisible(true);
-      return;
-    }
+    // iOS: دليل يدوي دائماً
+    if (isIOS) { setIsVisible(true); return; }
 
-    // لو مش موجود بعد → انتظر 3 ثواني وتحقق تاني
-    // beforeinstallprompt بياخد وقت على بعض الأجهزة
-    const timer = setTimeout(() => {
-      const prompt = (window as any).deferredPrompt;
-      if (prompt && !isStandalone && localStorage.getItem(INSTALLED_KEY) !== '1') {
-        setIsVisible(true);
-      }
-    }, 3000);
+    // Android/Chrome: فقط لو الـ prompt متاح
+    const prompt = (window as any).deferredPrompt;
+    if (prompt) { setIsVisible(true); }
+  }, [isStandalone]);
 
-    return () => clearTimeout(timer);
-  }, [canInstall, isStandalone]);
+  useEffect(() => {
+    // فحص فوري
+    checkAndShow();
 
-  // مؤقت فقط — لا يحفظ في localStorage
+    // فحص بعد 3 ثواني (بعض الأجهزة تُطلق الحدث متأخراً)
+    const t1 = setTimeout(checkAndShow, 3000);
+    // فحص بعد 8 ثواني كـ fallback نهائي
+    const t2 = setTimeout(checkAndShow, 8000);
+
+    // فحص عند عودة المستخدم للتبويب
+    const onFocus = () => checkAndShow();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
+  }, [checkAndShow]);
+
+  // إعادة الفحص عند تغير canInstall (لما يطلق beforeinstallprompt)
+  useEffect(() => {
+    if (canInstall) checkAndShow();
+  }, [canInstall, checkAndShow]);
+
+  // "ليس الآن" → أجّل 3 أيام
   const handleDismiss = () => {
+    localStorage.setItem(SNOOZED_KEY, String(Date.now() + 3 * 24 * 60 * 60 * 1000));
     setIsVisible(false);
   };
 
@@ -62,7 +74,6 @@ export default function PWAInstallPrompt() {
     setIsInstalling(false);
 
     if (result === 'accepted') {
-      // ثُبِّت التطبيق — لا داعي لإظهار النافذة مستقبلاً
       localStorage.setItem(INSTALLED_KEY, '1');
     }
     setIsVisible(false);

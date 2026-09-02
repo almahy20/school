@@ -91,7 +91,8 @@ export function useClassElectronicExams(classId: string | null) {
         `)
         .eq('school_id', user.schoolId)
         .eq('class_id', classId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50); // الاختبارات لفصل واحد — 50 كافية
 
       if (error) throw error;
 
@@ -154,7 +155,8 @@ export function useExamAttempts(examId: string | null) {
           student:students!exam_attempts_student_id_fkey(name)
         `)
         .eq('exam_id', examId)
-        .order('completed_at', { ascending: false });
+        .order('completed_at', { ascending: false })
+        .limit(200); // محاولات اختبار واحد — 200 تكفي فصلاً كاملاً مع تكرار
       if (error) throw error;
       return (data || []).map((a: any) => ({
         ...a,
@@ -413,7 +415,8 @@ export function useParentElectronicExams() {
         .eq('school_id', user.schoolId)
         .eq('status', 'published')
         .in('class_id', classIds)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(30); // أبناء ولي الأمر عادةً 1-3، فصولهم أقل من 30 اختبار منشور
       if (exErr) throw exErr;
 
       // جلب محاولات ولي الأمر
@@ -422,7 +425,7 @@ export function useParentElectronicExams() {
       if (examIds.length) {
         const { data: attempts } = await db
           .from('exam_attempts')
-          .select('id, exam_id, student_id, parent_id, score, total_score, completed_at')
+          .select('id, exam_id, student_id, parent_id, score, total_score, completed_at, answers')
           .eq('parent_id', user.id)
           .in('exam_id', examIds);
         (attempts || []).forEach((a: any) => {

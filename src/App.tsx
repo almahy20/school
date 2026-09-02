@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -50,7 +51,6 @@ const AdminConversationDetailPage   = lazy(() => import("./pages/AdminConversati
 const AdminClassChatRoomPage        = lazy(() => import("./pages/AdminClassChatRoomPage"));
 const ClassChatRoomPage             = lazy(() => import("./pages/ClassChatRoomPage"));
 const ParentExamsPage          = lazy(() => import("./pages/ParentExamsPage"));
-const LandingPage              = lazy(() => import("./pages/LandingPage"));
 const PaymentPage              = lazy(() => import("./pages/PaymentPage"));
 const SubscriptionExpiredPage  = lazy(() => import("./pages/SubscriptionExpiredPage"));
 const SettingsPage             = lazy(() => import("./pages/SettingsPage"));
@@ -187,6 +187,8 @@ export default function App() {
           </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>
+      {/* React Query Devtools — dev only, لا تظهر في production */}
+      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
     </QueryClientProvider>
   );
 }

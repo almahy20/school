@@ -35,22 +35,32 @@ export function useExamTemplates(classId: string | null, subject: string | null,
     queryFn: async () => {
       if (!user?.schoolId || !classId) return { data: [], count: 0 };
       
-      let q = supabase
-        .from('exam_templates')
-        .select('id, class_id, subject, exam_type, max_score, weight, term, title, teacher_id, created_at, school_id, score_type, expected_results', { count: 'exact' })
-        .eq('school_id', user.schoolId)
-        .eq('class_id', classId);
-      
-      if (subject) {
-        q = q.eq('subject', subject);
-      }
-      
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
+      // نحاول أولاً بالـ select الكامل
+      // لو رجع 42703 (column does not exist) نعيد بـ select أدنى
+      const selectFull = 'id, class_id, subject, exam_type, max_score, weight, term, title, teacher_id, created_at, school_id, score_type, expected_results';
+      const selectMinimal = 'id, class_id, subject, term, created_at, school_id';
 
-      const { data, error, count } = await q
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      const from = (page - 1) * pageSize;
+
+      const runQuery = async (selectStr: string) => {
+        let q: any = supabase
+          .from('exam_templates')
+          .select(selectStr, { count: 'exact' })
+          .eq('school_id', user.schoolId)
+          .eq('class_id', classId);
+        if (subject) q = q.eq('subject', subject);
+        return q.order('created_at', { ascending: false }).range(from, from + pageSize - 1);
+      };
+
+      let { data, error, count } = await runQuery(selectFull);
+
+      // 42703 = column does not exist — الـ production database ناقص أعمدة
+      if (error && error.code === '42703') {
+        const fallback = await runQuery(selectMinimal);
+        data  = fallback.data;
+        error = fallback.error;
+        count = fallback.count;
+      }
 
       if (error) throw error;
       return { data: (data as ExamTemplate[]) || [], count: count || 0 };
@@ -90,7 +100,8 @@ export function useStudentGrades(template: any | null, classId: string | null) {
         `)
         .eq('school_id', user.schoolId)
         .eq('class_id', classId)
-        .order('name');
+        .order('name')
+        .limit(200); // فصل دراسي — 200 طالب أقصى حد معقول
       
       if (error) throw error;
       if (!studentsWithGrades?.length) return [];

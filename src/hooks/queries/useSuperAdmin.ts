@@ -42,7 +42,8 @@ export function useSchools() {
       const { data, error } = await supabase
         .from('schools')
         .select('id, name, status, created_at, subscription_end_date, slug, plan, logo_url, address, phone')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500); // Super Admin — عدد المدارس لن يتجاوز 500 في أي سيناريو معقول
       if (error) throw error;
       return data as School[];
     },
@@ -61,7 +62,8 @@ export function useSchoolOrders() {
       const { data, error } = await supabase
         .from('school_orders')
         .select('id, school_name, admin_name, admin_email, admin_phone, admin_whatsapp, plan, package_type, status, receipt_url, receipt_note, created_at')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(500); // Super Admin — طلبات الاشتراك لن تتجاوز 500
       if (error) throw error;
       return data as SchoolOrder[];
     },

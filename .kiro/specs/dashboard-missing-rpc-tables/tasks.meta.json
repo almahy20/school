@@ -1,0 +1,10 @@
+{
+  "pbtResults": {
+    "1. Write bug condition exploration test": {
+      "status": "passed",
+      "failingExample": "Bug condition confirmed via migration file analysis:\n- get_dashboard_stats defined in 20260903100000 but not visible in PostgREST schema cache → PGRST202\n- get_admin_dashboard_activities defined in 20260903100000 but not visible → 404\n- get_unread_notification_counts defined in 20260903100000 but not visible → 404\n- get_fees_summary defined in 20260807000000 but not visible → 404\n- notifications table defined in earlier migrations but returns 404 on HEAD request\n- unread_by_parent column defined in 20260821000000 but returns 404\n- notification_prefs column defined in 20260404900001 but returns 400 Bad Request\nFix migration 20260904000000_force_schema_cache_reload.sql does not exist yet (expected failure — confirms bug exists and fix is needed)",
+      "lastRunTimestamp": 1788355072765
+    }
+  },
+  "executionHistory": {}
+}

@@ -73,7 +73,7 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
   try {
     const [profileRes, roleRes] = await Promise.all([
       supabase.from('profiles').select('id, full_name, phone, school_id').eq('id', supaUser.id).maybeSingle(),
-      (supabase as any).from('user_roles').select('id, user_id, role, school_id, approval_status, is_super_admin').eq('user_id', supaUser.id).maybeSingle(),
+      (supabase).from('user_roles').select('id, user_id, role, school_id, approval_status, is_super_admin').eq('user_id', supaUser.id).maybeSingle(),
     ]);
     const profile = profileRes.data as any;
     const role = roleRes.data as any;
@@ -175,8 +175,8 @@ async function performSignOut(
     localStorage.removeItem('last_auth_sync');
   } catch (_e) { /* ignore */ }
 
+  // local scope: clears this device's session without invalidating other devices' sessions
   try { await supabase.auth.signOut({ scope: 'local' }); } catch (_e) { /* ignore */ }
-  try { await supabase.auth.signOut({ scope: 'global' }); } catch (_e) { /* ignore */ }
 
   try {
     const keysToRemove = Object.keys(localStorage).filter(k => 
