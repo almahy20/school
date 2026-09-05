@@ -12,7 +12,10 @@ BEGIN
       AND a.exam_template_id IS NOT NULL
       AND a.exam_template_id = b.exam_template_id;
 
-    -- 2. Add unique constraint if not exists
+    -- 2. Ensure teacher_id column exists if needed in the future
+    ALTER TABLE public.grades ADD COLUMN IF NOT EXISTS teacher_id UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+
+    -- 3. Add unique constraint if not exists
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'grades_student_exam_template_unique'

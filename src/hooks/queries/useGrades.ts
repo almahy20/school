@@ -181,10 +181,9 @@ export function useUpsertGrades() {
       const templateId = grades[0].exam_template_id;
 
       // Clean id and prepare grades with school context
-      const cleanedGrades = grades.map(({ id, ...rest }) => ({
+      const cleanedGrades = grades.map(({ id, teacher_id, ...rest }) => ({
         ...rest,
         school_id: user.schoolId,
-        teacher_id: user.id
       }));
 
       const studentIds = cleanedGrades.map(g => g.student_id);
