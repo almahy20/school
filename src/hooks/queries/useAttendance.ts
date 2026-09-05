@@ -150,6 +150,7 @@ export function useTeacherAttendance(date: string) {
     queryFn: async () => {
       if (!user?.schoolId) return [];
 
+      // Step 1: جلب IDs المعلمين المعتمدين
       const { data: rolesData, error: rolesError } = await (supabase
         .from('user_roles') as any)
         .select('user_id')
@@ -162,25 +163,30 @@ export function useTeacherAttendance(date: string) {
       
       const teacherIds = rolesData.map(r => r.user_id);
 
-      const { data: teachers, error: tError } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .in('id', teacherIds)
-        .order('full_name');
-      
-      if (tError) throw tError;
-      if (!teachers?.length) return [];
+      // Step 2: جلب profiles و attendance بالتوازي بدل الـ waterfall
+      const [profilesRes, attendanceRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', teacherIds)
+          .order('full_name'),
+        (supabase as any)
+          .from('teacher_attendance')
+          .select('id, teacher_id, status, date, school_id')
+          .eq('school_id', user.schoolId)
+          .eq('date', date),
+      ]);
 
-      const { data: records, error: rError } = await (supabase as any)
-        .from('teacher_attendance')
-        .select('id, teacher_id, status, date, school_id')
-        .eq('school_id', user.schoolId)
-        .eq('date', date);
-      
-      if (rError) throw rError;
+      if (profilesRes.error) throw profilesRes.error;
+      if (attendanceRes.error) throw attendanceRes.error;
+
+      const teachers = profilesRes.data || [];
+      const records  = attendanceRes.data || [];
+
+      if (!teachers.length) return [];
 
       return teachers.map(t => {
-        const record = records?.find(r => r.teacher_id === t.id);
+        const record = records.find(r => r.teacher_id === t.id);
         return { 
           teacherId: t.id, 
           teacherName: t.full_name || 'غير محدد', 
@@ -192,6 +198,8 @@ export function useTeacherAttendance(date: string) {
     staleTime: 1000 * 60 * 60, 
     gcTime: 1000 * 60 * 60 * 2,
     placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
 

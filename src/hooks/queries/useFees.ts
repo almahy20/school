@@ -103,6 +103,8 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
     enabled: !!(session && user?.schoolId),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
 

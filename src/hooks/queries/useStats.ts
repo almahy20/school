@@ -41,6 +41,8 @@ export function useAdminStats() {
     staleTime: 2 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -199,5 +201,7 @@ export function useAdminActivities() {
     staleTime: 3 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }

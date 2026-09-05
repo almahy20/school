@@ -166,6 +166,7 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'Ø§Ù
     staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

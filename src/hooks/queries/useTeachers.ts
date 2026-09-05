@@ -169,6 +169,10 @@ export function useTeacherDetailStats(id: string | undefined | null) {
       return { studentCount: studentCount || 0, curriculumProgress: avgProgress };
     },
     enabled: !!session && !!(id && user?.schoolId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
 

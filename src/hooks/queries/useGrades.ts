@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -187,20 +187,40 @@ export function useUpsertGrades() {
         teacher_id: user.id
       }));
 
-      // ✅ Use upsert instead of delete+insert to avoid data loss if insert fails
-      // onConflict targets the unique constraint on (student_id, exam_template_id)
+      const studentIds = cleanedGrades.map(g => g.student_id);
+
+      // Try upsert with onConflict; if unique constraint doesn't exist on remote DB, fallback to delete + insert
       const { error } = await supabase
         .from('grades')
         .upsert(cleanedGrades, { onConflict: 'student_id,exam_template_id' });
 
-      if (error) throw error;
+      if (error) {
+        // Fallback: Delete existing grades for these students on this exam then insert
+        const { error: delError } = await supabase
+          .from('grades')
+          .delete()
+          .eq('exam_template_id', templateId)
+          .in('student_id', studentIds);
 
-      // Log action to audit logs
-      await (supabase as any).rpc('log_action', {
-        p_action: 'UPSERT_GRADES',
-        p_entity_type: 'grades',
-        p_details: `رصد درجات لعدد ${grades.length} طلاب في اختبار ${templateId}`
-      });
+        if (delError) throw delError;
+
+        const { error: insError } = await supabase
+          .from('grades')
+          .insert(cleanedGrades);
+
+        if (insError) throw insError;
+      }
+
+      // Log action to audit logs (safe against audit RPC failures)
+      try {
+        await (supabase as any).rpc('log_action', {
+          p_action: 'UPSERT_GRADES',
+          p_entity_type: 'grades',
+          p_details: `رصد درجات لعدد ${grades.length} طلاب في اختبار ${templateId}`
+        });
+      } catch {
+        // Ignore audit log error if RPC not available
+      }
     },
     onMutate: async (newGrades) => {
       if (newGrades.length === 0) return;

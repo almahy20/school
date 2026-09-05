@@ -46,6 +46,8 @@ export function useNotifications(page = 1, pageSize = 15) {
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: 1,
     retryDelay: 1000,
   });

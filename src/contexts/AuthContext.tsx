@@ -26,8 +26,9 @@ function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
     const schoolId: string | undefined =
       (app?.school_id ? String(app.school_id) : undefined) ||
       (meta?.school_id ? String(meta.school_id) : undefined);
-    const fullName: string = meta?.full_name || '';
-    const phone: string = meta?.phone || '';
+    // app_metadata (من JWT hook) يأتي أولاً، ثم user_metadata كـ fallback
+    const fullName: string = app?.full_name || meta?.full_name || '';
+    const phone: string = app?.phone || meta?.phone || '';
     const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin);
     const approvalStatus = (app?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected';
 
@@ -239,9 +240,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cachedUser = getCachedUser();
     const isJwtComplete = !!(jwtUser?.role && jwtUser?.schoolId);
     const hasApprovalStatus = !!(jwtUser?.approvalStatus || cachedUser?.approvalStatus);
-    const isRecentlySynced = Date.now() - lastSync < 30 * 60 * 1000;
+    // 2 hours instead of 30 min — reduces RPC calls on page navigation
+    const isRecentlySynced = Date.now() - lastSync < 2 * 60 * 60 * 1000;
 
-    if (isJwtComplete && hasApprovalStatus && isRecentlySynced) {
+    // Skip RPC if cache already has complete data (role + schoolId + name)
+    const cacheIsComplete = !!(
+      cachedUser?.role &&
+      cachedUser?.schoolId &&
+      cachedUser?.approvalStatus &&
+      cachedUser?.fullName
+    );
+
+    if ((isJwtComplete && hasApprovalStatus && isRecentlySynced) || cacheIsComplete) {
       logger.log('[Auth] Background RPC skipped â€” JWT complete + recently synced');
       if (cachedUser) {
         prefetchCommonQueries(cachedUser);

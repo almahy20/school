@@ -138,6 +138,7 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     retry: 1,
   });
 }
@@ -201,6 +202,7 @@ export function usePendingParents() {
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -270,9 +272,10 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
         });
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 15 * 1000,
+    staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
@@ -307,9 +310,10 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
         }));
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 15 * 1000,
+    staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 30,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }
 
