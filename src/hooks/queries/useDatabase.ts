@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
@@ -43,6 +43,8 @@ export function useInsertRow(tableName: TableName) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', tableName] });
+      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -67,6 +69,8 @@ export function useUpdateRow(tableName: TableName) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', tableName] });
+      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -204,6 +208,8 @@ export function useDeleteRow(tableName: TableName) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['database', tableName] });
+      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }

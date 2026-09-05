@@ -257,7 +257,15 @@ export function useDeleteStudent() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['student'], exact: false });
-      // Also invalidate stats since student count changed
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['attendance'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['grades'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['student-parent'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -278,6 +286,11 @@ export function useAddStudent() {
     onSuccess: () => {
       toast.success('تم إضافة الطالب بنجاح');
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });

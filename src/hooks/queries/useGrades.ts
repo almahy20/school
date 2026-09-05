@@ -146,6 +146,7 @@ export function useCreateExamTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
@@ -167,6 +168,8 @@ export function useDeleteExamTemplate() {
       queryClient.invalidateQueries({ queryKey: ['student-grades-full'] });
       queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
       queryClient.invalidateQueries({ queryKey: ['grades'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
@@ -246,11 +249,13 @@ export function useUpsertGrades() {
       }
     },
     onSettled: (_, __, variables) => {
-      if (variables.length > 0) {
-        queryClient.invalidateQueries({ 
-          queryKey: ['student-grades', variables[0].exam_template_id] 
-        });
-      }
+      queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['student-grades'] });
+      queryClient.invalidateQueries({ queryKey: ['student-grades-full'] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }

@@ -54,8 +54,21 @@ export function usePushNotifications() {
         { onConflict: 'endpoint' }
       );
     if (error) {
-      logger.error('[Push] DB upsert error:', error);
-      return false;
+      logger.warn('[Push] DB upsert failed, trying delete+insert fallback:', error);
+      // Fallback: delete existing by endpoint or user_id + endpoint, then insert
+      await (supabase as any)
+        .from('push_subscriptions')
+        .delete()
+        .eq('endpoint', subscription.endpoint);
+
+      const { error: insErr } = await (supabase as any)
+        .from('push_subscriptions')
+        .insert({ user_id: userId, subscription: subJson, endpoint: subscription.endpoint });
+
+      if (insErr) {
+        logger.error('[Push] DB fallback insert error:', insErr);
+        return false;
+      }
     }
     return true;
   }, []);

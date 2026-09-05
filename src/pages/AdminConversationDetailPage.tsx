@@ -174,40 +174,11 @@ export default function AdminConversationDetailPage() {
   const cfg = STATUS_CONFIG[conversation.status];
   const StatusIcon = cfg.icon;
 
-  // ── Chat Layout ───────────────────────────────────────────────────────────
-  //
-  // نستخدم AppLayout عشان نحتفظ بالـ sidebar والـ header العلوي.
-  // داخل الـ content area نبني flex column يملأ المساحة المتاحة بالكامل
-  // بدون negative margins.
-  //
-  // AppLayout content div:
-  //   flex-1 w-full px-4..lg:px-10 py-5..py-6 pb-24 md:pb-6
-  //
-  // الحل: نعطي الـ content wrapper h-full + overflow-hidden ونبني
-  // flex column بداخله. نستغل أن AppLayout > main > content div هو flex-1
-  // وبالتالي h-full يشتغل.
-
   return (
-    <AppLayout>
-      {/*
-        هذا الـ wrapper يملأ كل الـ content area المتاحة من AppLayout.
-        overflow-hidden يمنع الـ scroll على مستوى الصفحة —
-        الـ scroll يحدث فقط في div الرسائل الداخلي.
-      */}
+    <AppLayout hideBottomNav={true}>
       <div
         dir="rtl"
-        className={[
-          // إلغاء الـ padding بتاع AppLayout content div وإعادة بناء المساحة
-          '-mx-4 sm:-mx-6 md:-mx-8 lg:-mx-10',
-          '-mt-5 sm:-mt-6',
-          '-mb-24 md:-mb-6',
-          // ارتفاع ثابت = viewport - mobile header (64px/80px) أو desktop header (64px/80px)
-          // على موبايل نطرح كمان BottomNav (≈64px)
-          'h-[calc(100dvh-64px)] sm:h-[calc(100dvh-80px)] lg:h-[calc(100dvh-64px)] xl:h-[calc(100dvh-80px)]',
-          // flex column — header ثابت + messages تملأ الباقي + input ثابت
-          'flex flex-col overflow-hidden',
-          'bg-slate-50',
-        ].join(' ')}
+        className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
       >
         {/* ── Top bar ─────────────────────────────────────────────────────── */}
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
@@ -312,7 +283,7 @@ export default function AdminConversationDetailPage() {
 
         {/* ── Input bar ── ثابت في الأسفل ──────────────────────────────────── */}
         {conversation.status !== 'closed' ? (
-          <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-3 bg-white border-t border-slate-100">
+          <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-lg z-10">
             <div className="max-w-[760px] mx-auto flex items-end gap-2">
               <Textarea
                 ref={textareaRef}

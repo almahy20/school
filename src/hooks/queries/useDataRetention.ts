@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -112,8 +112,13 @@ export function useTriggerCleanup() {
       return data as CleanupResult;
     },
     onSuccess: () => {
-      // Refresh database size info
+      // Refresh database size info and cleaned tables
       queryClient.invalidateQueries({ queryKey: ['database-size-info'] });
+      queryClient.invalidateQueries({ queryKey: ['cleanup-estimate'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
     },
   });
 }

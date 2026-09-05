@@ -24,7 +24,7 @@ describe("QueryStateHandler", () => {
     expect(button).toBeInTheDocument();
   });
 
-  it("should show loading spinner ONLY when loading is true and isRefetching is false", () => {
+  it("should show skeleton ONLY when loading is true and isRefetching is false (no data)", () => {
     const onRetry = vi.fn();
     const { rerender } = render(
       <QueryStateHandler 
@@ -33,13 +33,14 @@ describe("QueryStateHandler", () => {
         data={null} 
         onRetry={onRetry} 
         isRefetching={false}
+        skeleton={<div data-testid="custom-skeleton">Loading Skeleton</div>}
       >
         <div data-testid="content">Content</div>
       </QueryStateHandler>
     );
 
-    // Should show loading message, not content
-    expect(screen.getByText("جاري التحميل...")).toBeInTheDocument();
+    // Should show skeleton, not content (new skeleton-based loading UX)
+    expect(screen.getByTestId("custom-skeleton")).toBeInTheDocument();
     expect(screen.queryByTestId("content")).not.toBeInTheDocument();
 
     // Rerender with data and isRefetching=true
@@ -50,13 +51,14 @@ describe("QueryStateHandler", () => {
         data={{ id: 1 }} 
         onRetry={onRetry} 
         isRefetching={true}
+        skeleton={<div data-testid="custom-skeleton">Loading Skeleton</div>}
       >
         <div data-testid="content">Content</div>
       </QueryStateHandler>
     );
 
-    // Should show content, NOT full page loading spinner
+    // Should show content, NOT skeleton (background refetch shows content)
     expect(screen.getByTestId("content")).toBeInTheDocument();
-    expect(screen.queryByText("جاري التحميل...")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("custom-skeleton")).not.toBeInTheDocument();
   });
 });

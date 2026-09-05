@@ -1,9 +1,10 @@
-﻿import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { queryClient, clearAllCache } from '@/lib/queryClient';
 import { getCachedUser, setCachedUser } from '@/lib/userCache';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { logger } from '@/utils/logger';
 
 interface AuthContextType {
@@ -165,6 +166,7 @@ async function performSignOut(
   setSession: (s: Session | null) => void,
 ) {
   try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
+  try { realtimeEngine.unsubscribeAll(); } catch (_e) { /* ignore */ }
   clearAllCache();
   setUser(null);
   setSession(null);

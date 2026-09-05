@@ -180,7 +180,7 @@ export function useParentConversations() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const channelName = `parent-conversations-${user.id}`;
+    const channelName = `parent-conv-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
 
     const channel = db
       .channel(channelName)
@@ -194,7 +194,9 @@ export function useParentConversations() {
       })
       .subscribe();
 
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [user?.id, queryClient]);
 
   return useQuery<Conversation[]>({
@@ -236,7 +238,7 @@ export function useConversationMessages(conversationId: string | null) {
   useEffect(() => {
     if (!conversationId || !user?.id) return;
 
-    const channelName = `conv-messages-${conversationId}`;
+    const channelName = `conv-msg-${conversationId}-${Math.random().toString(36).slice(2, 8)}`;
 
     const channel = db
       .channel(channelName)
@@ -267,7 +269,9 @@ export function useConversationMessages(conversationId: string | null) {
       })
       .subscribe();
 
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [conversationId, user?.id, queryClient, queryKey]);
 
   const infiniteQuery = useInfiniteQuery<ConversationMessage[]>({
@@ -385,6 +389,9 @@ export function useCreateConversation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['conversations-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: (err: any) => {
       toast.error('حدث خطأ أثناء إنشاء المحادثة', { description: err.message });
@@ -428,6 +435,8 @@ export function useSendConversationMessage() {
       // Realtime handles the update, but invalidate as safety net
       queryClient.invalidateQueries({ queryKey: ['conversation-messages', variables.conversationId] });
       queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['conversations-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread'] });
     },
     onError: (err: any) => {
       toast.error('فشل إرسال الرسالة', { description: err.message });
@@ -465,6 +474,8 @@ export function useUpdateConversationStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['conversations-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
       toast.success('تم تحديث الحالة');
     },
     onError: (err: any) => {
@@ -538,10 +549,9 @@ export function useMarkConversationRead() {
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['conversation-messages', vars.conversationId] });
-      // Update unread notification counts
-      if (user?.id) {
-        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user.id] });
-      }
+      queryClient.invalidateQueries({ queryKey: ['conversations-unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'] });
     },
   });
 }

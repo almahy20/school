@@ -258,10 +258,6 @@ export default function StudentsPage() {
 
         {/* Students Grid */}
         <div className="flex-1 min-w-0 w-full">
-            {/* أول تحميل حقيقي (لا يوجد cached data) → skeleton بدل spinner */}
-            {loading && students.length === 0 ? (
-              <StudentsGridSkeleton />
-            ) : (
             <QueryStateHandler
               loading={loading}
               error={error}
@@ -272,6 +268,7 @@ export default function StudentsPage() {
               errorMessage="فشل تحميل قائمة الطلاب. يرجى التحقق من اتصالك بالإنترنت."
               emptyMessage="لا يوجد طلاب مسجلين حالياً في المدرسة."
               isEmpty={students.length === 0}
+              skeleton={<StudentsGridSkeleton />}
             >
               <div className="space-y-6">
                 <div className="flex items-center justify-between px-1">
@@ -297,7 +294,6 @@ export default function StudentsPage() {
                 />
               </div>
             </QueryStateHandler>
-            )}
           </div>
       </div>
 

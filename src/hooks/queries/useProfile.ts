@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -85,6 +85,11 @@ export function useUpdateMyProfile() {
     onSuccess: () => {
       toast.success('تم حفظ التغييرات بنجاح');
       queryClient.invalidateQueries({ queryKey: ['profile'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['profile-by-id'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['profiles-by-ids'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
     },
   });
 }

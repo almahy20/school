@@ -42,8 +42,9 @@ export function useAdminClassChatRooms() {
 
   useEffect(() => {
     if (!user?.schoolId) return;
+    const channelName = `admin-rooms-${user.schoolId}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = db
-      .channel(`admin-chat-rooms-${user.schoolId}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -53,7 +54,9 @@ export function useAdminClassChatRooms() {
         queryClient.invalidateQueries({ queryKey });
       })
       .subscribe();
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
@@ -190,8 +193,9 @@ export function useClassChatMessages(roomId: string | null) {
   useEffect(() => {
     if (!roomId || !user?.id) return;
 
+    const channelName = `class-chat-${roomId}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = db
-      .channel(`class-chat-${roomId}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -207,7 +211,9 @@ export function useClassChatMessages(roomId: string | null) {
       })
       .subscribe();
 
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [roomId, user?.id, queryClient, queryKey]);
 
   return useQuery<ClassChatMessage[]>({
@@ -279,8 +285,9 @@ export function useClassChatUnreadCounts() {
   // Realtime: لما يجي إشعار جديد من نوع class_chat_message
   useEffect(() => {
     if (!user?.id) return;
+    const channelName = `class-unread-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = db
-      .channel(`class-chat-unread-${user.id}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -302,7 +309,9 @@ export function useClassChatUnreadCounts() {
         }
       })
       .subscribe();
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [user?.id, queryClient, queryKey]);
 
   return useQuery<Record<string, number>>({
@@ -350,8 +359,9 @@ export function useMarkClassChatRoomRead() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['class-chat-unread', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['class-chat-unread'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'] });
     },
   });
 }
@@ -382,6 +392,7 @@ export function useSendClassChatMessage() {
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['class-chat-messages', vars.roomId] });
+      queryClient.invalidateQueries({ queryKey: ['class-chat-rooms'] });
     },
     onError: (err: any) => {
       toast.error('فشل إرسال الرسالة', { description: err.message });

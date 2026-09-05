@@ -129,7 +129,10 @@ export function useUpdateStudentMonthlyFee() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة المالية الثابتة للطالب');
-      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -184,7 +187,10 @@ export function useUpsertFee() {
     },
     onSuccess: () => {
       toast.success('تم تسجيل الدفعة بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -219,7 +225,11 @@ export function useGenerateFees() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة الثابتة لجميع الطلاب بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -249,7 +259,10 @@ export function useClearTermFees() {
     },
     onSuccess: () => {
       toast.success('تم تصفير سجلات هذا الشهر بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }

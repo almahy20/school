@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
@@ -99,7 +99,10 @@ export function useCreateUser() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -140,8 +143,11 @@ export function useDeleteUser() {
       queryClient.removeQueries({
         predicate: (query) => query.queryKey[0] === 'admin-users' && query.queryKey.length > 0,
       });
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -166,7 +172,10 @@ export function useUpdateUserRole() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -191,7 +200,10 @@ export function useUpdateUserStatus() {
       return { userId, status };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -216,7 +228,9 @@ export function useUpdateUserProfile() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
     },
   });
 }

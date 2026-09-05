@@ -60,20 +60,50 @@ export function useUpsertAttendance() {
       if (!records || records.length === 0) return;
       const classId = records[0].class_id;
       const date = records[0].date;
+      const schoolId = records[0].school_id;
+      const studentIds = records.map(r => r.student_id);
 
+      // Try upsert first
       const { error } = await supabase
         .from('attendance')
         .upsert(records, {
           onConflict: 'student_id,date,school_id'
         });
 
-      if (error) throw error;
+      if (error) {
+        // Fallback: delete existing records for these students on this date and school, then insert
+        const { error: delError } = await supabase
+          .from('attendance')
+          .delete()
+          .eq('date', date)
+          .in('student_id', studentIds);
 
-      await (supabase as any).rpc('log_action', {
-        p_action: 'MARK_STUDENT_ATTENDANCE',
-        p_entity_type: 'attendance',
-        p_details: `رصد حضور لعدد ${records.length} طلاب لتاريخ ${date}`
-      });
+        if (delError) {
+          // If delete with in failed, try with school_id filter
+          await supabase
+            .from('attendance')
+            .delete()
+            .eq('school_id', schoolId)
+            .eq('date', date)
+            .in('student_id', studentIds);
+        }
+
+        const { error: insError } = await supabase
+          .from('attendance')
+          .insert(records);
+
+        if (insError) throw insError;
+      }
+
+      try {
+        await (supabase as any).rpc('log_action', {
+          p_action: 'MARK_STUDENT_ATTENDANCE',
+          p_entity_type: 'attendance',
+          p_details: `رصد حضور لعدد ${records.length} طلاب لتاريخ ${date}`
+        });
+      } catch {
+        // Ignore audit log error
+      }
     },
     onMutate: async (newRecords) => {
       if (newRecords.length === 0) return;
@@ -103,6 +133,9 @@ export function useUpsertAttendance() {
         queryClient.invalidateQueries({ 
           queryKey: ['attendance', 'class', variables[0].class_id, variables[0].date] 
         });
+        queryClient.invalidateQueries({ queryKey: ['attendance', 'student'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }
     },
@@ -255,6 +288,7 @@ export function useUpsertTeacherAttendance() {
         queryClient.invalidateQueries({ 
           queryKey: ['teacher-attendance', variables[0].date] 
         });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }
     },
   });

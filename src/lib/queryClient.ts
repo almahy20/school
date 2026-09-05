@@ -25,7 +25,7 @@ export const queryClient = new QueryClient({
     queries: {
       // ✅ Stale-While-Revalidate: Serve from cache, background refresh only when needed
       staleTime: 60 * 1000, // 1 minute (prevents spamming Supabase API on rapid page switches)
-      gcTime: 24 * 60 * 60 * 1000, // 24 hours (IndexedDB cache)
+      gcTime: 30 * 60 * 1000, // 30 minutes in RAM (automatically frees memory for unmounted pages)
       refetchOnWindowFocus: false, // Prevents request storm when user tabs switch
       refetchOnMount: true, // Refetch only when component mounts and data is stale (>60s)
       retry: 1,
@@ -45,10 +45,10 @@ export const queryClient = new QueryClient({
   }),
 });
 
-// ✅ Optimization: IndexedDB Query Persistence with Versioning
+// ✅ Optimization: IndexedDB Query Persistence with Strict Whitelisting
 if (typeof window !== 'undefined') {
   // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v2.0'; // bumped: fresh cache reset with fast SWR defaults
+  const CACHE_VERSION = 'v2.1'; // bumped: ultra-lean cache whitelist (branding only)
 
   const idbPersister = {
     persistClient: async (client: any) => {
@@ -65,25 +65,19 @@ if (typeof window !== 'undefined') {
   persistQueryClient({
     queryClient,
     persister: idbPersister,
-    maxAge: 12 * 60 * 60 * 1000, // 12 hours
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
     buster: CACHE_VERSION, // ✅ Forces cache clear when version changes
     shouldPersistQuery: (query) => {
-      // Don't persist errors or temporary states
-      if (query.state.status === 'error') return false;
-      
-      // ✅ Don't persist queries that are marked as 'no-persist' in their meta
+      // Don't persist errors, pending states, or temporary data
+      if (query.state.status !== 'success') return false;
       if (query.meta?.persist === false) return false;
 
-      // لا نحفظ القوائم والرسائل الكبيرة في IndexedDB؛ بقاؤها في الذاكرة يكفي للتنقل،
-      // وتخزينها الدائم يبطئ الأجهزة الضعيفة عند بدء التطبيق وتحديث الكاش.
+      // ✅ أمان وأداء مطلق للأجهزة الضعيفة:
+      // نخزن فقط هوية المدرسة وشعارها لفتح التطبيق فوراً بشعار المدرسة.
+      // أي بيانات ديناميكية (طلاب، درجات، غياب، رسائل، فصول) تبقى في ذاكرة الـ RAM المؤقتة فقط
+      // لمنع تراكم الملفات وتضخم مساحة التخزين على هاتف المستخدم نهائياً.
       const key = String(query.queryKey[0]);
-      const heavyQueryKeys = new Set([
-        'child-full-details', 'students', 'parents', 'teachers', 'notifications',
-        'conversation-messages', 'class-chat-messages', 'database', 'parent-dashboard',
-      ]);
-      if (heavyQueryKeys.has(key)) return false;
-
-      return true;
+      return key === 'school-branding' || key === 'school-by-slug';
     },
   });
 }

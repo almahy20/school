@@ -15,6 +15,41 @@ interface QueryStateHandlerProps {
   loadingMessage?: string;
   children: React.ReactNode;
   isEmpty?: boolean;
+  skeleton?: React.ReactNode;
+}
+
+function DefaultGridSkeleton() {
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex items-center gap-2 px-1">
+        <div className="w-2 h-2 rounded-full bg-indigo-500/50 animate-pulse" />
+        <div className="h-3.5 w-36 bg-slate-200/70 rounded-full animate-pulse" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="bg-white rounded-[28px] p-6 space-y-4 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 animate-pulse shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 bg-slate-100 rounded-lg animate-pulse" />
+                <div className="h-3 w-1/2 bg-slate-100 rounded-lg animate-pulse" />
+              </div>
+              <div className="w-14 h-6 rounded-xl bg-slate-100 animate-pulse" />
+            </div>
+            <div className="space-y-2 pt-2">
+              <div className="h-3 w-full bg-slate-50 rounded-md animate-pulse" />
+              <div className="h-3 w-4/5 bg-slate-50 rounded-md animate-pulse" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <div className="h-9 flex-1 rounded-xl bg-slate-100 animate-pulse" />
+              <div className="h-9 w-10 rounded-xl bg-slate-100 animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="h-12 w-full rounded-2xl bg-slate-100 animate-pulse" />
+    </div>
+  );
 }
 
 export function QueryStateHandler({
@@ -28,6 +63,7 @@ export function QueryStateHandler({
   loadingMessage = 'جاري التحميل...',
   children,
   isEmpty = false,
+  skeleton,
 }: QueryStateHandlerProps) {
   
   const [showTimeoutError, setShowTimeoutError] = React.useState(false);
@@ -74,7 +110,7 @@ export function QueryStateHandler({
     const loadDuration = Date.now() - loadingStartRef.current;
     
     // Log error for debugging
-    console.error('[QueryStateHandler] Error details:', {
+    logger.error('[QueryStateHandler] Error details:', {
       error: finalError,
       isTimeout,
       loadDuration,
@@ -142,21 +178,12 @@ export function QueryStateHandler({
   //    إذا كانت هناك بيانات قديمة (placeholder/cache) نعرضها فوراً مع شريط تحديث خفيف
   //    ملاحظة: array فاضي [] = data وصلت بالفعل، مش "loading"
   // البيانات وصلت لو: data مش null/undefined، أو array فيها عناصر، أو object كامل
-  const dataArrived = data !== undefined && data !== null;
+  const dataArrived = data !== undefined && data !== null && (!Array.isArray(data) || data.length > 0);
   if (loading && !isRefetching && !showTimeoutError && !dataArrived) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-6 p-8 animate-in fade-in duration-500 rounded-[40px] bg-slate-50/50 border border-slate-100/50 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="relative flex items-center justify-center">
-          <div className="absolute inset-0 w-16 h-16 border-4 border-indigo-100 rounded-full animate-ping opacity-75"></div>
-          <div className="relative w-16 h-16 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin shadow-lg"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-4 h-4 bg-indigo-500 rounded-full animate-pulse"></div>
-          </div>
-        </div>
-        <p className="text-slate-500 font-bold text-sm tracking-widest uppercase animate-pulse">{loadingMessage}</p>
-      </div>
-    );
+    if (skeleton) {
+      return <>{skeleton}</>;
+    }
+    return <DefaultGridSkeleton />;
   }
 
   // 3. Empty State

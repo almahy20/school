@@ -62,6 +62,17 @@ class RealtimeEngine {
     };
   }
 
+  public unsubscribeAll() {
+    this.activeSubscriptions.forEach((channel) => {
+      try {
+        supabase.removeChannel(channel);
+      } catch (e) {
+        logger.warn('Failed to remove channel:', e);
+      }
+    });
+    this.activeSubscriptions.clear();
+  }
+
   // المحرك السحري: يقوم بالتحديث الذكي للكاش محلياً لكي تختفي الـ Loading 완전히
   private syncToCache(table: string, payload: any) {
     const { eventType, new: newRec, old: oldRec } = payload;
@@ -121,9 +132,52 @@ class RealtimeEngine {
         }
 
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        // إذا تغير طالب، الأبناء وأولياء الأمور يحتاجون إعادة تحميل
+        if (eventType !== 'INSERT') {
+          queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+        }
       }
-      
-      // Add similar automatic synced responses for messages, notifications etc. if generic
+
+      else if (table === 'classes') {
+        // إعادة تحميل كل كاش الفصول + الإحصائيات
+        queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+        if (eventType !== 'INSERT') {
+          queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+        }
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      }
+
+      else if (table === 'attendance') {
+        // تحديث صامت لكاش الحضور
+        queryClient.invalidateQueries({ queryKey: ['attendance'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      }
+
+      else if (table === 'grades') {
+        queryClient.invalidateQueries({ queryKey: ['grades'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['student-grades'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['student-grades-full'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      }
+
+      else if (table === 'fees') {
+        queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      }
+
+      else if (table === 'complaints') {
+        queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-complaints'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-activities'], exact: false });
+      }
+
       // ✅ notifications are handled exclusively by RealtimeNotificationsManager
       // to avoid duplicate subscriptions and conflicting cache updates.
 
@@ -134,3 +188,4 @@ class RealtimeEngine {
 }
 
 export const realtimeEngine = new RealtimeEngine();
+

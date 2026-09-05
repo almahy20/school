@@ -6,31 +6,42 @@ import { Menu, BookOpen, Bell, Search, User, ChevronLeft } from 'lucide-react';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
 import { cn, getOptimizedImageUrl } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
 import { logger } from '@/utils/logger';
 import PushNotificationPrompt from './PushNotificationPrompt';
+import NetworkStatusBanner from './NetworkStatusBanner';
 
 interface Props {
   children: ReactNode;
+  hideBottomNav?: boolean;
 }
 
-export default function AppLayout({ children }: Props) {
+export default function AppLayout({ children, hideBottomNav }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const { data: unreadCounts } = useUnreadCounts();
   const unreadCount = unreadCounts?.unread || 0;
   const { data: branding } = useBranding();
   
   const schoolBranding = useCleanBranding(branding);
-  const hasBottomNav = true; // BottomNav shows for ALL roles on mobile (md:hidden)
+  
+  // Auto-hide BottomNav on full-screen chat rooms
+  const isChatRoomRoute =
+    location.pathname.startsWith('/conversations/class/') ||
+    location.pathname.startsWith('/manage-conversations/class/') ||
+    (/^\/manage-conversations\/[a-zA-Z0-9_-]+$/.test(location.pathname) && location.pathname !== '/manage-conversations');
+
+  const shouldHideBottomNav = Boolean(hideBottomNav || isChatRoomRoute);
+  const hasBottomNav = !shouldHideBottomNav; // BottomNav shows for ALL roles on mobile (md:hidden) unless in chat room
   
   const [logoError, setLogoError] = useState(false);
 
@@ -126,6 +137,9 @@ export default function AppLayout({ children }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col w-full font-cairo selection:bg-primary/20 bg-[#F8FAFC]" dir="rtl">
+      {/* Network Offline/Online Status Banner */}
+      <NetworkStatusBanner />
+
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
 
@@ -268,39 +282,44 @@ export default function AppLayout({ children }: Props) {
         </div>
 
         {/* Content Section */}
-        <div className="flex-1 w-full px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-6 relative z-10">
+        <div className={cn(
+          "flex-1 w-full relative z-10",
+          shouldHideBottomNav ? "p-0" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-6"
+        )}>
           {children}
         </div>
 
-        {/* Sticky Footer */}
-        <footer className={cn(
-          "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto no-print",
-          hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
-        )}>
-          <div className="flex mb-20 md:mb-0  flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">
-                {schoolBranding.logo && !logoError ? (
-                  <img src={schoolBranding.logo} alt="Logo" className="w-full h-full object-contain p-2" onError={() => setLogoError(true)} />
-                ) : (
-                  <BookOpen className="w-6 h-6 text-slate-400" />
-                )}
+        {/* Sticky Footer - Hidden on full-screen chat rooms */}
+        {!shouldHideBottomNav && (
+          <footer className={cn(
+            "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto no-print",
+            hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
+          )}>
+            <div className="flex mb-20 md:mb-0 flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">
+                  {schoolBranding.logo && !logoError ? (
+                    <img src={schoolBranding.logo} alt="Logo" className="w-full h-full object-contain p-2" onError={() => setLogoError(true)} />
+                  ) : (
+                    <BookOpen className="w-6 h-6 text-slate-400" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.cleanName}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">منصة التعليم المتكاملة</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-black text-slate-900 leading-none mb-1">{schoolBranding.cleanName}</p>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">منصة التعليم المتكاملة</p>
-              </div>
-            </div>
 
-            <div className="text-center md:text-right">
-              <p className="text-sm font-black text-slate-900 border-b-2 border-indigo-500/20 pb-1 inline-block"> تطوير: عبدالرحمن سيد فوزي </p>
-              <p className="text-[10px] font-bold text-slate-300 tracking-[0.3em] mt-3"> جميع الحقوق محفوظة © {new Date().getFullYear()} </p>
+              <div className="text-center md:text-right">
+                <p className="text-sm font-black text-slate-900 border-b-2 border-indigo-500/20 pb-1 inline-block"> تطوير: عبدالرحمن سيد فوزي </p>
+                <p className="text-[10px] font-bold text-slate-300 tracking-[0.3em] mt-3"> جميع الحقوق محفوظة © {new Date().getFullYear()} </p>
+              </div>
             </div>
-          </div>
-        </footer>
+          </footer>
+        )}
       </main>
       
-      <BottomNav />
+      {hasBottomNav && <BottomNav />}
     </div>
   );
 }

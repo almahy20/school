@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -140,6 +140,9 @@ export function useUpsertComplaint() {
     onSuccess: (result: any) => {
       toast.success('تم حفظ الشكوى بنجاح');
       queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-activities'], exact: false });
       if (result?.parent_id) {
         queryClient.invalidateQueries({ queryKey: ['parent-complaints', result.parent_id] });
       }
@@ -160,7 +163,9 @@ export function useDeleteComplaint() {
     onSuccess: () => {
       toast.success('تم حذف الشكوى بنجاح');
       queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-complaints'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-complaints'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
     },
   });
 }
@@ -191,7 +196,10 @@ export function useCreateComplaint() {
     onSuccess: () => {
       toast.success('تم إرسال الشكوى بنجاح');
       queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-complaints'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-complaints'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-activities'], exact: false });
     },
   });
 }

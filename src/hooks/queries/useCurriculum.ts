@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -93,6 +93,9 @@ export function useUpsertCurriculum() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['curriculums', user?.schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['curriculum-subjects'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
     },
   });
 }
@@ -116,6 +119,10 @@ export function useDeleteCurriculum() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['curriculums', user?.schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['curriculum-subjects'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
     },
   });
 }
@@ -191,7 +198,10 @@ export function useAssignCurriculumToClass() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['classes', user?.schoolId] });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
     },
   });
 }

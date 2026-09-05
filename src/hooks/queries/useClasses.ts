@@ -144,8 +144,11 @@ export function useDeleteClass() {
     },
     onSuccess: () => {
       toast.success('تم حذف الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
       queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['class-chat-rooms'], exact: false });
     },
   });
 }
@@ -161,8 +164,9 @@ export function useAddClass() {
     },
     onSuccess: () => {
       toast.success('تم إضافة الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
       queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['class-chat-rooms'], exact: false });
     },
   });
 }
@@ -184,8 +188,11 @@ export function useUpdateClass() {
     },
     onSuccess: () => {
       toast.success('تم تحديث الفصل بنجاح');
-      // Invalidate ALL class queries with any parameters
       queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
     },
   });
 }

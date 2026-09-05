@@ -99,27 +99,44 @@ async function fetchParents(
 
   const userRolesMap = new Map<string, any>();
   userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
-
   const parentIds = profilesRaw.map((p: any) => p.id);
-  const [{ data: links }, { data: classes }] = await Promise.all([
-    supabase.from('student_parents').select('parent_id, students(id, name, class_id)').in('parent_id', parentIds),
+  const parentPhones = profilesRaw.map((p: any) => p.phone?.trim()).filter(Boolean);
+
+  const [{ data: links }, { data: studentsByPhone }, { data: classes }] = await Promise.all([
+    supabase
+      .from('student_parents')
+      .select('parent_id, student_id, students(id, name, class_id)')
+      .in('parent_id', parentIds),
+    parentPhones.length > 0
+      ? supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .eq('school_id', schoolId)
+          .in('parent_phone', parentPhones)
+      : Promise.resolve({ data: [] }),
     supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
   ]);
 
   const data = (profilesRaw as any[]).map((profile) => {
     const roleRecord = userRolesMap.get(profile.id);
     const parentLinks = (links || []).filter((l: any) => l.parent_id === profile.id);
+    const linkedStudents = parentLinks.map((l: any) => l.students).filter(Boolean);
+    const phoneStudents = (studentsByPhone || []).filter((s: any) => s.parent_phone === profile.phone?.trim());
+
+    // Combine & deduplicate
+    const studentMap = new Map<string, any>();
+    linkedStudents.forEach((s: any) => studentMap.set(s.id, s));
+    phoneStudents.forEach((s: any) => studentMap.set(s.id, s));
+
     return {
       ...profile,
       approval_status: roleRecord?.approval_status || 'approved',
       user_role_id: roleRecord?.id,
-      children: parentLinks
-        .map((l: any) => ({
-          id: l.students?.id,
-          name: l.students?.name,
-          class_name: classes?.find((c: any) => c.id === l.students?.class_id)?.name,
-        }))
-        .filter((c: any) => c.id),
+      children: Array.from(studentMap.values()).map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        class_name: classes?.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
+      })),
     };
   }) as Parent[];
 
@@ -135,10 +152,10 @@ export function useParents(page = 1, pageSize = 15, search = '', status = 'ال�
     queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
     enabled: !!session && !!user?.schoolId,
     placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     retry: 1,
   });
 }
@@ -153,11 +170,11 @@ export interface PendingParent {
   children_count?: number;
 }
 
-export function usePendingParents() {
+export function usePendingParents(limit = 100) {
   const { user, session } = useAuth();
 
   return useQuery({
-    queryKey: ['pending-parents', user?.schoolId],
+    queryKey: ['pending-parents', user?.schoolId, limit],
     queryFn: async () => {
       if (!user?.schoolId) return [];
 
@@ -166,7 +183,8 @@ export function usePendingParents() {
         .select('id, user_id, created_at, approval_status')
         .eq('school_id', user.schoolId)
         .eq('role', 'parent')
-        .eq('approval_status', 'pending');
+        .eq('approval_status', 'pending')
+        .limit(limit);
 
       if (rolesError) throw rolesError;
       if (!rolesData || rolesData.length === 0) return [];
@@ -185,24 +203,20 @@ export function usePendingParents() {
         }
       }
 
-      return rolesData.map((roleRecord: any) => {
-        const profile = profilesMap.get(roleRecord.user_id);
+      return rolesData.map((r: any) => {
+        const profile = profilesMap.get(r.user_id);
         return {
-          id: profile?.id || roleRecord.user_id,
-          full_name: profile?.full_name || 'بدون اسم',
-          phone: profile?.phone || 'بدون هاتف',
-          created_at: roleRecord.created_at,
-          user_role_id: roleRecord.id,
-          approval_status: roleRecord.approval_status,
+          id: r.user_id,
+          user_role_id: r.id,
+          full_name: profile?.full_name || 'غير معروف',
+          phone: profile?.phone || 'غير مسجل',
+          created_at: r.created_at,
+          approval_status: r.approval_status,
         };
       }) as PendingParent[];
     },
     enabled: !!session && !!user?.schoolId,
-    placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -221,9 +235,10 @@ export function useParent(id: string | undefined | null) {
     },
     enabled: !!id,
     placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
     refetchOnWindowFocus: false,
+    refetchOnMount: true,
   });
 }
 
@@ -236,46 +251,90 @@ export function useAdminParentChildren(parentId: string | undefined | null) {
     queryFn: async () => {
       if (!parentId || !user?.schoolId) return [];
 
-      const [linksRes, classesRes, curriculumsRes, subjectsRes] = await Promise.all([
-        supabase.from('student_parents').select('parent_id, students(id, name, class_id)').eq('parent_id', parentId),
-        supabase.from('classes').select('id, name, curriculum_id').eq('school_id', user.schoolId),
+      // 1. Fetch parent profile (phone)
+      const { data: parentProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, school_id')
+        .eq('id', parentId)
+        .maybeSingle();
+
+      // 2. Fetch direct links
+      const { data: links } = await supabase
+        .from('student_parents')
+        .select('student_id, students(id, name, class_id)')
+        .eq('parent_id', parentId);
+
+      const linkedIds = (links || []).map((l: any) => l.student_id).filter(Boolean);
+      const studentMap = new Map<string, any>();
+
+      (links || []).forEach((l: any) => {
+        if (l.students) studentMap.set(l.students.id, l.students);
+      });
+
+      // 3. Direct fetch for missing IDs
+      const missingIds = linkedIds.filter(id => !studentMap.has(id));
+      if (missingIds.length > 0) {
+        const { data: missingStudents } = await supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .in('id', missingIds);
+        (missingStudents || []).forEach(s => studentMap.set(s.id, s));
+      }
+
+      // 4. Phone match
+      if (parentProfile?.phone) {
+        const cleanPhone = parentProfile.phone.trim();
+        const { data: phoneStudents } = await supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .eq('school_id', user.schoolId)
+          .eq('parent_phone', cleanPhone);
+        
+        (phoneStudents || []).forEach(s => {
+          if (!studentMap.has(s.id)) studentMap.set(s.id, s);
+        });
+      }
+
+      const allStudents = Array.from(studentMap.values());
+      if (allStudents.length === 0) return [];
+
+      const classIds = allStudents.map(s => s.class_id).filter(Boolean);
+      const [classesRes, curriculumsRes, subjectsRes] = await Promise.all([
+        classIds.length > 0
+          ? supabase.from('classes').select('id, name, curriculum_id').in('id', classIds)
+          : Promise.resolve({ data: [] }),
         supabase.from('curriculums').select('id, name, status, school_id').eq('school_id', user.schoolId),
         supabase.from('curriculum_subjects').select('id, curriculum_id, subject_name, content, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
       ]);
 
-      const links = linksRes.data || [];
       const classes = classesRes.data || [];
       const curriculums = curriculumsRes.data || [];
       const subjects = subjectsRes.data || [];
 
-      return links
-        .map((l: any) => l.students)
-        .filter(Boolean)
-        .map((s: any) => {
-          const studentClass = classes.find(c => c.id === s.class_id);
-          const studentCurriculum = curriculums.find(curr => curr.id === studentClass?.curriculum_id);
-          const studentCurriculumSubjects = subjects.filter(sub => sub.curriculum_id === studentCurriculum?.id);
-          return {
-            id: s.id,
-            name: s.name,
-            class_name: studentClass?.name,
-            curriculum: studentCurriculum
-              ? {
-                  name: studentCurriculum.name,
-                  subjects: studentCurriculumSubjects.map(sub => ({
-                    subject_name: sub.subject_name,
-                    content: sub.content,
-                  })),
-                }
-              : null,
-          };
-        });
+      return allStudents.map((s: any) => {
+        const studentClass = classes.find((c: any) => c.id === s.class_id);
+        const studentCurriculum = curriculums.find((curr: any) => curr.id === studentClass?.curriculum_id);
+        const studentCurriculumSubjects = subjects.filter((sub: any) => sub.curriculum_id === studentCurriculum?.id);
+        return {
+          id: s.id,
+          name: s.name,
+          class_name: studentClass?.name || 'بدون فصل',
+          curriculum: studentCurriculum
+            ? {
+                name: studentCurriculum.name,
+                subjects: studentCurriculumSubjects.map((sub: any) => ({
+                  subject_name: sub.subject_name,
+                  content: sub.content,
+                })),
+              }
+            : null,
+        };
+      });
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 1000 * 60 * 60 * 2,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
   });
 }
 
@@ -286,34 +345,96 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
     queryFn: async () => {
       if (!parentId || !user?.schoolId) return [];
 
+      // 1. Fetch parent profile (phone)
+      const { data: parentProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, school_id')
+        .eq('id', parentId)
+        .maybeSingle();
+
+      // 2. Fetch direct links from student_parents
       const { data: links } = await supabase
         .from('student_parents')
-        .select('students(id, name, class_id)')
+        .select('student_id, students(id, name, class_id)')
         .eq('parent_id', parentId);
 
-      if (!links || links.length === 0) return [];
+      const linkedIds = (links || []).map((l: any) => l.student_id).filter(Boolean);
+      const studentMap = new Map<string, any>();
 
-      const classIds = links.map((l: any) => l.students?.class_id).filter(Boolean);
-      let classes: any[] = [];
-      if (classIds.length > 0) {
-        const { data } = await supabase.from('classes').select('id, name').in('id', classIds);
-        classes = data || [];
+      (links || []).forEach((l: any) => {
+        if (l.students) {
+          studentMap.set(l.students.id, l.students);
+        }
+      });
+
+      // 3. If there are linked IDs where embedded join was null, fetch them directly
+      const missingIds = linkedIds.filter(id => !studentMap.has(id));
+      if (missingIds.length > 0) {
+        const { data: missingStudents } = await supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .in('id', missingIds);
+        (missingStudents || []).forEach(s => studentMap.set(s.id, s));
       }
 
-      return links
-        .map((l: any) => l.students)
-        .filter(Boolean)
-        .map((s: any) => ({
+      // 4. Also fetch by parent phone
+      if (parentProfile?.phone) {
+        const cleanPhone = parentProfile.phone.trim();
+        const { data: phoneStudents } = await supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .eq('school_id', user.schoolId)
+          .eq('parent_phone', cleanPhone);
+        
+        (phoneStudents || []).forEach(s => {
+          if (!studentMap.has(s.id)) {
+            studentMap.set(s.id, s);
+          }
+        });
+      }
+
+      const allStudents = Array.from(studentMap.values());
+      if (allStudents.length === 0) return [];
+
+      // 5. Fetch classes and curriculums for rich display in ParentDetailPage
+      const classIds = allStudents.map(s => s.class_id).filter(Boolean);
+      const [classesRes, curriculumsRes, subjectsRes] = await Promise.all([
+        classIds.length > 0
+          ? supabase.from('classes').select('id, name, curriculum_id').in('id', classIds)
+          : Promise.resolve({ data: [] }),
+        supabase.from('curriculums').select('id, name, status, school_id').eq('school_id', user.schoolId),
+        supabase.from('curriculum_subjects').select('id, curriculum_id, subject_name, content, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
+      ]);
+
+      const classes = classesRes.data || [];
+      const curriculums = curriculumsRes.data || [];
+      const subjects = subjectsRes.data || [];
+
+      return allStudents.map((s: any) => {
+        const studentClass = classes.find((c: any) => c.id === s.class_id);
+        const studentCurriculum = curriculums.find((curr: any) => curr.id === studentClass?.curriculum_id);
+        const studentCurriculumSubjects = subjects.filter((sub: any) => sub.curriculum_id === studentCurriculum?.id);
+
+        return {
           id: s.id,
           name: s.name,
-          class_name: classes.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
-        }));
+          class_name: studentClass?.name || 'بدون فصل',
+          curriculum: studentCurriculum
+            ? {
+                name: studentCurriculum.name,
+                subjects: studentCurriculumSubjects.map((sub: any) => ({
+                  subject_name: sub.subject_name,
+                  content: sub.content,
+                })),
+              }
+            : null,
+        };
+      });
     },
     enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 1000 * 60 * 30,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
   });
 }
 
@@ -335,6 +456,7 @@ export function useParentAction() {
     onSuccess: (_, variables) => {
       toast.success(`تم ${variables.status === 'approved' ? 'قبول' : 'رفض'} ولي الأمر`);
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -357,7 +479,10 @@ export function useUpdateParent() {
       toast.success('تم تحديث بيانات ولي الأمر');
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['parent-detail', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
     },
   });
 }
@@ -397,8 +522,11 @@ export function useDeleteParent() {
           query.queryKey[0] === 'admin-stats',
       });
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
     },
   });
 }

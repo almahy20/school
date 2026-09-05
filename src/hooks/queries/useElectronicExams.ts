@@ -206,7 +206,8 @@ export function useCreateElectronicExam() {
       return exam;
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'class', vars.class_id] });
+      queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: (err: any) => {
       toast.error('فشل إنشاء الاختبار', { description: err.message });
@@ -241,9 +242,9 @@ export function useUpdateElectronicExam() {
       if (error) throw error;
       return exam;
     },
-    onSuccess: (exam) => {
-      queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'class', exam.class_id] });
-      queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'parent'] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: (err: any) => {
       toast.error('فشل تحديث الاختبار', { description: err.message });
@@ -261,8 +262,10 @@ export function useDeleteElectronicExam() {
       if (error) throw error;
       return classId;
     },
-    onSuccess: (classId) => {
-      queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'class', classId] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
+      queryClient.invalidateQueries({ queryKey: ['exam-attempts'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
     onError: (err: any) => {
       toast.error('فشل حذف الاختبار', { description: err.message });
@@ -369,8 +372,9 @@ export function useParentElectronicExams() {
   // Realtime: لما يُنشر اختبار جديد يظهر فوراً
   useEffect(() => {
     if (!user?.id || !user?.schoolId) return;
+    const channelName = `parent-exams-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
     const channel = db
-      .channel(`parent-exams-${user.id}`)
+      .channel(channelName)
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
@@ -380,7 +384,9 @@ export function useParentElectronicExams() {
         queryClient.invalidateQueries({ queryKey });
       })
       .subscribe();
-    return () => { db.removeChannel(channel); };
+    return () => {
+      try { db.removeChannel(channel); } catch (_e) {}
+    };
   }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>>({
@@ -609,8 +615,9 @@ export function useSubmitExamAttempt() {
       return { score, totalScore, questions, answers };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['electronic-exams', 'parent'] });
+      queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
       queryClient.invalidateQueries({ queryKey: ['exam-attempts'] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
     },
     onError: (err: any) => {
       toast.error('فشل إرسال الاختبار', { description: err.message });

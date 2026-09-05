@@ -111,7 +111,9 @@ export function useSendMessage() {
     },
     onSettled: () => {
       // إجبار التحديث بصمت للاستعاضة عن الرسائل المؤقتة بحقيقية
-      queryClient.invalidateQueries({ queryKey: ['messages', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-activities'] });
     }
   });
 }

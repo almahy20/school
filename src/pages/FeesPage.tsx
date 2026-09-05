@@ -211,10 +211,6 @@ export default function FeesPage() {
           }
         />
 
-        {/* أول تحميل حقيقي → skeleton، وعند وجود cached data → QueryStateHandler يعرضها فوراً مع شريط تحديث */}
-        {loading && studentsData.length === 0 ? (
-          <FeesGridSkeleton />
-        ) : (
         <QueryStateHandler
           loading={loading}
           error={error}
@@ -224,6 +220,7 @@ export default function FeesPage() {
           loadingMessage="جاري مزامنة الحسابات المالية..."
           emptyMessage="لم يتم العثور على طلاب مسجلين لتحصيل رسوم منهم."
           isEmpty={studentsData.length === 0}
+          skeleton={<FeesGridSkeleton />}
         >
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
              <FinanceCard title={`مستحقات ${selectedTerm}`} value={stats.total_due.toLocaleString()} symbol="ج.م" icon={Wallet} color="indigo" />
@@ -296,7 +293,6 @@ export default function FeesPage() {
             </div>
           </div>
         </QueryStateHandler>
-        )}
       </div>
 
       {showPaymentModal && selectedStudent && (

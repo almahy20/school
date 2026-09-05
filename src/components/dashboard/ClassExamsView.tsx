@@ -455,42 +455,46 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
               onRetry={refetchGrades}
               loadingMessage="جاري تحميل قائمة الطلاب..."
             >
-              <div className="divide-y divide-slate-50 max-h-[60vh] overflow-y-auto">
+              <div className="divide-y divide-slate-100">
                 {filteredGrades.map((grade, idx) => (
                   <div
                     key={grade.studentId}
-                    className="px-4 sm:px-6 py-3 sm:py-3.5 flex items-center gap-3 hover:bg-slate-50/60 transition-colors"
+                    className="px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 hover:bg-slate-50/70 transition-colors border-b border-slate-50 last:border-0"
                   >
-                    {/* أسهم الترتيب — تظهر بس لما مفيش بحث نشط */}
-                    {!searchQuery && (
-                      <div className="flex flex-col gap-0.5 shrink-0">
-                        <button
-                          onClick={() => moveUp(idx)}
-                          disabled={idx === 0}
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={() => moveDown(idx)}
-                          disabled={idx === filteredGrades.length - 1}
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-600 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
+                    {/* رقم + اسم + أسهم الترتيب */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {/* أسهم الترتيب — تظهر بس لما مفيش بحث نشط */}
+                      {!searchQuery && (
+                        <div className="flex sm:flex-col gap-1 sm:gap-0.5 shrink-0">
+                          <button
+                            onClick={() => moveUp(idx)}
+                            disabled={idx === 0}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
+                            title="تحريك لأعلى"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => moveDown(idx)}
+                            disabled={idx === filteredGrades.length - 1}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-300 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-20 disabled:cursor-not-allowed transition-all"
+                            title="تحريك لأسفل"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
 
-                    {/* رقم + اسم */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-500 text-xs font-black flex items-center justify-center shrink-0">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 text-slate-600 text-xs font-black flex items-center justify-center shrink-0 shadow-sm">
                         {idx + 1}
                       </div>
-                      <span className="font-black text-slate-800 text-sm truncate">{grade.studentName}</span>
+                      <span className="font-black text-slate-900 text-sm sm:text-base leading-snug break-words">
+                        {grade.studentName}
+                      </span>
                     </div>
 
                     {/* Input */}
-                    <div className="flex items-center gap-2 w-44 sm:w-56">
+                    <div className="flex items-center gap-2.5 w-full sm:w-64 sm:justify-end shrink-0 pl-1">
                       {selectedTemplate.score_type === 'text' ? (
                         <AutocompleteInput
                           value={grade.score}
@@ -499,16 +503,18 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                           placeholder="ممتاز، جيد جداً..."
                         />
                       ) : (
-                        <>
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                           <Input
                             type="number"
                             value={grade.score}
                             onChange={e => handleGradeChange(grade.studentId, e.target.value)}
                             placeholder="0"
-                            className="h-11 sm:h-10 w-20 text-center font-black text-sm rounded-xl bg-slate-50 border-slate-200 focus:bg-white"
+                            className="h-11 w-24 sm:w-28 text-center font-black text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-400 shadow-sm"
                           />
-                          <span className="text-xs font-bold text-slate-300 shrink-0">/ {selectedTemplate.max_score}</span>
-                        </>
+                          <span className="text-xs font-black text-slate-400 shrink-0 min-w-[40px]">
+                            من {selectedTemplate.max_score}
+                          </span>
+                        </div>
                       )}
                     </div>
                   </div>

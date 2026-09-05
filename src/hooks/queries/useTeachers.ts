@@ -1,4 +1,4 @@
-﻿import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -209,7 +209,9 @@ export function useDeleteTeacher() {
           query.queryKey[0] === 'teachers' || query.queryKey[0] === 'teacher-detail',
       });
       queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -232,6 +234,7 @@ export function useTeacherAction() {
     onSuccess: (_, variables) => {
       toast.success(`تم ${variables.status === 'approved' ? 'قبول' : 'رفض'} المعلم`);
       queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
 }
@@ -252,6 +255,8 @@ export function useUpdateTeacher() {
       toast.success('تم تحديث بيانات المعلم');
       queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['teacher', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
     },
   });
 }
