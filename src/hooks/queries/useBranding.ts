@@ -95,21 +95,41 @@ export function useSchoolBySlug(slug: string | undefined | null) {
     queryKey: ['school-by-slug', slug],
     queryFn: async () => {
       if (!slug) return null;
-      const { data: schoolId, error: rpcError } = await (supabase as any).rpc('get_school_id_by_slug', { p_slug: slug });
-      if (rpcError) throw rpcError;
-      if (!schoolId) return null;
 
-      const { data: school, error: schoolError } = await supabase
+      // 1. Try exact slug match via RPC
+      const { data: schoolId, error: rpcError } = await (supabase as any).rpc('get_school_id_by_slug', { p_slug: slug });
+      if (!rpcError && schoolId) {
+        const { data: school, error: schoolError } = await supabase
+          .from('schools')
+          .select('id, name, logo_url, slug')
+          .eq('id', schoolId as string)
+          .maybeSingle();
+        if (!schoolError && school) return school;
+      }
+
+      // 2. Fallback: case-insensitive ilike search directly on schools table
+      //    (handles slug variations like hyphens vs underscores, spacing differences)
+      const { data: schools } = await supabase
         .from('schools')
-        .select('id, name, logo_url')
-        .eq('id', schoolId as string)
-        .maybeSingle();
-      
-      if (schoolError && schoolError.code !== 'PGRST116') throw schoolError;
-      return school;
+        .select('id, name, logo_url, slug')
+        .ilike('slug', slug)
+        .limit(1);
+
+      if (schools && schools.length > 0) return schools[0];
+
+      // 3. Second fallback: strip hyphens and compare
+      const slugNormalized = slug.replace(/-/g, ' ').replace(/_/g, ' ').trim();
+      const { data: schools2 } = await supabase
+        .from('schools')
+        .select('id, name, logo_url, slug')
+        .ilike('name', `%${slugNormalized}%`)
+        .limit(1);
+
+      return (schools2 && schools2.length > 0) ? schools2[0] : null;
     },
     enabled: !!slug,
-    staleTime: Infinity, // التخزين في الذاكرة للأبد لسرعة التحميل
+    staleTime: Infinity,
+    retry: 2,
   });
 }
 

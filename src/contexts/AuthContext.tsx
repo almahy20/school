@@ -79,25 +79,44 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
     ]);
     const profile = profileRes.data as any;
     const role = roleRes.data as any;
+
+    // ✅ Fallback to user_metadata if profile fields are empty (prevents name disappearing)
+    const userMeta = (supaUser.user_metadata || {}) as any;
+    const appMeta  = (supaUser.app_metadata  || {}) as any;
+    const fullName  = profile?.full_name?.trim()  || userMeta.full_name?.trim()  || appMeta.full_name?.trim()  || '';
+    const phone     = profile?.phone?.trim()      || userMeta.phone?.trim()      || appMeta.phone?.trim()      || '';
+    const schoolId  = profile?.school_id || role?.school_id
+                      || (userMeta.school_id ? String(userMeta.school_id) : undefined)
+                      || (appMeta.school_id  ? String(appMeta.school_id)  : undefined);
+
+    // 🔧 Auto-repair profile row if name is missing in DB (runs silently in background)
+    if (profile && (!profile.full_name || !profile.school_id) && (fullName || schoolId)) {
+      supabase.from('profiles').update({
+        ...(fullName && !profile.full_name ? { full_name: fullName } : {}),
+        ...(phone    && !profile.phone    ? { phone }               : {}),
+        ...(schoolId && !profile.school_id ? { school_id: schoolId } : {}),
+      }).eq('id', supaUser.id).then(() => { /* background, ignore result */ });
+    }
+
     let school: any = null;
-    if (profile?.school_id) {
-      const schoolRes = await supabase.from('schools').select('id, name, slug, status, logo_url, subscription_end_date').eq('id', profile.school_id).maybeSingle();
+    if (schoolId) {
+      const schoolRes = await supabase.from('schools').select('id, name, slug, status, logo_url, subscription_end_date').eq('id', schoolId).maybeSingle();
       school = schoolRes.data;
     }
-    if (school && profile?.school_id) {
+    if (school && schoolId) {
       const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
-      queryClient.setQueryData(['school-branding', profile.school_id], b);
-      try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
+      queryClient.setQueryData(['school-branding', schoolId], b);
+      try { localStorage.setItem(`branding_${schoolId}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
     const userRole = (role?.role || 'parent') as AppRole;
     return {
       id: supaUser.id,
       email: supaUser.email || '',
-      phone: profile?.phone || '',
-      fullName: profile?.full_name || '',
+      phone,
+      fullName,
       role: userRole,
       isSuperAdmin: role?.is_super_admin || false,
-      schoolId: profile?.school_id,
+      schoolId,
       schoolStatus: school?.status || 'active',
       approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
       subscriptionExpired: checkSubscriptionExpired(school),
@@ -113,23 +132,44 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
     const { data: userData, error } = await supabase.rpc('get_complete_user_data', { p_user_id: supaUser.id });
     if (error || !userData) throw new Error('rpc_failed');
     const { profile, role, school } = userData as any;
-    if (school && profile?.school_id) {
-      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
-      queryClient.setQueryData(['school-branding', profile.school_id], b);
-      try { localStorage.setItem(`branding_${profile.school_id}`, JSON.stringify(b)); } catch { /* ignore */ }
+
+    // ✅ Fallback to user_metadata when profile fields are empty (prevents name flicker)
+    const userMeta = (supaUser.user_metadata || {}) as any;
+    const appMeta  = (supaUser.app_metadata  || {}) as any;
+    const fullName  = profile?.full_name?.trim()  || userMeta.full_name?.trim()  || appMeta.full_name?.trim()  || '';
+    const phone     = profile?.phone?.trim()      || userMeta.phone?.trim()      || appMeta.phone?.trim()      || '';
+    const schoolId  = profile?.school_id || role?.school_id
+                      || (userMeta.school_id ? String(userMeta.school_id) : undefined)
+                      || (appMeta.school_id  ? String(appMeta.school_id)  : undefined);
+
+    // 🔧 Auto-repair if DB profile is missing name/school_id
+    if (profile && (!profile.full_name || !profile.school_id) && (fullName || schoolId)) {
+      supabase.from('profiles').update({
+        ...(fullName  && !profile.full_name  ? { full_name: fullName } : {}),
+        ...(phone     && !profile.phone     ? { phone }                : {}),
+        ...(schoolId  && !profile.school_id ? { school_id: schoolId } : {}),
+      }).eq('id', supaUser.id).then(() => { /* background, ignore result */ });
+    }
+
+    const resolvedSchoolId = schoolId;
+    const resolvedSchool = school || null;
+    if (resolvedSchool && resolvedSchoolId) {
+      const b = { id: resolvedSchool.id, name: resolvedSchool.name, logo_url: resolvedSchool.logo_url || null, slug: resolvedSchool.slug, status: resolvedSchool.status };
+      queryClient.setQueryData(['school-branding', resolvedSchoolId], b);
+      try { localStorage.setItem(`branding_${resolvedSchoolId}`, JSON.stringify(b)); } catch { /* ignore */ }
     }
     const userRole = (role?.role || 'parent') as AppRole;
     return {
       id: supaUser.id,
       email: supaUser.email || '',
-      phone: profile?.phone || '',
-      fullName: profile?.full_name || '',
+      phone,
+      fullName,
       role: userRole,
       isSuperAdmin: role?.is_super_admin || false,
-      schoolId: profile?.school_id,
-      schoolStatus: school?.status || 'active',
+      schoolId: resolvedSchoolId,
+      schoolStatus: resolvedSchool?.status || 'active',
       approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
-      subscriptionExpired: checkSubscriptionExpired(school),
+      subscriptionExpired: checkSubscriptionExpired(resolvedSchool),
     };
   } catch {
     return buildAppUserFromDirectQueries(supaUser);

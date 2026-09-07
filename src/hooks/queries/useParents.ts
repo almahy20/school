@@ -70,7 +70,7 @@ async function fetchParents(
     .from('user_roles')
     .select('user_id, id, approval_status, role, school_id', { count: 'exact' })
     .eq('role', 'parent')
-    .eq('school_id', schoolId);
+    .or(`school_id.eq.${schoolId},school_id.is.null`);
 
   if (status !== 'الكل') {
     rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
@@ -181,7 +181,7 @@ export function usePendingParents(limit = 100) {
       const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('id, user_id, created_at, approval_status')
-        .eq('school_id', user.schoolId)
+        .or(`school_id.eq.${user.schoolId},school_id.is.null`)
         .eq('role', 'parent')
         .eq('approval_status', 'pending')
         .limit(limit);

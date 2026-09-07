@@ -39,8 +39,10 @@ export default function ParentSignupPage() {
   });
 
   const school = slugSchool || defaultSchool;
-  const schoolLoading = school_slug ? slugLoading : false;
-  const schoolBranding = useCleanBranding(school);
+  // ⚠️ If slug was in URL but didn't resolve → do NOT fall back to default school
+  const schoolLoading = school_slug ? (slugLoading || (!slugSchool && !slugError && slugLoading)) : defaultLoading;
+  const resolvedSchool = school_slug ? slugSchool : school; // When slug given, only use slug result
+  const schoolBranding = useCleanBranding(resolvedSchool);
 
   const { signup } = useAuth();
   const navigate = useNavigate();
@@ -75,7 +77,13 @@ export default function ParentSignupPage() {
     }
 
     setLoading(true);
-    const targetSchoolId = school?.id || '';
+    // ✅ Guard: if a slug was provided but school wasn't found, block signup
+    if (school_slug && !resolvedSchool) {
+      setError('لم يتم العثور على المدرسة. تأكد من الرابط أو تواصل مع المدير.');
+      setLoading(false);
+      return;
+    }
+    const targetSchoolId = resolvedSchool?.id || '';
     const err = await signup(phone.trim(), password, fullName.trim(), 'parent', targetSchoolId);
     setLoading(false);
 
