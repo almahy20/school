@@ -149,8 +149,7 @@ export function useParentClassChatRooms() {
       const { data: links, error: linksErr } = await db
         .from('student_parents')
         .select('students!student_parents_student_id_fkey(class_id)')
-        .eq('parent_id', user.id)
-        .eq('school_id', user.schoolId);
+        .eq('parent_id', user.id);
 
       if (linksErr) throw linksErr;
 

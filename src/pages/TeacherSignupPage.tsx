@@ -27,7 +27,9 @@ export default function TeacherSignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!school) return;
+    setError('');
+    setSuccessMsg('');
+
     if (!fullName.trim() || !phone.trim() || !password.trim()) {
       setError('يرجى ملء جميع الحقول المطلوبة');
       return;
@@ -37,7 +39,8 @@ export default function TeacherSignupPage() {
       return;
     }
     setLoading(true);
-    const err = await signup(phone.trim(), password, fullName.trim(), 'teacher', school.id);
+    const targetSchoolId = school?.id || '';
+    const err = await signup(phone.trim(), password, fullName.trim(), 'teacher', targetSchoolId);
     setLoading(false);
     if (err) {
       setError(err);
@@ -48,7 +51,7 @@ export default function TeacherSignupPage() {
       logger.log('✅ Teacher signup - stored signup time:', signupTime);
       
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك للمنصة...');
-      setTimeout(() => navigate('/', { replace: true }), 1500);
+      setTimeout(() => navigate('/', { replace: true }), 1000);
     }
   };
 

@@ -196,19 +196,86 @@ export function useParentChildren() {
             logger.warn('[useParentChildren] RPC returned data without attendanceRate, using fallback...');
             throw new Error('RPC returned incomplete data');
           }
+          return data;
+        }
+
+        // If RPC returned 0 students, attempt fallback by phone matching (matching admin behavior)
+        if (user.phone) {
+          const cleanPhone = user.phone.replace(/\D/g, '');
+          const phoneVariants = [
+            cleanPhone,
+            cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
+            cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
+            '+20' + (cleanPhone.startsWith('0') ? cleanPhone.slice(1) : cleanPhone),
+          ].filter(Boolean);
+
+          const { data: phoneStudents } = await supabase
+            .from('students')
+            .select('id, name, class_id, monthly_fee, school_id, classes(name)')
+            .in('parent_phone', phoneVariants);
+
+          if (phoneStudents && phoneStudents.length > 0) {
+            // Auto-heal links in student_parents
+            const linksToInsert = phoneStudents.map((s: any) => ({
+              school_id: s.school_id || user.schoolId,
+              student_id: s.id,
+              parent_id: user.id,
+            }));
+            supabase.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
+
+            return phoneStudents.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              class_id: s.class_id,
+              className: s.classes?.name,
+              avgGrade: 0,
+              attendanceRate: 100,
+              feesRemaining: Number(s.monthly_fee) || 0,
+            }));
+          }
         }
         
         return data || [];
       } catch (err) {
         logger.error('[useParentChildren] Unexpected error:', err);
+        
+        // Final catch fallback: try phone matching
+        if (user?.phone) {
+          try {
+            const cleanPhone = user.phone.replace(/\D/g, '');
+            const phoneVariants = [
+              cleanPhone,
+              cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
+              cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
+            ].filter(Boolean);
+
+            const { data: phoneStudents } = await supabase
+              .from('students')
+              .select('id, name, class_id, monthly_fee, school_id, classes(name)')
+              .in('parent_phone', phoneVariants);
+
+            if (phoneStudents && phoneStudents.length > 0) {
+              return phoneStudents.map((s: any) => ({
+                id: s.id,
+                name: s.name,
+                class_id: s.class_id,
+                className: s.classes?.name,
+                avgGrade: 0,
+                attendanceRate: 100,
+                feesRemaining: Number(s.monthly_fee) || 0,
+              }));
+            }
+          } catch (_e) { /* ignore */ }
+        }
+
         throw err;
       }
     },
-    enabled: !!session && !!(user?.id && user?.schoolId && user?.role === 'parent'),
+    enabled: !!session && !!(user?.id && user?.role === 'parent'),
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: 1,
     retryDelay: 1000,

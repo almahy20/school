@@ -21,45 +21,25 @@ export default function ParentSignupPage() {
 
   const { data: slugSchool, isLoading: slugLoading, error: slugError } = useSchoolBySlug(school_slug);
   
-  // Fallback: fetch active school (مدرسة الجيل الجديد) if no slug in URL
+  // Fallback: fetch active school if no slug in URL
   const { data: defaultSchool, isLoading: defaultLoading } = useQuery({
     queryKey: ['default-school-signup-main'],
     queryFn: async () => {
-      // 1. Fetch by primary active school ID
-      const { data: activeSchool } = await supabase
+      // 1. Fetch any registered/active school
+      const { data: schools } = await supabase
         .from('schools')
         .select('id, name, logo_url, slug')
-        .eq('id', '963e8620-591a-43a6-99d7-4edb9c681f58')
-        .maybeSingle();
-
-      if (activeSchool) return activeSchool;
-
-      // 2. Or school with verified logo
-      const { data: schoolsWithLogo } = await supabase
-        .from('schools')
-        .select('id, name, logo_url, slug')
-        .not('logo_url', 'is', null)
         .limit(1);
 
-      if (schoolsWithLogo && schoolsWithLogo.length > 0) {
-        return schoolsWithLogo[0];
-      }
-
-      // 3. Fallback by name
-      const { data: schoolsByName } = await supabase
-        .from('schools')
-        .select('id, name, logo_url, slug')
-        .ilike('name', '%الجيل الجديد%')
-        .limit(1);
-
-      return schoolsByName?.[0] || null;
+      if (schools && schools.length > 0) return schools[0];
+      return null;
     },
     enabled: !school_slug,
     staleTime: Infinity,
   });
 
   const school = slugSchool || defaultSchool;
-  const schoolLoading = school_slug ? slugLoading : defaultLoading;
+  const schoolLoading = school_slug ? slugLoading : false;
   const schoolBranding = useCleanBranding(school);
 
   const { signup } = useAuth();
@@ -82,7 +62,9 @@ export default function ParentSignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!school) return;
+    setError('');
+    setSuccessMsg('');
+
     if (!fullName.trim() || !phone.trim() || !password.trim()) {
       setError('يرجى ملء جميع الحقول المطلوبة');
       return;
@@ -93,8 +75,10 @@ export default function ParentSignupPage() {
     }
 
     setLoading(true);
-    const err = await signup(phone.trim(), password, fullName.trim(), 'parent', school.id);
+    const targetSchoolId = school?.id || '';
+    const err = await signup(phone.trim(), password, fullName.trim(), 'parent', targetSchoolId);
     setLoading(false);
+
     if (err) {
       setError(err);
     } else {
@@ -103,7 +87,7 @@ export default function ParentSignupPage() {
       logger.log('✅ Parent signup - stored signup time:', signupTime);
       
       setSuccessMsg('تم إنشاء الحساب بنجاح! جاري تحويلك للمنصة...');
-      setTimeout(() => navigate('/', { replace: true }), 1500);
+      setTimeout(() => navigate('/', { replace: true }), 1000);
     }
   };
 

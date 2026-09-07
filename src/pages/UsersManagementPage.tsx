@@ -162,17 +162,19 @@ export default function UsersManagementPage() {
     }
 
     try {
-      // 🚨 تحذير أمني: لا يمكنك استخدام auth.admin من المتصفح (Frontend Client).
-      // منصة Supabase ترفض هذا بـ (403 Forbidden) لأنه يتطلب مفتاح Service Role الذي يمنع قطعيًا وضعه بالمتصفح.
-      // 💡 الحل الصحيح: إنشاء Edge Function بداخل Supabase للقيام بهذا، أو توجيه المستخدم لاستعادة كلمة مروره بريدياً.
-      
-      toast({ 
-        title: 'إجراء محظور أمنياً (403)', 
-        description: 'لا يمكن تغيير كلمة المرور مباشرة من المتصفح لضمان أمان النظام. يرجى توجيه المستخدم لاستخدام ميزة "نسيت كلمة المرور" من شاشة الدخول.', 
+      setResettingUserId(userId);
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'reset_password', userId, data: { password: newPassword } },
       });
-      
-      logger.warn("Blocked insecure client-side admin auth call (403 Forbidden). Requires Edge Function or RPC.");
-      
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({ 
+        title: 'تم بنجاح', 
+        description: 'تم تحديث كلمة المرور للمستخدم بنجاح' 
+      });
+
       setNewPassword('');
       setShowPassword(null);
       setResettingUserId(null);
@@ -182,6 +184,8 @@ export default function UsersManagementPage() {
         description: err.message || 'فشل في إعادة تعيين كلمة المرور', 
         variant: 'destructive' 
       });
+    } finally {
+      setResettingUserId(null);
     }
   };
 

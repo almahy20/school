@@ -477,14 +477,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string, password: string, fullName: string, role: string, schoolId: string,
   ): Promise<string | null> => {
     try {
-      const email = `${phone}@edara.com`;
-      const { error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { full_name: fullName, phone, role, school_id: schoolId } },
+      const cleanPhone = phone.trim();
+      const cleanPassword = password.trim();
+      const email = `${cleanPhone}@edara.com`;
+      const { data, error } = await supabase.auth.signUp({
+        email, 
+        password: cleanPassword,
+        options: { 
+          data: { 
+            full_name: fullName.trim(), 
+            phone: cleanPhone, 
+            role, 
+            school_id: schoolId || undefined 
+          } 
+        },
       });
-      return error ? error.message : null;
+
+      if (error) {
+        if (error.message.includes('User already registered') || error.message.includes('already exists')) {
+          return 'رقم الهاتف مسجل بالفعل مسبقاً، يرجى تسجيل الدخول بدلاً من ذلك';
+        }
+        return error.message;
+      }
+
+      // If Supabase returned a session, apply it immediately
+      if (data?.session) {
+        applySession(data.session);
+      } else {
+        // Automatically login if session was not returned directly by signUp
+        const loginErr = await login(cleanPhone, cleanPassword);
+        if (loginErr) {
+          logger.warn('[Auth] Auto login after signup:', loginErr);
+        }
+      }
+
+      return null;
     } catch (err: any) {
-      return err.message;
+      return err?.message || 'حدث خطأ غير متوقع أثناء إنشاء الحساب';
     }
   };
 

@@ -246,11 +246,12 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => {
+                    const schoolName = schoolBranding.cleanName || 'المدرسة';
                     const phoneText = forgotPhone ? ` (رقم هاتفي المسجل: ${forgotPhone})` : '';
-                    const message = `السلام عليكم ورحمة الله، أرغب في استعادة كلمة المرور لحسابي في منصة المدرسة${phoneText}`;
-                    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+                    const message = `السلام عليكم ورحمة الله، أرغب في استعادة كلمة المرور لحسابي في منصة ${schoolName}${phoneText}`;
+                    window.open(`https://wa.me/201005321773?text=${encodeURIComponent(message)}`, '_blank');
                   }}
-                  className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-900/30"
+                  className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-900/30 active:scale-[0.98]"
                 >
                   <span>📲 تواصل مع الإدارة عبر واتساب</span>
                 </button>
