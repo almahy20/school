@@ -1,5 +1,5 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
-const CACHE_NAME = 'school-cache-v1789285503572';
+const CACHE_NAME = 'school-cache-v1789288201652';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
@@ -259,8 +259,21 @@ self.addEventListener('push', function (event) {
       await self.registration.showNotification(title, options);
       console.log('[SW] ✅ Notification shown, tag:', tag, 'url:', targetUrl);
     } catch (err) {
-      console.error('[SW] ❌ showNotification FAILED — signalling retry.', err);
-      throw err; // Re-throw → browser يطلب retry من push service
+      console.warn('[SW] ⚠️ Primary showNotification failed, trying minimal fallback...', err);
+      try {
+        await self.registration.showNotification(title, {
+          body: messageBody,
+          icon: '/icons/icon-192x192.png',
+          badge: '/icons/badge-72.png',
+          tag,
+          renotify: true,
+          data: { url: targetUrl }
+        });
+        console.log('[SW] ✅ Fallback Notification shown successfully');
+      } catch (fallbackErr) {
+        console.error('[SW] ❌ Critical: Fallback showNotification failed:', fallbackErr);
+        throw fallbackErr;
+      }
     }
   })();
 

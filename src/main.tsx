@@ -12,14 +12,14 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
 
-// Service Worker registration & auto-update logic (Production only to avoid dev server latency)
+// Service Worker registration & auto-update logic
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 
-if (import.meta.env.PROD && "serviceWorker" in navigator && !isSWDisabled) {
+if ("serviceWorker" in navigator && !isSWDisabled) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(
       (registration) => {
-        logger.log("✅ PWA Ready");
+        logger.log("✅ PWA & Service Worker Ready");
 
         // 🔄 Periodically check for updates and on window focus/tab visibility
         const checkForUpdate = () => {
@@ -51,24 +51,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator && !isSWDisabled) {
     );
   });
 
-  // Smoothly reload when new service worker takes control (seamless update)
+  // Smoothly reload when new service worker takes control (seamless update in prod)
   let isRefreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!isRefreshing) {
+    if (!isRefreshing && import.meta.env.PROD) {
       isRefreshing = true;
       logger.log("⚡ New Service Worker activated — refreshing page with latest assets");
       window.location.reload();
     }
   });
-} else if (import.meta.env.DEV && "serviceWorker" in navigator) {
-  // ⚡ In development: Auto-unregister any active service workers so they don't delay local requests
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister().then((success) => {
-        if (success) logger.log("🧹 [Dev] Cleaned up ServiceWorker to prevent local latency");
-      });
-    }
-  }).catch(() => {});
 }
 
 // 🚀 Capture beforeinstallprompt event early — قبل React حتى
