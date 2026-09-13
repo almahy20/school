@@ -51,6 +51,7 @@
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@fast-check/vitest": "^0.4.1",
+    "@rollup/wasm-node": "^4.63.2",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/react-query-devtools": "^5.102.8",
@@ -60,6 +61,7 @@
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.3.4",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
     "eslint": "^9.32.0",
@@ -78,5 +80,8 @@
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.1",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "rollup": "npm:@rollup/wasm-node@^4.63.2"
   }
 }

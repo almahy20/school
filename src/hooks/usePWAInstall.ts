@@ -44,8 +44,9 @@ export function usePWAInstall(): PWAInstallState {
   const [, forceUpdate] = useState(0);
 
   // تحقق من SW registration — لو مش مسجّل، الـ PWA install لن يعمل
+  // في dev mode الـ SW بيتشال عمداً (main.tsx) فمش محتاجين warning
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
+    if (import.meta.env.PROD && 'serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistration().then(reg => {
         if (!reg) {
           logger.warn('[usePWAInstall] No SW registration found — PWA install may not work');

@@ -12,10 +12,10 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
 
-// Service Worker registration & auto-update logic
+// Service Worker registration & auto-update logic (Production only to avoid dev server latency)
 const isSWDisabled = new URLSearchParams(window.location.search).has('disable-sw');
 
-if ("serviceWorker" in navigator && !isSWDisabled) {
+if (import.meta.env.PROD && "serviceWorker" in navigator && !isSWDisabled) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/sw.js").then(
       (registration) => {
@@ -60,6 +60,15 @@ if ("serviceWorker" in navigator && !isSWDisabled) {
       window.location.reload();
     }
   });
+} else if (import.meta.env.DEV && "serviceWorker" in navigator) {
+  // ⚡ In development: Auto-unregister any active service workers so they don't delay local requests
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister().then((success) => {
+        if (success) logger.log("🧹 [Dev] Cleaned up ServiceWorker to prevent local latency");
+      });
+    }
+  }).catch(() => {});
 }
 
 // 🚀 Capture beforeinstallprompt event early — قبل React حتى

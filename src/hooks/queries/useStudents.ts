@@ -14,6 +14,7 @@ export interface Student {
   birth_date?: string | null;
   notes?: string | null;
   classes?: { name: string; grade_level: string | null; teacher_id?: string };
+  student_parents?: { parent_id: string }[];
 }
 
 // ─── Arabic text normalizer ───────────────────────────────────────────────────
@@ -91,7 +92,7 @@ async function fetchStudents(
 
     let q = supabase
       .from('students')
-      .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+      .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
 
     if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
     if (user.role === 'teacher' && teacherClassIds.length > 0) q = q.in('class_id', teacherClassIds);
@@ -116,7 +117,7 @@ async function fetchStudents(
 
   let q = supabase
     .from('students')
-    .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+    .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
 
   if (!user.isSuperAdmin && user.schoolId) {
     q = q.eq('school_id', user.schoolId);

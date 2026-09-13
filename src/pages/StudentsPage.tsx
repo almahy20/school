@@ -9,7 +9,8 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, GraduationCap, School, User, 
   ArrowRight,
-  SlidersHorizontal, Check, ChevronDown
+  SlidersHorizontal, Check, ChevronDown,
+  Phone, PhoneOff
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -344,19 +345,43 @@ export default function StudentsPage() {
 }
 
 function StudentCard({ student, onClick }: { student: any; onClick: () => void }) {
+  const hasPhone = Boolean(student.parent_phone && String(student.parent_phone).trim().length > 0);
+  const isLinkedToParent = Boolean(
+    (Array.isArray(student.student_parents) && student.student_parents.length > 0) ||
+    student.parent_id
+  );
+
   return (
     <div 
       className="group bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl overflow-hidden hover:-translate-y-1 transition-all duration-300 text-right cursor-pointer" 
       onClick={onClick}
     >
       <div className="p-6 flex flex-col gap-4">
-        {/* Header: avatar + grade badge */}
+        {/* Header: avatar + phone status badge */}
         <div className="flex items-start justify-between">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 transition-all duration-300 group-hover:bg-indigo-600 group-hover:text-white group-hover:rotate-6 shrink-0">
             <User className="w-6 h-6 stroke-[2.5px]" />
           </div>
-          <Badge variant="outline" className="rounded-xl px-3 py-1 bg-slate-50 border-slate-100 text-[10px] font-bold text-slate-400 max-w-[120px] truncate group-hover:border-indigo-100 group-hover:text-indigo-500 transition-colors">
-            {student.classes?.grade_level || 'غير محدد'}
+          <Badge 
+            variant="outline" 
+            className={cn(
+              "rounded-xl px-2.5 py-1 text-[10px] font-bold max-w-[130px] truncate flex items-center gap-1.5 transition-colors shadow-none",
+              hasPhone 
+                ? "bg-emerald-50/80 border-emerald-200/70 text-emerald-700 group-hover:bg-emerald-100/80" 
+                : "bg-slate-50 border-slate-200/80 text-slate-400 group-hover:text-slate-500"
+            )}
+          >
+            {hasPhone ? (
+              <>
+                <Phone className="w-2.5 h-2.5 shrink-0 text-emerald-600" />
+                <span>يوجد رقم</span>
+              </>
+            ) : (
+              <>
+                <PhoneOff className="w-2.5 h-2.5 shrink-0 text-slate-400" />
+                <span>لا يوجد رقم</span>
+              </>
+            )}
           </Badge>
         </div>
 
@@ -373,9 +398,18 @@ function StudentCard({ student, onClick }: { student: any; onClick: () => void }
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-slate-50">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse ring-4 ring-emerald-500/20" />
-            <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest">مُنتظم</span>
+          <div 
+            className="flex items-center gap-2"
+            title={isLinkedToParent ? 'مربوط بولي أمر' : 'غير مربوط بولي أمر'}
+          >
+            <div 
+              className={cn(
+                "w-2.5 h-2.5 rounded-full transition-all",
+                isLinkedToParent 
+                  ? "bg-emerald-500 ring-4 ring-emerald-500/20" 
+                  : "bg-rose-500 ring-4 ring-rose-500/20"
+              )} 
+            />
           </div>
           <div className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all duration-300">
             <ArrowRight className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />

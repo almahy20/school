@@ -13,7 +13,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { sendPushToUser } from '@/utils/pushNotifications';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { 
@@ -33,6 +33,8 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const { permission, isSubscribed, subscribeToNotifications, unsubscribeFromNotifications } = usePushNotifications();
   const [isTestingPush, setIsTestingPush] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const timerRef = useRef<any>(null);
 
   const handleTestPush = async () => {
     if (!user?.id) return;
@@ -41,16 +43,16 @@ export default function SettingsPage() {
       const result = await sendPushToUser({
         userId: user.id,
         title: 'إشعار تجريبي 🚀',
-        body: 'إذا رأيت هذا، فهذا يعني أن نظام الإشعارات يعمل بنجاح!',
+        body: 'إذا رأيت هذا الإشعار، فهذا يعني أن نظام الإشعارات يعمل بنجاح!',
         url: '/settings'
       });
       
       if (result?.sent > 0) {
-        toast({ title: 'تم إرسال الإشعار', description: 'يجب أن يظهر على جهازك الآن.' });
+        toast({ title: 'تم إرسال الإشعار بنجاح', description: 'يجب أن يظهر على جهازك الآن بصوت واهتزاز.' });
       } else {
         toast({ 
-          title: 'لم يتم العثور على أجهزة', 
-          description: 'تأكد من تفعيل الإشعارات على هذا المتصفح أولاً.',
+          title: 'لم يتم العثور على أجهزة مسجلة', 
+          description: 'تأكد من الضغط على "تفعيل الإشعارات" في هذا الجهاز أولاً.',
           variant: 'destructive'
         });
       }
@@ -58,13 +60,56 @@ export default function SettingsPage() {
       logger.error('Test push error:', err);
       toast({ 
         title: 'فشل إرسال الإشعار', 
-        description: err.message || 'حدث خطأ غير متوقع في الخادم.',
+        description: err.message || 'حدث خطأ غير متوقع في الخادم أثناء الإرسال.',
         variant: 'destructive' 
       });
     } finally {
       setIsTestingPush(false);
     }
   };
+
+  const handleDelayedPush = (seconds = 10) => {
+    if (!user?.id || isTestingPush || countdown !== null) return;
+    setCountdown(seconds);
+    toast({
+      title: `بدء العد التنازلي (${seconds} ثوانٍ)`,
+      description: 'أغلق التطبيق أو المتصفح أو اقفل شاشة هاتفك الآن!',
+    });
+
+    let remaining = seconds;
+    const interval = setInterval(async () => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setCountdown(remaining);
+      } else {
+        clearInterval(interval);
+        timerRef.current = null;
+        setCountdown(null);
+        await handleTestPush();
+      }
+    }, 1000);
+    timerRef.current = interval;
+  };
+
+  const handleCancelCountdown = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setCountdown(null);
+    toast({
+      title: 'تم إلغاء المؤقت',
+      description: 'تم إيقاف العد التنازلي للإشعار التجريبي.',
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
   
   const { data: profile, isLoading, error, refetch } = useProfile();
   const updatePrefsMutation = useUpdateNotificationPrefs();
@@ -291,12 +336,18 @@ export default function SettingsPage() {
                  </div>
 
                  <div className="grid grid-cols-1 gap-6 pt-2">
-                    <NotificationSettingsCard
-                      permission={permission}
-                      isSubscribed={isSubscribed}
-                      onSubscribe={subscribeToNotifications}
-                      onUnsubscribe={unsubscribeFromNotifications}
-                    />
+                     <NotificationSettingsCard
+                       permission={permission}
+                       isSubscribed={isSubscribed}
+                       onSubscribe={subscribeToNotifications}
+                       onUnsubscribe={unsubscribeFromNotifications}
+                       onTestPush={handleTestPush}
+                       onDelayedPush={handleDelayedPush}
+                       onCancelDelayedPush={handleCancelCountdown}
+                       isTesting={isTestingPush}
+                       countdown={countdown}
+                       userId={user?.id}
+                     />
                  </div>
               </div>
           </div>
