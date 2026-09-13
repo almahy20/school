@@ -239,7 +239,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isSigningOutRef = useRef(false);
   const loadingUserIdRef = useRef<string | null>(null);
 
+  // ── Token refresh throttling & backoff ───────────────────────────────────
+  // Prevents spam of /auth/v1/token (refresh_token) during network errors/CORS/504
+  const refreshInProgressRef = useRef(false);
+  const lastRefreshAttemptAtRef = useRef(0);
+  const consecutiveRefreshFailsRef = useRef(0);
+  const BASE_REFRESH_COOLDOWN_MS = 15_000;      // 15s after first network fail
+  const MAX_REFRESH_COOLDOWN_MS = 3 * 60_000;   // 3min ceiling (exponential backoff)
+  const MIN_REFRESH_GAP_MS = 5_000;             // min gap between ANY two refresh attempts
+
+  const getNextAllowedRefreshAt = (): number => {
+    if (consecutiveRefreshFailsRef.current <= 0) return lastRefreshAttemptAtRef.current + MIN_REFRESH_GAP_MS;
+    const backoff = Math.min(
+      MAX_REFRESH_COOLDOWN_MS,
+      BASE_REFRESH_COOLDOWN_MS * Math.pow(2, consecutiveRefreshFailsRef.current - 1)
+    );
+    return lastRefreshAttemptAtRef.current + backoff;
+  };
+
+  const recordRefreshAttempt = () => {
+    lastRefreshAttemptAtRef.current = Date.now();
+  };
+
+  const recordRefreshResult = (ok: boolean, wasNetworkError: boolean) => {
+    if (ok) {
+      consecutiveRefreshFailsRef.current = 0;
+    } else if (wasNetworkError) {
+      consecutiveRefreshFailsRef.current++;
+      logger.warn(
+        `[Auth] Refresh network fail #${consecutiveRefreshFailsRef.current} — ` +
+        `backoff ${Math.round((getNextAllowedRefreshAt() - Date.now()) / 1000)}s`
+      );
+    } else {
+      consecutiveRefreshFailsRef.current = Math.min(consecutiveRefreshFailsRef.current + 1, 3);
+    }
+  };
+
   const applySession = (s: Session) => {
+    // Reset refresh backoff — a valid session being applied means connectivity is healthy
+    if (consecutiveRefreshFailsRef.current > 0) consecutiveRefreshFailsRef.current = 0;
+
     setSession(prev => {
       if (prev?.access_token === s.access_token && prev?.user?.id === s.user?.id) {
         return prev;
@@ -330,30 +369,81 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const isTokenRefreshNetworkError = (e: any): boolean => {
+    if (!e) return false;
+    const msg = (e?.message || '').toLowerCase();
+    return (
+      msg.includes('failed to fetch') ||
+      msg.includes('networkerror') ||
+      msg.includes('cors') ||
+      msg.includes('load resource') ||
+      msg.includes('abort') ||
+      msg.includes('timeout') ||
+      msg.includes('gateway timeout') ||
+      msg.includes('504') ||
+      msg.includes('502') ||
+      msg.includes('503') ||
+      e?.status === 0
+    );
+  };
+
   const silentRefresh = async (): Promise<boolean> => {
+    // Guard 1: Offline — pretend success (no logout)
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return true;
+    }
+
+    const now = Date.now();
+
+    // Guard 2: Another refresh is currently in flight
+    if (refreshInProgressRef.current) {
+      logger.debug('[Auth] silentRefresh skipped — already in progress');
+      return true;
+    }
+
+    // Guard 3: Cooldown/backoff active (prevents refresh_token spam)
+    const nextAllowed = getNextAllowedRefreshAt();
+    if (now < nextAllowed) {
+      const waitSecs = Math.round((nextAllowed - now) / 1000);
+      logger.debug(`[Auth] silentRefresh skipped — backoff cooldown active (${waitSecs}s left)`);
+      // Treat as "no-op success" so callers don't panic. The cached session is still valid for now.
+      return true;
+    }
+
+    refreshInProgressRef.current = true;
+    recordRefreshAttempt();
+
     try {
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return true;
-      }
       const { data, error } = await supabase.auth.refreshSession();
       if (!error && data.session) {
         applySession(data.session);
+        recordRefreshResult(true, false);
         return true;
       }
-      if (error && (
-        error.message?.includes('Failed to fetch') || 
-        error.message?.includes('NetworkError') || 
-        (error as any)?.status === 0
-      )) {
-        return true;
+
+      const wasNet = isTokenRefreshNetworkError(error);
+      recordRefreshResult(false, wasNet);
+
+      // Network errors — keep session (true). Auth errors — let caller decide (false).
+      if (wasNet) return true;
+      // If error indicates invalid refresh token, we should NOT return true
+      if (
+        error?.message?.includes('Invalid Refresh Token') ||
+        error?.message?.includes('invalid_grant') ||
+        error?.message?.includes('refresh_token not found')
+      ) {
+        return false;
       }
-    } catch (_e) { 
-      if (typeof navigator !== 'undefined' && !navigator.onLine) {
-        return true;
-      }
+      return true;
+    } catch (_e) {
+      const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+      const wasNet = offline || isTokenRefreshNetworkError(_e);
+      recordRefreshResult(false, wasNet);
+      if (wasNet || offline) return true;
       return false;
+    } finally {
+      refreshInProgressRef.current = false;
     }
-    return false;
   };
 
   useEffect(() => {

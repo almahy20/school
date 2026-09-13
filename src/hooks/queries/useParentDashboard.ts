@@ -1,4 +1,4 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, keepPreviousData, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
@@ -284,6 +284,7 @@ export function useParentChildren() {
 
 export function useChildFullDetails(studentId: string | undefined) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   return useQuery({
     queryKey: ['child-full-details', studentId],
@@ -291,6 +292,32 @@ export function useChildFullDetails(studentId: string | undefined) {
       if (!studentId || !user?.schoolId) return null;
 
       const current_term = getCurrentTerm();
+
+      const isNetworkOrTimeoutErr = (e: any): boolean => {
+        if (!e) return false;
+        const msg = ((e?.message || '') + ' ' + (e?.details || '') + ' ' + (e?.code || '')).toLowerCase();
+        return (
+          msg.includes('failed to fetch') ||
+          msg.includes('networkerror') ||
+          msg.includes('cors') ||
+          msg.includes('load resource') ||
+          msg.includes('abort') ||
+          msg.includes('timeout') ||
+          msg.includes('gateway timeout') ||
+          msg.includes('504') ||
+          msg.includes('502') ||
+          msg.includes('503') ||
+          msg.includes('temporarily unavailable') ||
+          (typeof navigator !== 'undefined' && !navigator.onLine)
+        );
+      };
+
+      const tryGetCached = (): any | null => {
+        try {
+          const prev = queryClient.getQueryData(['child-full-details', studentId]) as any;
+          return prev || null;
+        } catch { return null; }
+      };
 
       try {
         logger.log('[useChildFullDetails] Calling RPC get_child_full_details for student:', studentId);
@@ -332,8 +359,23 @@ export function useChildFullDetails(studentId: string | undefined) {
           currentTerm: term,
           summary: { avgGrade, attendanceRate, feesRemaining: totalFeesRemaining, currentTerm: term },
         };
-      } catch (rpcError) {
+      } catch (rpcError: any) {
+        const rpcWasNetErr = isNetworkOrTimeoutErr(rpcError);
+
+        if (rpcWasNetErr) {
+          const cached = tryGetCached();
+          if (cached && cached.id) {
+            logger.debug('[useChildFullDetails] Network error during RPC — returning STALE CACHED result (no fallback spree).');
+            return cached;
+          }
+        }
+
         logger.warn('[useChildFullDetails] Falling back to direct table queries...');
+
+        if (rpcWasNetErr && typeof navigator !== 'undefined' && !navigator.onLine) {
+          const cached = tryGetCached();
+          if (cached && cached.id) return cached;
+        }
 
         const [studentResult, gradesResult, attendanceResult, feesResult, curriculumResult] =
           await Promise.all([
@@ -346,15 +388,15 @@ export function useChildFullDetails(studentId: string | undefined) {
 
             supabase
               .from('grades')
-              .select('*, exam_templates(id, title, term, subject)')
+              .select('*, exam_templates(id, title, term, subject, max_score)')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
               .order('created_at', { ascending: true })
-              .limit(500), // درجات طالب واحد — 500 تكفي كل المسيرة الدراسية
+              .limit(500),
 
             supabase
               .from('attendance')
-              .select('id, student_id, status, date, school_id')
+              .select('id, student_id, status, date, school_id, class_id, notes')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
               .order('date', { ascending: false })
@@ -362,7 +404,7 @@ export function useChildFullDetails(studentId: string | undefined) {
 
             supabase
               .from('fees')
-              .select('id, student_id, amount_due, amount_paid, status, term, created_at')
+              .select('id, student_id, description, amount_due, amount_paid, status, term, created_at')
               .eq('student_id', studentId)
               .eq('school_id', user.schoolId)
               .order('created_at', { ascending: false }),
@@ -378,7 +420,7 @@ export function useChildFullDetails(studentId: string | undefined) {
               if (!curriculumId) return { data: [], error: null };
               return supabase
                 .from('curriculum_subjects')
-                .select('id, curriculum_id, subject_name, content')
+                .select('id, curriculum_id, subject_name, description')
                 .eq('curriculum_id', curriculumId)
                 .order('subject_name');
             })(),
@@ -386,6 +428,10 @@ export function useChildFullDetails(studentId: string | undefined) {
 
         if (studentResult.error) {
           logger.error('[useChildFullDetails] Fallback failed at student fetch:', studentResult.error);
+          if (isNetworkOrTimeoutErr(studentResult.error)) {
+            const cached = tryGetCached();
+            if (cached && cached.id) return cached;
+          }
           throw studentResult.error;
         }
 
@@ -419,13 +465,19 @@ export function useChildFullDetails(studentId: string | undefined) {
         const feeIds = fees.map((f: any) => f.id).filter(Boolean);
         let payments: any[] = [];
         if (feeIds.length > 0) {
-          const { data: pData } = await supabase
-            .from('fee_payments')
-            .select('id, fee_id, amount, payment_date, notes, school_id')
-            .eq('school_id', user.schoolId)
-            .in('fee_id', feeIds)
-            .order('payment_date', { ascending: false });
-          payments = pData || [];
+          try {
+            const { data: pData } = await supabase
+              .from('fee_payments')
+              .select('id, fee_id, amount, payment_date, notes, school_id')
+              .eq('school_id', user.schoolId)
+              .in('fee_id', feeIds)
+              .order('payment_date', { ascending: false });
+            payments = pData || [];
+          } catch (pErr) {
+            if (!isNetworkOrTimeoutErr(pErr)) {
+              logger.warn('[useChildFullDetails] payments fetch (non-fatal) failed:', pErr);
+            }
+          }
         }
 
         logger.log('[useChildFullDetails] Fallback succeeded for student:', studentId);
@@ -462,6 +514,6 @@ export function useChildFullDetails(studentId: string | undefined) {
       }
       return failureCount < 1;
     },
-    retryDelay: 1000,
+    retryDelay: 2500,
   });
 }

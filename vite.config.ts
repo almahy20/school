@@ -9,6 +9,33 @@ export default defineConfig(({ mode }) => ({
     host: true,
     port: 3000,
     strictPort: false,
+    proxy: {
+      '/supabase-auth': {
+        target: 'https://mecutwhreywjwstirpka.supabase.co',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/supabase-auth/, '/auth/v1'),
+      },
+      '/supabase-rest': {
+        target: 'https://mecutwhreywjwstirpka.supabase.co',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/supabase-rest/, '/rest/v1'),
+      },
+      '/supabase-realtime': {
+        target: 'wss://mecutwhreywjwstirpka.supabase.co',
+        changeOrigin: true,
+        secure: true,
+        ws: true,
+        rewrite: (path) => path.replace(/^\/supabase-realtime/, '/realtime/v1'),
+      },
+      '/supabase-storage': {
+        target: 'https://mecutwhreywjwstirpka.supabase.co',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/supabase-storage/, '/storage/v1'),
+      },
+    },
   },
   test: {
     globals: true,
