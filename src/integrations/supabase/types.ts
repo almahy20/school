@@ -6,1001 +6,1544 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
-  }
+export interface Database {
   public: {
     Tables: {
-      attendance: {
+      schools: {
         Row: {
-          class_id: string | null
-          created_at: string
-          date: string
           id: string
-          school_id: string | null
+          name: string
+          slug: string
           status: string
-          student_id: string
+          plan: string | null
+          subscription_plan: string | null
+          subscription_end_date: string | null
+          logo_url: string | null
+          settings: Json | null
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
-          class_id?: string | null
-          created_at?: string
-          date: string
           id?: string
-          school_id?: string | null
-          status: string
-          student_id: string
-        }
-        Update: {
-          class_id?: string | null
-          created_at?: string
-          date?: string
-          id?: string
-          school_id?: string | null
+          name: string
+          slug: string
           status?: string
-          student_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attendance_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "classes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attendance_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "attendance_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      children: {
-        Row: {
-          birth_date: string | null
-          class_name: string | null
-          created_at: string
-          id: string
-          name: string
-          notes: string | null
-          parent_id: string
-          updated_at: string
-        }
-        Insert: {
-          birth_date?: string | null
-          class_name?: string | null
-          created_at?: string
-          id?: string
-          name: string
-          notes?: string | null
-          parent_id: string
-          updated_at?: string
+          plan?: string | null
+          subscription_plan?: string | null
+          subscription_end_date?: string | null
+          logo_url?: string | null
+          settings?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Update: {
-          birth_date?: string | null
-          class_name?: string | null
-          created_at?: string
           id?: string
           name?: string
-          notes?: string | null
-          parent_id?: string
-          updated_at?: string
+          slug?: string
+          status?: string
+          plan?: string | null
+          subscription_plan?: string | null
+          subscription_end_date?: string | null
+          logo_url?: string | null
+          settings?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
-      }
-      classes: {
-        Row: {
-          created_at: string
-          curriculum_id: string | null
-          grade_level: string | null
-          id: string
-          name: string
-          school_id: string | null
-          teacher_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          curriculum_id?: string | null
-          grade_level?: string | null
-          id?: string
-          name: string
-          school_id?: string | null
-          teacher_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          curriculum_id?: string | null
-          grade_level?: string | null
-          id?: string
-          name?: string
-          school_id?: string | null
-          teacher_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "classes_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "classes_teacher_id_fkey"
-            columns: ["teacher_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "classes_curriculum_id_fkey"
-            columns: ["curriculum_id"]
-            isOneToOne: false
-            referencedRelation: "curriculums"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      complaints: {
-        Row: {
-          admin_response: string | null
-          content: string
-          created_at: string | null
-          id: string
-          parent_id: string | null
-          school_id: string | null
-          status: string | null
-          student_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          admin_response?: string | null
-          content: string
-          created_at?: string | null
-          id?: string
-          parent_id?: string | null
-          school_id?: string | null
-          status?: string | null
-          student_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          admin_response?: string | null
-          content?: string
-          created_at?: string | null
-          id?: string
-          parent_id?: string | null
-          school_id?: string | null
-          status?: string | null
-          student_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "complaints_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "complaints_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      exam_templates: {
-        Row: {
-          class_id: string
-          created_at: string
-          exam_type: string
-          id: string
-          max_score: number
-          school_id: string | null
-          subject: string
-          teacher_id: string
-          term: string
-          title: string
-          weight: number
-          score_type: string
-          expected_results: string[] | null
-        }
-        Insert: {
-          class_id: string
-          created_at?: string
-          exam_type?: string
-          id?: string
-          max_score?: number
-          school_id?: string | null
-          subject: string
-          teacher_id: string
-          term?: string
-          title?: string
-          weight?: number
-          score_type?: string
-          expected_results?: string[] | null
-        }
-        Update: {
-          class_id?: string
-          created_at?: string
-          exam_type?: string
-          id?: string
-          max_score?: number
-          school_id?: string | null
-          subject?: string
-          teacher_id?: string
-          term?: string
-          title?: string
-          weight?: number
-          score_type?: string
-          expected_results?: string[] | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exam_templates_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "classes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exam_templates_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exam_templates_teacher_id_fkey"
-            columns: ["teacher_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fee_payments: {
-        Row: {
-          amount: number
-          fee_id: string | null
-          id: string
-          payment_date: string | null
-          payment_method: string | null
-          school_id: string | null
-        }
-        Insert: {
-          amount: number
-          fee_id?: string | null
-          id?: string
-          payment_date?: string | null
-          payment_method?: string | null
-          school_id?: string | null
-        }
-        Update: {
-          amount?: number
-          fee_id?: string | null
-          id?: string
-          payment_date?: string | null
-          payment_method?: string | null
-          school_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fee_payments_fee_id_fkey"
-            columns: ["fee_id"]
-            isOneToOne: false
-            referencedRelation: "fees"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fee_payments_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      fees: {
-        Row: {
-          amount_due: number
-          amount_paid: number
-          created_at: string | null
-          id: string
-          school_id: string | null
-          status: string | null
-          student_id: string | null
-          term: string
-          updated_at: string | null
-        }
-        Insert: {
-          amount_due?: number
-          amount_paid?: number
-          created_at?: string | null
-          id?: string
-          school_id?: string | null
-          status?: string | null
-          student_id?: string | null
-          term: string
-          updated_at?: string | null
-        }
-        Update: {
-          amount_due?: number
-          amount_paid?: number
-          created_at?: string | null
-          id?: string
-          school_id?: string | null
-          status?: string | null
-          student_id?: string | null
-          term?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fees_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fees_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      grades: {
-        Row: {
-          created_at: string
-          date: string
-          exam_template_id: string | null
-          id: string
-          max_score: number
-          school_id: string | null
-          score: number
-          student_id: string
-          subject: string
-          teacher_id: string | null
-          term: string
-        }
-        Insert: {
-          created_at?: string
-          date?: string
-          exam_template_id?: string | null
-          id?: string
-          max_score?: number
-          school_id?: string | null
-          score: number
-          student_id: string
-          subject: string
-          teacher_id?: string | null
-          term?: string
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          exam_template_id?: string | null
-          id?: string
-          max_score?: number
-          school_id?: string | null
-          score?: number
-          student_id?: string
-          subject?: string
-          teacher_id?: string | null
-          term?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "grades_exam_template_id_fkey"
-            columns: ["exam_template_id"]
-            isOneToOne: false
-            referencedRelation: "exam_templates"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "grades_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "grades_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "grades_teacher_id_fkey"
-            columns: ["teacher_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      messages: {
-        Row: {
-          content: string
-          created_at: string
-          id: string
-          is_read: boolean
-          receiver_id: string
-          sender_id: string
-          student_id: string | null
-          school_id: string | null
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          id?: string
-          is_read?: boolean
-          receiver_id: string
-          sender_id: string
-          student_id?: string | null
-          school_id?: string | null
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          id?: string
-          is_read?: boolean
-          receiver_id?: string
-          sender_id?: string
-          student_id?: string | null
-          school_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_receiver_id_fkey"
-            columns: ["receiver_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       profiles: {
         Row: {
-          created_at: string
-          email: string | null
-          full_name: string
           id: string
+          full_name: string
+          email: string | null
           phone: string | null
           school_id: string | null
-          specialization: string | null
-          updated_at: string
-          last_seen: string | null
-        }
-        Insert: {
-          created_at?: string
-          email?: string | null
-          full_name?: string
-          id: string
-          phone?: string | null
-          school_id?: string | null
-          specialization?: string | null
-          updated_at?: string
-          last_seen?: string | null
-        }
-        Update: {
-          created_at?: string
-          email?: string | null
-          full_name?: string
-          id?: string
-          phone?: string | null
-          school_id?: string | null
-          specialization?: string | null
-          updated_at?: string
-          last_seen?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      schools: {
-        Row: {
+          notification_prefs: Json | null
           created_at: string | null
-          id: string
-          logo_url: string | null
-          name: string
-          plan: string | null
-          slug: string | null
-          status: string | null
-          subscription_date: string | null
-          subscription_end_date: string | null
           updated_at: string | null
+          last_seen: string | null
+          role: string | null
+          is_active: boolean | null
         }
         Insert: {
-          created_at?: string | null
-          id?: string
-          logo_url?: string | null
-          name: string
-          plan?: string | null
-          slug?: string | null
-          status?: string | null
-          subscription_date?: string | null
-          subscription_end_date?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          logo_url?: string | null
-          name?: string
-          plan?: string | null
-          slug?: string | null
-          status?: string | null
-          subscription_date?: string | null
-          subscription_end_date?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      school_orders: {
-        Row: {
-          admin_name: string
-          admin_phone: string
-          admin_whatsapp: string
-          created_at: string
           id: string
-          logo_url: string | null
-          plan: string
-          receipt_note: string | null
-          receipt_url: string | null
-          rejection_note: string | null
-          school_name: string
-          school_slug: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          admin_name: string
-          admin_phone: string
-          admin_whatsapp: string
-          created_at?: string
-          id?: string
-          logo_url?: string | null
-          plan?: string
-          receipt_note?: string | null
-          receipt_url?: string | null
-          rejection_note?: string | null
-          school_name: string
-          school_slug: string
-          status?: string
-          updated_at?: string
+          full_name: string
+          email?: string | null
+          phone?: string | null
+          school_id?: string | null
+          notification_prefs?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          last_seen?: string | null
+          role?: string | null
+          is_active?: boolean | null
         }
         Update: {
-          admin_name?: string
-          admin_phone?: string
-          admin_whatsapp?: string
-          created_at?: string
           id?: string
-          logo_url?: string | null
-          plan?: string
-          receipt_note?: string | null
-          receipt_url?: string | null
-          rejection_note?: string | null
-          school_name?: string
-          school_slug?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      student_parents: {
-        Row: {
-          created_at: string
-          id: string
-          parent_id: string
-          school_id: string | null
-          student_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          parent_id: string
+          full_name?: string
+          email?: string | null
+          phone?: string | null
           school_id?: string | null
-          student_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          parent_id?: string
-          school_id?: string | null
-          student_id?: string
+          notification_prefs?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          last_seen?: string | null
+          role?: string | null
+          is_active?: boolean | null
         }
         Relationships: [
           {
-            foreignKeyName: "student_parents_parent_id_fkey"
-            columns: ["parent_id"]
+            foreignKeyName: 'profiles_school_id_fkey'
+            columns: ['school_id']
             isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_parents_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "student_parents_student_id_fkey"
-            columns: ["student_id"]
-            isOneToOne: false
-            referencedRelation: "students"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      students: {
-        Row: {
-          birth_date: string | null
-          class_id: string | null
-          created_at: string
-          id: string
-          name: string
-          notes: string | null
-          parent_phone: string | null
-          school_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          birth_date?: string | null
-          class_id?: string | null
-          created_at?: string
-          id?: string
-          name: string
-          notes?: string | null
-          parent_phone?: string | null
-          school_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          birth_date?: string | null
-          class_id?: string | null
-          created_at?: string
-          id?: string
-          name?: string
-          notes?: string | null
-          parent_phone?: string | null
-          school_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "students_class_id_fkey"
-            columns: ["class_id"]
-            isOneToOne: false
-            referencedRelation: "classes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "students_school_id_fkey"
-            columns: ["school_id"]
-            isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
         ]
       }
       user_roles: {
         Row: {
           id: string
-          is_super_admin: boolean | null
-          role: Database["public"]["Enums"]["app_role"]
+          user_id: string | null
+          role: string
           school_id: string | null
-          user_id: string
-          approval_status: string | null
+          is_super_admin: boolean | null
+          approval_status: string
           created_at: string | null
         }
         Insert: {
           id?: string
-          is_super_admin?: boolean | null
-          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
+          role: string
           school_id?: string | null
-          user_id: string
-          approval_status?: string | null
+          is_super_admin?: boolean | null
+          approval_status?: string
           created_at?: string | null
         }
         Update: {
           id?: string
-          is_super_admin?: boolean | null
-          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string | null
+          role?: string
           school_id?: string | null
-          user_id?: string
-          approval_status?: string | null
+          is_super_admin?: boolean | null
+          approval_status?: string
           created_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "user_roles_school_id_fkey"
-            columns: ["school_id"]
+            foreignKeyName: 'user_roles_school_id_fkey'
+            columns: ['school_id']
             isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      curriculum_subjects: {
-        Row: {
-          content: string | null
-          created_at: string | null
-          curriculum_id: string
-          id: string
-          subject_name: string
-          updated_at: string | null
-          term: string | null
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string | null
-          curriculum_id: string
-          id?: string
-          subject_name: string
-          updated_at?: string | null
-          term?: string | null
-        }
-        Update: {
-          content?: string | null
-          created_at?: string | null
-          curriculum_id?: string
-          id?: string
-          subject_name?: string
-          updated_at?: string | null
-          term?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "curriculum_subjects_curriculum_id_fkey"
-            columns: ["curriculum_id"]
-            isOneToOne: false
-            referencedRelation: "curriculums"
-            referencedColumns: ["id"]
-          },
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
         ]
       }
       curriculums: {
         Row: {
-          created_at: string | null
           id: string
-          name: string
           school_id: string
+          name: string
           status: string
+          created_at: string | null
           updated_at: string | null
         }
         Insert: {
-          created_at?: string | null
           id?: string
-          name: string
           school_id: string
+          name: string
           status?: string
+          created_at?: string | null
           updated_at?: string | null
         }
         Update: {
-          created_at?: string | null
           id?: string
-          name?: string
           school_id?: string
+          name?: string
           status?: string
+          created_at?: string | null
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "curriculums_school_id_fkey"
-            columns: ["school_id"]
+            foreignKeyName: 'curriculums_school_id_fkey'
+            columns: ['school_id']
             isOneToOne: false
-            referencedRelation: "schools"
-            referencedColumns: ["id"]
-          },
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
         ]
+      }
+      curriculum_subjects: {
+        Row: {
+          id: string
+          curriculum_id: string
+          subject_name: string
+          description: string | null
+          content: string | null
+          term: string | null
+          created_at: string | null
+          updated_at: string | null
+          school_id: string | null
+        }
+        Insert: {
+          id?: string
+          curriculum_id: string
+          subject_name: string
+          description?: string | null
+          content?: string | null
+          term?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          school_id?: string | null
+        }
+        Update: {
+          id?: string
+          curriculum_id?: string
+          subject_name?: string
+          description?: string | null
+          content?: string | null
+          term?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          school_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'curriculum_subjects_curriculum_id_fkey'
+            columns: ['curriculum_id']
+            isOneToOne: false
+            referencedRelation: 'curriculums'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'curriculum_subjects_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      classes: {
+        Row: {
+          id: string
+          school_id: string
+          name: string
+          grade_level: string | null
+          teacher_id: string | null
+          curriculum_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          name: string
+          grade_level?: string | null
+          teacher_id?: string | null
+          curriculum_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          name?: string
+          grade_level?: string | null
+          teacher_id?: string | null
+          curriculum_id?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'classes_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'classes_curriculum_id_fkey'
+            columns: ['curriculum_id']
+            isOneToOne: false
+            referencedRelation: 'curriculums'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      exam_templates: {
+        Row: {
+          id: string
+          school_id: string
+          class_id: string | null
+          title: string
+          subject: string
+          term: string
+          score_type: string
+          expected_results: Json | null
+          created_at: string | null
+          updated_at: string | null
+          exam_type: string | null
+          max_score: number | null
+          weight: number | null
+          teacher_id: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          class_id?: string | null
+          title: string
+          subject: string
+          term: string
+          score_type?: string
+          expected_results?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          exam_type?: string | null
+          max_score?: number | null
+          weight?: number | null
+          teacher_id?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          class_id?: string | null
+          title?: string
+          subject?: string
+          term?: string
+          score_type?: string
+          expected_results?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+          exam_type?: string | null
+          max_score?: number | null
+          weight?: number | null
+          teacher_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'exam_templates_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'exam_templates_class_id_fkey'
+            columns: ['class_id']
+            isOneToOne: false
+            referencedRelation: 'classes'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      students: {
+        Row: {
+          id: string
+          school_id: string
+          class_id: string | null
+          name: string
+          parent_phone: string | null
+          monthly_fee: number | null
+          address: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          class_id?: string | null
+          name: string
+          parent_phone?: string | null
+          monthly_fee?: number | null
+          address?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          class_id?: string | null
+          name?: string
+          parent_phone?: string | null
+          monthly_fee?: number | null
+          address?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'students_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'students_class_id_fkey'
+            columns: ['class_id']
+            isOneToOne: false
+            referencedRelation: 'classes'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      attendance: {
+        Row: {
+          id: string
+          school_id: string
+          student_id: string
+          class_id: string | null
+          teacher_id: string | null
+          date: string
+          status: string
+          notes: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          student_id: string
+          class_id?: string | null
+          teacher_id?: string | null
+          date?: string
+          status: string
+          notes?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          student_id?: string
+          class_id?: string | null
+          teacher_id?: string | null
+          date?: string
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_class_id_fkey'
+            columns: ['class_id']
+            isOneToOne: false
+            referencedRelation: 'classes'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      grades: {
+        Row: {
+          id: string
+          school_id: string
+          student_id: string
+          exam_template_id: string | null
+          subject: string
+          score: string
+          max_score: number | null
+          term: string | null
+          date: string | null
+          created_at: string | null
+          teacher_id: string | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          student_id: string
+          exam_template_id?: string | null
+          subject: string
+          score: string
+          max_score?: number | null
+          term?: string | null
+          date?: string | null
+          created_at?: string | null
+          teacher_id?: string | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          student_id?: string
+          exam_template_id?: string | null
+          subject?: string
+          score?: string
+          max_score?: number | null
+          term?: string | null
+          date?: string | null
+          created_at?: string | null
+          teacher_id?: string | null
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'grades_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'grades_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'grades_exam_template_id_fkey'
+            columns: ['exam_template_id']
+            isOneToOne: false
+            referencedRelation: 'exam_templates'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'grades_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      complaints: {
+        Row: {
+          id: string
+          school_id: string
+          user_id: string
+          student_id: string | null
+          content: string
+          status: string | null
+          admin_response: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          user_id: string
+          student_id?: string | null
+          content: string
+          status?: string | null
+          admin_response?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          user_id?: string
+          student_id?: string | null
+          content?: string
+          status?: string | null
+          admin_response?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'complaints_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'complaints_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      messages: {
+        Row: {
+          id: string
+          school_id: string
+          sender_id: string
+          receiver_id: string
+          student_id: string | null
+          content: string
+          is_read: boolean | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          sender_id: string
+          receiver_id: string
+          student_id?: string | null
+          content: string
+          is_read?: boolean | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          sender_id?: string
+          receiver_id?: string
+          student_id?: string | null
+          content?: string
+          is_read?: boolean | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'messages_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'messages_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          school_id: string | null
+          user_id: string
+          title: string
+          message: string
+          type: string | null
+          is_read: boolean | null
+          link: string | null
+          created_at: string | null
+          metadata: Json | null
+          content: string | null
+        }
+        Insert: {
+          id?: string
+          school_id?: string | null
+          user_id: string
+          title: string
+          message: string
+          type?: string | null
+          is_read?: boolean | null
+          link?: string | null
+          created_at?: string | null
+          metadata?: Json | null
+          content?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string | null
+          user_id?: string
+          title?: string
+          message?: string
+          type?: string | null
+          is_read?: boolean | null
+          link?: string | null
+          created_at?: string | null
+          metadata?: Json | null
+          content?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'notifications_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      notification_delivery_logs: {
+        Row: {
+          id: string
+          notification_id: string | null
+          sent_count: number
+          total_subscriptions: number
+          has_active_subscription: boolean
+          no_device_registered: boolean
+          temporary_outage: boolean
+          delivered_at: string
+          raw_response: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          notification_id?: string | null
+          sent_count?: number
+          total_subscriptions?: number
+          has_active_subscription?: boolean
+          no_device_registered?: boolean
+          temporary_outage?: boolean
+          delivered_at?: string
+          raw_response?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          notification_id?: string | null
+          sent_count?: number
+          total_subscriptions?: number
+          has_active_subscription?: boolean
+          no_device_registered?: boolean
+          temporary_outage?: boolean
+          delivered_at?: string
+          raw_response?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'notification_delivery_logs_notification_id_fkey'
+            columns: ['notification_id']
+            isOneToOne: false
+            referencedRelation: 'notifications'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      push_delivery_log: {
+        Row: {
+          id: string
+          notification_id: string | null
+          user_id: string | null
+          queued_at: string | null
+          error_message: string | null
+          pg_net_request_id: number | null
+          target_user_id: string | null
+          sent_count: number
+          total_subscriptions: number
+          has_active_subscription: boolean
+          no_device_registered: boolean
+          temporary_outage: boolean
+          raw_response: Json | null
+        }
+        Insert: {
+          id?: string
+          notification_id?: string | null
+          user_id?: string | null
+          queued_at?: string | null
+          error_message?: string | null
+          pg_net_request_id?: number | null
+          target_user_id?: string | null
+          sent_count?: number
+          total_subscriptions?: number
+          has_active_subscription?: boolean
+          no_device_registered?: boolean
+          temporary_outage?: boolean
+          raw_response?: Json | null
+        }
+        Update: {
+          id?: string
+          notification_id?: string | null
+          user_id?: string | null
+          queued_at?: string | null
+          error_message?: string | null
+          pg_net_request_id?: number | null
+          target_user_id?: string | null
+          sent_count?: number
+          total_subscriptions?: number
+          has_active_subscription?: boolean
+          no_device_registered?: boolean
+          temporary_outage?: boolean
+          raw_response?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'push_delivery_log_notification_id_fkey'
+            columns: ['notification_id']
+            isOneToOne: false
+            referencedRelation: 'notifications'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      push_trigger_errors: {
+        Row: {
+          id: string
+          notification_id: string | null
+          user_id: string | null
+          error_code: string
+          error_message: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          notification_id?: string | null
+          user_id?: string | null
+          error_code?: string
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          notification_id?: string | null
+          user_id?: string | null
+          error_code?: string
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'push_trigger_errors_notification_id_fkey'
+            columns: ['notification_id']
+            isOneToOne: false
+            referencedRelation: 'notifications'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          school_id: string | null
+          subscription: Json
+          user_agent: string | null
+          failure_count: number
+          last_failure_at: string | null
+          last_failure_reason: string | null
+          created_at: string | null
+          updated_at: string | null
+          endpoint: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          school_id?: string | null
+          subscription: Json
+          user_agent?: string | null
+          failure_count?: number
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          endpoint?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          school_id?: string | null
+          subscription?: Json
+          user_agent?: string | null
+          failure_count?: number
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          endpoint?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'push_subscriptions_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      student_parents: {
+        Row: {
+          id: string
+          school_id: string
+          student_id: string
+          parent_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          student_id: string
+          parent_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          student_id?: string
+          parent_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'student_parents_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'student_parents_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'student_parents_parent_id_fkey'
+            columns: ['parent_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      conversations: {
+        Row: {
+          id: string
+          school_id: string
+          parent_id: string
+          student_id: string | null
+          subject: string
+          status: string
+          priority: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          unread_by_admin: number | null
+          unread_by_parent: number | null
+          messages_count: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          parent_id: string
+          student_id?: string | null
+          subject?: string
+          status?: string
+          priority?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          unread_by_admin?: number | null
+          unread_by_parent?: number | null
+          messages_count?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          parent_id?: string
+          student_id?: string | null
+          subject?: string
+          status?: string
+          priority?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          unread_by_admin?: number | null
+          unread_by_parent?: number | null
+          messages_count?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'conversations_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'conversations_parent_id_fkey'
+            columns: ['parent_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'conversations_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      conversation_messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          sender_id: string
+          sender_role: string | null
+          content: string
+          is_read: boolean | null
+          deleted_by_admin: boolean | null
+          deleted_at: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          sender_id: string
+          sender_role?: string | null
+          content: string
+          is_read?: boolean | null
+          deleted_by_admin?: boolean | null
+          deleted_at?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          sender_id?: string
+          sender_role?: string | null
+          content?: string
+          is_read?: boolean | null
+          deleted_by_admin?: boolean | null
+          deleted_at?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'conversation_messages_conversation_id_fkey'
+            columns: ['conversation_id']
+            isOneToOne: false
+            referencedRelation: 'conversations'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'conversation_messages_sender_id_fkey'
+            columns: ['sender_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      teacher_attendance: {
+        Row: {
+          id: string
+          school_id: string
+          teacher_id: string
+          date: string
+          status: string
+          notes: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          teacher_id: string
+          date?: string
+          status: string
+          notes?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          teacher_id?: string
+          date?: string
+          status?: string
+          notes?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_attendance_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'teacher_attendance_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      electronic_exams: {
+        Row: {
+          id: string
+          school_id: string
+          class_id: string | null
+          teacher_id: string | null
+          title: string
+          subject: string
+          duration_minutes: number
+          instructions: string | null
+          status: string
+          created_at: string | null
+          updated_at: string | null
+          available_from: string | null
+          available_until: string | null
+          language: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          class_id?: string | null
+          teacher_id?: string | null
+          title: string
+          subject: string
+          duration_minutes: number
+          instructions?: string | null
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+          available_from?: string | null
+          available_until?: string | null
+          language?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          class_id?: string | null
+          teacher_id?: string | null
+          title?: string
+          subject?: string
+          duration_minutes?: number
+          instructions?: string | null
+          status?: string
+          created_at?: string | null
+          updated_at?: string | null
+          available_from?: string | null
+          available_until?: string | null
+          language?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'electronic_exams_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'electronic_exams_class_id_fkey'
+            columns: ['class_id']
+            isOneToOne: false
+            referencedRelation: 'classes'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'electronic_exams_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      exam_questions: {
+        Row: {
+          id: string
+          exam_id: string
+          school_id: string
+          question_type: string
+          question_text: string
+          options: Json | null
+          correct_answer: string | null
+          order_index: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          exam_id: string
+          school_id: string
+          question_type: string
+          question_text: string
+          options?: Json | null
+          correct_answer?: string | null
+          order_index?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          exam_id?: string
+          school_id?: string
+          question_type?: string
+          question_text?: string
+          options?: Json | null
+          correct_answer?: string | null
+          order_index?: number
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'exam_questions_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'exam_questions_exam_id_fkey'
+            columns: ['exam_id']
+            isOneToOne: false
+            referencedRelation: 'electronic_exams'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      exam_attempts: {
+        Row: {
+          id: string
+          exam_id: string
+          student_id: string
+          parent_id: string | null
+          answers: Json
+          score: number
+          total_score: number
+          time_spent_seconds: number
+          started_at: string | null
+          completed_at: string | null
+          tab_switches_count: number
+        }
+        Insert: {
+          id?: string
+          exam_id: string
+          student_id: string
+          parent_id?: string | null
+          answers?: Json
+          score?: number
+          total_score?: number
+          time_spent_seconds?: number
+          started_at?: string | null
+          completed_at?: string | null
+          tab_switches_count?: number
+        }
+        Update: {
+          id?: string
+          exam_id?: string
+          student_id?: string
+          parent_id?: string | null
+          answers?: Json
+          score?: number
+          total_score?: number
+          time_spent_seconds?: number
+          started_at?: string | null
+          completed_at?: string | null
+          tab_switches_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'exam_attempts_exam_id_fkey'
+            columns: ['exam_id']
+            isOneToOne: false
+            referencedRelation: 'electronic_exams'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'exam_attempts_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'exam_attempts_parent_id_fkey'
+            columns: ['parent_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      class_chat_rooms: {
+        Row: {
+          id: string
+          school_id: string
+          class_id: string | null
+          name: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_id: string
+          class_id?: string | null
+          name: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string
+          class_id?: string | null
+          name?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'class_chat_rooms_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'class_chat_rooms_class_id_fkey'
+            columns: ['class_id']
+            isOneToOne: false
+            referencedRelation: 'classes'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      class_chat_messages: {
+        Row: {
+          id: string
+          room_id: string
+          sender_id: string | null
+          sender_name: string | null
+          content: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          room_id: string
+          sender_id?: string | null
+          sender_name?: string | null
+          content: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          room_id?: string
+          sender_id?: string | null
+          sender_name?: string | null
+          content?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'class_chat_messages_room_id_fkey'
+            columns: ['room_id']
+            isOneToOne: false
+            referencedRelation: 'class_chat_rooms'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      fees: {
+        Row: {
+          id: string
+          school_id: string | null
+          student_id: string | null
+          amount_due: number
+          amount_paid: number
+          status: string | null
+          term: string | null
+          created_at: string | null
+          description: string | null
+        }
+        Insert: {
+          id?: string
+          school_id?: string | null
+          student_id?: string | null
+          amount_due?: number
+          amount_paid?: number
+          status?: string | null
+          term?: string | null
+          created_at?: string | null
+          description?: string | null
+        }
+        Update: {
+          id?: string
+          school_id?: string | null
+          student_id?: string | null
+          amount_due?: number
+          amount_paid?: number
+          status?: string | null
+          term?: string | null
+          created_at?: string | null
+          description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fees_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fees_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      fee_payments: {
+        Row: {
+          id: string
+          fee_id: string | null
+          school_id: string | null
+          amount: number | null
+          payment_date: string | null
+          created_at: string | null
+          notes: string | null
+        }
+        Insert: {
+          id?: string
+          fee_id?: string | null
+          school_id?: string | null
+          amount?: number | null
+          payment_date?: string | null
+          created_at?: string | null
+          notes?: string | null
+        }
+        Update: {
+          id?: string
+          fee_id?: string | null
+          school_id?: string | null
+          amount?: number | null
+          payment_date?: string | null
+          created_at?: string | null
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fee_payments_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fee_payments_fee_id_fkey'
+            columns: ['fee_id']
+            isOneToOne: false
+            referencedRelation: 'fees'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      audit_logs: {
+        Row: {
+          id: string
+          user_id: string | null
+          school_id: string | null
+          action: string | null
+          entity_type: string | null
+          entity_id: string | null
+          details: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          school_id?: string | null
+          action?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          details?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          school_id?: string | null
+          action?: string | null
+          entity_type?: string | null
+          entity_id?: string | null
+          details?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'audit_logs_school_id_fkey'
+            columns: ['school_id']
+            isOneToOne: false
+            referencedRelation: 'schools'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      school_orders: {
+        Row: {
+          id: string
+          school_name: string
+          school_slug: string
+          admin_name: string
+          admin_phone: string
+          admin_whatsapp: string | null
+          plan: string
+          logo_url: string | null
+          receipt_url: string | null
+          receipt_note: string | null
+          status: string
+          rejection_note: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          school_name: string
+          school_slug: string
+          admin_name: string
+          admin_phone: string
+          admin_whatsapp?: string | null
+          plan?: string
+          logo_url?: string | null
+          receipt_url?: string | null
+          receipt_note?: string | null
+          status?: string
+          rejection_note?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          school_name?: string
+          school_slug?: string
+          admin_name?: string
+          admin_phone?: string
+          admin_whatsapp?: string | null
+          plan?: string
+          logo_url?: string | null
+          receipt_url?: string | null
+          receipt_note?: string | null
+          status?: string
+          rejection_note?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      claim_school_admin: {
-        Args: { new_school_id: string }
-        Returns: undefined
-      }
-      get_auth_school_id: { Args: never; Returns: string }
-      get_parent_student_ids: {
-        Args: { _parent_id: string }
-        Returns: string[]
-      }
-      get_teacher_class_ids: {
-        Args: { _teacher_id: string }
-        Returns: string[]
-      }
-      get_user_role: {
-        Args: { _user_id: string }
-        Returns: Database["public"]["Enums"]["app_role"]
-      }
       has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
+        Args: { user_id: string; required_role: string }
         Returns: boolean
       }
-      is_super_admin: { Args: never; Returns: boolean }
+      get_user_role: {
+        Args: { user_id: string }
+        Returns: string
+      }
+      is_super_admin: {
+        Args: { user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "admin" | "teacher" | "parent"
-    }
-    CompositeTypes: {
-      [_ in never]: never
+      app_role: 'admin' | 'teacher' | 'parent' | 'super_admin'
     }
   }
 }
-
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
-
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
-
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      app_role: ["admin", "teacher", "parent"],
-    },
-  },
-} as const

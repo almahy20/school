@@ -178,9 +178,10 @@ BEGIN
   END IF;
 END $$;
 
--- إزالة عمود كلمة المرور من school_orders إذا وجد
-DO $$
+-- إزالة عمود كلمة المرور من school_orders إذا وجد (الاسمين: القديم والجديد)
+DO $
 BEGIN
+  -- عمود password (الاسم المتوقع في الإصلاحات السابقة)
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public'
@@ -189,7 +190,16 @@ BEGIN
   ) THEN
     ALTER TABLE public.school_orders DROP COLUMN password;
   END IF;
-END $$;
+  -- عمود admin_password (الاسم اللي فعلاً تم إنشاؤه في migration 20260402380000)
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'school_orders'
+      AND column_name = 'admin_password'
+  ) THEN
+    ALTER TABLE public.school_orders DROP COLUMN admin_password;
+  END IF;
+END $;
 
 -- ── 4. إضافة فهرس أداء إضافي إذا لم يتم إضافتها سابقاً ──
 CREATE INDEX IF NOT EXISTS idx_user_roles_user_id_role ON public.user_roles(user_id, role);

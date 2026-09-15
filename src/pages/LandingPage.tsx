@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   BookOpen, Users, GraduationCap, MessageSquare, CalendarCheck, ClipboardList,
   ShieldCheck, Zap, Globe, CheckCircle2, ArrowLeft, Star, Phone, Building2,
-  ChevronDown, Sparkles, BarChart3, Bell, Lock, X, Upload, Loader2, Eye, EyeOff
+  ChevronDown, Sparkles, BarChart3, Bell, Lock, X, Upload, Loader2
 } from 'lucide-react';
 
 const PLANS = [
@@ -452,10 +452,8 @@ function SchoolOrderModal({
   const [adminWhatsapp, setAdminWhatsapp] = useState('');
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -480,12 +478,8 @@ function SchoolOrderModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!schoolName.trim() || !adminName.trim() || !adminPhone.trim() || !adminWhatsapp.trim() || !adminPassword.trim()) {
+    if (!schoolName.trim() || !adminName.trim() || !adminPhone.trim() || !adminWhatsapp.trim()) {
       setError('يرجى ملء جميع الحقول المطلوبة');
-      return;
-    }
-    if (adminPassword.length < 6) {
-      setError('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
       return;
     }
     setLoading(true);
@@ -515,7 +509,6 @@ function SchoolOrderModal({
           admin_name: adminName.trim(),
           admin_phone: adminPhone.trim(),
           admin_whatsapp: adminWhatsapp.trim(),
-          admin_password: adminPassword.trim(),
           plan: plan.id,
           logo_url: logoUrl || null,
         })
@@ -613,30 +606,6 @@ function SchoolOrderModal({
                 className="w-full h-14 px-5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
                 required
               />
-            </div>
-          </div>
-
-          {/* Admin Password */}
-          <div className="space-y-2">
-            <label className="text-xs font-black text-white/50 uppercase tracking-widest">كلمة المرور (للدخول لاحقاً) *</label>
-            <div className="relative group">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                placeholder="اختر كلمة مرور قوية"
-                className="w-full h-14 px-5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold placeholder:text-white/20 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all text-center"
-                dir="ltr"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white transition-colors"
-                dir="rtl"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
             </div>
           </div>
 

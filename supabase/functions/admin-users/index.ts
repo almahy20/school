@@ -326,8 +326,6 @@ Deno.serve(async (req) => {
             school_id,
             full_name: fullName,
             phone,
-            // حفظ كلمة المرور بشكل مرئي ليتمكن المدير من عرضها لاحقاً
-            plain_password: data.password,
           })
           .eq("id", newUserId);
 
@@ -373,12 +371,6 @@ Deno.serve(async (req) => {
         });
 
         if (error) throw error;
-
-        // تحديث كلمة المرور المرئية في profiles
-        await adminClient
-          .from("profiles")
-          .update({ plain_password: data.password })
-          .eq("id", userId);
 
         return jsonResponse(req, { success: true });
       }

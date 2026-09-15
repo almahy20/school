@@ -37,9 +37,7 @@ export default function ParentDetailPage() {
   const queryClient = useQueryClient();
   const [notificationStats] = useState<any>(null);
   const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
-  const [plainPassword, setPlainPassword] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [showPlainPassword, setShowPlainPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -49,22 +47,20 @@ export default function ParentDetailPage() {
   const { data: children = [], isLoading: childrenLoading } = useParentChildrenBasic(id);
   const deleteParentMutation = useDeleteParent();
   
-  // Fetch notification stats and last_seen using useQuery
+  // Fetch last_seen using useQuery
   const { data: parentExtraData } = useQuery({
     queryKey: ['parent-extra-data', id],
     queryFn: async () => {
       if (!id) return null;
         
-      // جلب last_seen و plain_password من profiles
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('last_seen, plain_password')
+        .select('last_seen')
         .eq('id', id)
         .maybeSingle();
 
       return {
         lastSeen: profileData?.last_seen,
-        plainPassword: profileData?.plain_password ?? null,
       };
     },
     enabled: !!id,
@@ -75,9 +71,6 @@ export default function ParentDetailPage() {
   useEffect(() => {
     if (parentExtraData?.lastSeen) {
       setParentLastSeen(parentExtraData.lastSeen);
-    }
-    if (parentExtraData?.plainPassword !== undefined) {
-      setPlainPassword(parentExtraData.plainPassword);
     }
   }, [parentExtraData]);
 
@@ -113,7 +106,6 @@ export default function ParentDetailPage() {
       if (!result?.success) throw new Error(result?.error || 'فشل في تغيير كلمة المرور');
 
       toast({ title: 'تم بنجاح', description: 'تم تحديث كلمة المرور. يمكن لولي الأمر الدخول بالكلمة الجديدة.' });
-      setPlainPassword(newPassword);
       setNewPassword('');
       setShowPassword(false);
     } catch (err: any) {
@@ -200,36 +192,19 @@ export default function ParentDetailPage() {
                         color="indigo"
                       />
                       
-                      {/* Password Card */}
+                      {/* Password Reset Card */}
                       <div className="p-6 rounded-2xl border bg-slate-900 text-white shadow-sm flex flex-col gap-4">
                          <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
                                <Key className="w-5 h-5" />
                             </div>
-                            <p className="text-[10px] font-medium text-white/40">كلمة المرور الحالية</p>
+                            <div>
+                              <p className="text-[10px] font-medium text-white/40">إدارة كلمة المرور</p>
+                              <p className="text-xs text-white/20 italic mt-0.5">لا يمكن عرض كلمة المرور الحالية لأسباب أمنية</p>
+                            </div>
                          </div>
 
-                         {/* ── عرض كلمة المرور دايماً ── */}
-                         <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-2 min-h-[44px]">
-                           {plainPassword ? (
-                             <>
-                               <span className="text-sm font-mono font-bold tracking-widest text-white/90 select-all" dir="ltr">
-                                 {showPlainPassword ? plainPassword : '•'.repeat(Math.min(plainPassword.length, 12))}
-                               </span>
-                               <button
-                                 type="button"
-                                 onClick={() => setShowPlainPassword(v => !v)}
-                                 className="text-[10px] font-bold text-white/40 hover:text-white/80 transition-colors shrink-0 px-2 py-1 rounded-lg hover:bg-white/10"
-                               >
-                                 {showPlainPassword ? 'إخفاء' : 'إظهار'}
-                               </button>
-                             </>
-                           ) : (
-                             <span className="text-xs text-white/25 italic">غير متاحة — سجّل ولي الأمر بنفسه</span>
-                           )}
-                         </div>
-
-                         {/* ── نموذج إعادة التعيين ── */}
+                         {/* ── نموذج إعادة التعيين فقط ── */}
                          {showPassword ? (
                            <div className="space-y-2">
                              <div className="relative">
