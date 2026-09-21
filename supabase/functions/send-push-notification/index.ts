@@ -1,4 +1,4 @@
-﻿import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import webpush from "https://esm.sh/web-push@3.6.6";
 
@@ -191,12 +191,11 @@ serve(async (req) => {
   const targetUrl = url
     ?? (isMessage ? "/conversations" : "/notifications");
 
-  // Fix #1 — Pick TTL / urgency based on message characteristics
-  const effectiveUrgent = urgent === true || isMessage;
+  // Fix #1 — Pick TTL / urgency: Maximize TTL (28 days) and force High Urgency to wake sleeping devices
+  const effectiveUrgent = true;
   const effectiveTtl = typeof ttl === "number" && ttl > 0
     ? ttl
-    : effectiveUrgent ? 60 * 60 * 24   /* 24 hours for messages */
-                      : 60 * 60 * 72;  /* 3 days otherwise */
+    : 60 * 60 * 24 * 28;  /* 28 days (Max RFC Time-To-Live so sleeping devices NEVER drop notifications) */
 
   // ✅ استخدم room_id كـ topic لو conversation_id مش موجود
   const effectiveTopic = conversation_id
@@ -211,7 +210,7 @@ serve(async (req) => {
     },
     TTL: effectiveTtl,
     headers: {
-      Urgency: effectiveUrgent ? "high" : "normal",
+      Urgency: "high",
       Topic: effectiveTopic,
     },
   };

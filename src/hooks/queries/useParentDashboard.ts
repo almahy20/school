@@ -275,7 +275,7 @@ export function useParentChildren() {
     staleTime: 5 * 60 * 1000, // 5 minutes cache
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: true,
+    refetchOnMount: false, // كان true → يسبب refetch غير ضروري في كل mount
     refetchOnWindowFocus: false,
     retry: 1,
     retryDelay: 1000,

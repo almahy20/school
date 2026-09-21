@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useMemo } from 'react';
 
@@ -42,21 +43,13 @@ export function useAdminClassChatRooms() {
 
   useEffect(() => {
     if (!user?.schoolId) return;
-    const channelName = `admin-rooms-${user.schoolId}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'class_chat_rooms',
-        filter: `school_id=eq.${user.schoolId}`,
-      }, () => {
+    return realtimeEngine.subscribe(
+      'class_chat_rooms',
+      () => {
         queryClient.invalidateQueries({ queryKey });
-      })
-      .subscribe();
-    return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
-    };
+      },
+      { filter: `school_id=eq.${user.schoolId}` }
+    );
   }, [user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
@@ -126,18 +119,13 @@ export function useParentClassChatRooms() {
   // Realtime: لما تُنشأ غرفة جديدة
   useEffect(() => {
     if (!user?.id || !user?.schoolId) return;
-    const channel = db
-      .channel(`parent-chat-rooms-${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'class_chat_rooms',
-        filter: `school_id=eq.${user.schoolId}`,
-      }, () => {
+    return realtimeEngine.subscribe(
+      'class_chat_rooms',
+      () => {
         queryClient.invalidateQueries({ queryKey });
-      })
-      .subscribe();
-    return () => { db.removeChannel(channel); };
+      },
+      { filter: `school_id=eq.${user.schoolId}` }
+    );
   }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
@@ -188,31 +176,22 @@ export function useClassChatMessages(roomId: string | null) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['class-chat-messages', roomId], [roomId]);
 
-  // Realtime subscription
+  // Realtime subscription via single channel
   useEffect(() => {
     if (!roomId || !user?.id) return;
 
-    const channelName = `class-chat-${roomId}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'class_chat_messages',
-        filter: `room_id=eq.${roomId}`,
-      }, (payload: any) => {
+    return realtimeEngine.subscribe(
+      'class_chat_messages',
+      (payload: any) => {
         // Optimistic append
         queryClient.setQueryData(queryKey, (old: ClassChatMessage[] | undefined) => {
           const msgs = old || [];
-          if (msgs.some(m => m.id === payload.new.id)) return msgs;
+          if (msgs.some(m => m.id === payload.new?.id)) return msgs;
           return [...msgs, payload.new as ClassChatMessage];
         });
-      })
-      .subscribe();
-
-    return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
-    };
+      },
+      { event: 'INSERT', filter: `room_id=eq.${roomId}` }
+    );
   }, [roomId, user?.id, queryClient, queryKey]);
 
   return useQuery<ClassChatMessage[]>({
@@ -284,33 +263,15 @@ export function useClassChatUnreadCounts() {
   // Realtime: لما يجي إشعار جديد من نوع class_chat_message
   useEffect(() => {
     if (!user?.id) return;
-    const channelName = `class-unread-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, (payload: any) => {
+    return realtimeEngine.subscribe(
+      'notifications',
+      (payload: any) => {
         if (payload.new?.type === 'class_chat_message') {
           queryClient.invalidateQueries({ queryKey });
         }
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      }, (payload: any) => {
-        if (payload.new?.type === 'class_chat_message') {
-          queryClient.invalidateQueries({ queryKey });
-        }
-      })
-      .subscribe();
-    return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
-    };
+      },
+      { filter: `user_id=eq.${user.id}` }
+    );
   }, [user?.id, queryClient, queryKey]);
 
   return useQuery<Record<string, number>>({

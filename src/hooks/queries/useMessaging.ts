@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { useEffect, useMemo } from 'react';
@@ -127,29 +128,26 @@ export function useMessages() {
   useEffect(() => {
     if (!user?.id || !session) return;
 
-    const channel = supabase
-      .channel(`user-messages-${user.id}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `sender_id=eq.${user.id}`
-      }, () => {
+    const un1 = realtimeEngine.subscribe(
+      'messages',
+      () => {
         queryClient.invalidateQueries({ queryKey });
-      })
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}`
-      }, () => {
+      },
+      { filter: `sender_id=eq.${user.id}` }
+    );
+
+    const un2 = realtimeEngine.subscribe(
+      'messages',
+      () => {
         logger.log('📩 New message detected, refreshing...');
         queryClient.invalidateQueries({ queryKey });
-      })
-      .subscribe();
+      },
+      { filter: `receiver_id=eq.${user.id}` }
+    );
 
     return () => {
-      supabase.removeChannel(channel);
+      un1();
+      un2();
     };
   }, [user?.id, session, queryClient, queryKey]);
       

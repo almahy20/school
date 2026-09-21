@@ -189,7 +189,12 @@ export default function RealtimeNotificationsManager() {
     // ✅ Single channel for all notification events (INSERT + UPDATE)
     // Filtered by user_id so each user only receives their own notifications
     const notificationsChannel = supabase
-      .channel(`notifications-manager-${userId}`)
+      .channel(`notifications-manager-${userId}`, {
+        config: {
+          broadcast: { self: false, ack: false },
+          presence: { key: '' },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -218,7 +223,12 @@ export default function RealtimeNotificationsManager() {
     let brandingChannel: ReturnType<typeof supabase.channel> | null = null;
     if (schoolId) {
       brandingChannel = supabase
-        .channel(`branding-${schoolId}`)
+        .channel(`branding-${schoolId}`, {
+          config: {
+            broadcast: { self: false, ack: false },
+            presence: { key: '' },
+          },
+        })
         .on(
           'postgres_changes',
           {

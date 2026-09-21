@@ -227,6 +227,10 @@ export function usePushNotifications() {
         }
       }
 
+      if (user?.id && !shouldSkipDbCalls()) {
+        saveSubscriptionToDb(user.id, subscription).catch(() => {});
+      }
+
       setIsSubscribed(true);
     } catch (error) {
       logger.error('[Push] Error in checkSubscription:', error);
@@ -237,6 +241,17 @@ export function usePushNotifications() {
     if ('Notification' in window) {
       setPermission(Notification.permission);
       checkSubscription();
+    }
+
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'PUSH_SUBSCRIPTION_CHANGED' && user?.id) {
+        logger.log('[Push] SW renewed subscription in background — refreshing DB');
+        checkSubscription();
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
     }
 
     if ('serviceWorker' in navigator && 'SyncManager' in window) {

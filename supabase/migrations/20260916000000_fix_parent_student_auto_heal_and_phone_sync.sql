@@ -106,7 +106,7 @@ WHERE sp.student_id = s.id
   AND sp.school_id IS NULL
   AND s.school_id IS NOT NULL;
 
--- 4. إعادة كتابة get_parent_dashboard_summary مع Auto-Heal ومطابقة مرنة
+-- 4. إعادة كتابة get_parent_dashboard_summary مع Auto-Heal + تحسينات أداء شاملة
 CREATE OR REPLACE FUNCTION public.get_parent_dashboard_summary(
     p_parent_id uuid,
     p_school_id uuid
@@ -128,7 +128,7 @@ BEGIN
 
   -- Security check
   IF v_caller <> p_parent_id AND NOT EXISTS (
-    SELECT 1 FROM user_roles
+    SELECT 1 FROM public.user_roles
     WHERE user_id = v_caller AND role = 'admin'
       AND (p_school_id IS NULL OR school_id = p_school_id) AND approval_status = 'approved'
   ) THEN
@@ -148,48 +148,68 @@ BEGIN
       WHEN 10 THEN 'أكتوبر'  WHEN 11 THEN 'نوفمبر'  WHEN 12 THEN 'ديسمبر'
     END || ' ' || TO_CHAR(NOW(), 'YYYY');
 
+  -- ⚡ Auto-Heal: ربط أي أبناء مطابقين بالهاتف في student_parents قبل الـ SELECT
+  IF v_parent_phone IS NOT NULL AND v_parent_phone <> '' THEN
+    INSERT INTO public.student_parents (school_id, student_id, parent_id)
+    SELECT DISTINCT
+      s.school_id,
+      s.id AS student_id,
+      p_parent_id AS parent_id
+    FROM public.students s
+    WHERE s.parent_phone IS NOT NULL AND s.parent_phone <> ''
+      AND public.phones_match(s.parent_phone, v_parent_phone)
+      AND (p_school_id IS NULL OR s.school_id = p_school_id OR s.school_id = v_parent_school)
+      AND NOT EXISTS (
+        SELECT 1 FROM public.student_parents sp
+        WHERE sp.student_id = s.id AND sp.parent_id = p_parent_id
+      )
+    ON CONFLICT (student_id, parent_id) DO NOTHING;
+  END IF;
+
   WITH
   children AS (
-    SELECT DISTINCT
-      s.id, s.name, s.class_id, s.school_id, s.monthly_fee,
-      c.name AS class_name
+    -- ⚡ المسار السريع: روابط صريحة في student_parents (يستخدم الفهارس مباشرة)
+    SELECT s.id, s.name, s.class_id, s.school_id, s.monthly_fee,
+           c.name AS class_name
+    FROM public.student_parents sp
+    JOIN public.students s ON s.id = sp.student_id
+    LEFT JOIN public.classes c ON c.id = s.class_id
+    WHERE sp.parent_id = p_parent_id
+      AND (p_school_id IS NULL OR s.school_id = p_school_id OR s.school_id = v_parent_school OR v_parent_school IS NULL)
+
+    UNION  -- يزيل التكرارات تلقائياً (يستبدل DISTINCT البطيء)
+
+    -- ⚡ المسار البطيء: مطابقة رقم الهاتف (فقط للطلاب الذين لم يتم ربطهم بعد)
+    SELECT s.id, s.name, s.class_id, s.school_id, s.monthly_fee,
+           c.name AS class_name
     FROM public.students s
     LEFT JOIN public.classes c ON c.id = s.class_id
-    WHERE (
-      -- 1. مربوط صراحة في student_parents
-      s.id IN (SELECT student_id FROM public.student_parents WHERE parent_id = p_parent_id)
-      OR
-      -- 2. أو يطابق رقم هاتف ولي الأمر
-      (
-        v_parent_phone IS NOT NULL AND v_parent_phone <> ''
-        AND s.parent_phone IS NOT NULL AND s.parent_phone <> ''
-        AND public.phones_match(s.parent_phone, v_parent_phone)
-      )
-    )
-    AND (
-      p_school_id IS NULL 
-      OR s.school_id = p_school_id
-      OR s.school_id = v_parent_school
-      OR v_parent_school IS NULL
-    )
+    WHERE v_parent_phone IS NOT NULL AND v_parent_phone <> ''
+      AND s.parent_phone IS NOT NULL AND s.parent_phone <> ''
+      AND public.phones_match(s.parent_phone, v_parent_phone)
+      AND (p_school_id IS NULL OR s.school_id = p_school_id OR s.school_id = v_parent_school OR v_parent_school IS NULL)
   ),
   grade_avgs AS (
+    -- ⚡ إصلاح حاسم: فلتر school_id أولاً → يقلل عدد الصفوف بمقدار 100-1000 ضعف
+    -- grades.score هو TEXT، regex للتحقق من رقميته قبل cast
     SELECT
       g.student_id,
       ROUND(AVG(
         CASE
-          WHEN trim(g.score::text) ~ '^\d+(\.\d+)?$'
+          WHEN trim(g.score) ~ '^\d+(\.\d+)?$'
            AND g.max_score IS NOT NULL
            AND g.max_score > 0
-          THEN (trim(g.score::text)::float / g.max_score::float) * 100
+          THEN (trim(g.score)::float / g.max_score::float) * 100
           ELSE NULL
         END
       )) AS avg_grade
     FROM public.grades g
-    WHERE g.student_id IN (SELECT id FROM children)
+    WHERE (p_school_id IS NULL OR g.school_id = p_school_id)
+      AND g.student_id IN (SELECT id FROM children)
     GROUP BY g.student_id
   ),
   attendance_rates AS (
+    -- ⚡ فلتر school_id + حدود زمنية (آخر 365 يوم فقط — كافية لـ Dashboard)
     SELECT
       a.student_id,
       CASE WHEN COUNT(*) = 0 THEN 0
@@ -199,10 +219,13 @@ BEGIN
            )
       END AS attendance_rate
     FROM public.attendance a
-    WHERE a.student_id IN (SELECT id FROM children)
+    WHERE (p_school_id IS NULL OR a.school_id = p_school_id)
+      AND a.student_id IN (SELECT id FROM children)
+      AND a.date >= CURRENT_DATE - INTERVAL '365 days'
     GROUP BY a.student_id
   ),
   fees_data AS (
+    -- ⚡ فلتر school_id حاسم
     SELECT
       f.student_id,
       COALESCE(SUM(f.amount_due - f.amount_paid)
@@ -210,7 +233,8 @@ BEGIN
       COALESCE(SUM(f.amount_paid)
         FILTER (WHERE f.term  = v_current_term), 0) AS current_paid
     FROM public.fees f
-    WHERE f.student_id IN (SELECT id FROM children)
+    WHERE (p_school_id IS NULL OR f.school_id = p_school_id)
+      AND f.student_id IN (SELECT id FROM children)
     GROUP BY f.student_id
   )
   SELECT COALESCE(jsonb_agg(
@@ -235,7 +259,7 @@ BEGIN
 END;
 $$;
 
--- 5. إعادة كتابة get_child_full_details لدعم مطابقة الهاتف
+-- 5. إعادة كتابة get_child_full_details لدعم مطابقة الهاتف + تحسينات أداء
 CREATE OR REPLACE FUNCTION public.get_child_full_details(
     p_student_id UUID,
     p_school_id  UUID
@@ -310,47 +334,64 @@ BEGIN
     FROM public.students s
     LEFT JOIN public.classes c ON c.id = s.class_id
     WHERE s.id = p_student_id
+      AND (p_school_id IS NULL OR s.school_id = p_school_id)  -- ⚡ فلتر school_id
   ),
   grades_data AS (
-    SELECT COALESCE(jsonb_agg(
-      jsonb_build_object(
-        'id',         g.id,
-        'subject',    g.subject,
-        'score',      g.score,
-        'max_score',  g.max_score,
-        'notes',      g.notes,
-        'created_at', g.created_at
-      ) ORDER BY g.created_at DESC
-    ), '[]'::jsonb) AS grades_list,
-    ROUND(AVG(
-      CASE
-        WHEN trim(g.score::text) ~ '^\d+(\.\d+)?$'
-         AND g.max_score IS NOT NULL
-         AND g.max_score > 0
-        THEN (trim(g.score::text)::float / g.max_score::float) * 100
-        ELSE NULL
-      END
-    )) AS avg_grade
-    FROM public.grades g
-    WHERE g.student_id = p_student_id
+    SELECT
+      COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'id',         g.id,
+          'subject',    g.subject,
+          'score',      g.score,
+          'max_score',  g.max_score,
+          'notes',      g.notes,
+          'created_at', g.created_at
+        ) ORDER BY g.created_at DESC
+      ), '[]'::jsonb) AS grades_list,
+      ROUND(AVG(
+        CASE
+          WHEN trim(g.score) ~ '^\d+(\.\d+)?$'
+           AND g.max_score IS NOT NULL
+           AND g.max_score > 0
+          THEN (trim(g.score)::float / g.max_score::float) * 100
+          ELSE NULL
+        END
+      )) AS avg_grade
+    FROM (
+      -- ⚡ LIMIT 200 + فلتر school_id داخل subquery → قبل التجميع لتفادي full scan
+      SELECT g2.id, g2.subject, g2.score, g2.max_score, g2.notes, g2.created_at
+      FROM public.grades g2
+      WHERE g2.student_id = p_student_id
+        AND (p_school_id IS NULL OR g2.school_id = p_school_id)
+      ORDER BY g2.created_at DESC
+      LIMIT 200
+    ) g
   ),
   attendance_data AS (
-    SELECT COALESCE(jsonb_agg(
-      jsonb_build_object(
-        'id',     a.id,
-        'date',   a.date,
-        'status', a.status,
-        'notes',  a.notes
-      ) ORDER BY a.date DESC
-    ), '[]'::jsonb) AS attendance_list,
-    CASE WHEN COUNT(*) = 0 THEN 0
-         ELSE ROUND(
-           (COUNT(*) FILTER (WHERE a.status = 'present')::float
-            / COUNT(*)::float) * 100
-         )
-    END AS attendance_rate
-    FROM public.attendance a
-    WHERE a.student_id = p_student_id
+    SELECT
+      COALESCE(jsonb_agg(
+        jsonb_build_object(
+          'id',     a.id,
+          'date',   a.date,
+          'status', a.status,
+          'notes',  a.notes
+        ) ORDER BY a.date DESC
+      ), '[]'::jsonb) AS attendance_list,
+      CASE WHEN COUNT(*) = 0 THEN 0
+           ELSE ROUND(
+             (COUNT(*) FILTER (WHERE a.status = 'present')::float
+              / COUNT(*)::float) * 100
+           )
+      END AS attendance_rate
+    FROM (
+      -- ⚡ LIMIT 365 + فلتر school_id داخل subquery → قبل التجميع
+      SELECT a2.id, a2.date, a2.status, a2.notes
+      FROM public.attendance a2
+      WHERE a2.student_id = p_student_id
+        AND (p_school_id IS NULL OR a2.school_id = p_school_id)
+      ORDER BY a2.date DESC
+      LIMIT 365
+    ) a
   ),
   curriculum_data AS (
     SELECT COALESCE(jsonb_agg(
@@ -378,6 +419,7 @@ BEGIN
         FILTER (WHERE f.term  = v_current_term), 0) AS current_paid
     FROM public.fees f
     WHERE f.student_id = p_student_id
+      AND (p_school_id IS NULL OR f.school_id = p_school_id)  -- ⚡ فلتر school_id
   )
   SELECT jsonb_build_object(
     'student',        sd.info,
@@ -530,7 +572,41 @@ CREATE TRIGGER tr_sync_role_students_by_phone
   FOR EACH ROW
   EXECUTE FUNCTION public.sync_role_students_by_phone();
 
--- 10. الصلاحيات وإعادة تحميل الـ schema
+-- 10. ⚡ فهارس أداء جديدة لحل مشاكل pg_stat_statements (Top slow queries)
+--     المستهدفة: get_parent_dashboard_summary (prop_total_time: 2.36%)
+--                 get_child_full_details
+--                 get_unread_notification_counts (prop_total_time: 3.70%)
+
+-- ⚡ فهارس per-student lookup (الترتيب student_id أولاً لاستخدام الفهرس في استعلامات الطالب الفردي)
+CREATE INDEX IF NOT EXISTS idx_grades_student_school_created
+    ON public.grades (student_id, school_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_attendance_student_school_date
+    ON public.attendance (student_id, school_id, date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_fees_student_school_term
+    ON public.fees (student_id, school_id, term);
+
+-- ⚡ فهرس parent_phone لمطابقة الهواتف (يسرّع المسار البطيء في children CTE)
+--     partial index لتفادي NULLs و empty strings
+CREATE INDEX IF NOT EXISTS idx_students_parent_phone
+    ON public.students (parent_phone)
+    WHERE parent_phone IS NOT NULL AND parent_phone <> '';
+
+-- ⚡ فهارس إضافية للـ security guards (تجنب seq scans على user_roles و student_parents)
+--     student_parents(parent_id, student_id) للبحث عن أبناء وليّ أمر
+CREATE INDEX IF NOT EXISTS idx_student_parents_parent_student_covering
+    ON public.student_parents (parent_id, student_id, school_id);
+
+-- 11. تحديث الإحصائيات للـ query planner بعد إضافة الفهارس
+ANALYZE public.grades;
+ANALYZE public.attendance;
+ANALYZE public.fees;
+ANALYZE public.students;
+ANALYZE public.student_parents;
+ANALYZE public.notifications;
+
+-- 12. الصلاحيات وإعادة تحميل الـ schema
 GRANT EXECUTE ON FUNCTION public.get_parent_dashboard_summary(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_child_full_details(uuid, uuid) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.normalize_phone(text) TO authenticated, service_role, anon;

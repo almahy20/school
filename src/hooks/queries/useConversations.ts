@@ -6,6 +6,7 @@ const CONVERSATIONS_PAGE_SIZE = 50;
 const MESSAGES_PAGE_SIZE = 50;
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEffect, useMemo } from 'react';
 
@@ -60,23 +61,17 @@ export function useAdminConversations(status: string = 'all', search: string = '
   const queryClient = useQueryClient();
   const queryKey = ['conversations', 'admin', user?.schoolId, status, search];
 
-  // Realtime subscription
+  // Realtime subscription via single master channel
   useEffect(() => {
     if (!user?.id || !user?.schoolId) return;
 
-    const channel = db
-      .channel(`admin-conversations-${user.schoolId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'conversations',
-        filter: `school_id=eq.${user.schoolId}`,
-      }, () => {
+    return realtimeEngine.subscribe(
+      'conversations',
+      () => {
         queryClient.invalidateQueries({ queryKey: ['conversations', 'admin', user.schoolId], exact: false });
-      })
-      .subscribe();
-
-    return () => { db.removeChannel(channel); };
+      },
+      { filter: `school_id=eq.${user.schoolId}` }
+    );
   }, [user?.id, user?.schoolId, queryClient]);
 
   return useQuery<Conversation[]>({
@@ -124,21 +119,16 @@ export function useConversation(conversationId: string | null | undefined) {
 
   useEffect(() => {
     if (!conversationId) return;
-    const channel = db
-      .channel(`conv-detail-${conversationId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'conversations',
-        filter: `id=eq.${conversationId}`,
-      }, (payload: any) => {
+    return realtimeEngine.subscribe(
+      'conversations',
+      (payload: any) => {
         queryClient.setQueryData(
           ['conversation', conversationId],
           (old: Conversation | null | undefined) => old ? { ...old, ...payload.new } : old
         );
-      })
-      .subscribe();
-    return () => { db.removeChannel(channel); };
+      },
+      { event: 'UPDATE', filter: `id=eq.${conversationId}` }
+    );
   }, [conversationId, queryClient]);
 
   return useQuery<Conversation | null>({
@@ -176,27 +166,17 @@ export function useParentConversations() {
   const queryClient = useQueryClient();
   const queryKey = ['conversations', 'parent', user?.id];
 
-  // Realtime
+  // Realtime via single master channel
   useEffect(() => {
     if (!user?.id) return;
 
-    const channelName = `parent-conv-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
-
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'conversations',
-        filter: `parent_id=eq.${user.id}`,
-      }, () => {
+    return realtimeEngine.subscribe(
+      'conversations',
+      () => {
         queryClient.invalidateQueries({ queryKey: ['conversations', 'parent', user.id], exact: false });
-      })
-      .subscribe();
-
-    return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
-    };
+      },
+      { filter: `parent_id=eq.${user.id}` }
+    );
   }, [user?.id, queryClient]);
 
   return useQuery<Conversation[]>({
@@ -234,43 +214,38 @@ export function useConversationMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['conversation-messages', conversationId], [conversationId]);
 
-  // Realtime للرسائل الجديدة — يُضاف مباشرة بدون refetch
+  // Realtime للرسائل الجديدة — يُضاف مباشرة بدون refetch عبر القناة الموحدة
   useEffect(() => {
     if (!conversationId || !user?.id) return;
 
-    const channelName = `conv-msg-${conversationId}-${Math.random().toString(36).slice(2, 8)}`;
-
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'conversation_messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      }, (payload: any) => {
+    const un1 = realtimeEngine.subscribe(
+      'conversation_messages',
+      (payload: any) => {
         // أضف الرسالة الجديدة لآخر صفحة في الـ cache مباشرة
         queryClient.setQueryData(queryKey, (old: any) => {
           if (!old?.pages?.length) return old;
           const pages = [...old.pages];
           const lastPage = pages[pages.length - 1];
           // تجنب التكرار
-          if (lastPage.some((m: ConversationMessage) => m.id === payload.new.id)) return old;
+          if (lastPage.some((m: ConversationMessage) => m.id === payload.new?.id)) return old;
           pages[pages.length - 1] = [...lastPage, payload.new as ConversationMessage];
           return { ...old, pages };
         });
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'conversation_messages',
-        filter: `conversation_id=eq.${conversationId}`,
-      }, () => {
+      },
+      { event: 'INSERT', filter: `conversation_id=eq.${conversationId}` }
+    );
+
+    const un2 = realtimeEngine.subscribe(
+      'conversation_messages',
+      () => {
         queryClient.invalidateQueries({ queryKey });
-      })
-      .subscribe();
+      },
+      { event: 'UPDATE', filter: `conversation_id=eq.${conversationId}` }
+    );
 
     return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
+      un1();
+      un2();
     };
   }, [conversationId, user?.id, queryClient, queryKey]);
 

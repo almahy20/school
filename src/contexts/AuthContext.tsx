@@ -231,6 +231,29 @@ async function performSignOut(
   } catch (_e) { /* ignore */ }
 }
 
+/** Pre-hydrates queryClient with cached branding BEFORE React renders — prevents flicker on refresh. */
+function preHydrateBrandingCache() {
+  try {
+    const cached = getCachedUser();
+    if (cached?.schoolId) {
+      const raw = localStorage.getItem(`branding_${cached.schoolId}`);
+      if (raw) {
+        const branding = JSON.parse(raw);
+        const existing = queryClient.getQueryData(['school-branding', cached.schoolId]);
+        if (!existing && branding?.name) {
+          let cleanName = branding.name.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
+          cleanName = cleanName.split(' — ')[0];
+          if (document.title !== cleanName) document.title = cleanName;
+        }
+        if (!existing) {
+          queryClient.setQueryData(['school-branding', cached.schoolId], branding);
+        }
+      }
+    }
+  } catch (_e) { /* ignore */ }
+}
+preHydrateBrandingCache();
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<AppUser | null>(() => getCachedUser());

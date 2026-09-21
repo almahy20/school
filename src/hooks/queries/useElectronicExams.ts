@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 
 const db = supabase as any;
@@ -372,21 +373,14 @@ export function useParentElectronicExams() {
   // Realtime: لما يُنشر اختبار جديد يظهر فوراً
   useEffect(() => {
     if (!user?.id || !user?.schoolId) return;
-    const channelName = `parent-exams-${user.id}-${Math.random().toString(36).slice(2, 8)}`;
-    const channel = db
-      .channel(channelName)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'electronic_exams',
-        filter: `school_id=eq.${user.schoolId}`,
-      }, () => {
+
+    return realtimeEngine.subscribe(
+      'electronic_exams',
+      () => {
         queryClient.invalidateQueries({ queryKey });
-      })
-      .subscribe();
-    return () => {
-      try { db.removeChannel(channel); } catch (_e) {}
-    };
+      },
+      { filter: `school_id=eq.${user.schoolId}` }
+    );
   }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>>({

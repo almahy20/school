@@ -11,6 +11,8 @@ import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
 import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import PwaManager from "./components/PwaManager";
 function RouteLoadingScreen() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#0a0f1e] text-white" dir="rtl">
@@ -62,8 +64,6 @@ const StudentDataPage          = lazy(() => import("./pages/StudentDetailPages")
 
 // ── Lazy loaded global components ────────────────────────────────────────────
 const RealtimeNotificationsManager = lazy(() => import('./components/RealtimeNotificationsManager'));
-const PWAInstallPrompt             = lazy(() => import('./components/PWAInstallPrompt'));
-const PwaManager                   = lazy(() => import('./components/PwaManager'));
 
 // Only expose the developer portal in development builds
 const isDev = import.meta.env.DEV;

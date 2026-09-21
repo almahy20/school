@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useProfilesByIds } from '@/hooks/queries/useProfile';
@@ -141,17 +142,17 @@ export function GlobalAnnouncement() {
       }
     };
 
-    const channel = supabase.channel('global-announcements')
-      .on('postgres_changes', {
+    const unsubscribe = realtimeEngine.subscribe(
+      'messages',
+      handleRealtimeMessage,
+      {
         event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `receiver_id=eq.${user.id}`
-      }, handleRealtimeMessage)
-      .subscribe();
+        filter: `receiver_id=eq.${user.id}`,
+      }
+    );
 
     return () => {
-      void supabase.removeChannel(channel);
+      unsubscribe();
     };
     // senderProfiles is intentionally excluded: adding it would re-subscribe the realtime
     // channel on every profile update. The handler uses whatever profiles are cached at

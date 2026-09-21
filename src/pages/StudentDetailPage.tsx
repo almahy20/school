@@ -6,9 +6,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, School, BookOpen, Award, User, 
   Trash2, Edit2, CalendarCheck, Info, Loader2,
-  Phone, MapPin, Hash, UserCircle, GraduationCap, FolderOpen, ChevronLeft
+  Phone, MapPin, Hash, UserCircle, GraduationCap, FolderOpen, ChevronLeft,
+  FileText
 } from 'lucide-react';
 import { EditStudentModal } from './StudentsPage';
+import { StudentReportModal } from '@/components/students/StudentReportModal';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,7 @@ export default function StudentDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Curriculum drill-down state
   const [curriculumView, setCurriculumView] = useState<'folders' | 'subjects'>('folders');
@@ -150,24 +153,36 @@ export default function StudentDetailPage() {
               <ArrowRight className="w-5 h-5" />
             </button>
 
-            {currentUser?.role === 'admin' && student && (
+            {student && (
               <div className="flex items-center gap-3">
                 <Button
-                  onClick={() => setShowEdit(true)}
-                  className="h-11 px-5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 shadow-lg gap-2"
+                  onClick={() => setShowReportModal(true)}
+                  className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow-lg shadow-indigo-950/50 gap-2 transition-all active:scale-95"
                 >
-                  <Edit2 className="w-4 h-4 text-indigo-600" />
-                  تعديل
+                  <FileText className="w-4 h-4" />
+                  <span>تقرير الطالب</span>
                 </Button>
-                <Button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={deleteStudentMutation.isPending}
-                  className="h-11 w-11 bg-rose-500/20 border border-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-xl flex items-center justify-center transition-all"
-                >
-                  {deleteStudentMutation.isPending
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Trash2 className="w-4 h-4" />}
-                </Button>
+
+                {currentUser?.role === 'admin' && (
+                  <>
+                    <Button
+                      onClick={() => setShowEdit(true)}
+                      className="h-11 px-5 rounded-xl bg-white text-slate-900 font-black text-xs hover:bg-slate-100 shadow-lg gap-2"
+                    >
+                      <Edit2 className="w-4 h-4 text-indigo-600" />
+                      تعديل
+                    </Button>
+                    <Button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={deleteStudentMutation.isPending}
+                      className="h-11 w-11 bg-rose-500/20 border border-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-xl flex items-center justify-center transition-all"
+                    >
+                      {deleteStudentMutation.isPending
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Trash2 className="w-4 h-4" />}
+                    </Button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -502,6 +517,15 @@ export default function StudentDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Student Comprehensive Report Modal ── */}
+      {student && (
+        <StudentReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          studentData={fullData}
+        />
+      )}
     </AppLayout>
   );
 }

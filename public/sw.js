@@ -1,11 +1,21 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
-const CACHE_NAME = 'school-cache-v1789464373496';
+// ⚠️ عند تحديث هذه السطر: غيّر رقم الـ version حتى الـ SW الجديد يستبدل القديم
+const CACHE_NAME = 'school-cache-v1790001474868';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [
   '/manifest.json',
+  '/placeholder.svg',
   '/icons/badge-72.png',
-  '/placeholder.svg'
+  '/icons/icon-72x72.png',
+  '/icons/icon-96x96.png',
+  '/icons/icon-128x128.png',
+  '/icons/icon-144x144.png',
+  // الأيقونات المطلوبة فعلياً قبل مطالبة التثبيت (Chrome Desktop + Android)
+  '/icons/icon-192x192.png',
+  '/icons/icon-256x256.png',
+  '/icons/icon-384x384.png',
+  '/icons/icon-512x512.png'
 ];
 
 const BRANDING_CACHE = 'school-branding-v1';
@@ -363,3 +373,25 @@ async function syncPendingNotifications() {
     console.warn('[SW] syncPendingNotifications failed:', err);
   }
 }
+
+// ─── Push Subscription Change (Keep alive even when app closed for weeks) ───
+self.addEventListener('pushsubscriptionchange', function (event) {
+  console.log('[SW] 🔄 Push subscription expired or changed in background — renewing...');
+  event.waitUntil(
+    self.registration.pushManager
+      .subscribe(event.oldSubscription ? event.oldSubscription.options : { userVisibleOnly: true })
+      .then(async function (newSubscription) {
+        console.log('[SW] ✅ Re-subscribed successfully in background:', newSubscription.endpoint);
+        const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windowClients) {
+          client.postMessage({
+            type: 'PUSH_SUBSCRIPTION_CHANGED',
+            subscription: newSubscription.toJSON()
+          });
+        }
+      })
+      .catch(function (err) {
+        console.error('[SW] ❌ Background re-subscription failed:', err);
+      })
+  );
+});

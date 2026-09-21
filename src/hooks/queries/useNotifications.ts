@@ -219,7 +219,7 @@ export function useUnreadCounts() {
       };
     },
     enabled: !!(session && user?.id),
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 دقائق — تقليل الاستدعاءات المتكررة (كانت 60 ثانية فقط)
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
     refetchOnMount: false,

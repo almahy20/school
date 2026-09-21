@@ -21,6 +21,20 @@ function syncDocumentTitle(name: string) {
   }
 }
 
+/** Reads branding from localStorage synchronously — used BEFORE first render to prevent flicker. */
+function readBrandingFromLocalStorage(schoolId: string | null): SchoolBranding | null | undefined {
+  if (!schoolId) return undefined;
+  try {
+    const cached = localStorage.getItem(`branding_${schoolId}`);
+    if (cached) {
+      const parsed = JSON.parse(cached) as SchoolBranding;
+      if (parsed?.name) syncDocumentTitle(parsed.name);
+      return parsed;
+    }
+  } catch (_e) { /* ignore */ }
+  return undefined;
+}
+
 async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | null> {
   if (!schoolId) return null;
   
@@ -40,32 +54,30 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 
 export function useBranding() {
   const { user } = useAuth();
-  // ✅ Use cached schoolId immediately for parallel loading
   const schoolId = user?.schoolId || getCachedUser()?.schoolId || null;
   const queryKey = useMemo(() => ['school-branding', schoolId], [schoolId]);
   const queryClient = useQueryClient();
 
-  // ✅ Optimization: Load branding from localStorage immediately if available
-  // This prevents the "flicker" where the logo disappears and comes back on refresh
+  const initialData = useMemo<SchoolBranding | null | undefined>(() => {
+    const fromClient = queryClient.getQueryData<SchoolBranding>(queryKey);
+    if (fromClient) {
+      if (fromClient.name) syncDocumentTitle(fromClient.name);
+      return fromClient;
+    }
+    return readBrandingFromLocalStorage(schoolId);
+  }, [queryKey, queryClient, schoolId]);
+
   useEffect(() => {
     if (schoolId) {
       const cached = localStorage.getItem(`branding_${schoolId}`);
       if (cached) {
         try {
-          const parsed = JSON.parse(cached);
-          const existing = queryClient.getQueryData(queryKey);
-          
-          // ✅ Sync Title IMMEDIATELY from cache before even setting query data
-          if (parsed.name) {
+          const parsed = JSON.parse(cached) as SchoolBranding;
+          const existing = queryClient.getQueryData<SchoolBranding>(queryKey);
+          if (!existing && parsed?.name) {
             syncDocumentTitle(parsed.name);
           }
-
-          if (!existing) {
-            queryClient.setQueryData(queryKey, parsed);
-          }
-        } catch (e) {
-          logger.error('Failed to parse cached branding');
-        }
+        } catch (_e) { /* ignore */ }
       }
     }
   }, [schoolId, queryKey, queryClient]);
@@ -76,18 +88,16 @@ export function useBranding() {
       const data = await fetchBranding(schoolId);
       if (data && schoolId) {
         localStorage.setItem(`branding_${schoolId}`, JSON.stringify(data));
-        // ✅ Sync Title when data arrives
-        if (data.name) {
-          syncDocumentTitle(data.name);
-        }
+        if (data.name) syncDocumentTitle(data.name);
       }
       return data;
     },
     enabled: !!schoolId,
+    initialData,
     placeholderData: (previousData: any) => previousData,
     retry: 1,
     retryDelay: 1000,
-    staleTime: Infinity, 
+    staleTime: Infinity,
   });
 }
 export function useSchoolBySlug(slug: string | undefined | null) {
