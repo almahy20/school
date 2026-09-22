@@ -3,6 +3,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useMemo } from 'react';
+import { matchesArabic } from '@/utils/arabicSearch';
+import { useAllStudents } from './useStudents';
 
 export interface FeeRecord {
   id: string;
@@ -16,96 +18,122 @@ export interface FeeRecord {
   updated_at?: string | null;
 }
 
-export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all') {
+// ─── Query for all fees in a given term ─────────────────────────────────────
+export function useTermFees(term?: string) {
   const { user, session } = useAuth();
-  const queryKey = ['fees', user?.schoolId, term, page, pageSize, search, classId];
   
   return useQuery({
-    queryKey,
+    queryKey: ['fees', 'term', user?.schoolId, term],
     queryFn: async () => {
-      if (!user?.schoolId) return { data: [], count: 0, stats: { total_due: 0, total_paid: 0 } };
+      if (!user?.schoolId || !term) return [];
+      const { data, error } = await supabase
+        .from('fees')
+        .select('id, student_id, amount_paid, status, term, amount_due')
+        .eq('school_id', user.schoolId)
+        .eq('term', term);
 
-      let studentsQ = supabase
-        .from('students')
-        .select('id, name, monthly_fee, class_id, classes(id, name)', { count: 'exact' })
-        .eq('school_id', user.schoolId);
-
-      if (search) studentsQ = studentsQ.ilike('name', `%${search}%`);
-      if (classId !== 'all') studentsQ = studentsQ.eq('class_id', classId);
-
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data: students, error: sErr, count } = await studentsQ
-        .order('name')
-        .range(from, to);
-
-      if (sErr) throw sErr;
-
-      const studentIds = (students || []).map(s => s.id);
-
-      // ── جلب رسوم الصفحة الحالية + الإجماليات بـ RPC في آنٍ واحد (parallel) ──
-      // get_fees_summary يحسب SUM داخل Postgres بدل تنزيل كل الصفوف
-      const [monthFeesResult, summaryResult] = await Promise.all([
-        studentIds.length > 0
-          ? supabase
-              .from('fees')
-              .select('id, student_id, amount_paid, status, term')
-              .eq('school_id', user.schoolId)
-              .eq('term', term)
-              .in('student_id', studentIds)
-          : Promise.resolve({ data: [], error: null }),
-
-        supabase.rpc('get_fees_summary', {
-          p_school_id: user.schoolId,
-          p_class_id:  classId !== 'all' ? classId : null,
-          p_term:      term ?? '',
-        }),
-      ]);
-
-      if (monthFeesResult.error) throw monthFeesResult.error;
-
-      const monthFees = monthFeesResult.data || [];
-      const summaryRow = (summaryResult.data as any)?.[0] ?? summaryResult.data ?? {};
-      const total_due  = Number(summaryRow?.total_due  ?? 0);
-      const total_paid = Number(summaryRow?.total_paid ?? 0);
-
-      const enrichedData = (students || []).map((s: any) => {
-        const feeRecord = (monthFees || []).find(f => f.student_id === s.id);
-        
-        const amount_due = Number(s.monthly_fee) || 0;
-        const amount_paid = Number(feeRecord?.amount_paid) || 0;
-        
-        let status = 'unpaid';
-        if (amount_due > 0) {
-          if (amount_paid >= amount_due) status = 'paid';
-          else if (amount_paid > 0) status = 'partial';
-        }
-
-        return {
-          ...s,
-          fee: {
-            id: feeRecord?.id,
-            amount_due,
-            amount_paid,
-            status,
-            term
-          }
-        };
-      });
-
-      return { 
-        data: enrichedData, 
-        count: count || 0, 
-        stats: { total_due, total_paid } 
-      };
+      if (error) throw error;
+      return data || [];
     },
-    enabled: !!(session && user?.schoolId),
-    placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
+    enabled: !!(session && user?.schoolId && term),
+    staleTime: 3 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
+}
+
+// ─── useFees Hook (Instant 0ms in-memory search & filter) ───────────────────
+export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all') {
+  const allStudentsQuery = useAllStudents();
+  const allStudents = allStudentsQuery.data || [];
+  
+  const termFeesQuery = useTermFees(term);
+  const monthFees = termFeesQuery.data || [];
+
+  const processed = useMemo(() => {
+    if (!allStudents.length) {
+      return {
+        data: [],
+        count: 0,
+        stats: { total_due: 0, total_paid: 0 },
+      };
+    }
+
+    const cleanSearch = search.trim();
+
+    // Map fees by student_id
+    const feeMap = new Map<string, any>();
+    monthFees.forEach((f) => {
+      if (f.student_id) feeMap.set(f.student_id, f);
+    });
+
+    let total_due = 0;
+    let total_paid = 0;
+
+    const enriched = allStudents.map((s: any) => {
+      const feeRecord = feeMap.get(s.id);
+      const amount_due = Number(s.monthly_fee) || 0;
+      const amount_paid = Number(feeRecord?.amount_paid) || 0;
+
+      let status = 'unpaid';
+      if (amount_due > 0) {
+        if (amount_paid >= amount_due) status = 'paid';
+        else if (amount_paid > 0) status = 'partial';
+      }
+
+      total_due += amount_due;
+      total_paid += amount_paid;
+
+      return {
+        ...s,
+        fee: {
+          id: feeRecord?.id,
+          amount_due,
+          amount_paid,
+          status,
+          term,
+        },
+      };
+    });
+
+    // Apply filters
+    const filtered = enriched.filter((item: any) => {
+      // 1. Class filter
+      if (classId !== 'all') {
+        if (item.class_id !== classId) return false;
+      }
+
+      // 2. Arabic Search filter
+      if (cleanSearch) {
+        const match = matchesArabic(item.name, cleanSearch);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+      stats: { total_due, total_paid },
+    };
+  }, [allStudents, monthFees, term, page, pageSize, search, classId]);
+
+  return {
+    data: processed,
+    isLoading: allStudentsQuery.isLoading || termFeesQuery.isLoading,
+    error: allStudentsQuery.error || termFeesQuery.error,
+    refetch: () => {
+      allStudentsQuery.refetch();
+      termFeesQuery.refetch();
+    },
+    isRefetching: allStudentsQuery.isRefetching || termFeesQuery.isRefetching,
+  };
 }
 
 export function useUpdateStudentMonthlyFee() {

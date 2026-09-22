@@ -49,7 +49,6 @@ export default function UsersManagementPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ fullName: '', phone: '' });
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -61,12 +60,6 @@ export default function UsersManagementPage() {
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // ── Queries ──
   const { data: branding } = useBranding();
   const { 
@@ -74,7 +67,7 @@ export default function UsersManagementPage() {
     isLoading: loading, 
     error, 
     refetch 
-  } = useUsers(page, PAGE_SIZE, debouncedSearch, roleFilter);
+  } = useUsers(page, PAGE_SIZE, search, roleFilter);
 
   const users = data?.data || [];
   const totalItems = data?.count || 0;

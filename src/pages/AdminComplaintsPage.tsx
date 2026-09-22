@@ -27,23 +27,17 @@ export default function AdminComplaintsPage() {
   }, [markAsRead]);
 
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('الكل');
   const [page, setPage] = useState(1);
 
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // ── Queries ──
+  // فلترة فورية 0ms في الذاكرة
   const { 
     data, 
     isLoading: loading, 
     error, 
     refetch 
-  } = useComplaints(page, PAGE_SIZE, debouncedSearch, filterStatus);
+  } = useComplaints(page, PAGE_SIZE, search, filterStatus);
 
   const complaints = data?.data || [];
   const totalItems = data?.count || 0;

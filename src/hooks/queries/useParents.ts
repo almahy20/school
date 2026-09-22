@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
 import { logger } from '@/utils/logger';
 import { getAuthToken } from '@/utils/getAuthToken';
+import { buildArabicSearchPatterns, matchesArabic } from '@/utils/arabicSearch';
 
 export interface Parent {
   id: string; // user_id
@@ -42,122 +43,133 @@ async function invokeAdminUsers(body: object) {
   });
 }
 
-async function fetchParents(
-  schoolId: string | null,
-  page = 1,
-  pageSize = 15,
-  search = '',
-  status = 'الكل'
-): Promise<{ data: Parent[]; count: number }> {
-  if (!schoolId) return { data: [], count: 0 };
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  let userIds: string[] | null = null;
-
-  if (search) {
-    const { data: matchedProfiles, error: searchError } = await supabase
-      .from('profiles')
-      .select('id')
-      .or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
-    if (searchError) throw searchError;
-    if (!matchedProfiles || matchedProfiles.length === 0) return { data: [], count: 0 };
-    userIds = matchedProfiles.map(p => p.id);
-  }
-
-  let rolesQuery = supabase
-    .from('user_roles')
-    .select('user_id, id, approval_status, role, school_id', { count: 'exact' })
-    .eq('role', 'parent')
-    .or(`school_id.eq.${schoolId},school_id.is.null`);
-
-  if (status !== 'الكل') {
-    rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
-  }
-
-  if (userIds !== null) {
-    rolesQuery = rolesQuery.in('user_id', userIds);
-  }
-
-  const { data: userRoles, error: rolesError, count } = await rolesQuery
-    .order('id')
-    .range(from, to);
-
-  if (rolesError) throw rolesError;
-  if (!userRoles || userRoles.length === 0) return { data: [], count: 0 };
-
-  const pageUserIds = userRoles.map(ur => ur.user_id);
-  const { data: profilesRaw, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, full_name, phone, email, school_id, created_at')
-    .in('id', pageUserIds)
-    .order('full_name');
-
-  if (profileError) throw profileError;
-  if (!profilesRaw) return { data: [], count: 0 };
-
-  const userRolesMap = new Map<string, any>();
-  userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
-  const parentIds = profilesRaw.map((p: any) => p.id);
-  const parentPhones = profilesRaw.map((p: any) => p.phone?.trim()).filter(Boolean);
-
-  const [{ data: links }, { data: studentsByPhone }, { data: classes }] = await Promise.all([
-    supabase
-      .from('student_parents')
-      .select('parent_id, student_id, students(id, name, class_id)')
-      .in('parent_id', parentIds),
-    parentPhones.length > 0
-      ? supabase
-          .from('students')
-          .select('id, name, class_id, parent_phone')
-          .eq('school_id', schoolId)
-          .in('parent_phone', parentPhones)
-      : Promise.resolve({ data: [] }),
-    supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
-  ]);
-
-  const data = (profilesRaw as any[]).map((profile) => {
-    const roleRecord = userRolesMap.get(profile.id);
-    const parentLinks = (links || []).filter((l: any) => l.parent_id === profile.id);
-    const linkedStudents = parentLinks.map((l: any) => l.students).filter(Boolean);
-    const phoneStudents = (studentsByPhone || []).filter((s: any) => s.parent_phone === profile.phone?.trim());
-
-    // Combine & deduplicate
-    const studentMap = new Map<string, any>();
-    linkedStudents.forEach((s: any) => studentMap.set(s.id, s));
-    phoneStudents.forEach((s: any) => studentMap.set(s.id, s));
-
-    return {
-      ...profile,
-      approval_status: roleRecord?.approval_status || 'approved',
-      user_role_id: roleRecord?.id,
-      children: Array.from(studentMap.values()).map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        class_name: classes?.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
-      })),
-    };
-  }) as Parent[];
-
-  return { data, count: count || 0 };
-}
-
-export function useParents(page = 1, pageSize = 15, search = '', status = 'الكل') {
+// ─── useAllParents Hook (Single cached fetch for the school) ────────────────
+export function useAllParents() {
   const { user, session } = useAuth();
-  const queryKey = ['parents', user?.schoolId, page, pageSize, search, status];
+  const schoolId = user?.schoolId;
 
   return useQuery({
-    queryKey,
-    queryFn: () => fetchParents(user?.schoolId || null, page, pageSize, search, status),
-    enabled: !!session && !!user?.schoolId,
-    placeholderData: keepPreviousData,
-    staleTime: 60 * 1000,
+    queryKey: ['parents', 'all', schoolId],
+    queryFn: async (): Promise<Parent[]> => {
+      if (!schoolId) return [];
+
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, id, approval_status, role, school_id')
+        .eq('role', 'parent')
+        .or(`school_id.eq.${schoolId},school_id.is.null`);
+
+      if (rolesError) throw rolesError;
+      if (!userRoles || userRoles.length === 0) return [];
+
+      const userIds = userRoles.map(ur => ur.user_id);
+      const { data: profilesRaw, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, email, school_id, created_at')
+        .in('id', userIds)
+        .order('full_name');
+
+      if (profileError) throw profileError;
+      if (!profilesRaw) return [];
+
+      const userRolesMap = new Map<string, any>();
+      userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
+      const parentIds = profilesRaw.map((p: any) => p.id);
+      const parentPhones = profilesRaw.map((p: any) => p.phone?.trim()).filter(Boolean);
+
+      const [{ data: links }, { data: studentsByPhone }, { data: classes }] = await Promise.all([
+        supabase
+          .from('student_parents')
+          .select('parent_id, student_id, students(id, name, class_id)')
+          .in('parent_id', parentIds),
+        parentPhones.length > 0
+          ? supabase
+              .from('students')
+              .select('id, name, class_id, parent_phone')
+              .eq('school_id', schoolId)
+              .in('parent_phone', parentPhones)
+          : Promise.resolve({ data: [] }),
+        supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
+      ]);
+
+      const data = (profilesRaw as any[]).map((profile) => {
+        const roleRecord = userRolesMap.get(profile.id);
+        const parentLinks = (links || []).filter((l: any) => l.parent_id === profile.id);
+        const linkedStudents = parentLinks.map((l: any) => l.students).filter(Boolean);
+        const phoneStudents = (studentsByPhone || []).filter((s: any) => s.parent_phone === profile.phone?.trim());
+
+        // Combine & deduplicate
+        const studentMap = new Map<string, any>();
+        linkedStudents.forEach((s: any) => studentMap.set(s.id, s));
+        phoneStudents.forEach((s: any) => studentMap.set(s.id, s));
+
+        return {
+          ...profile,
+          approval_status: roleRecord?.approval_status || 'approved',
+          user_role_id: roleRecord?.id,
+          children: Array.from(studentMap.values()).map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            class_name: classes?.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
+          })),
+        };
+      }) as Parent[];
+
+      return data;
+    },
+    enabled: !!session && !!schoolId,
+    staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
+    refetchOnMount: false,
     retry: 1,
   });
+}
+
+// ─── useParents Hook (Instant in-memory 0ms search & filter) ────────────────
+export function useParents(page = 1, pageSize = 15, search = '', status = 'الكل') {
+  const allParentsQuery = useAllParents();
+  const allParents = allParentsQuery.data || [];
+
+  const filteredData = useMemo(() => {
+    if (!allParents.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+    const cleanPhone = cleanSearch.replace(/\D/g, '');
+
+    const filtered = allParents.filter((parent) => {
+      // 1. Status Filter
+      if (status !== 'الكل') {
+        const isApproved = parent.approval_status === 'approved';
+        if (status === 'معتمد' && !isApproved) return false;
+        if (status === 'معلق' && isApproved) return false;
+      }
+
+      // 2. Instant Arabic Search & Phone Match
+      if (cleanSearch) {
+        const nameMatch = matchesArabic(parent.full_name, cleanSearch);
+        const phoneMatch = cleanPhone.length >= 3 && Boolean(parent.phone && parent.phone.includes(cleanPhone));
+        const childMatch = Boolean(parent.children && parent.children.some(c => matchesArabic(c.name, cleanSearch)));
+        if (!nameMatch && !phoneMatch && !childMatch) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allParents, page, pageSize, search, status]);
+
+  return {
+    ...allParentsQuery,
+    data: filteredData,
+  };
 }
 
 export interface PendingParent {
@@ -221,6 +233,7 @@ export function usePendingParents(limit = 100) {
 }
 
 export function useParent(id: string | undefined | null) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['parent', id],
     queryFn: async () => {
@@ -232,6 +245,21 @@ export function useParent(id: string | undefined | null) {
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
       return data as Parent;
+    },
+    initialData: () => {
+      if (!id) return undefined;
+      const allQueries = queryClient.getQueriesData<Parent[]>({ queryKey: ['parents', 'all'] });
+      for (const [, list] of allQueries) {
+        if (Array.isArray(list)) {
+          const match = list.find((p) => p.id === id);
+          if (match) return match;
+        }
+      }
+      return undefined;
+    },
+    initialDataUpdatedAt: () => {
+      const match = queryClient.getQueryState(['parents', 'all'])?.dataUpdatedAt;
+      return match || 0;
     },
     enabled: !!id,
     placeholderData: keepPreviousData,

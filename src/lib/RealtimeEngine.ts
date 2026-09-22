@@ -31,6 +31,9 @@ export const SYNCED_TABLES = [
   'class_chat_messages',
   'messages',
   'schools',
+  'profiles',
+  'user_roles',
+  'student_parents',
 ] as const;
 
 export type SyncedTable = (typeof SYNCED_TABLES)[number];
@@ -424,6 +427,34 @@ class RealtimeEngine {
         if (newRec?.id) {
           queryClient.invalidateQueries({ queryKey: ['school-branding', newRec.id], exact: false });
         }
+        break;
+      }
+
+      case 'profiles': {
+        queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['users'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['pending-parents'], exact: false });
+        break;
+      }
+
+      case 'user_roles': {
+        queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['users'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['pending-parents'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        break;
+      }
+
+      case 'student_parents': {
+        queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
         break;
       }
     }

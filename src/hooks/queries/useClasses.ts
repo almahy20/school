@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppUser } from '@/types/auth';
+import { matchesArabic } from '@/utils/arabicSearch';
 
 export interface Class {
   id: string;
@@ -15,80 +16,69 @@ export interface Class {
   created_at: string;
 }
 
-async function fetchClasses(
-  user: AppUser | null,
-  page = 1,
-  pageSize = 15,
-  search = '',
-  gradeLevel = 'الكل'
-): Promise<{ data: Class[]; count: number }> {
-  if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
-
-  let q = supabase
-    .from('classes')
-    .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at', { count: 'exact' });
-
-  if (!user.isSuperAdmin && user.schoolId) {
-    q = q.eq('school_id', user.schoolId);
-  }
-
-  if (search) {
-    q = q.ilike('name', `%${search}%`);
-  }
-
-  if (gradeLevel !== 'الكل') {
-    q = q.eq('grade_level', gradeLevel);
-  }
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const { data, error, count } = await q
-    .order('name')
-    .range(from, to);
-
-  if (error) throw error;
-  return { data: (data || []) as Class[], count: count || 0 };
-}
-
-export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
-  const { user, session } = useAuth();
-  const queryKey = ['classes', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id, page, pageSize, search, gradeLevel];
-  
-  return useQuery({
-    queryKey,
-    queryFn: () => fetchClasses(user, page, pageSize, search, gradeLevel),
-    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
-    placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
-    retry: 1,
-    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
-  });
-}
-
 export function useAllClasses() {
   const { user, session } = useAuth();
   const queryKey = ['classes', 'all', user?.schoolId, user?.isSuperAdmin, user?.role, user?.id];
   
   return useQuery({
     queryKey,
-    queryFn: async () => {
+    queryFn: async (): Promise<Class[]> => {
       if (!user?.isSuperAdmin && !user?.schoolId) return [];
       let q = supabase.from('classes').select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at');
       if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
       const { data, error } = await q.order('name');
       if (error) throw error;
-      return data || [];
+      return (data || []) as Class[];
     },
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 30 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }
 
+// ─── useClasses Hook (Instant 0ms in-memory search & filter) ────────────────
+export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
+  const allClassesQuery = useAllClasses();
+  const allClasses = allClassesQuery.data || [];
+
+  const filteredData = useMemo(() => {
+    if (!allClasses.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+
+    const filtered = allClasses.filter((c) => {
+      if (gradeLevel !== 'الكل') {
+        if (c.grade_level !== gradeLevel) return false;
+      }
+
+      if (cleanSearch) {
+        const match = matchesArabic(c.name, cleanSearch);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allClasses, page, pageSize, search, gradeLevel]);
+
+  return {
+    ...allClassesQuery,
+    data: filteredData,
+  };
+}
+
 export function useClass(id: string | undefined | null) {
+  const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['class', id], [id]);
   
   return useQuery({
@@ -104,6 +94,21 @@ export function useClass(id: string | undefined | null) {
       
       if (error) throw error;
       return data;
+    },
+    initialData: () => {
+      if (!id) return undefined;
+      const allQueries = queryClient.getQueriesData<Class[]>({ queryKey: ['classes', 'all'] });
+      for (const [, list] of allQueries) {
+        if (Array.isArray(list)) {
+          const match = list.find((c) => c.id === id);
+          if (match) return match;
+        }
+      }
+      return undefined;
+    },
+    initialDataUpdatedAt: () => {
+      const match = queryClient.getQueryState(['classes', 'all'])?.dataUpdatedAt;
+      return match || 0;
     },
     enabled: !!id,
     staleTime: 5 * 60 * 1000,

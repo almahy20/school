@@ -48,27 +48,20 @@ export default function TeachersPage() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selectedTeacher, setSelectedTeacher] = useState<any>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // ── React Query Hooks ──
-  // جلب المعلمين المعتمدين مع التجزئة والبحث
+  // جلب المعلمين المعتمدين مع الفلترة الفورية 0ms
   const { 
     data: activeData, 
     isLoading: loadingActive, 
     error: errorActive, 
     refetch: refetchActive, 
     isRefetching: isRefetchingActive 
-  } = useTeachers(page, PAGE_SIZE, debouncedSearch, 'معتمد');
+  } = useTeachers(page, PAGE_SIZE, search, 'معتمد');
 
   // جلب المعلمين المنتظرين (قائمة صغيرة عادةً، نكتفي بالصفحة الأولى)
   const { data: pendingData, 

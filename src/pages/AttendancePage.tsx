@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/components/ui/use-toast';
 import { useBranding, useTeacherAttendance, useUpsertTeacherAttendance } from '@/hooks/queries';
+import { matchesArabic } from '@/utils/arabicSearch';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 import PageHeader from '@/components/layout/PageHeader';
 
@@ -87,7 +88,7 @@ export default function TeacherAttendancePage() {
     total: localAttendance.length
   };
 
-  const filteredAttendance = localAttendance.filter(a => (a.teacherName || '').toLowerCase().includes((search || '').toLowerCase()));
+  const filteredAttendance = localAttendance.filter(a => !search.trim() || matchesArabic(a.teacherName, search));
   const loading = attendanceLoading && !isRefetching;
 
   return (

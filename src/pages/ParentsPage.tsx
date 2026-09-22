@@ -22,25 +22,18 @@ export default function ParentsPage() {
   const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [filterNoChildren, setFilterNoChildren] = useState(false);
 
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // ── React Query Hooks ──
-  // جلب أولياء الأمور المعتمدين مع التجزئة والبحث
+  // جلب أولياء الأمور المعتمدين مع الفلترة الفورية 0ms
   const { 
     data: parentsData, 
     isLoading: loading, 
     error, 
     refetch, 
     isRefetching 
-  } = useParents(page, PAGE_SIZE, debouncedSearch, 'معتمد');
+  } = useParents(page, PAGE_SIZE, search, 'معتمد');
 
   // جلب طلبات الانتظار (قائمة منفصلة عادة ما تكون صغيرة)
   // ✅ الآن باستخدام usePendingParents خفيف (بدون جلب الأبناء والفصول)

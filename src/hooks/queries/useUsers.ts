@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { getAuthToken } from '@/utils/getAuthToken';
+import { buildArabicSearchPatterns, matchesArabic } from '@/utils/arabicSearch';
 
 export interface UserProfile {
   id: string;
@@ -27,31 +29,22 @@ async function invokeAdminUsers(body: object) {
   });
 }
 
-export function useUsers(page: number = 1, pageSize: number = 20, search: string = '', roleFilter: string = '') {
+// ─── useAllUsers Hook (Single cached fetch for the school) ──────────────────
+export function useAllUsers() {
   const { user, session } = useAuth();
 
   return useQuery({
-    queryKey: ['admin-users', page, pageSize, search, roleFilter],
-    queryFn: async () => {
+    queryKey: ['admin-users', 'all', user?.schoolId, user?.isSuperAdmin],
+    queryFn: async (): Promise<UserProfile[]> => {
       let query = supabase
         .from('profiles')
-        .select('id, full_name, email, phone, school_id, created_at, updated_at, user_roles(role, approval_status, school_id, is_super_admin)', { count: 'exact' });
+        .select('id, full_name, email, phone, school_id, created_at, updated_at, user_roles(role, approval_status, school_id, is_super_admin)');
 
-      if (search) {
-        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%`);
+      if (!user?.isSuperAdmin && user?.schoolId) {
+        query = query.eq('school_id', user.schoolId);
       }
 
-      if (roleFilter) {
-        query = query.eq('user_roles.role', roleFilter);
-      }
-
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data, error, count } = await query
-        .range(from, to)
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
 
       const transformedData = (data || []).map((item: any) => ({
@@ -71,12 +64,56 @@ export function useUsers(page: number = 1, pageSize: number = 20, search: string
         updated_at: item.updated_at,
       }));
 
-      return { data: transformedData as UserProfile[], count: count || 0 };
+      return transformedData as UserProfile[];
     },
     enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
+}
+
+// ─── useUsers Hook (Instant in-memory 0ms search & filter) ──────────────────
+export function useUsers(page: number = 1, pageSize: number = 20, search: string = '', roleFilter: string = '') {
+  const allUsersQuery = useAllUsers();
+  const allUsers = allUsersQuery.data || [];
+
+  const filteredData = useMemo(() => {
+    if (!allUsers.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+    const cleanPhone = cleanSearch.replace(/\D/g, '');
+
+    const filtered = allUsers.filter((u) => {
+      // 1. Role Filter
+      if (roleFilter && roleFilter !== 'الكل') {
+        if (u.role !== roleFilter) return false;
+      }
+
+      // 2. Instant Arabic Search & Phone/Email Match
+      if (cleanSearch) {
+        const nameMatch = matchesArabic(u.full_name, cleanSearch);
+        const phoneMatch = cleanPhone.length >= 3 && Boolean(u.phone && u.phone.includes(cleanPhone));
+        const emailMatch = Boolean(u.email && u.email.toLowerCase().includes(cleanSearch.toLowerCase()));
+        if (!nameMatch && !phoneMatch && !emailMatch) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allUsers, page, pageSize, search, roleFilter]);
+
+  return {
+    ...allUsersQuery,
+    data: filteredData,
+  };
 }
 
 export function useCreateUser() {

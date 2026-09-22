@@ -24,14 +24,16 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       // ✅ Stale-While-Revalidate: Serve from cache, background refresh only when needed
+      networkMode: 'offlineFirst', // Run query & serve cache immediately without pausing on slow/offline network
       staleTime: 60 * 1000, // 1 minute (prevents spamming Supabase API on rapid page switches)
       gcTime: 30 * 60 * 1000, // 30 minutes in RAM (automatically frees memory for unmounted pages)
       refetchOnWindowFocus: false, // Prevents request storm when user tabs switch
-      refetchOnMount: true, // Refetch only when component mounts and data is stale (>60s)
+      refetchOnMount: false, // Use instant cached data without waiting for network re-fetch on mount
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
     },
     mutations: {
+      networkMode: 'offlineFirst',
       onSuccess: () => {
         // Individual mutations manage their targeted cache invalidation
       },

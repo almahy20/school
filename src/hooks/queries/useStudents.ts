@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,153 +18,56 @@ export interface Student {
   student_parents?: { parent_id: string }[];
 }
 
-// ─── Arabic text normalizer ───────────────────────────────────────────────────
-// يحوّل أحرف Unicode المتشابهة بصرياً لشكل موحّد:
-//   - ی فارسي (U+06CC) → ي عربي (U+064A)
-//   - ك أردية (U+06A9) → ك عربية (U+0643)
-//   - ة → ه  |  أ إ آ ء ؤ ئ → ا / و / ي
-//   - يزيل التشكيل
-export function normalizeArabic(text: string): string {
-  return text
-    .replace(/\u06CC/g, '\u064A')   // ی فارسي → ي
-    .replace(/\u06A9/g, '\u0643')   // ك أردية → ك
-    .replace(/[أإآءؤئ]/g, 'ا')     // همزات → ا  (للبحث فقط)
-    .replace(/ة/g, 'ه')
-    .replace(/ى/g, '\u064A')        // ى → ي
-    .replace(/[\u064B-\u0652\u0670]/g, '') // حذف التشكيل
-    .trim();
-}
+import {
+  normalizeArabic,
+  normalizeStudentName,
+  buildArabicSearchPatterns,
+  matchesArabic,
+} from '@/utils/arabicSearch';
 
-// نسخة للأسماء المدخلة — تحافظ على الهمزات وتُوحّد فقط Unicode المشابه
-export function normalizeStudentName(text: string): string {
-  return text
-    .replace(/\u06CC/g, '\u064A')   // ی فارسي → ي
-    .replace(/\u06A9/g, '\u0643')   // ك أردية → ك
-    .replace(/[\u064B-\u0652\u0670]/g, '') // حذف التشكيل
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+export { normalizeArabic, normalizeStudentName, buildArabicSearchPatterns, matchesArabic };
 
-// يبني كل variants ممكنة للكلمة (مع/بدون تطبيع) ليشمل الحالتين في ilike
-function buildArabicSearchPatterns(search: string): string[] {
-  const normalized = normalizeArabic(search);
-  const patterns = new Set<string>();
-  patterns.add(search);
-  patterns.add(normalized);
-  // أيضاً: ه → ة و ي → ى (العكس)
-  patterns.add(search.replace(/ه/g, 'ة').replace(/ي/g, 'ى'));
-  patterns.add(search.replace(/ه/g, 'ة'));
-  patterns.add(search.replace(/ي/g, 'ى'));
-  return Array.from(patterns).filter(Boolean);
-}
-
-// ─── Fetch function ───────────────────────────────────────────────────────────
-async function fetchStudents(
-  user: AppUser | null,
-  page = 1,
-  pageSize = 15,
-  search = '',
-  classId = 'الكل'  // الآن نستقبل classId بدل className
-): Promise<{ data: Student[]; count: number }> {
-  if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
-
-  let teacherClassIds: string[] = [];
-  if (user.role === 'teacher') {
-    const { data: teacherClasses } = await supabase
-      .from('classes')
-      .select('id')
-      .eq('teacher_id', user.id);
-    
-    if (teacherClasses && teacherClasses.length > 0) {
-      teacherClassIds = teacherClasses.map(c => c.id);
-    } else {
-      return { data: [], count: 0 };
-    }
-  }
-
-  // ── فلتر "بدون ولي أمر" — يحتاج subquery منفصل ──
-  if (classId === 'بدون_ولي_امر') {
-    // جلب كل الطلاب اللي عندهم ربط في student_parents
-    const { data: linked } = await supabase
-      .from('student_parents')
-      .select('student_id')
-      .eq('school_id', user.schoolId || '');
-    const linkedIds = (linked || []).map((l: any) => l.student_id).filter(Boolean);
-
-    let q = supabase
-      .from('students')
-      .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
-
-    if (!user.isSuperAdmin && user.schoolId) q = q.eq('school_id', user.schoolId);
-    if (user.role === 'teacher' && teacherClassIds.length > 0) q = q.in('class_id', teacherClassIds);
-
-    // الطلاب اللي مش موجودين في student_parents
-    if (linkedIds.length > 0) {
-      q = q.not('id', 'in', `(${linkedIds.map(id => `"${id}"`).join(',')})`);
-    }
-
-    if (search.trim()) {
-      const patterns = buildArabicSearchPatterns(search.trim());
-      const orFilter = patterns.map(p => `name.ilike.%${p}%`).join(',');
-      q = q.or(orFilter);
-    }
-
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    const { data, error, count } = await q.order('name').range(from, to);
-    if (error) throw error;
-    return { data: (data || []) as Student[], count: count || 0 };
-  }
-
-  let q = supabase
-    .from('students')
-    .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
-
-  if (!user.isSuperAdmin && user.schoolId) {
-    q = q.eq('school_id', user.schoolId);
-  }
-  
-  if (user.role === 'teacher' && teacherClassIds.length > 0) {
-    q = q.in('class_id', teacherClassIds);
-  }
-
-  // ── فلتر الفصل (server-side) ──
-  if (classId === 'بدون_فصل') {
-    q = q.is('class_id', null);
-  } else if (classId !== 'الكل') {
-    q = q.eq('class_id', classId);
-  }
-
-  // ── البحث مع دعم ة/ه و ى/ي (server-side) ──
-  if (search.trim()) {
-    const patterns = buildArabicSearchPatterns(search.trim());
-    const orFilter = patterns.map(p => `name.ilike.%${p}%`).join(',');
-    q = q.or(orFilter);
-  }
-
-  // ── Pagination ──
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  
-  const { data, error, count } = await q
-    .order('name')
-    .range(from, to);
-
-  if (error) throw error;
-  return { data: (data || []) as Student[], count: count || 0 };
-}
-
-// ─── useStudents Hook ─────────────────────────────────────────────────────────
-export function useStudents(page = 1, pageSize = 15, search = '', classId = 'الكل') {
+// ─── useAllStudents Hook (Cached single-fetch) ──────────────────────────────
+export function useAllStudents() {
   const { user, session } = useAuth();
   
-  const queryKey = ['students', user?.schoolId, page, pageSize, search, classId];
+  const queryKey = ['students', 'all', user?.schoolId, user?.role, user?.id];
   
   return useQuery({
     queryKey,
-    queryFn: () => fetchStudents(user, page, pageSize, search, classId),
-    enabled: !!(session && user?.id), 
-    placeholderData: keepPreviousData,
+    queryFn: async (): Promise<Student[]> => {
+      if (!user?.isSuperAdmin && !user?.schoolId) return [];
+
+      let teacherClassIds: string[] = [];
+      if (user.role === 'teacher') {
+        const { data: teacherClasses } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('teacher_id', user.id);
+        
+        if (teacherClasses && teacherClasses.length > 0) {
+          teacherClassIds = teacherClasses.map(c => c.id);
+        } else {
+          return [];
+        }
+      }
+
+      let q = supabase
+        .from('students')
+        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)');
+
+      if (!user.isSuperAdmin && user.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+      if (user.role === 'teacher' && teacherClassIds.length > 0) {
+        q = q.in('class_id', teacherClassIds);
+      }
+
+      const { data, error } = await q.order('name');
+      if (error) throw error;
+      return (data || []) as Student[];
+    },
+    enabled: !!(session && user?.id && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
@@ -171,6 +75,54 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
+}
+
+// ─── useStudents Hook (Instant 0ms in-memory search & filter) ────────────────
+export function useStudents(page = 1, pageSize = 15, search = '', classId = 'الكل') {
+  const allStudentsQuery = useAllStudents();
+  const allStudents = allStudentsQuery.data || [];
+
+  const filteredData = (useMemo as any)(() => {
+    if (!allStudents.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+    const cleanPhone = cleanSearch.replace(/\D/g, '');
+
+    const filtered = allStudents.filter((student) => {
+      // 1. Filter by class
+      if (classId === 'بدون_فصل') {
+        if (student.class_id) return false;
+      } else if (classId === 'بدون_ولي_امر') {
+        const hasParent = Array.isArray(student.student_parents) && student.student_parents.length > 0;
+        if (hasParent) return false;
+      } else if (classId !== 'الكل') {
+        if (student.class_id !== classId) return false;
+      }
+
+      // 2. Filter by search (instant Arabic normalization & phone search)
+      if (cleanSearch) {
+        const nameMatch = matchesArabic(student.name, cleanSearch);
+        const phoneMatch = cleanPhone.length >= 3 && Boolean(student.parent_phone && student.parent_phone.includes(cleanPhone));
+        if (!nameMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allStudents, page, pageSize, search, classId]);
+
+  return {
+    ...allStudentsQuery,
+    data: filteredData,
+  };
 }
 
 // ─── useStudent Hook ──────────────────────────────────────────────────────────

@@ -53,6 +53,8 @@ export function useRetentionPolicies() {
     },
     // Only fetch for admin users
     enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
+    staleTime: 15 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 }
 
@@ -144,6 +146,8 @@ export function useDatabaseSizeInfo() {
     },
     // Only fetch for admin users
     enabled: !!session && (user?.role === 'admin' || user?.isSuperAdmin === true),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 

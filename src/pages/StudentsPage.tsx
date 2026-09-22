@@ -72,13 +72,6 @@ export default function StudentsPage() {
   const [search, setSearch] = useSessionState('students:search', '');
   const [filterClassId, setFilterClassId] = useSessionState('students:filterClassId', 'الكل');
   const [page, setPage] = useSessionState('students:page', 1);
-  // نبدأ debouncedSearch بنفس قيمة search المحفوظة حتى لا يتأخر الفلتر عند العودة للصفحة
-  const [debouncedSearch, setDebouncedSearch] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('students:search');
-      return stored !== null ? JSON.parse(stored) : '';
-    } catch { return ''; }
-  });
   const [showAdd, setShowAdd] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
@@ -87,14 +80,14 @@ export default function StudentsPage() {
   const filterRef = useRef<HTMLDivElement>(null);
 
   // ── React Query Hooks ──
-  // نمرر البارامترات للـ hook ليقوم بالفلترة والتجزئة من جهة الخادم
+  // فلترة فورية 0ms في الذاكرة
   const { 
     data, 
     isLoading: loading, 
     error, 
     refetch, 
     isRefetching 
-  } = useStudents(page, PAGE_SIZE, debouncedSearch, filterClassId);
+  } = useStudents(page, PAGE_SIZE, search, filterClassId);
   
   const students = data?.data || [];
   const totalItems = data?.count || 0;
@@ -104,12 +97,6 @@ export default function StudentsPage() {
   const classes: Array<{id: string; name: string; grade_level: string | null}> = useMemo(() => 
     Array.isArray(classesData) ? classesData : [], [classesData]);
   const deleteMutation = useDeleteStudent();
-
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
 
   // Derive classes list for filter dropdown — بـ classId وليس اسم الفصل
   const availableClasses = useMemo(() => {

@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { matchesArabic } from '@/utils/arabicSearch';
 
 export interface Complaint {
   id: string;
@@ -16,14 +18,14 @@ export interface Complaint {
   student_name?: string;
 }
 
-export function useComplaints(page = 1, pageSize = 15, search = '', status = 'الكل') {
+export function useAllComplaints() {
   const { user, session } = useAuth();
-  const queryKey = ['complaints', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
-  
+  const queryKey = ['complaints', 'all', user?.schoolId, user?.isSuperAdmin];
+
   return useQuery({
     queryKey,
-    queryFn: async () => {
-      if (!user?.schoolId && !user?.isSuperAdmin) return { data: [], count: 0 };
+    queryFn: async (): Promise<Complaint[]> => {
+      if (!user?.schoolId && !user?.isSuperAdmin) return [];
       
       let q = supabase
         .from('complaints')
@@ -31,44 +33,70 @@ export function useComplaints(page = 1, pageSize = 15, search = '', status = 'ا
           *,
           parent:profiles(full_name),
           student:students(name)
-        `, { count: 'exact' });
+        `);
 
       if (!user?.isSuperAdmin && user?.schoolId) {
         q = q.eq('school_id', user.schoolId);
       }
 
-      if (status !== 'الكل') {
-        q = q.eq('status', status);
-      }
-
-      if (search) {
-        q = q.ilike('content', `%${search}%`);
-      }
-
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data: complaintsData, error, count } = await q
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
+      const { data: complaintsData, error } = await q.order('created_at', { ascending: false });
       if (error) throw error;
 
-      const data = (complaintsData || []).map((c: any) => ({
+      return (complaintsData || []).map((c: any) => ({
         ...c,
         parent_name: (c.parent as any)?.full_name || 'ولي أمر',
         student_name: (c.student as any)?.name || 'غير محدد',
       })) as Complaint[];
-
-      return { data, count: count || 0 };
     },
     enabled: !!session && !!(user?.schoolId || user?.isSuperAdmin),
-    placeholderData: keepPreviousData,
-    staleTime: 0,
-    gcTime: 5 * 60 * 1000,
-    retry: 1,
-    retryDelay: 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
+}
+
+// ─── useComplaints Hook (Instant 0ms in-memory search & filter) ──────────────
+export function useComplaints(page = 1, pageSize = 15, search = '', status = 'الكل') {
+  const allComplaintsQuery = useAllComplaints();
+  const allComplaints = allComplaintsQuery.data || [];
+
+  const filteredData = useMemo(() => {
+    if (!allComplaints.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+
+    const filtered = allComplaints.filter((c) => {
+      // 1. Status Filter
+      if (status !== 'الكل') {
+        if (c.status !== status) return false;
+      }
+
+      // 2. Search Filter (Arabic normalization for content, parent_name, student_name)
+      if (cleanSearch) {
+        const contentMatch = matchesArabic(c.content, cleanSearch);
+        const parentMatch = Boolean(c.parent_name && matchesArabic(c.parent_name, cleanSearch));
+        const studentMatch = Boolean(c.student_name && matchesArabic(c.student_name, cleanSearch));
+        if (!contentMatch && !parentMatch && !studentMatch) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allComplaints, page, pageSize, search, status]);
+
+  return {
+    ...allComplaintsQuery,
+    data: filteredData,
+  };
 }
 
 export function useParentComplaints(page = 1, pageSize = 10) {

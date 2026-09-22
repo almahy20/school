@@ -289,7 +289,7 @@ export function useChildFullDetails(studentId: string | undefined) {
   return useQuery({
     queryKey: ['child-full-details', studentId],
     queryFn: async () => {
-      if (!studentId || !user?.schoolId) return null;
+      if (!studentId || (!user?.schoolId && !user?.isSuperAdmin)) return null;
 
       const current_term = getCurrentTerm();
 
@@ -323,7 +323,7 @@ export function useChildFullDetails(studentId: string | undefined) {
         logger.log('[useChildFullDetails] Calling RPC get_child_full_details for student:', studentId);
         const { data, error } = await (supabase as any).rpc('get_child_full_details', {
           p_student_id: studentId,
-          p_school_id: user.schoolId,
+          p_school_id: user.schoolId || null,
         });
 
         if (error) {
@@ -377,45 +377,48 @@ export function useChildFullDetails(studentId: string | undefined) {
           if (cached && cached.id) return cached;
         }
 
+        let studentQuery = supabase
+          .from('students')
+          .select('*, classes(id, name, curriculum_id)')
+          .eq('id', studentId);
+        if (user.schoolId) studentQuery = studentQuery.eq('school_id', user.schoolId);
+
+        let gradesQuery = supabase
+          .from('grades')
+          .select('*, exam_templates(id, title, term, subject, max_score)')
+          .eq('student_id', studentId)
+          .order('created_at', { ascending: true })
+          .limit(500);
+        if (user.schoolId) gradesQuery = gradesQuery.eq('school_id', user.schoolId);
+
+        let attendanceQuery = supabase
+          .from('attendance')
+          .select('id, student_id, status, date, school_id, class_id, notes')
+          .eq('student_id', studentId)
+          .order('date', { ascending: false })
+          .limit(365);
+        if (user.schoolId) attendanceQuery = attendanceQuery.eq('school_id', user.schoolId);
+
+        let feesQuery = supabase
+          .from('fees')
+          .select('id, student_id, description, amount_due, amount_paid, status, term, created_at')
+          .eq('student_id', studentId)
+          .order('created_at', { ascending: false });
+        if (user.schoolId) feesQuery = feesQuery.eq('school_id', user.schoolId);
+
         const [studentResult, gradesResult, attendanceResult, feesResult, curriculumResult] =
           await Promise.all([
-            supabase
-              .from('students')
-              .select('*, classes(id, name, curriculum_id)')
-              .eq('id', studentId)
-              .eq('school_id', user.schoolId)
-              .maybeSingle(),
-
-            supabase
-              .from('grades')
-              .select('*, exam_templates(id, title, term, subject, max_score)')
-              .eq('student_id', studentId)
-              .eq('school_id', user.schoolId)
-              .order('created_at', { ascending: true })
-              .limit(500),
-
-            supabase
-              .from('attendance')
-              .select('id, student_id, status, date, school_id, class_id, notes')
-              .eq('student_id', studentId)
-              .eq('school_id', user.schoolId)
-              .order('date', { ascending: false })
-              .limit(365),
-
-            supabase
-              .from('fees')
-              .select('id, student_id, description, amount_due, amount_paid, status, term, created_at')
-              .eq('student_id', studentId)
-              .eq('school_id', user.schoolId)
-              .order('created_at', { ascending: false }),
-
+            studentQuery.maybeSingle(),
+            gradesQuery,
+            attendanceQuery,
+            feesQuery,
             (async () => {
-              const { data: stud } = await supabase
+              let studQuery = supabase
                 .from('students')
                 .select('classes!inner(curriculum_id)')
-                .eq('id', studentId)
-                .eq('school_id', user.schoolId)
-                .maybeSingle();
+                .eq('id', studentId);
+              if (user.schoolId) studQuery = studQuery.eq('school_id', user.schoolId);
+              const { data: stud } = await studQuery.maybeSingle();
               const curriculumId = (stud as any)?.classes?.curriculum_id;
               if (!curriculumId) return { data: [], error: null };
               return supabase
@@ -466,12 +469,13 @@ export function useChildFullDetails(studentId: string | undefined) {
         let payments: any[] = [];
         if (feeIds.length > 0) {
           try {
-            const { data: pData } = await supabase
+            let pQuery = supabase
               .from('fee_payments')
               .select('id, fee_id, amount, payment_date, notes, school_id')
-              .eq('school_id', user.schoolId)
               .in('fee_id', feeIds)
               .order('payment_date', { ascending: false });
+            if (user.schoolId) pQuery = pQuery.eq('school_id', user.schoolId);
+            const { data: pData } = await pQuery;
             payments = pData || [];
           } catch (pErr) {
             if (!isNetworkOrTimeoutErr(pErr)) {
@@ -502,11 +506,11 @@ export function useChildFullDetails(studentId: string | undefined) {
         };
       }
     },
-    enabled: !!(studentId && user?.schoolId),
-    staleTime: 3 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false,
+    refetchOnMount: 'always',
     refetchOnWindowFocus: false,
     retry: (failureCount, error: any) => {
       if (error?.code === 'PGRST202' || (error?.status >= 400 && error?.status < 500)) {
@@ -514,6 +518,6 @@ export function useChildFullDetails(studentId: string | undefined) {
       }
       return failureCount < 1;
     },
-    retryDelay: 2500,
+    retryDelay: 1000,
   });
 }

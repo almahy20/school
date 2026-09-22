@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { getAuthToken } from '@/utils/getAuthToken';
+import { buildArabicSearchPatterns, matchesArabic } from '@/utils/arabicSearch';
 
 export interface Teacher {
   id: string;
@@ -43,72 +44,45 @@ async function invokeAdminUsers(body: object) {
   });
 }
 
-async function fetchTeachers(
-  schoolId: string | null,
-  isSuperAdmin: boolean,
-  page = 1,
-  pageSize = 15,
-  search = '',
-  status = 'الكل'
-): Promise<{ data: Teacher[]; count: number }> {
-  let rolesQuery = (supabase.from('user_roles') as any)
-    .select('user_id, id, approval_status, role, school_id', { count: 'estimated' })
-    .eq('role', 'teacher');
-
-  if (!isSuperAdmin && schoolId) {
-    rolesQuery = rolesQuery.eq('school_id', schoolId);
-  }
-
-  if (status !== 'الكل') {
-    rolesQuery = rolesQuery.eq('approval_status', status === 'معتمد' ? 'approved' : 'pending');
-  }
-
-  const { data: userRoles, error: rolesError, count } = await rolesQuery;
-
-  if (rolesError) throw rolesError;
-  if (!userRoles || userRoles.length === 0) return { data: [], count: 0 };
-
-  const userIds = userRoles.map(ur => ur.user_id);
-
-  let profilesQuery = supabase
-    .from('profiles')
-    .select('id, full_name, phone, email, school_id, created_at')
-    .in('id', userIds);
-
-  if (search) {
-    profilesQuery = profilesQuery.ilike('full_name', `%${search}%`);
-  }
-
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-
-  const { data: profiles, error: profileError } = await profilesQuery
-    .order('full_name')
-    .range(from, to);
-
-  if (profileError) throw profileError;
-
-  const data = (profiles || []).map((profile: any) => {
-    const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
-    return {
-      ...profile,
-      approval_status: roleRecord?.approval_status || 'approved',
-      user_role_id: roleRecord?.id,
-    };
-  }) as Teacher[];
-
-  return { data, count: count || 0 };
-}
-
-export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل', options?: { enabled?: boolean }) {
+// ─── useAllTeachers Hook (Single fetch cached in React Query) ────────────────
+export function useAllTeachers(options?: { enabled?: boolean }) {
   const { user, session } = useAuth();
-  const queryKey = ['teachers', user?.schoolId, user?.isSuperAdmin, page, pageSize, search, status];
+  const queryKey = ['teachers', 'all', user?.schoolId, user?.isSuperAdmin];
 
   return useQuery({
     queryKey,
-    queryFn: () => fetchTeachers(user?.schoolId || null, !!user?.isSuperAdmin, page, pageSize, search, status),
+    queryFn: async (): Promise<Teacher[]> => {
+      let rolesQuery = (supabase.from('user_roles') as any)
+        .select('user_id, id, approval_status, role, school_id')
+        .eq('role', 'teacher');
+
+      if (!user?.isSuperAdmin && user?.schoolId) {
+        rolesQuery = rolesQuery.eq('school_id', user.schoolId);
+      }
+
+      const { data: userRoles, error: rolesError } = await rolesQuery;
+      if (rolesError) throw rolesError;
+      if (!userRoles || userRoles.length === 0) return [];
+
+      const userIds = userRoles.map(ur => ur.user_id);
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, email, school_id, created_at')
+        .in('id', userIds)
+        .order('full_name');
+
+      if (profileError) throw profileError;
+
+      return (profiles || []).map((profile: any) => {
+        const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
+        return {
+          ...profile,
+          approval_status: roleRecord?.approval_status || 'approved',
+          user_role_id: roleRecord?.id,
+        };
+      }) as Teacher[];
+    },
     enabled: (options?.enabled ?? true) && !!session && !!(user?.schoolId || user?.isSuperAdmin),
-    placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
@@ -117,7 +91,53 @@ export function useTeachers(page = 1, pageSize = 15, search = '', status = 'ال
   });
 }
 
+// ─── useTeachers Hook (Instant in-memory 0ms search & filter) ────────────────
+export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل', options?: { enabled?: boolean }) {
+  const allTeachersQuery = useAllTeachers(options);
+  const allTeachers = allTeachersQuery.data || [];
+
+  const filteredData = useMemo(() => {
+    if (!allTeachers.length) return { data: [], count: 0 };
+
+    const cleanSearch = search.trim();
+    const cleanPhone = cleanSearch.replace(/\D/g, '');
+
+    const filtered = allTeachers.filter((teacher) => {
+      // 1. Filter by approval status
+      if (status !== 'الكل') {
+        const isApproved = teacher.approval_status === 'approved';
+        if (status === 'معتمد' && !isApproved) return false;
+        if (status === 'معلق' && isApproved) return false;
+      }
+
+      // 2. Filter by search (instant Arabic normalization & phone search)
+      if (cleanSearch) {
+        const nameMatch = matchesArabic(teacher.full_name, cleanSearch);
+        const phoneMatch = cleanPhone.length >= 3 && Boolean(teacher.phone && teacher.phone.includes(cleanPhone));
+        if (!nameMatch && !phoneMatch) return false;
+      }
+
+      return true;
+    });
+
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize;
+    const paginated = filtered.slice(from, to);
+
+    return {
+      data: paginated,
+      count: filtered.length,
+    };
+  }, [allTeachers, page, pageSize, search, status]);
+
+  return {
+    ...allTeachersQuery,
+    data: filteredData,
+  };
+}
+
 export function useTeacher(id: string | undefined | null) {
+  const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['teacher', id], [id]);
 
   return useQuery({
@@ -131,6 +151,21 @@ export function useTeacher(id: string | undefined | null) {
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
       return (data as unknown) as Teacher;
+    },
+    initialData: () => {
+      if (!id) return undefined;
+      const allQueries = queryClient.getQueriesData<Teacher[]>({ queryKey: ['teachers', 'all'] });
+      for (const [, list] of allQueries) {
+        if (Array.isArray(list)) {
+          const match = list.find((t) => t.id === id);
+          if (match) return match;
+        }
+      }
+      return undefined;
+    },
+    initialDataUpdatedAt: () => {
+      const match = queryClient.getQueryState(['teachers', 'all'])?.dataUpdatedAt;
+      return match || 0;
     },
     enabled: !!id,
     placeholderData: keepPreviousData,

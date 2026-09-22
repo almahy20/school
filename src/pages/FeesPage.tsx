@@ -83,12 +83,6 @@ export default function FeesPage() {
   const [selectedTerm, setSelectedTerm] = useSessionState('fees:selectedTerm', `شهر ${MONTHS_AR[currentMonthIdx]} ${currentYear}`);
   const [selectedClassId, setSelectedClassId] = useSessionState<string>('fees:selectedClassId', 'all');
   const [search, setSearch] = useSessionState('fees:search', '');
-  const [debouncedSearch, setDebouncedSearch] = useState(() => {
-    try {
-      const stored = sessionStorage.getItem('fees:search');
-      return stored !== null ? JSON.parse(stored) : '';
-    } catch { return ''; }
-  });
   const [filterStatus, setFilterStatus] = useSessionState('fees:filterStatus', 'الكل');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [page, setPage] = useSessionState('fees:page', 1);
@@ -100,25 +94,19 @@ export default function FeesPage() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [isEditingFee, setIsEditingFee] = useState(false);
 
-  // ── Debounce Search ──
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
-    return () => clearTimeout(timer);
-  }, [search]);
-
   // ── Queries ──
   const { data: branding } = useBranding();
   const { data: classesData } = useAllClasses();
   const classes = (classesData || []) as Array<{id: string; name: string}>;
   
-  // نستخدم useFees المطور الذي يجلب الطلاب ورسومهم لهذا الترم
+  // فلترة فورية 0ms في الذاكرة
   const { 
     data, 
     isLoading: feesLoading, 
     error, 
     refetch, 
     isRefetching 
-  } = useFees(selectedTerm, page, PAGE_SIZE, debouncedSearch, selectedClassId);
+  } = useFees(selectedTerm, page, PAGE_SIZE, search, selectedClassId);
 
   const studentsData = useMemo(() => data?.data || [], [data]);
   const totalItems = data?.count || 0;

@@ -102,7 +102,12 @@ export function usePushNotifications() {
       const { error } = await supabase
         .from('push_subscriptions')
         .upsert(
-          { user_id: userId, subscription: subJson, endpoint: subscription.endpoint },
+          { 
+            user_id: userId, 
+            school_id: user?.schoolId || null,
+            subscription: subJson, 
+            endpoint: subscription.endpoint 
+          },
           { onConflict: 'endpoint' }
         );
 
