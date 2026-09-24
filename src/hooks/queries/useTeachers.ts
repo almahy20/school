@@ -82,10 +82,10 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
         };
       }) as Teacher[];
     },
-    enabled: (options?.enabled ?? true) && !!session && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 3 * 60 * 1000,
+    enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 10 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

@@ -14,6 +14,7 @@ import { useCleanBranding } from '@/hooks/useCleanBranding';
 import { logger } from '@/utils/logger';
 import PushNotificationPrompt from './PushNotificationPrompt';
 import NetworkStatusBanner from './NetworkStatusBanner';
+import GlobalSyncIndicator from './GlobalSyncIndicator';
 
 interface Props {
   children: ReactNode;
@@ -139,6 +140,9 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
     <div className="min-h-screen flex flex-col w-full font-cairo selection:bg-primary/20 bg-[#F8FAFC]" dir="rtl">
       {/* Network Offline/Online Status Banner */}
       <NetworkStatusBanner />
+
+      {/* Global Background Sync Indicator & Delay Alert */}
+      <GlobalSyncIndicator />
 
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />

@@ -23,14 +23,14 @@ if (typeof window !== 'undefined') {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ✅ Stale-While-Revalidate: Serve from cache, background refresh only when needed
-      networkMode: 'offlineFirst', // Run query & serve cache immediately without pausing on slow/offline network
-      staleTime: 60 * 1000, // 1 minute (prevents spamming Supabase API on rapid page switches)
-      gcTime: 30 * 60 * 1000, // 30 minutes in RAM (automatically frees memory for unmounted pages)
-      refetchOnWindowFocus: false, // Prevents request storm when user tabs switch
-      refetchOnMount: false, // Use instant cached data without waiting for network re-fetch on mount
-      retry: 1,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+      // ✅ Stale-While-Revalidate: عرض فوري من الكاش وتحديث صامت في الخلفية لجلب أحدث البيانات دائماً
+      networkMode: 'offlineFirst',
+      staleTime: 10 * 1000, // 10 ثوانٍ: أي بيانات في الكاش تعرض فوراً ويعاد التحقق في الخلفية
+      gcTime: 60 * 60 * 1000, // ساعة كاملة في ذاكرة الـ RAM
+      refetchOnWindowFocus: true, // تحديث تلقائي عند العودة للتطبيق
+      refetchOnMount: true, // تحديث صامت في الخلفية عند دخول الصفحة
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 6000),
     },
     mutations: {
       networkMode: 'offlineFirst',
@@ -47,10 +47,10 @@ export const queryClient = new QueryClient({
   }),
 });
 
-// ✅ Optimization: IndexedDB Query Persistence with Strict Whitelisting
+// ✅ Optimization: IndexedDB Query Persistence with Smart Whitelisting
 if (typeof window !== 'undefined') {
   // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v2.1'; // bumped: ultra-lean cache whitelist (branding only)
+  const CACHE_VERSION = 'v2.2'; // bumped: smart offline cache for instant mobile load
 
   const idbPersister = {
     persistClient: async (client: any) => {
@@ -74,12 +74,26 @@ if (typeof window !== 'undefined') {
       if (query.state.status !== 'success') return false;
       if (query.meta?.persist === false) return false;
 
-      // ✅ أمان وأداء مطلق للأجهزة الضعيفة:
-      // نخزن فقط هوية المدرسة وشعارها لفتح التطبيق فوراً بشعار المدرسة.
-      // أي بيانات ديناميكية (طلاب، درجات، غياب، رسائل، فصول) تبقى في ذاكرة الـ RAM المؤقتة فقط
-      // لمنع تراكم الملفات وتضخم مساحة التخزين على هاتف المستخدم نهائياً.
+      // ✅ استراتيجية ذكية: حفظ البيانات الرئيسية في ذاكرة الهاتف لتفتح الصفحات في أجزاء من الثانية
       const key = String(query.queryKey[0]);
-      return key === 'school-branding' || key === 'school-by-slug';
+      const allowedKeys = [
+        'school-branding',
+        'school-by-slug',
+        'profile',
+        'parent-children',
+        'child-full-details',
+        'students',
+        'classes',
+        'teachers',
+        'parents',
+        'attendance',
+        'grades',
+        'fees',
+        'notifications',
+        'complaints',
+        'curriculum'
+      ];
+      return allowedKeys.includes(key);
     },
   });
 }

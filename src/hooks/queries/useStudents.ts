@@ -67,11 +67,11 @@ export function useAllStudents() {
       if (error) throw error;
       return (data || []) as Student[];
     },
-    enabled: !!(session && user?.id && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 3 * 60 * 1000,
+    enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
+    staleTime: 10 * 1000,
     gcTime: 15 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

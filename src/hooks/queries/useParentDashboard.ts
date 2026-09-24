@@ -271,12 +271,12 @@ export function useParentChildren() {
         throw err;
       }
     },
-    enabled: !!session && !!(user?.id && user?.role === 'parent'),
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
+    enabled: !!(user?.id && user?.role === 'parent'),
+    staleTime: 10 * 1000, // 10 ثوانٍ لتمكين التحديث الصامت السريع
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false, // كان true → يسبب refetch غير ضروري في كل mount
-    refetchOnWindowFocus: false,
+    refetchOnMount: true, // يضمن فحص وتحديث البيانات في الخلفية
+    refetchOnWindowFocus: true,
     retry: 1,
     retryDelay: 1000,
   });

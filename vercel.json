@@ -3,7 +3,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!assets/|icons/|sw\\.js|manifest\\.json|robots\\.txt|favicon\\.ico|placeholder\\.svg|push-sw\\.js).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],

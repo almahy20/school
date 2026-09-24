@@ -117,11 +117,11 @@ export function useAllParents() {
 
       return data;
     },
-    enabled: !!session && !!schoolId,
-    staleTime: 3 * 60 * 1000,
+    enabled: !!schoolId,
+    staleTime: 10 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
     retry: 1,
   });
 }

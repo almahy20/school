@@ -30,11 +30,11 @@ export function useAllClasses() {
       if (error) throw error;
       return (data || []) as Class[];
     },
-    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 5 * 60 * 1000,
+    enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    staleTime: 10 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
