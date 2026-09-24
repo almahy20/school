@@ -52,7 +52,7 @@ export default function ParentSignupPage() {
     if (schoolBranding.cleanName) {
       document.title = `${schoolBranding.cleanName} — إنشاء حساب ولي أمر`;
     } else {
-      document.title = "النظام الذكي — إنشاء حساب";
+      document.title = "مدرسة الجيل الجديد — إنشاء حساب";
     }
   }, [schoolBranding.cleanName]);
 

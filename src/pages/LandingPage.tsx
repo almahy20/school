@@ -71,7 +71,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-lg overflow-hidden p-1.5 text-slate-400">
               <BookOpen className="w-5 h-5" />
             </div>
-            <span className="text-lg font-black text-white tracking-tight">النظام الذكي</span>
+            <span className="text-lg font-black text-white tracking-tight">الجيل الجديد</span>
           </div>
           <div className="flex items-center gap-4">
             <a href="#features" className="text-white/50 hover:text-white text-sm font-bold transition-colors hidden md:block">المميزات</a>
