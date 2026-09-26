@@ -216,7 +216,7 @@ export function usePWAInstall(): PWAInstallState {
   );
 
   return {
-    canInstall: !isStandalone && (hasPrompt || isIOS),
+    canInstall: !isStandalone && hasPrompt,
     isStandalone,
     isIOS,
     promptInstall,

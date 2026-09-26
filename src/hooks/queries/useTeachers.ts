@@ -56,36 +56,45 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
         .select('user_id, id, approval_status, role, school_id')
         .eq('role', 'teacher');
 
-      if (!user?.isSuperAdmin && user?.schoolId) {
-        rolesQuery = rolesQuery.eq('school_id', user.schoolId);
-      }
-
-      const { data: userRoles, error: rolesError } = await rolesQuery;
-      if (rolesError) throw rolesError;
-      if (!userRoles || userRoles.length === 0) return [];
-
-      const userIds = userRoles.map(ur => ur.user_id);
-      const { data: profiles, error: profileError } = await supabase
+      let profsQuery = supabase
         .from('profiles')
         .select('id, full_name, phone, email, school_id, created_at')
-        .in('id', userIds)
         .order('full_name');
 
-      if (profileError) throw profileError;
+      if (!user?.isSuperAdmin && user?.schoolId) {
+        rolesQuery = rolesQuery.eq('school_id', user.schoolId);
+        profsQuery = profsQuery.eq('school_id', user.schoolId);
+      }
 
-      return (profiles || []).map((profile: any) => {
-        const roleRecord = userRoles.find(ur => ur.user_id === profile.id);
-        return {
-          ...profile,
-          approval_status: roleRecord?.approval_status || 'approved',
-          user_role_id: roleRecord?.id,
-        };
-      }) as Teacher[];
+      // ✅ FIX: Run user_roles and profiles in parallel (Zero Waterfall)
+      const [{ data: userRoles, error: rolesError }, { data: profiles, error: profileError }] = await Promise.all([
+        rolesQuery,
+        profsQuery,
+      ]);
+
+      if (rolesError) throw rolesError;
+      if (profileError) throw profileError;
+      if (!userRoles || userRoles.length === 0) return [];
+
+      const userRolesMap = new Map<string, any>();
+      userRoles.forEach((ur: any) => userRolesMap.set(ur.user_id, ur));
+
+      return (profiles || [])
+        .filter((p: any) => userRolesMap.has(p.id))
+        .map((profile: any) => {
+          const roleRecord = userRolesMap.get(profile.id);
+          return {
+            ...profile,
+            approval_status: roleRecord?.approval_status || 'approved',
+            user_role_id: roleRecord?.id,
+          };
+        }) as Teacher[];
     },
     enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 10 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
+    staleTime: 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     refetchOnMount: true,
+    refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -138,17 +147,23 @@ export function useTeachers(page = 1, pageSize = 15, search = '', status = 'ال
 
 export function useTeacher(id: string | undefined | null) {
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => ['teacher', id], [id]);
+  const { user } = useAuth();
+  const queryKey = useMemo(() => ['teacher', id, user?.schoolId], [id, user?.schoolId]);
 
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
+      let q = supabase
         .from('profiles')
         .select('id, full_name, phone, email, school_id, created_at')
-        .eq('id', id)
-        .maybeSingle();
+        .eq('id', id);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      const { data, error } = await q.maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
       return (data as unknown) as Teacher;
     },
@@ -167,7 +182,7 @@ export function useTeacher(id: string | undefined | null) {
       const match = queryClient.getQueryState(['teachers', 'all'])?.dataUpdatedAt;
       return match || 0;
     },
-    enabled: !!id,
+    enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,

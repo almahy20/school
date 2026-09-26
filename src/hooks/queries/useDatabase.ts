@@ -1,79 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
-
-type TableName = 'students' | 'classes' | 'grades' | 'attendance' | 'student_parents' | 'exam_templates';
-
-/**
- * Hook to fetch all rows from a table
- */
-export function useTableData(tableName: TableName) {
-  return useQuery({
-    queryKey: ['database', tableName],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from(tableName)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500); // Super Admin data browser — 500 صف كافية للعرض
-      
-      if (error) throw error;
-      return data || [];
-    },
-  });
-}
-
-/**
- * Hook to insert a new row into a table
- */
-export function useInsertRow(tableName: TableName) {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (record: Record<string, any>) => {
-      const { data, error } = await supabase
-        .from(tableName)
-        .insert(record as any)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
-      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-    },
-  });
-}
-
-/**
- * Hook to update a row in a table
- */
-export function useUpdateRow(tableName: TableName) {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async ({ id, ...updates }: Record<string, any>) => {
-      const { data, error } = await supabase
-        .from(tableName)
-        .update(updates as any)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
-      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-    },
-  });
-}
 
 /**
  * Hook to get database statistics (table sizes, row counts, etc.)
@@ -122,7 +50,7 @@ async function fetchDatabaseStatsFallback() {
   const tables = [
     'students', 'user_roles', 'profiles', 'classes', 
     'attendance', 'grades', 'fees', 'messages',
-    'notifications', 'complaints', 'schools',
+    'notifications', 'schools',
     'student_parents', 'exam_templates', 'curriculums'
   ];
 
@@ -169,7 +97,6 @@ function estimateTableSize(tableName: string, rowCount: number): string {
     fees: 450,          // ~450 bytes per row
     messages: 800,      // ~800 bytes per row (text content)
     notifications: 700, // ~700 bytes per row
-    complaints: 1000,   // ~1000 bytes per row (longer text)
     schools: 1000,      // ~1000 bytes per row
     student_parents: 200,
     exam_templates: 600,
@@ -188,28 +115,4 @@ function estimateTableSize(tableName: string, rowCount: number): string {
   } else {
     return `${(totalBytes / (1024 * 1024 * 1024)).toFixed(3)} GB`;
   }
-}
-
-/**
- * Hook to delete a row from a table
- */
-export function useDeleteRow(tableName: TableName) {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-      return id;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database', tableName] });
-      queryClient.invalidateQueries({ queryKey: [tableName], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-    },
-  });
 }

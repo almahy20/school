@@ -14,7 +14,7 @@ export interface AttendanceRecord {
 
 export function useClassAttendance(classId: string | null, date: string) {
   const { user, session } = useAuth();
-  const queryKey = ['attendance', 'class', classId, date];
+  const queryKey = ['attendance', 'class', classId, date, user?.schoolId];
   
   return useQuery({
     queryKey,
@@ -130,12 +130,11 @@ export function useUpsertAttendance() {
     },
     onSettled: (data, error, variables) => {
       if (variables.length > 0) {
+        // ✅ FIX: Reduced from 5 to 2 invalidations — optimistic update handles
+        //    the attendance cache directly; Realtime covers cross-table updates
         queryClient.invalidateQueries({ 
           queryKey: ['attendance', 'class', variables[0].class_id, variables[0].date] 
         });
-        queryClient.invalidateQueries({ queryKey: ['attendance', 'student'], exact: false });
-        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       }
     },
@@ -143,23 +142,30 @@ export function useUpsertAttendance() {
 }
 
 export function useStudentAttendance(studentId: string | null) {
-  const queryKey = ['attendance', 'student', studentId];
+  const { user } = useAuth();
+  const queryKey = ['attendance', 'student', studentId, user?.schoolId];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!studentId) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from('attendance')
         .select('id, student_id, status, date, school_id, class_id, created_at')
-        .eq('student_id', studentId)
+        .eq('student_id', studentId);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      const { data, error } = await q
         .order('date', { ascending: false })
         .limit(365); // حد معقول: سنة دراسية كاملة
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!studentId,
+    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,

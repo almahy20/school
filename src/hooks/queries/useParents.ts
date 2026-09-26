@@ -43,7 +43,7 @@ async function invokeAdminUsers(body: object) {
   });
 }
 
-// ─── useAllParents Hook (Single cached fetch for the school) ────────────────
+// ─── useAllParents Hook (Parallelized cached fetch for the school) ──────────
 export function useAllParents() {
   const { user, session } = useAuth();
   const schoolId = user?.schoolId;
@@ -53,14 +53,30 @@ export function useAllParents() {
     queryFn: async (): Promise<Parent[]> => {
       if (!schoolId) return [];
 
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, id, approval_status, role, school_id')
-        .eq('role', 'parent')
-        .or(`school_id.eq.${schoolId},school_id.is.null`);
+      // ✅ FIX: Parallelized Execution — All auxiliary tables (classes, student_parents, students)
+      // fetch in parallel with user_roles in ONE network roundtrip (eliminates 3-tier Waterfall).
+      const [userRolesRes, classesRes, linksRes, studentsRes] = await Promise.all([
+        supabase
+          .from('user_roles')
+          .select('user_id, id, approval_status, role, school_id')
+          .eq('role', 'parent')
+          .or(`school_id.eq.${schoolId},school_id.is.null`),
+        supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
+        supabase
+          .from('student_parents')
+          .select('parent_id, student_id, students(id, name, class_id)')
+          .eq('school_id', schoolId),
+        supabase
+          .from('students')
+          .select('id, name, class_id, parent_phone')
+          .eq('school_id', schoolId)
+          .not('parent_phone', 'is', null)
+          .limit(2000),
+      ]);
 
-      if (rolesError) throw rolesError;
-      if (!userRoles || userRoles.length === 0) return [];
+      if (userRolesRes.error) throw userRolesRes.error;
+      const userRoles = userRolesRes.data || [];
+      if (userRoles.length === 0) return [];
 
       const userIds = userRoles.map(ur => ur.user_id);
       const { data: profilesRaw, error: profileError } = await supabase
@@ -74,29 +90,35 @@ export function useAllParents() {
 
       const userRolesMap = new Map<string, any>();
       userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
-      const parentIds = profilesRaw.map((p: any) => p.id);
-      const parentPhones = profilesRaw.map((p: any) => p.phone?.trim()).filter(Boolean);
 
-      const [{ data: links }, { data: studentsByPhone }, { data: classes }] = await Promise.all([
-        supabase
-          .from('student_parents')
-          .select('parent_id, student_id, students(id, name, class_id)')
-          .in('parent_id', parentIds),
-        parentPhones.length > 0
-          ? supabase
-              .from('students')
-              .select('id, name, class_id, parent_phone')
-              .eq('school_id', schoolId)
-              .in('parent_phone', parentPhones)
-          : Promise.resolve({ data: [] }),
-        supabase.from('classes').select('id, name').eq('school_id', schoolId).limit(200),
-      ]);
+      const classMap = new Map<string, string>();
+      (classesRes.data || []).forEach((c: any) => classMap.set(c.id, c.name));
+
+      const links = linksRes.data || [];
+      const studentsByPhone = studentsRes.data || [];
+
+      // Group links by parent_id for O(1) lookup
+      const linksByParent = new Map<string, any[]>();
+      links.forEach((l: any) => {
+        if (!linksByParent.has(l.parent_id)) linksByParent.set(l.parent_id, []);
+        linksByParent.get(l.parent_id)!.push(l);
+      });
+
+      // Group students by phone for O(1) lookup
+      const studentsByPhoneMap = new Map<string, any[]>();
+      studentsByPhone.forEach((s: any) => {
+        const phone = s.parent_phone?.trim();
+        if (phone) {
+          if (!studentsByPhoneMap.has(phone)) studentsByPhoneMap.set(phone, []);
+          studentsByPhoneMap.get(phone)!.push(s);
+        }
+      });
 
       const data = (profilesRaw as any[]).map((profile) => {
         const roleRecord = userRolesMap.get(profile.id);
-        const parentLinks = (links || []).filter((l: any) => l.parent_id === profile.id);
+        const parentLinks = linksByParent.get(profile.id) || [];
         const linkedStudents = parentLinks.map((l: any) => l.students).filter(Boolean);
-        const phoneStudents = (studentsByPhone || []).filter((s: any) => s.parent_phone === profile.phone?.trim());
+        const phoneStudents = profile.phone ? (studentsByPhoneMap.get(profile.phone.trim()) || []) : [];
 
         // Combine & deduplicate
         const studentMap = new Map<string, any>();
@@ -110,7 +132,7 @@ export function useAllParents() {
           children: Array.from(studentMap.values()).map((s: any) => ({
             id: s.id,
             name: s.name,
-            class_name: classes?.find((c: any) => c.id === s.class_id)?.name || 'بدون فصل',
+            class_name: classMap.get(s.class_id) || 'بدون فصل',
           })),
         };
       }) as Parent[];
@@ -118,9 +140,9 @@ export function useAllParents() {
       return data;
     },
     enabled: !!schoolId,
-    staleTime: 10 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
     retry: 1,
   });
@@ -272,99 +294,9 @@ export function useParent(id: string | undefined | null) {
 
 export const useParentDetails = useParent;
 
-export function useAdminParentChildren(parentId: string | undefined | null) {
-  const { user, session } = useAuth();
-  return useQuery({
-    queryKey: ['parent-children', 'admin', parentId, user?.schoolId],
-    queryFn: async () => {
-      if (!parentId || !user?.schoolId) return [];
-
-      // 1. Fetch parent profile (phone)
-      const { data: parentProfile } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, school_id')
-        .eq('id', parentId)
-        .maybeSingle();
-
-      // 2. Fetch direct links
-      const { data: links } = await supabase
-        .from('student_parents')
-        .select('student_id, students(id, name, class_id)')
-        .eq('parent_id', parentId);
-
-      const linkedIds = (links || []).map((l: any) => l.student_id).filter(Boolean);
-      const studentMap = new Map<string, any>();
-
-      (links || []).forEach((l: any) => {
-        if (l.students) studentMap.set(l.students.id, l.students);
-      });
-
-      // 3. Direct fetch for missing IDs
-      const missingIds = linkedIds.filter(id => !studentMap.has(id));
-      if (missingIds.length > 0) {
-        const { data: missingStudents } = await supabase
-          .from('students')
-          .select('id, name, class_id, parent_phone')
-          .in('id', missingIds);
-        (missingStudents || []).forEach(s => studentMap.set(s.id, s));
-      }
-
-      // 4. Phone match
-      if (parentProfile?.phone) {
-        const cleanPhone = parentProfile.phone.trim();
-        const { data: phoneStudents } = await supabase
-          .from('students')
-          .select('id, name, class_id, parent_phone')
-          .eq('school_id', user.schoolId)
-          .eq('parent_phone', cleanPhone);
-        
-        (phoneStudents || []).forEach(s => {
-          if (!studentMap.has(s.id)) studentMap.set(s.id, s);
-        });
-      }
-
-      const allStudents = Array.from(studentMap.values());
-      if (allStudents.length === 0) return [];
-
-      const classIds = allStudents.map(s => s.class_id).filter(Boolean);
-      const [classesRes, curriculumsRes, subjectsRes] = await Promise.all([
-        classIds.length > 0
-          ? supabase.from('classes').select('id, name, curriculum_id').in('id', classIds)
-          : Promise.resolve({ data: [] }),
-        supabase.from('curriculums').select('id, name, status, school_id').eq('school_id', user.schoolId),
-        supabase.from('curriculum_subjects').select('id, curriculum_id, subject_name, content, curriculums!inner(school_id)').eq('curriculums.school_id', user.schoolId),
-      ]);
-
-      const classes = classesRes.data || [];
-      const curriculums = curriculumsRes.data || [];
-      const subjects = subjectsRes.data || [];
-
-      return allStudents.map((s: any) => {
-        const studentClass = classes.find((c: any) => c.id === s.class_id);
-        const studentCurriculum = curriculums.find((curr: any) => curr.id === studentClass?.curriculum_id);
-        const studentCurriculumSubjects = subjects.filter((sub: any) => sub.curriculum_id === studentCurriculum?.id);
-        return {
-          id: s.id,
-          name: s.name,
-          class_name: studentClass?.name || 'بدون فصل',
-          curriculum: studentCurriculum
-            ? {
-                name: studentCurriculum.name,
-                subjects: studentCurriculumSubjects.map((sub: any) => ({
-                  subject_name: sub.subject_name,
-                  content: sub.content,
-                })),
-              }
-            : null,
-        };
-      });
-    },
-    enabled: !!session && !!(parentId && user?.schoolId),
-    staleTime: 60 * 1000,
-    gcTime: 1000 * 60 * 60 * 2,
-    refetchOnMount: true,
-  });
-}
+// ✅ FIX: Removed useAdminParentChildren — it was identical to useParentChildrenBasic
+//    and was dead code (exported but never imported/used anywhere in the project).
+//    useParentChildrenBasic covers the same functionality with the same query pattern.
 
 export function useParentChildrenBasic(parentId: string | undefined | null) {
   const { user, session } = useAuth();
@@ -506,11 +438,10 @@ export function useUpdateParent() {
     onSuccess: (_, variables) => {
       toast.success('تم تحديث بيانات ولي الأمر');
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-detail', variables.id] });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent', variables.id] });
+      // ✅ FIX: Reduced invalidation cascade — removed 'students' and 'admin-stats'
+      //    which are unrelated to a parent profile update, and merged parent-children keys
       queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
     },
   });
 }
@@ -543,16 +474,15 @@ export function useDeleteParent() {
       return parentId;
     },
     onSuccess: () => {
+      // ✅ FIX: Reduced invalidation — removed parent-children (already covered by removeQueries)
+      //    and child-full-details (unrelated to parent deletion)
       queryClient.removeQueries({
         predicate: (query) =>
           query.queryKey[0] === 'parents' ||
           query.queryKey[0] === 'parent-detail' ||
-          query.queryKey[0] === 'admin-stats',
+          query.queryKey[0] === 'parent-children-basic',
       });
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
     },

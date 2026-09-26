@@ -58,21 +58,7 @@ export interface ConversationMessage {
 /** قائمة المحادثات للأدمن */
 export function useAdminConversations(status: string = 'all', search: string = '') {
   const { user, session } = useAuth();
-  const queryClient = useQueryClient();
   const queryKey = ['conversations', 'admin', user?.schoolId, status, search];
-
-  // Realtime subscription via single master channel
-  useEffect(() => {
-    if (!user?.id || !user?.schoolId) return;
-
-    return realtimeEngine.subscribe(
-      'conversations',
-      () => {
-        queryClient.invalidateQueries({ queryKey: ['conversations', 'admin', user.schoolId], exact: false });
-      },
-      { filter: `school_id=eq.${user.schoolId}` }
-    );
-  }, [user?.id, user?.schoolId, queryClient]);
 
   return useQuery<Conversation[]>({
     queryKey,
@@ -82,7 +68,9 @@ export function useAdminConversations(status: string = 'all', search: string = '
       let q = db
         .from('conversations')
         .select(`
-          *,
+          id, school_id, parent_id, student_id, subject, status, priority,
+          last_message_at, last_message_preview, unread_by_admin, unread_by_parent,
+          messages_count, created_at, updated_at,
           parent:profiles!conversations_parent_id_fkey(full_name, phone),
           student:students!conversations_student_id_fkey(name)
         `)
@@ -163,21 +151,7 @@ export function useConversation(conversationId: string | null | undefined) {
 /** قائمة محادثات ولي الأمر */
 export function useParentConversations() {
   const { user, session } = useAuth();
-  const queryClient = useQueryClient();
   const queryKey = ['conversations', 'parent', user?.id];
-
-  // Realtime via single master channel
-  useEffect(() => {
-    if (!user?.id) return;
-
-    return realtimeEngine.subscribe(
-      'conversations',
-      () => {
-        queryClient.invalidateQueries({ queryKey: ['conversations', 'parent', user.id], exact: false });
-      },
-      { filter: `parent_id=eq.${user.id}` }
-    );
-  }, [user?.id, queryClient]);
 
   return useQuery<Conversation[]>({
     queryKey,
@@ -550,7 +524,8 @@ export function useUnreadConversationsCount() {
     },
     enabled: !!(session && user?.schoolId && user?.role === 'admin'),
     staleTime: 60 * 1000,
-    refetchInterval: 60 * 1000,
+    // ✅ FIX: Removed refetchInterval — RealtimeNotificationsManager already
+    //    invalidates 'conversations-unread-count' on new conversation messages
   });
 }
 
@@ -590,6 +565,7 @@ export function useUnreadConversationsParentCount() {
     },
     enabled: !!(session && user?.id && user?.role === 'parent'),
     staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    // ✅ FIX: Removed refetchInterval — RealtimeNotificationsManager already
+    //    invalidates 'conversations-parent-unread' on new messages/class chat
   });
 }

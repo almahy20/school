@@ -522,57 +522,6 @@ export interface Database {
           }
         ]
       }
-      complaints: {
-        Row: {
-          id: string
-          school_id: string
-          user_id: string
-          student_id: string | null
-          content: string
-          status: string | null
-          admin_response: string | null
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          school_id: string
-          user_id: string
-          student_id?: string | null
-          content: string
-          status?: string | null
-          admin_response?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          school_id?: string
-          user_id?: string
-          student_id?: string | null
-          content?: string
-          status?: string | null
-          admin_response?: string | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'complaints_school_id_fkey'
-            columns: ['school_id']
-            isOneToOne: false
-            referencedRelation: 'schools'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'complaints_student_id_fkey'
-            columns: ['student_id']
-            isOneToOne: false
-            referencedRelation: 'students'
-            referencedColumns: ['id']
-          }
-        ]
-      }
       messages: {
         Row: {
           id: string

@@ -44,7 +44,7 @@ export function useTermFees(term?: string) {
 }
 
 // ─── useFees Hook (Instant 0ms in-memory search & filter) ───────────────────
-export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all') {
+export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all', statusFilter = 'الكل') {
   const allStudentsQuery = useAllStudents();
   const allStudents = allStudentsQuery.data || [];
   
@@ -104,7 +104,14 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
         if (item.class_id !== classId) return false;
       }
 
-      // 2. Arabic Search filter
+      // 2. Status filter
+      if (statusFilter && statusFilter !== 'الكل') {
+        if (statusFilter === 'مدفوع' && item.fee?.status !== 'paid') return false;
+        if (statusFilter === 'متأخر' && item.fee?.status !== 'unpaid') return false;
+        if (statusFilter === 'جزئي' && item.fee?.status !== 'partial') return false;
+      }
+
+      // 3. Arabic Search filter
       if (cleanSearch) {
         const match = matchesArabic(item.name, cleanSearch);
         if (!match) return false;
@@ -122,7 +129,7 @@ export function useFees(term?: string, page = 1, pageSize = 15, search = '', cla
       count: filtered.length,
       stats: { total_due, total_paid },
     };
-  }, [allStudents, monthFees, term, page, pageSize, search, classId]);
+  }, [allStudents, monthFees, term, page, pageSize, search, classId, statusFilter]);
 
   return {
     data: processed,
@@ -157,9 +164,8 @@ export function useUpdateStudentMonthlyFee() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة المالية الثابتة للطالب');
+      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
       queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -215,9 +221,8 @@ export function useUpsertFee() {
     },
     onSuccess: () => {
       toast.success('تم تسجيل الدفعة بنجاح');
+      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
       queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -253,10 +258,9 @@ export function useGenerateFees() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة الثابتة لجميع الطلاب بنجاح');
+      // ✅ FIX: Reduced from 5 to 3 — Realtime covers child-full-details and parent-children
       queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -287,9 +291,8 @@ export function useClearTermFees() {
     },
     onSuccess: () => {
       toast.success('تم تصفير سجلات هذا الشهر بنجاح');
+      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
       queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });

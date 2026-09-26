@@ -22,7 +22,6 @@ export const SYNCED_TABLES = [
   'attendance',
   'grades',
   'fees',
-  'complaints',
   'notifications',
   'electronic_exams',
   'conversations',
@@ -272,71 +271,59 @@ class RealtimeEngine {
 
     switch (table) {
       case 'students': {
-        const allStudentQueries = queryClient.getQueryCache().findAll({ queryKey: ['students'] });
-        for (const query of allStudentQueries) {
-          const key = query.queryKey as unknown[];
-          const isClassCache = key[1] === 'class';
-          const cacheClassId = isClassCache ? (key[2] as string | undefined) : undefined;
-
-          queryClient.setQueryData(key, (oldData: any) => {
-            if (Array.isArray(oldData)) {
-              if (eventType === 'INSERT') {
-                if (oldData.some((d: any) => d.id === newRec.id)) return oldData;
-                if (cacheClassId && newRec.class_id && newRec.class_id !== cacheClassId) return oldData;
-                return [...oldData, newRec].sort((a: any, b: any) =>
-                  (a.name ?? '').localeCompare(b.name ?? '', 'ar')
-                );
-              }
-              if (eventType === 'UPDATE') {
-                return oldData.map((d: any) => (d.id === newRec.id ? { ...d, ...newRec } : d));
-              }
-              if (eventType === 'DELETE') {
-                return oldData.filter((d: any) => d.id !== oldRec.id);
-              }
-              return oldData;
-            }
-
-            if (oldData && Array.isArray(oldData.data)) {
-              let newArr = oldData.data;
-
-              if (eventType === 'INSERT') {
-                if (!newArr.some((d: any) => d.id === newRec.id)) {
-                  newArr = [newRec, ...newArr];
+        if (eventType === 'INSERT') {
+          // On INSERT: Invalidate students queries to fetch full relation data (classes, student_parents)
+          queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+          queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+        } else {
+          // On UPDATE / DELETE: Can safely patch existing in-memory cache items without breaking relations
+          const allStudentQueries = queryClient.getQueryCache().findAll({ queryKey: ['students'] });
+          for (const query of allStudentQueries) {
+            const key = query.queryKey as unknown[];
+            queryClient.setQueryData(key, (oldData: any) => {
+              if (Array.isArray(oldData)) {
+                if (eventType === 'UPDATE') {
+                  return oldData.map((d: any) => (d.id === newRec?.id ? { ...d, ...newRec } : d));
                 }
-              } else if (eventType === 'UPDATE') {
-                newArr = newArr.map((d: any) => (d.id === newRec.id ? { ...d, ...newRec } : d));
-              } else if (eventType === 'DELETE') {
-                newArr = newArr.filter((d: any) => d.id !== oldRec.id);
+                if (eventType === 'DELETE') {
+                  const targetId = oldRec?.id || newRec?.id;
+                  return oldData.filter((d: any) => d.id !== targetId);
+                }
+                return oldData;
               }
 
-              const prevCount =
-                typeof oldData.count === 'number' ? oldData.count : oldData.data.length;
-              let newCount = prevCount;
-              if (eventType === 'INSERT') newCount = prevCount + 1;
-              else if (eventType === 'DELETE') newCount = Math.max(0, prevCount - 1);
+              if (oldData && Array.isArray(oldData.data)) {
+                let newArr = oldData.data;
+                if (eventType === 'UPDATE') {
+                  newArr = newArr.map((d: any) => (d.id === newRec?.id ? { ...d, ...newRec } : d));
+                } else if (eventType === 'DELETE') {
+                  const targetId = oldRec?.id || newRec?.id;
+                  newArr = newArr.filter((d: any) => d.id !== targetId);
+                }
 
-              return { ...oldData, data: newArr, count: newCount };
-            }
+                const prevCount = typeof oldData.count === 'number' ? oldData.count : oldData.data.length;
+                let newCount = prevCount;
+                if (eventType === 'DELETE') newCount = Math.max(0, prevCount - 1);
 
-            return oldData;
-          });
-        }
+                return { ...oldData, data: newArr, count: newCount };
+              }
 
-        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-        if (eventType !== 'INSERT') {
+              return oldData;
+            });
+          }
           queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
           queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         }
+
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
         break;
       }
 
       case 'classes': {
         queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
-        if (eventType !== 'INSERT') {
-          queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-          queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-          queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
-        }
+        queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
         break;
       }
@@ -364,14 +351,6 @@ class RealtimeEngine {
         break;
       }
 
-      case 'complaints': {
-        queryClient.invalidateQueries({ queryKey: ['complaints'], exact: false });
-        queryClient.invalidateQueries({ queryKey: ['parent-complaints'], exact: false });
-        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-        queryClient.invalidateQueries({ queryKey: ['admin-activities'], exact: false });
-        break;
-      }
-
       case 'notifications': {
         queryClient.invalidateQueries({ queryKey: ['notifications'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
@@ -386,19 +365,22 @@ class RealtimeEngine {
 
       case 'conversations': {
         queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
-        if (newRec?.id) {
-          queryClient.invalidateQueries({ queryKey: ['conversation', newRec.id], exact: false });
+        const convId = newRec?.id || oldRec?.id;
+        if (convId) {
+          queryClient.invalidateQueries({ queryKey: ['conversation', convId], exact: false });
         }
         break;
       }
 
       case 'conversation_messages': {
-        if (newRec?.conversation_id) {
+        const convId = newRec?.conversation_id || oldRec?.conversation_id;
+        if (convId) {
           queryClient.invalidateQueries({
-            queryKey: ['conversation-messages', newRec.conversation_id],
+            queryKey: ['conversation-messages', convId],
             exact: false,
           });
         }
+        queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
         break;
       }
 
@@ -408,12 +390,14 @@ class RealtimeEngine {
       }
 
       case 'class_chat_messages': {
-        if (newRec?.room_id) {
+        const roomId = newRec?.room_id || oldRec?.room_id;
+        if (roomId) {
           queryClient.invalidateQueries({
-            queryKey: ['class-chat-messages', newRec.room_id],
+            queryKey: ['class-chat-messages', roomId],
             exact: false,
           });
         }
+        queryClient.invalidateQueries({ queryKey: ['class-chat-rooms'], exact: false });
         break;
       }
 
@@ -424,8 +408,9 @@ class RealtimeEngine {
       }
 
       case 'schools': {
-        if (newRec?.id) {
-          queryClient.invalidateQueries({ queryKey: ['school-branding', newRec.id], exact: false });
+        const targetSchoolId = newRec?.id || oldRec?.id;
+        if (targetSchoolId) {
+          queryClient.invalidateQueries({ queryKey: ['school-branding', targetSchoolId], exact: false });
         }
         break;
       }

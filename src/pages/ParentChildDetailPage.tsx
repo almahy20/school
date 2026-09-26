@@ -9,7 +9,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useChildFullDetails, useCreateComplaint } from '@/hooks/queries';
+import { useChildFullDetails } from '@/hooks/queries';
 import { cn } from '@/lib/utils';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
 

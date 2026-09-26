@@ -38,19 +38,7 @@ export interface ClassChatMessage {
 /** كل فصول المدرسة مع غرف الدردشة الخاصة بها للأدمن/المدير والمعلمين */
 export function useAdminClassChatRooms() {
   const { user, session } = useAuth();
-  const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['class-chat-rooms', 'admin', user?.schoolId], [user?.schoolId]);
-
-  useEffect(() => {
-    if (!user?.schoolId) return;
-    return realtimeEngine.subscribe(
-      'class_chat_rooms',
-      () => {
-        queryClient.invalidateQueries({ queryKey });
-      },
-      { filter: `school_id=eq.${user.schoolId}` }
-    );
-  }, [user?.schoolId, queryClient, queryKey]);
 
   return useQuery<ClassChatRoom[]>({
     queryKey,

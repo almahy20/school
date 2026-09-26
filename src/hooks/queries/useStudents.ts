@@ -27,7 +27,7 @@ import {
 
 export { normalizeArabic, normalizeStudentName, buildArabicSearchPatterns, matchesArabic };
 
-// ─── useAllStudents Hook (Cached single-fetch) ──────────────────────────────
+// ─── useAllStudents Hook (Lightweight cached fetch for count/mapping) ────────
 export function useAllStudents() {
   const { user, session } = useAuth();
   
@@ -52,9 +52,10 @@ export function useAllStudents() {
         }
       }
 
+      // ✅ FIX: Only fetch core columns without heavy relations
       let q = supabase
         .from('students')
-        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)');
+        .select('id, name, class_id, parent_phone, school_id, monthly_fee, created_at');
 
       if (!user.isSuperAdmin && user.schoolId) {
         q = q.eq('school_id', user.schoolId);
@@ -68,83 +69,126 @@ export function useAllStudents() {
       return (data || []) as Student[];
     },
     enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 10 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 15 * 60 * 1000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
     refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
 }
 
-// ─── useStudents Hook (Instant 0ms in-memory search & filter) ────────────────
+// ─── useStudents Hook (Server-Side Paginated, Filtered & Searched) ───────────
 export function useStudents(page = 1, pageSize = 15, search = '', classId = 'الكل') {
-  const allStudentsQuery = useAllStudents();
-  const allStudents = allStudentsQuery.data || [];
+  const { user, session } = useAuth();
+  const cleanSearch = search.trim();
+  const queryKey = [
+    'students',
+    'list',
+    user?.schoolId,
+    user?.role,
+    user?.id,
+    page,
+    pageSize,
+    cleanSearch,
+    classId,
+  ];
 
-  const filteredData = (useMemo as any)(() => {
-    if (!allStudents.length) return { data: [], count: 0 };
+  return useQuery<{ data: Student[]; count: number }>({
+    queryKey,
+    queryFn: async () => {
+      if (!user?.isSuperAdmin && !user?.schoolId) return { data: [], count: 0 };
 
-    const cleanSearch = search.trim();
-    const cleanPhone = cleanSearch.replace(/\D/g, '');
+      let teacherClassIds: string[] = [];
+      if (user.role === 'teacher') {
+        const { data: teacherClasses } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('teacher_id', user.id);
+        
+        if (teacherClasses && teacherClasses.length > 0) {
+          teacherClassIds = teacherClasses.map(c => c.id);
+        } else {
+          return { data: [], count: 0 };
+        }
+      }
 
-    const filtered = allStudents.filter((student) => {
-      // 1. Filter by class
+      // ✅ FIX: Select only needed columns for the page + count: exact
+      let q = supabase
+        .from('students')
+        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+
+      if (!user.isSuperAdmin && user.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+      if (user.role === 'teacher' && teacherClassIds.length > 0) {
+        q = q.in('class_id', teacherClassIds);
+      }
+
+      // 1. Server-side filter by class
       if (classId === 'بدون_فصل') {
-        if (student.class_id) return false;
-      } else if (classId === 'بدون_ولي_امر') {
-        const hasParent = Array.isArray(student.student_parents) && student.student_parents.length > 0;
-        if (hasParent) return false;
-      } else if (classId !== 'الكل') {
-        if (student.class_id !== classId) return false;
+        q = q.is('class_id', null);
+      } else if (classId !== 'الكل' && classId !== 'بدون_ولي_امر') {
+        q = q.eq('class_id', classId);
       }
 
-      // 2. Filter by search (instant Arabic normalization & phone search)
+      // 2. Server-side filter by search (Name or Phone)
       if (cleanSearch) {
-        const nameMatch = matchesArabic(student.name, cleanSearch);
-        const phoneMatch = cleanPhone.length >= 3 && Boolean(student.parent_phone && student.parent_phone.includes(cleanPhone));
-        if (!nameMatch && !phoneMatch) return false;
+        const cleanPhone = cleanSearch.replace(/\D/g, '');
+        if (cleanPhone && cleanPhone.length >= 3) {
+          q = q.or(`name.ilike.%${cleanSearch}%,parent_phone.ilike.%${cleanPhone}%`);
+        } else {
+          q = q.ilike('name', `%${cleanSearch}%`);
+        }
       }
 
-      return true;
-    });
+      // 3. Server-side pagination via .range()
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
 
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize;
-    const paginated = filtered.slice(from, to);
+      const { data, error, count } = await q.order('name').range(from, to);
+      if (error) throw error;
 
-    return {
-      data: paginated,
-      count: filtered.length,
-    };
-  }, [allStudents, page, pageSize, search, classId]);
-
-  return {
-    ...allStudentsQuery,
-    data: filteredData,
-  };
+      return {
+        data: (data || []) as Student[],
+        count: count || 0,
+      };
+    },
+    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
+    placeholderData: keepPreviousData,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
 }
 
 // ─── useStudent Hook ──────────────────────────────────────────────────────────
 export function useStudent(id: string | undefined) {
-  const queryKey = ['student', id];
+  const { user } = useAuth();
+  const queryKey = ['student', id, user?.schoolId];
 
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!id) return null;
       
-      const { data: student, error: sError } = await supabase
+      let q = supabase
         .from('students')
         .select(`
-          *,
+          id, name, class_id, school_id, parent_phone, monthly_fee, created_at, grade_level,
           classes:classes!students_class_id_fkey (
-            *,
+            id, name, grade_level, school_id, teacher_id, curriculum_id,
             teacher:profiles!classes_teacher_id_fkey(full_name)
           )
         `)
-        .eq('id', id)
-        .maybeSingle();
+        .eq('id', id);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      const { data: student, error: sError } = await q.maybeSingle();
 
       if (sError) throw sError;
       if (!student) return null;
@@ -152,7 +196,7 @@ export function useStudent(id: string | undefined) {
       return student as Student & { classes: any };
     },
 
-    enabled: !!id,
+    enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -208,16 +252,10 @@ export function useDeleteStudent() {
       toast.success('تم حذف الطالب بنجاح');
     },
     onSettled: () => {
+      // ✅ FIX: Reduced from 12 to 5 invalidations — Realtime covers cross-table updates
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['student'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['attendance'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['grades'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['student-parent'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
@@ -238,12 +276,10 @@ export function useAddStudent() {
     },
     onSuccess: () => {
       toast.success('تم إضافة الطالب بنجاح');
+      // ✅ FIX: Reduced from 7 to 3 invalidations — classes/fees/parent-children are not
+      //    immediately affected by adding a student; Realtime covers any side effects
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
     },
   });
@@ -317,13 +353,11 @@ export function useUpdateStudent() {
         };
       });
 
-      // 4. Invalidate all related student & class queries
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['student'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
+      // ✅ FIX: Reduced from 6 to 2 invalidations — direct setQueriesData above already
+      //    handles students, student, and child-full-details cache. Only stats and
+      //    parent-children need server re-validation (Realtime covers other cross-table updates).
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
       
       toast.success('تم تحديث بيانات الطالب بنجاح');
     },
@@ -335,25 +369,36 @@ export function useUpdateStudent() {
 
 
 export function useStudentParent(studentId: string | null | undefined) {
-  const queryKey = ['student-parent', studentId];
+  const { user } = useAuth();
+  const queryKey = ['student-parent', studentId, user?.schoolId];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!studentId) return null;
-      const { data: parentLink } = await supabase
+      let pLinkQuery = supabase
         .from('student_parents')
         .select('parent_id')
-        .eq('student_id', studentId)
-        .maybeSingle();
+        .eq('student_id', studentId);
+
+      if (user?.schoolId) {
+        pLinkQuery = pLinkQuery.eq('school_id', user.schoolId);
+      }
+
+      const { data: parentLink } = await pLinkQuery.maybeSingle();
 
       if (!parentLink?.parent_id) return null;
 
-      const { data: parentProfile, error } = await supabase
+      let profQuery = supabase
         .from('profiles')
         .select('id, full_name, phone, email, created_at, school_id')
-        .eq('id', parentLink.parent_id)
-        .maybeSingle();
+        .eq('id', parentLink.parent_id);
+
+      if (user?.schoolId) {
+        profQuery = profQuery.eq('school_id', user.schoolId);
+      }
+
+      const { data: parentProfile, error } = await profQuery.maybeSingle();
       
       // Handle missing profile gracefully
       if (error && error.code !== 'PGRST116') {
@@ -362,7 +407,7 @@ export function useStudentParent(studentId: string | null | undefined) {
       
       return parentProfile;
     },
-    enabled: !!studentId,
+    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
@@ -371,23 +416,28 @@ export function useStudentParent(studentId: string | null | undefined) {
 }
 
 export function useClassStudents(classId: string | null | undefined) {
-  const queryKey = ['students', 'class', classId];
+  const { user } = useAuth();
+  const queryKey = ['students', 'class', classId, user?.schoolId];
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!classId) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from('students')
         .select('id, name, class_id, parent_phone, school_id, created_at')
-        .eq('class_id', classId)
-        .order('name')
-        .limit(200); // حد أمان: لا مدرسة لديها أكثر من 200 طالب في فصل واحد
+        .eq('class_id', classId);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      const { data, error } = await q.order('name').limit(200); // حد أمان: لا مدرسة لديها أكثر من 200 طالب في فصل واحد
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!classId,
+    enabled: !!classId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,

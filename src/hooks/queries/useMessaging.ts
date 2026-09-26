@@ -1,9 +1,7 @@
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
-import { useEffect, useMemo } from 'react';
 
 export function useProfiles(search = '', page = 1, pageSize = 20) {
   const { user, session } = useAuth();
@@ -97,80 +95,13 @@ export function useSendMessage() {
         throw msgError;
       }
 
-      const notificationTitle = senderName
-        ? `رسالة جديدة من ${senderName}`
-        : 'رسالة جديدة من إدارة المدرسة';
-      const notificationBody = content.trim().substring(0, 100);
-
-      // ✅ Note: Database trigger `tr_notify_new_message` on `messages` table 
-      // automatically creates notifications in DB. Direct client inserts violate RLS.
-
-      // ✅ Note: Database triggers (tr_notify_new_message -> tr_auto_push_on_notification)
-      // automatically generate DB notifications and fire push requests via pg_net reliably,
-      // even if the user closes the app immediately after sending.
       return { targets, content };
     },
     onSettled: () => {
-      // إجبار التحديث بصمت للاستعاضة عن الرسائل المؤقتة بحقيقية
+      // إجبار التحديث بصمت
       queryClient.invalidateQueries({ queryKey: ['messages'] });
       queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'] });
       queryClient.invalidateQueries({ queryKey: ['admin-activities'] });
     }
-  });
-}
-
-export function useMessages() {
-  const { user, session } = useAuth();
-  const queryClient = useQueryClient();
-  
-  const queryKey = useMemo(() => ['messages', user?.id], [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id || !session) return;
-
-    const un1 = realtimeEngine.subscribe(
-      'messages',
-      () => {
-        queryClient.invalidateQueries({ queryKey });
-      },
-      { filter: `sender_id=eq.${user.id}` }
-    );
-
-    const un2 = realtimeEngine.subscribe(
-      'messages',
-      () => {
-        logger.log('📩 New message detected, refreshing...');
-        queryClient.invalidateQueries({ queryKey });
-      },
-      { filter: `receiver_id=eq.${user.id}` }
-    );
-
-    return () => {
-      un1();
-      un2();
-    };
-  }, [user?.id, session, queryClient, queryKey]);
-      
-  return useQuery({
-    queryKey,
-    queryFn: async () => {
-      if (!user?.id) return [];
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          id, sender_id, receiver_id, content, is_read, created_at, school_id, student_id,
-          sender:profiles!messages_sender_id_fkey(full_name),
-          receiver:profiles!messages_receiver_id_fkey(full_name)
-        `)
-        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
-        .order('created_at', { ascending: false })
-        .limit(200); // آخر 200 رسالة كافية للعرض
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!(session && user?.id),
-    staleTime: 30 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchInterval: false,
   });
 }

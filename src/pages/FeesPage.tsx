@@ -106,7 +106,7 @@ export default function FeesPage() {
     error, 
     refetch, 
     isRefetching 
-  } = useFees(selectedTerm, page, PAGE_SIZE, search, selectedClassId);
+  } = useFees(selectedTerm, page, PAGE_SIZE, search, selectedClassId, filterStatus);
 
   const studentsData = useMemo(() => data?.data || [], [data]);
   const totalItems = data?.count || 0;
@@ -141,16 +141,7 @@ export default function FeesPage() {
     }
   };
 
-  // ملاحظة: فلترة الحالة "الكل/مدفوع/متأخر" ما زالت تحتاج لفلترة خادم إذا زادت البيانات، 
-  // ولكن حالياً نقوم بفلترة الصفحة الحالية فقط إذا كان filterStatus غير "الكل"
-  // أو الأفضل إضافتها لـ useFees كبارامتر.
-  const displayStudents = useMemo(() => {
-    if (filterStatus === 'الكل') return studentsData;
-    return studentsData.filter(s => {
-      const status = !s.fee ? 'متأخر' : s.fee.status === 'paid' ? 'مدفوع' : s.fee.status === 'partial' ? 'جزئي' : 'متأخر';
-      return status === filterStatus;
-    });
-  }, [studentsData, filterStatus]);
+  const displayStudents = studentsData;
 
   const TERMS = useMemo(() => {
     const list = [];

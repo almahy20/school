@@ -90,7 +90,6 @@ if (typeof window !== 'undefined') {
         'grades',
         'fees',
         'notifications',
-        'complaints',
         'curriculum'
       ];
       return allowedKeys.includes(key);

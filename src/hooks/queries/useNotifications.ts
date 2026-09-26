@@ -32,9 +32,10 @@ export function useNotifications(page = 1, pageSize = 15) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
+      // ✅ FIX: Select only needed columns instead of * to reduce response size
       const { data, error, count } = await db
         .from('notifications')
-        .select('*', { count: 'exact' })
+        .select('id, user_id, school_id, type, title, message, is_read, metadata, created_at', { count: 'exact' })
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .range(from, to);
@@ -77,12 +78,11 @@ export function useMarkAllAsRead() {
       await queryClient.cancelQueries({ queryKey: ['notifications'] });
 
       // Snapshot the previous value
-      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as { unread: number; complaints: number } | undefined;
+      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as { unread: number } | undefined;
 
       // Optimistically update to zero
       queryClient.setQueryData(['notifications-unread-counts', user?.id], {
         unread: 0,
-        complaints: 0
       });
 
       return { previousCounts };
@@ -105,51 +105,6 @@ export function useMarkAllAsRead() {
       // Only refresh the notifications list, NOT the unread count
       // The unread count is already 0 from optimistic update
       queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-    },
-  });
-}
-
-export function useMarkComplaintsAsRead() {
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
-  return useMutation({
-    mutationFn: async () => {
-      if (!user?.id) return;
-      const { error } = await db
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .ilike('type', 'complaint%')
-        .eq('is_read', false);
-      if (error) throw error;
-    },
-    // ✅ Optimistic Update for complaints
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ['notifications-unread-counts', user?.id] });
-      const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as any;
-      
-      if (previousCounts) {
-        queryClient.setQueryData(['notifications-unread-counts', user?.id], {
-          unread: Math.max(0, (previousCounts.unread || 0) - (previousCounts.complaints || 0)),
-          complaints: 0
-        });
-      }
-      
-      return { previousCounts };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previousCounts) {
-        queryClient.setQueryData(['notifications-unread-counts', user?.id], context.previousCounts);
-      }
-    },
-    onSuccess: () => {
-      // ✅ 1. Update the list immediately
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
-      
-      // ✅ 2. Force invalidate unread counts after a delay to confirm with DB
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
-      }, 3000); // 3 seconds delay to ensure DB transaction is fully propagated
     },
   });
 }
@@ -179,47 +134,22 @@ export function useUnreadCounts() {
   const { user, session } = useAuth();
   const queryKey = useMemo(() => ['notifications-unread-counts', user?.id], [user?.id]);
   
-  return useQuery<{ unread: number; complaints: number }>({
+  return useQuery<{ unread: number }>({
     queryKey,
     queryFn: async () => {
-      if (!user?.id) return { unread: 0, complaints: 0 };
+      if (!user?.id) return { unread: 0 };
       
-      // Single RPC call instead of two parallel queries — cuts one round-trip
-      const { data, error } = await (db as any)
-        .rpc('get_unread_notification_counts', { p_user_id: user.id });
+      const { count, error } = await db
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
 
-      if (error) {
-        // Fallback to two parallel queries if RPC not available yet
-        const [{ count: unreadCount, error: unreadError }, { count: complaintsCount, error: complaintsError }] = await Promise.all([
-          db
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-            .eq('is_read', false),
-          db
-            .from('notifications')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-            .ilike('type', 'complaint%')
-            .eq('is_read', false)
-        ]);
-
-        if (unreadError) throw unreadError;
-        if (complaintsError) throw complaintsError;
-
-        return {
-          unread: unreadCount || 0,
-          complaints: complaintsCount || 0
-        };
-      }
-
-      return {
-        unread: Number(data?.unread) || 0,
-        complaints: Number(data?.complaints) || 0
-      };
+      if (error) throw error;
+      return { unread: count || 0 };
     },
     enabled: !!(session && user?.id),
-    staleTime: 5 * 60 * 1000, // 5 دقائق — تقليل الاستدعاءات المتكررة (كانت 60 ثانية فقط)
+    staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -231,9 +161,4 @@ export function useUnreadCounts() {
 export function useUnreadNotificationsCount() {
   const { data } = useUnreadCounts();
   return { data: data?.unread || 0, isLoading: false };
-}
-
-export function useUnreadComplaintsCount() {
-  const { data } = useUnreadCounts();
-  return { data: data?.complaints || 0, isLoading: false };
 }

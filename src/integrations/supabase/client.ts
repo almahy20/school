@@ -118,6 +118,8 @@ const makeCorsSafeError = (err: unknown): Error => {
   return err as Error;
 };
 
+import { profiler } from '@/utils/performanceProfiler';
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     autoRefreshToken: true,
@@ -143,6 +145,18 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
         throw new Error(`Supabase temporarily unavailable. Retry in ${retryIn}s.`);
       }
 
+      const urlString = typeof url === 'string' ? url : (url as Request)?.url || '';
+      let endpointLabel = urlString;
+      try {
+        const parsedUrl = new URL(urlString);
+        endpointLabel = decodeURIComponent(parsedUrl.pathname + parsedUrl.search);
+      } catch {
+        endpointLabel = urlString;
+      }
+
+      const traceId = profiler.startRequest(endpointLabel, urlString, (options as any)?.method || 'GET');
+      profiler.markDbStart(traceId);
+
       const controller = new AbortController();
       const externalSignal = options.signal;
       const abortFromCaller = () => controller.abort();
@@ -152,6 +166,26 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
       try {
         const res = await fetch(url, { ...options, signal: controller.signal });
         recordSuccess();
+
+        profiler.markDbEnd(traceId, res.status);
+        try {
+          const clonedForProfile = res.clone();
+          clonedForProfile.text().then((text) => {
+            let count = 0;
+            try {
+              const parsed = JSON.parse(text);
+              if (Array.isArray(parsed)) count = parsed.length;
+              else if (parsed && typeof parsed === 'object') count = 1;
+            } catch {
+              count = 0;
+            }
+            profiler.markResponseParsed(traceId, new Blob([text]).size, count);
+          }).catch(() => {
+            profiler.markResponseParsed(traceId, 0, 0);
+          });
+        } catch {
+          profiler.markResponseParsed(traceId, 0, 0);
+        }
 
         if (res.status === 400 && isAuthEndpoint(url)) {
           try {

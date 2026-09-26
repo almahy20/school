@@ -79,19 +79,24 @@ export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = '�
 
 export function useClass(id: string | undefined | null) {
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => ['class', id], [id]);
+  const { user } = useAuth();
+  const queryKey = useMemo(() => ['class', id, user?.schoolId], [id, user?.schoolId]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!id) return null;
       
-      const { data, error } = await supabase
+      let q = supabase
         .from('classes')
         .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at')
-        .eq('id', id)
-        .maybeSingle();
+        .eq('id', id);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
       
+      const { data, error } = await q.maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -110,7 +115,7 @@ export function useClass(id: string | undefined | null) {
       const match = queryClient.getQueryState(['classes', 'all'])?.dataUpdatedAt;
       return match || 0;
     },
-    enabled: !!id,
+    enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
@@ -151,7 +156,6 @@ export function useDeleteClass() {
       toast.success('تم حذف الفصل بنجاح');
       queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['class-chat-rooms'], exact: false });
     },
@@ -181,15 +185,33 @@ export function useUpdateClass() {
 
   return useMutation({
     mutationFn: async ({ id, ...data }: Partial<Class> & { id: string }) => {
-      // Optimistic update
+      const { error } = await supabase.from('classes').update({ ...data }).eq('id', id);
+      if (error) throw error;
+      return { id, ...data };
+    },
+    onMutate: async ({ id, ...data }) => {
+      // Cancel in-flight queries
+      await queryClient.cancelQueries({ queryKey: ['classes'] });
+
+      // Snapshot previous state for rollback
+      const previousClasses = queryClient.getQueriesData<Class[]>({ queryKey: ['classes'] });
+
+      // Optimistically update cache
       queryClient.setQueriesData({ queryKey: ['classes'] }, (old: any) => {
         if (!Array.isArray(old)) return old;
         return old.map(c => c.id === id ? { ...c, ...data } : c);
       });
 
-      const { error } = await supabase.from('classes').update({ ...data }).eq('id', id);
-      if (error) throw error;
-      return { id, ...data };
+      return { previousClasses };
+    },
+    onError: (err: any, _variables, context) => {
+      // Rollback to previous state on error
+      if (context?.previousClasses) {
+        context.previousClasses.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
+      }
+      toast.error('فشل تحديث الفصل', { description: err.message });
     },
     onSuccess: () => {
       toast.success('تم تحديث الفصل بنجاح');
@@ -197,7 +219,6 @@ export function useUpdateClass() {
       queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
       queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
     },
   });
 }

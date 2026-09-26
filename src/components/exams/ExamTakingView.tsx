@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React from 'react';
 import AppLayout from '@/components/AppLayout';
 import {
-  ArrowRight, ArrowLeft, Clock, CheckCircle2, XCircle,
-  AlertCircle, Loader2, Send, Check, Sparkles, HelpCircle,
+  ArrowRight, Clock, XCircle,
+  AlertCircle, Loader2, Check, Sparkles,
   ShieldAlert, BookOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 import {
-  useExamQuestions,
-  useSubmitExamAttempt,
   isEnglishText,
   type ElectronicExam,
   type ExamQuestion,
@@ -20,20 +17,9 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
-
-// ── Seeded Shuffle (deterministic per student+exam, consistent across renders)
-function seededShuffle<T>(arr: T[], seed: string): T[] {
-  const out = [...arr];
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  for (let i = out.length - 1; i > 0; i--) {
-    h = (Math.imul(h ^ (h >>> 16), 0x45d9f3b)) | 0;
-    const j = Math.abs(h) % (i + 1);
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
+import { useExamRunner } from '@/hooks/useExamRunner';
+import { QuestionCard } from '@/components/exams/QuestionCard';
+import { ExamFooterActions } from '@/components/exams/ExamFooterActions';
 
 interface ExamTakingViewProps {
   exam: ElectronicExam;
@@ -43,263 +29,30 @@ interface ExamTakingViewProps {
   onBack: () => void;
 }
 
-type Screen = 'confirm' | 'taking' | 'result';
-
-interface SubmitResult {
-  score: number;
-  totalScore: number;
-  questions: ExamQuestion[];
-  answers: Record<string, string>;
-}
-
 export default function ExamTakingView({ exam, studentId, studentName, onFinish, onBack }: ExamTakingViewProps) {
-  const [screen, setScreen] = useState<Screen>('confirm');
-  const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [timeLeft, setTimeLeft] = useState(exam.duration_minutes * 60);
-  const [showEndDialog, setShowEndDialog] = useState(false);
-  const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const answersRef = useRef<Record<string, string>>({});
-  const isSubmittingRef = useRef<boolean>(false);
-
-  // ── Anti-Cheat State ────────────────────────────────────────────────────────
-  const [tabSwitchCount, setTabSwitchCount] = useState(0);
-  const [showCheatWarning, setShowCheatWarning] = useState(false);
-  const [cheatWarningMsg, setCheatWarningMsg] = useState('');
-  const tabSwitchCountRef = useRef(0);
-  const MAX_TAB_SWITCHES = 3;
-
-  const { data: rawQuestions = [], isLoading: qLoading } = useExamQuestions(exam.id);
-  const submitAttempt = useSubmitExamAttempt();
-
-  // Shuffle questions and options deterministically per student
-  const questions = useMemo(() => {
-    if (rawQuestions.length === 0) return rawQuestions;
-    const seed = `${exam.id}-${studentId}`;
-    return seededShuffle(rawQuestions, seed).map(q => {
-      if (q.question_type === 'multiple_choice' && Array.isArray(q.options)) {
-        return { ...q, options: seededShuffle(q.options as string[], seed + q.id) };
-      }
-      return q;
-    });
-  }, [rawQuestions, exam.id, studentId]);
-
-  const isExpired = exam.available_until ? new Date() > new Date(exam.available_until) : false;
-  const isNotStarted = exam.available_from ? new Date() < new Date(exam.available_from) : false;
-
-  const storageKey = `exam_progress_${exam.id}_${studentId}`;
-
-  // Restore active session on page reload if exam is still in progress
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const spent = Math.floor((Date.now() - parsed.startTime) / 1000);
-        const remaining = (exam.duration_minutes * 60) - spent;
-        if (remaining > 5 && parsed.answers) {
-          startTimeRef.current = parsed.startTime;
-          setTimeLeft(remaining);
-          answersRef.current = parsed.answers;
-          setAnswers(parsed.answers);
-          if (typeof parsed.currentQ === 'number' && parsed.currentQ >= 0) {
-            setCurrentQ(parsed.currentQ);
-          }
-          if (parsed.tabSwitchCount) {
-            tabSwitchCountRef.current = parsed.tabSwitchCount;
-            setTabSwitchCount(parsed.tabSwitchCount);
-          }
-          setScreen('taking');
-          toast.info('تم استعادة إجاباتك ومتابعة الاختبار 🔄');
-        } else {
-          sessionStorage.removeItem(storageKey);
-        }
-      }
-    } catch {
-      // sessionStorage unavailable or corrupted — start fresh
-    }
-  }, [storageKey, exam.duration_minutes]);
-
-  // Always keep answersRef in sync with latest answers and auto-save
-  const updateAnswer = useCallback((questionId: string, value: string) => {
-    setAnswers(prev => {
-      const next = { ...prev, [questionId]: value };
-      answersRef.current = next;
-      try {
-        sessionStorage.setItem(storageKey, JSON.stringify({
-          startTime: startTimeRef.current,
-          answers: next,
-          currentQ,
-          tabSwitchCount: tabSwitchCountRef.current,
-        }));
-      } catch {
-        // sessionStorage write failed — non-critical
-      }
-      return next;
-    });
-  }, [storageKey, currentQ]);
-
-  // Update currentQ in storage on change
-  const navigateToQ = useCallback((idx: number) => {
-    setCurrentQ(idx);
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        sessionStorage.setItem(storageKey, JSON.stringify({
-          ...parsed,
-          currentQ: idx,
-        }));
-      }
-    } catch {
-      // sessionStorage unavailable — non-critical
-    }
-  }, [storageKey]);
-
-  const handleSubmit = useCallback(async (auto = false) => {
-    if (isSubmittingRef.current) return;
-    isSubmittingRef.current = true;
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    const spent = Math.round((Date.now() - startTimeRef.current) / 1000);
-    // Always use the latest answers from answersRef to prevent stale closure data loss
-    const currentAnswers = { ...answersRef.current };
-
-    try {
-      const result = await submitAttempt.mutateAsync({
-        examId: exam.id,
-        studentId,
-        answers: currentAnswers,
-        timeSpentSeconds: spent,
-        questions,
-        tabSwitchesCount: tabSwitchCountRef.current,
-      });
-      try {
-        sessionStorage.removeItem(storageKey);
-      } catch {
-        // sessionStorage unavailable — non-critical
-      }
-      setSubmitResult({
-        score: result.score,
-        totalScore: result.totalScore,
-        questions: result.questions,
-        answers: currentAnswers,
-      });
-      setScreen('result');
-      if (auto) {
-        toast.info('انتهى وقت الاختبار — تم إرسال وتصحيح جميع إجاباتك التي قمت بحلها تلقائياً');
-      }
-    } catch (err: any) {
-      toast.error('حدث خطأ أثناء إرسال الاختبار', { description: err.message });
-      isSubmittingRef.current = false;
-    }
-    setShowEndDialog(false);
-  }, [exam.id, studentId, submitAttempt, questions, storageKey]);
-
-  const handleSubmitRef = useRef(handleSubmit);
-  useEffect(() => {
-    handleSubmitRef.current = handleSubmit;
-  }, [handleSubmit]);
-
-  // Timer
-  useEffect(() => {
-    if (screen !== 'taking') return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          handleSubmitRef.current(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [screen]);
-
-  // Keep Supabase session fresh during the exam so JWT never expires
-  useEffect(() => {
-    if (screen !== 'taking') return;
-    const keepAliveTimer = setInterval(async () => {
-      try {
-        await supabase.auth.getSession();
-      } catch {
-        // session check failed — will retry on next interval
-      }
-    }, 3 * 60 * 1000); // Check/refresh every 3 minutes
-    return () => clearInterval(keepAliveTimer);
-  }, [screen]);
-
-  // ── Anti-Cheat: Visibility change detection only (safe for mobile) ────────
-  useEffect(() => {
-    if (screen !== 'taking') return;
-
-    const handleVisibilityChange = () => {
-      // Only count true tab/app hidden states, never trigger on keyboard focus / blur
-      if (document.visibilityState === 'hidden') {
-        tabSwitchCountRef.current += 1;
-        const count = tabSwitchCountRef.current;
-        setTabSwitchCount(count);
-
-        if (count >= 5) {
-          toast.error('⚠️ تم رصد مغادرة متكررة لشاشة الاختبار — سيتم تسليم الاختبار تلقائياً!');
-          handleSubmitRef.current(true);
-        } else {
-          const remaining = 5 - count;
-          setCheatWarningMsg(`⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count} من 5). يرجى البقاء في صفحة الاختبار.`);
-          setShowCheatWarning(true);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [screen]);
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
-  const handleStart = () => {
-    if (isExpired || isNotStarted) return;
-    const now = Date.now();
-    startTimeRef.current = now;
-    setTimeLeft(exam.duration_minutes * 60);
-    answersRef.current = {};
-    setAnswers({});
-    setCurrentQ(0);
-    isSubmittingRef.current = false;
-    tabSwitchCountRef.current = 0;
-    setTabSwitchCount(0);
-    setShowCheatWarning(false);
-    try {
-      sessionStorage.setItem(storageKey, JSON.stringify({
-        startTime: now,
-        answers: {},
-        currentQ: 0,
-        tabSwitchCount: 0,
-      }));
-    } catch {
-      // sessionStorage unavailable — non-critical
-    }
-    try {
-      if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-    } catch {
-      // fullscreen API not available — non-critical
-    }
-    setScreen('taking');
-  };
-
+  const {
+    screen,
+    currentQ,
+    answers,
+    timeLeft,
+    showEndDialog,
+    setShowEndDialog,
+    submitResult,
+    tabSwitchCount,
+    showCheatWarning,
+    setShowCheatWarning,
+    cheatWarningMsg,
+    questions,
+    qLoading,
+    isExpired,
+    isNotStarted,
+    isSubmitting,
+    formatTime,
+    updateAnswer,
+    navigateToQ,
+    handleStart,
+    handleSubmit,
+  } = useExamRunner({ exam, studentId });
 
   // ── Confirm Screen ────────────────────────────────────────────────────────
   if (screen === 'confirm') {
@@ -417,15 +170,8 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     const q = questions[currentQ];
     const isLowTime = timeLeft < 120;
     const answeredCount = Object.keys(answers).filter(k => answers[k]?.trim() !== '').length;
-    const isAnsweredCurrent = answers[q?.id] !== undefined && answers[q?.id]?.trim() !== '';
 
     if (!q) return null;
-
-    const questionTypeLabels: Record<string, string> = {
-      true_false: 'صح أو خطأ',
-      multiple_choice: 'اختيار من متعدد',
-      fill_blank: 'إكمال الفراغ',
-    };
 
     return (
       <div
@@ -517,221 +263,24 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             </div>
           </div>
 
-          {/* Question Card */}
-          {(() => {
-            const isEn = exam.language === 'en' || isEnglishText(q.question_text);
-            const letters = isEn ? ['A', 'B', 'C', 'D'] : ['أ', 'ب', 'ج', 'د'];
-            const typeLabel = isEn 
-              ? (q.question_type === 'true_false' ? 'True / False' : q.question_type === 'multiple_choice' ? 'Multiple Choice' : 'Fill in Blank')
-              : (questionTypeLabels[q.question_type] || 'سؤال');
+          {/* Question Card Component */}
+          <QuestionCard
+            question={q}
+            questionIndex={currentQ}
+            answer={answers[q.id] || ''}
+            onAnswerChange={(val) => updateAnswer(q.id, val)}
+            isEnglishExam={exam.language === 'en'}
+          />
 
-            return (
-              <div className="bg-white border border-slate-100 rounded-[32px] p-6 sm:p-8 space-y-7 shadow-xl shadow-slate-100/60">
-                {/* Question Header & Badges */}
-                <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-violet-600 text-white font-black text-xs px-3 py-1 rounded-xl">
-                      {isEn ? `Question ${currentQ + 1}` : `السؤال ${currentQ + 1}`}
-                    </Badge>
-                    <Badge variant="outline" className="border-slate-200 text-slate-500 font-bold text-xs px-3 py-1 rounded-xl">
-                      {typeLabel}
-                    </Badge>
-                  </div>
-
-                  {isAnsweredCurrent ? (
-                    <span className="flex items-center gap-1 text-emerald-600 text-xs font-black bg-emerald-50 px-2.5 py-1 rounded-lg">
-                      <Check className="w-3.5 h-3.5" />
-                      {isEn ? 'Answered' : 'تمت الإجابة'}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400 text-xs font-bold bg-slate-50 px-2.5 py-1 rounded-lg">
-                      {isEn ? 'Not answered yet' : 'لم تتم الإجابة بعد'}
-                    </span>
-                  )}
-                </div>
-
-                {/* Question Text */}
-                <div className="py-2" dir={isEn ? 'ltr' : 'rtl'}>
-                  <h2 className={cn(
-                    "text-xl sm:text-2xl md:text-3xl font-black text-slate-900 leading-relaxed md:leading-loose whitespace-pre-wrap select-text tracking-normal",
-                    isEn ? "text-left font-sans" : "text-right"
-                  )}>
-                    {q.question_text}
-                  </h2>
-                </div>
-
-                {/* Answers Form Controls */}
-                {q.question_type === 'true_false' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                    {(['true', 'false'] as const).map(val => {
-                      const isSelected = answers[q.id] === val;
-                      const isTrue = val === 'true';
-                      return (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => updateAnswer(q.id, val)}
-                          className={cn(
-                            // ⚠️ SECURITY: Both options use the SAME neutral/violet color.
-                            // Never use green=correct or red=wrong during the exam itself,
-                            // as this would visually reveal the correct answer to the student.
-                            // Correct/wrong colors are only shown in the result screen AFTER submission.
-                            'flex items-center justify-center gap-3 h-16 sm:h-20 rounded-2xl text-lg sm:text-xl font-black border-2 transition-all duration-200 cursor-pointer',
-                            isSelected
-                              ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-200 scale-[1.02]'
-                              : 'bg-slate-50 border-slate-200/90 text-slate-700 hover:border-violet-300 hover:bg-violet-50/40'
-                          )}
-                        >
-                          {isTrue ? (
-                            <>
-                              <CheckCircle2 className="w-6 h-6" />
-                              <span>{isEn ? 'True' : 'صح'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <XCircle className="w-6 h-6" />
-                              <span>{isEn ? 'False' : 'خطأ'}</span>
-                            </>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {q.question_type === 'multiple_choice' && (
-                  <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3.5 pt-2">
-                    {(q.options as string[]).map((opt, oi) => {
-                      const isSelected = answers[q.id] === opt;
-                      return (
-                        <button
-                          key={oi}
-                          type="button"
-                          onClick={() => updateAnswer(q.id, opt)}
-                          className={cn(
-                            'w-full flex items-center gap-4 p-4 sm:p-5 rounded-2xl border-2 transition-all duration-200 cursor-pointer group',
-                            isEn ? 'text-left' : 'text-right',
-                            isSelected
-                              ? 'bg-violet-50 border-violet-600 text-violet-950 shadow-md shadow-violet-100 scale-[1.01]'
-                              : 'bg-slate-50/70 border-slate-200/80 text-slate-800 hover:border-violet-300 hover:bg-violet-50/30'
-                          )}
-                        >
-                          <span className={cn(
-                            'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center text-sm sm:text-base font-black shrink-0 border-2 transition-colors',
-                            isSelected
-                              ? 'bg-violet-600 border-violet-600 text-white shadow-sm'
-                              : 'bg-white border-slate-200 text-slate-600 group-hover:border-violet-300 group-hover:text-violet-600'
-                          )}>
-                            {letters[oi]}
-                          </span>
-                          <span className={cn("text-base sm:text-lg font-bold flex-1 leading-relaxed", isEn ? "text-left font-sans" : "text-right")}>
-                            {opt}
-                          </span>
-                          {isSelected && (
-                            <div className="w-6 h-6 rounded-full bg-violet-600 text-white flex items-center justify-center shrink-0">
-                              <Check className="w-4 h-4" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {q.question_type === 'fill_blank' && (
-                  <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3 pt-2">
-                    <label className={cn("text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-2", isEn ? "text-left" : "text-right")}>
-                      <HelpCircle className="w-4 h-4 text-violet-500" />
-                      {isEn ? 'Type your exact answer here:' : 'اكتب إجابتك هنا بدقة:'}
-                    </label>
-                    <input
-                      dir={isEn ? 'ltr' : 'rtl'}
-                      value={answers[q.id] || ''}
-                      onChange={e => updateAnswer(q.id, e.target.value)}
-                      placeholder={isEn ? 'Write answer here...' : 'اكتب الإجابة هنا...'}
-                      className={cn(
-                        "w-full h-14 sm:h-16 rounded-2xl border-2 border-slate-200 bg-slate-50 focus:bg-white focus:border-violet-500 px-5 text-base sm:text-lg font-bold outline-none transition-all shadow-inner",
-                        isEn ? "text-left font-sans" : "text-right"
-                      )}
-                      autoFocus
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Navigation Controls (RTL Proper Layout) */}
-          <div className="mt-8 space-y-6">
-            <div className="flex items-center gap-3">
-              {/* Previous Button (Right Side in RTL) */}
-              <button
-                onClick={() => navigateToQ(Math.max(0, currentQ - 1))}
-                disabled={currentQ === 0}
-                className="flex-1 h-13 sm:h-14 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-black text-sm sm:text-base disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-sm cursor-pointer"
-              >
-                <ArrowRight className="w-5 h-5" />
-                السابق
-              </button>
-
-              {/* Next / Finish Button (Left Side in RTL) */}
-              {currentQ < questions.length - 1 ? (
-                <button
-                  onClick={() => navigateToQ(Math.min(questions.length - 1, currentQ + 1))}
-                  className="flex-[2] h-13 sm:h-14 rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-violet-200 cursor-pointer"
-                >
-                  السؤال التالي
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowEndDialog(true)}
-                  className="flex-[2] h-13 sm:h-14 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 cursor-pointer"
-                >
-                  <Send className="w-5 h-5" />
-                  إنهاء وتسليم الاختبار
-                </button>
-              )}
-            </div>
-
-            {/* Quick Question Jump Dots Navigator */}
-            <div className="bg-white border border-slate-100 rounded-3xl p-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3 px-1">
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
-                  الانتقال السريع للأسئلة ({questions.length} سؤال)
-                </p>
-                {answeredCount === questions.length && (
-                  <span className="text-emerald-600 font-black text-xs flex items-center gap-1">
-                    <Check className="w-3.5 h-3.5" />
-                    أجبت على جميع الأسئلة
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {questions.map((question, i) => {
-                  const isCurrent = i === currentQ;
-                  const isDone = answers[question.id] !== undefined && answers[question.id]?.trim() !== '';
-
-                  return (
-                    <button
-                      key={question.id}
-                      onClick={() => navigateToQ(i)}
-                      className={cn(
-                        'w-10 h-10 sm:w-11 sm:h-11 rounded-2xl font-black text-xs sm:text-sm transition-all duration-200 flex items-center justify-center cursor-pointer',
-                        isCurrent
-                          ? 'bg-violet-600 text-white shadow-md shadow-violet-200 ring-2 ring-violet-400 ring-offset-2 scale-105'
-                          : isDone
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      )}
-                    >
-                      {i + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          {/* Navigation Controls & Dots Component */}
+          <ExamFooterActions
+            currentQ={currentQ}
+            totalQuestions={questions.length}
+            questions={questions}
+            answers={answers}
+            onNavigate={navigateToQ}
+            onSubmitClick={() => setShowEndDialog(true)}
+          />
         </div>
 
         {/* End confirmation Modal */}
@@ -757,10 +306,10 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => handleSubmit(false)}
-                disabled={submitAttempt.isPending}
+                disabled={isSubmitting}
                 className="rounded-2xl bg-emerald-600 hover:bg-emerald-700 font-black h-12 flex-1 text-white shadow-lg shadow-emerald-200"
               >
-                {submitAttempt.isPending ? (
+                {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin ml-2" />
                     جاري الإرسال...

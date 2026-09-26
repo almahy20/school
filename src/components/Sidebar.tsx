@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
-import { useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
+import { useUnreadConversationsCount, useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
 import { logger } from '@/utils/logger';
 import { 
   LucideIcon, LayoutDashboard, Users, GraduationCap, UserCheck, 
@@ -18,13 +18,13 @@ interface SidebarLink {
   to: string;
   label: string;
   icon: LucideIcon;
-  badge?: 'notifications' | 'complaints' | 'conversations';
+  badge?: 'notifications' | 'conversations';
   queryKey?: string[];
 }
 
 const adminLinks: SidebarLink[] = [
   { to: '/', label: 'الرئيسية', icon: Home, queryKey: ['admin-stats'] },
-  { to: '/manage-conversations', label: 'مركز الرسائل', icon: MessageSquare, badge: 'complaints' },
+  { to: '/manage-conversations', label: 'مركز الرسائل', icon: MessageSquare, badge: 'conversations' },
   { to: '/students', label: 'إدارة الطلاب', icon: Users, queryKey: ['students'] },
   { to: '/teachers', label: 'إدارة المعلمين', icon: GraduationCap, queryKey: ['teachers'] },
   { to: '/parents', label: 'أولياء الأمور', icon: UserCheck, queryKey: ['parents'] },
@@ -65,8 +65,9 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
   const queryClient = useQueryClient();
   const { data: unreadCounts } = useUnreadCounts();
   const unreadCount = unreadCounts?.unread || 0;
-  const unreadComplaintsCount = unreadCounts?.complaints || 0;
+  const { data: unreadConversationsAdmin = 0 } = useUnreadConversationsCount();
   const { data: unreadConversationsParent = 0 } = useUnreadConversationsParentCount();
+  const unreadConversations = user?.role === 'parent' ? unreadConversationsParent : unreadConversationsAdmin;
   const { data: branding } = useBranding();
   const [logoError, setLogoError] = useState(false);
 
@@ -205,15 +206,9 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
                   </span>
                 )}
                 
-                {link.badge === 'complaints' && unreadComplaintsCount > 0 && (
+                {link.badge === 'conversations' && unreadConversations > 0 && (
                   <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[8px] font-black shadow-lg shadow-rose-500/20 relative z-10">
-                    {unreadComplaintsCount}
-                  </span>
-                )}
-
-                {link.badge === 'conversations' && unreadConversationsParent > 0 && (
-                  <span className="px-2 py-0.5 rounded-md bg-rose-500 text-white text-[8px] font-black shadow-lg shadow-rose-500/20 relative z-10">
-                    {unreadConversationsParent}
+                    {unreadConversations}
                   </span>
                 )}
               </>

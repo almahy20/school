@@ -2,20 +2,18 @@ import { NavLink } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Home, MessageSquare, Settings, ShieldAlert, Users, School, ClipboardList } from 'lucide-react';
-import { useUnreadCounts } from '@/hooks/queries';
-import { useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
+import { useUnreadConversationsCount, useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
 
 export default function BottomNav() {
   const { user } = useAuth();
-  const { data: unreadCounts } = useUnreadCounts();
-  const unreadComplaintsCount = unreadCounts?.complaints || 0;
+  const { data: unreadAdminConversations = 0 } = useUnreadConversationsCount();
   const { data: unreadConversations = 0 } = useUnreadConversationsParentCount();
 
   if (!user) return null;
 
   const adminLinks = [
     { to: '/',                     label: 'الرئيسية',   icon: Home        },
-    { to: '/manage-conversations', label: 'الرسائل',    icon: MessageSquare, badge: unreadComplaintsCount },
+    { to: '/manage-conversations', label: 'الرسائل',    icon: MessageSquare, badge: unreadAdminConversations },
     { to: '/students',             label: 'الطلاب',     icon: Users       },
     { to: '/settings',             label: 'الإعدادات',  icon: Settings    },
   ];

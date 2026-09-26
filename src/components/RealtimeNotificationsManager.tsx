@@ -106,9 +106,6 @@ export default function RealtimeNotificationsManager() {
       if (userId) {
         qc.setQueryData(['notifications-unread-counts', userId], (old: any) => ({
           unread: (old?.unread || 0) + 1,
-          complaints:
-            (old?.complaints || 0) +
-            (newNotification.type?.startsWith('complaint') ? 1 : 0),
         }));
 
         qc.invalidateQueries({ queryKey: ['notifications', userId] });
@@ -116,12 +113,6 @@ export default function RealtimeNotificationsManager() {
 
       if (role === 'admin') {
         qc.invalidateQueries({ queryKey: ['admin-stats'] });
-        // ✅ FIX: When a new complaint arrives, refresh the complaints list and
-        //    dashboard activities so they update without a manual page reload.
-        if (newNotification.type === 'complaint_new') {
-          qc.invalidateQueries({ queryKey: ['complaints'], exact: false });
-          qc.invalidateQueries({ queryKey: ['admin-activities'] });
-        }
         // New conversations system
         if (newNotification.type === 'conversation_new_message') {
           qc.invalidateQueries({ queryKey: ['conversations', 'admin'], exact: false });
@@ -165,18 +156,16 @@ export default function RealtimeNotificationsManager() {
       if (notifUpdateTimerRef.current) clearTimeout(notifUpdateTimerRef.current);
       notifUpdateTimerRef.current = window.setTimeout(async () => {
         try {
-          const { data, error } = await (supabase as any)
+          // ✅ FIX: Use count-only queries instead of fetching all rows
+          const unreadRes = await (supabase as any)
             .from('notifications')
-            .select('type, is_read')
+            .select('id', { count: 'exact', head: true })
             .eq('user_id', userId)
             .eq('is_read', false);
 
-          if (!error && userId) {
+          if (!unreadRes.error && userId) {
             qc.setQueryData(['notifications-unread-counts', userId], {
-              unread: (data || []).length,
-              complaints: (data || []).filter((n: any) =>
-                n.type?.startsWith('complaint')
-              ).length,
+              unread: unreadRes.count || 0,
             });
           }
         } catch (e) {

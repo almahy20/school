@@ -35,6 +35,11 @@ export function usePushNotifications() {
   const DB_FAIL_COOLDOWN_MS = 60_000;
   const DB_MAX_FAILS_BEFORE_COOLDOWN = 3;
 
+// Module-level guard for proactive re-registration (shared across all hook instances)
+let _lastProactiveAttemptTime = 0;
+let _isProactiveInProgress = false;
+const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
+
   const onBatteryPermissionGranted = useCallback(() => {
     const isAndroid = /Android/.test(navigator.userAgent);
     if (!isAndroid) return;
@@ -170,12 +175,17 @@ export function usePushNotifications() {
       }
 
       if (!subscription) {
-        if (
+        const canAttemptProactive =
           Notification.permission === 'granted' &&
           VAPID_PUBLIC_KEY &&
           VAPID_PUBLIC_KEY !== 'your_vapid_public_key_here' &&
-          !shouldSkipDbCalls()
-        ) {
+          !shouldSkipDbCalls() &&
+          !_isProactiveInProgress &&
+          Date.now() - _lastProactiveAttemptTime > PROACTIVE_COOLDOWN_MS;
+
+        if (canAttemptProactive) {
+          _isProactiveInProgress = true;
+          _lastProactiveAttemptTime = Date.now();
           try {
             logger.log('[Push] Proactive re-registration: granted+null → re-subscribing silently');
             const newSub = await registration.pushManager.subscribe({
@@ -188,6 +198,8 @@ export function usePushNotifications() {
           } catch (err) {
             logger.warn('[Push] Proactive re-registration failed (silent):', err);
             setIsSubscribed(false);
+          } finally {
+            _isProactiveInProgress = false;
           }
         } else {
           setIsSubscribed(false);

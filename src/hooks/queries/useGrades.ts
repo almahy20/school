@@ -77,7 +77,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
 export function useStudentGrades(template: any | null, classId: string | null) {
   const { user, session } = useAuth();
   const templateId = template?.id;
-  const queryKey = ['student-grades', templateId, classId];
+  const queryKey = ['student-grades', templateId, classId, user?.schoolId];
   
   return useQuery({
     queryKey,
@@ -163,12 +163,10 @@ export function useDeleteExamTemplate() {
       if (error) throw error;
     },
     onSuccess: () => {
+      // ✅ FIX: Reduced from 7 to 3 invalidations — Realtime covers
+      //    child-full-details, grades, and parent-children
       queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
       queryClient.invalidateQueries({ queryKey: ['student-grades'] });
-      queryClient.invalidateQueries({ queryKey: ['student-grades-full'] });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
-      queryClient.invalidateQueries({ queryKey: ['grades'] });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
@@ -249,12 +247,10 @@ export function useUpsertGrades() {
       }
     },
     onSettled: (_, __, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
+      // ✅ FIX: Reduced from 7 to 3 invalidations — optimistic update already
+      //    handles student-grades cache; Realtime covers cross-table updates
       queryClient.invalidateQueries({ queryKey: ['student-grades'] });
-      queryClient.invalidateQueries({ queryKey: ['student-grades-full'] });
-      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
       queryClient.invalidateQueries({ queryKey: ['grades'] });
-      queryClient.invalidateQueries({ queryKey: ['parent-children'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
@@ -284,13 +280,14 @@ export function useGrades(studentId: string | null) {
 }
 
 export function useStudentDetailedGrades(studentId: string | null) {
-  const queryKey = useMemo(() => ['grades', 'detailed', studentId], [studentId]);
+  const { user } = useAuth();
+  const queryKey = useMemo(() => ['grades', 'detailed', studentId, user?.schoolId], [studentId, user?.schoolId]);
   
   return useQuery({
     queryKey,
     queryFn: async () => {
       if (!studentId) return [];
-      const { data, error } = await supabase
+      let q = supabase
         .from('grades')
         .select(`
           id, student_id, score, max_score, subject, term, exam_template_id, school_id, created_at,
@@ -300,14 +297,20 @@ export function useStudentDetailedGrades(studentId: string | null) {
             title
           )
         `)
-        .eq('student_id', studentId)
+        .eq('student_id', studentId);
+
+      if (user?.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      const { data, error } = await q
         .order('created_at', { ascending: false })
         .limit(500);
       
       if (error) throw error;
       return data || [];
     },
-    enabled: !!studentId,
+    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });

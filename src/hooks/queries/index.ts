@@ -14,7 +14,6 @@ export * from './useBranding';
 export * from './useFees';
 export * from './useCurriculum';
 export * from './useMessaging';
-export * from './useComplaints';
 export * from './useSuperAdmin';
 export * from './useProfile';
 export * from './useDataRetention';

@@ -74,47 +74,9 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [queryClient]);
 
-  // 🚀 تحسين السرعة عبر جلب البيانات في الخلفية (Prefetching)
-  useEffect(() => {
-    if (user?.schoolId) {
-      const commonOptions = { staleTime: 5 * 60 * 1000 };
-      
-      const prefetch = async () => {
-        try {
-          const doPrefetch = async () => {
-            const key = ['classes', 'all', user.schoolId, user.isSuperAdmin, user.role, user.id];
-            const existing = queryClient.getQueryData(key);
-            
-            if (!existing) {
-              await queryClient.prefetchQuery({ 
-                queryKey: key, 
-                queryFn: async () => {
-                  const { data, error } = await supabase
-                    .from('classes')
-                    .select('id, name, grade_level, school_id, teacher_id, curriculum_id, created_at')
-                    .eq('school_id', user.schoolId)
-                    .order('name');
-                  if (error) throw error;
-                  return data || [];
-                },
-                ...commonOptions 
-              });
-            }
-          };
-
-          if ('requestIdleCallback' in window) {
-            (window as any).requestIdleCallback(doPrefetch, { timeout: 3000 });
-          } else {
-            setTimeout(doPrefetch, 2000);
-          }
-        } catch (e) {
-          logger.warn('Prefetching failed, but that is fine:', e);
-        }
-      };
-      
-      prefetch();
-    }
-  }, [user, queryClient]);
+  // ✅ FIX: Removed manual prefetch for classes — useAllClasses hook already
+  //    handles this with staleTime: 10s and refetchOnMount: true, making
+  //    this prefetch redundant and causing duplicate requests on first load.
 
   // Show a non-blocking toast reminder if user is in browser but already logged in
   // (Reserved for future PWA reminder logic)
@@ -130,7 +92,7 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
       { to: '/attendance', label: 'سجل الحضور' },
       { to: '/fees', label: 'المصروفات' },
       { to: '/messages', label: 'الرسائل' },
-      { to: '/manage-complaints', label: 'الشكاوى' },
+      { to: '/manage-conversations', label: 'مركز الرسائل' },
       { to: '/settings', label: 'الإعدادات' },
     ];
     return links.filter(l => searchQuery && l.label.includes(searchQuery));

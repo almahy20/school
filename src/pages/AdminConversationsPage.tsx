@@ -233,7 +233,7 @@ function BroadcastTab() {
         .neq('id', user.id);
       return (data || []).map((p: any) => p.id);
     },
-    enabled: !!user?.schoolId,
+    enabled: !!user?.schoolId && targetType === 'all',
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });

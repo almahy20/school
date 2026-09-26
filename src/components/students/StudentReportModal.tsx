@@ -6,7 +6,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { useBranding } from '@/hooks/queries/useBranding';
 import {
   Printer,
@@ -20,15 +19,15 @@ import {
   BookOpen,
   DollarSign,
   User,
-  ShieldCheck,
-  GraduationCap,
-  Hash,
-  Phone,
-  MapPin,
-  Check,
-  ChevronDown
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  extractAvailableReportMonths,
+  filterAttendanceByMonth,
+  filterGradesByMonth,
+  filterCurriculumByMonth,
+  calculateReportStats,
+  getGradeRowDetails,
+} from '@/utils/studentReportCalculations';
 
 interface StudentReportModalProps {
   isOpen: boolean;
@@ -62,125 +61,33 @@ export function StudentReportModal({
   const fees = useMemo(() => (studentData?.fees || []) as any[], [studentData]);
   const payments = useMemo(() => (studentData?.payments || []) as any[], [studentData]);
 
-  // Extract all available months from data
+  // Extract all available months from data via pure helper
   const availableMonths = useMemo(() => {
-    const monthsMap = new Map<string, string>(); // key -> label
-
-    attendance.forEach((rec) => {
-      if (rec.date) {
-        const d = new Date(rec.date);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const label = d.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' });
-        monthsMap.set(key, label);
-      }
-    });
-
-    grades.forEach((g) => {
-      const termOrDate = g.exam_templates?.term || g.term || g.created_at;
-      if (termOrDate) {
-        if (!monthsMap.has(termOrDate)) {
-          monthsMap.set(termOrDate, termOrDate);
-        }
-      }
-    });
-
-    curriculum.forEach((c) => {
-      if (c.term && !monthsMap.has(c.term)) {
-        monthsMap.set(c.term, c.term);
-      }
-    });
-
-    return Array.from(monthsMap.entries()).map(([key, label]) => ({ key, label }));
+    return extractAvailableReportMonths(attendance, grades, curriculum);
   }, [attendance, grades, curriculum]);
 
-  // Filter Data by selected month
+  // Filter Data by selected month via pure helpers
   const filteredAttendance = useMemo(() => {
-    if (selectedMonth === 'all') return attendance;
-    return attendance.filter((rec) => {
-      if (!rec.date) return false;
-      const d = new Date(rec.date);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      return key === selectedMonth || d.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }) === selectedMonth;
-    });
+    return filterAttendanceByMonth(attendance, selectedMonth);
   }, [attendance, selectedMonth]);
 
   const filteredGrades = useMemo(() => {
-    if (selectedMonth === 'all') return grades;
-    return grades.filter((g) => {
-      const term = g.exam_templates?.term || g.term || '';
-      const cardTitle = g.exam_templates?.title || g.title || '';
-      return term === selectedMonth || cardTitle.includes(selectedMonth);
-    });
+    return filterGradesByMonth(grades, selectedMonth);
   }, [grades, selectedMonth]);
 
   const filteredCurriculum = useMemo(() => {
-    if (selectedMonth === 'all') return curriculum;
-    return curriculum.filter((c) => c.term === selectedMonth);
+    return filterCurriculumByMonth(curriculum, selectedMonth);
   }, [curriculum, selectedMonth]);
 
-  // Aggregate Counts (STRICTLY NO PERCENTAGES)
+  // Aggregate Counts & Totals via pure calculation function
   const stats = useMemo(() => {
-    // Attendance counts
-    let presentCount = 0;
-    let absentCount = 0;
-    let lateCount = 0;
-
-    filteredAttendance.forEach((rec) => {
-      if (rec.status === 'present') presentCount++;
-      else if (rec.status === 'absent') absentCount++;
-      else if (rec.status === 'late') lateCount++;
+    return calculateReportStats({
+      attendance: filteredAttendance,
+      grades: filteredGrades,
+      fees,
+      payments,
+      monthlyFee: student?.monthly_fee,
     });
-
-    const totalAttendanceDays = presentCount + absentCount + lateCount;
-
-    // Grades sums (Distinguishing numeric vs text assessments)
-    let totalScoreObtained = 0;
-    let totalMaxScorePossible = 0;
-    let numericSubjectsCount = 0;
-    let textSubjectsCount = 0;
-
-    filteredGrades.forEach((g) => {
-      const isText = g.exam_templates?.score_type === 'text' || isNaN(Number(g.score));
-      if (isText) {
-        textSubjectsCount++;
-      } else {
-        const scoreNum = Number(g.score);
-        const maxScoreNum = Number(g.exam_templates?.max_score ?? g.max_score ?? 100);
-        totalScoreObtained += scoreNum;
-        totalMaxScorePossible += maxScoreNum;
-        numericSubjectsCount++;
-      }
-    });
-
-    // Financial totals
-    let totalFeeAmount = 0;
-    let totalPaidAmount = 0;
-
-    fees.forEach((f) => {
-      totalFeeAmount += Number(f.amount || 0);
-    });
-    if (totalFeeAmount === 0 && student.monthly_fee) {
-      totalFeeAmount = Number(student.monthly_fee);
-    }
-
-    payments.forEach((p) => {
-      totalPaidAmount += Number(p.amount || 0);
-    });
-    const totalRemainingAmount = Math.max(0, totalFeeAmount - totalPaidAmount);
-
-    return {
-      presentCount,
-      absentCount,
-      lateCount,
-      totalAttendanceDays,
-      totalScoreObtained,
-      totalMaxScorePossible,
-      numericSubjectsCount,
-      textSubjectsCount,
-      totalFeeAmount,
-      totalPaidAmount,
-      totalRemainingAmount,
-    };
   }, [filteredAttendance, filteredGrades, fees, payments, student]);
 
   // Robust, 100% Reliable Print Function via Isolated IFrame with ALL application styles
@@ -562,10 +469,7 @@ export function StudentReportModal({
                       </thead>
                       <tbody className="divide-y divide-slate-200 text-[11px]">
                         {filteredGrades.map((g, idx) => {
-                          const subjectName = g.exam_templates?.subject || g.subject || 'مادة دراسية';
-                          const examTitle = g.exam_templates?.title || g.title || 'تقييم شهري';
-                          const isTextGrade = g.exam_templates?.score_type === 'text' || isNaN(Number(g.score));
-                          const maxScore = isTextGrade ? '---' : (g.exam_templates?.max_score ?? g.max_score ?? '---');
+                          const { subjectName, examTitle, isTextGrade, maxScore } = getGradeRowDetails(g);
                           return (
                             <tr key={g.id || idx}>
                               <td className="p-2 text-slate-400 font-bold">{idx + 1}</td>
