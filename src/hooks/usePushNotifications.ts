@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -19,7 +19,59 @@ const isNetworkLikeError = (e: unknown): boolean => {
   );
 };
 
-export function usePushNotifications() {
+const PUSH_SYNC_STORAGE_KEY = 'push_synced_endpoint_v1';
+const PUSH_SYNC_TTL_MS = 60 * 60 * 1000;
+
+type SyncedPushEndpoint = {
+  endpoint: string;
+  userId: string;
+  syncedAt: number;
+};
+
+const getRecentlySyncedEndpoint = (): SyncedPushEndpoint | null => {
+  try {
+    const raw = localStorage.getItem(PUSH_SYNC_STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as SyncedPushEndpoint;
+    if (!value?.endpoint || !value?.userId || !Number.isFinite(value.syncedAt)) return null;
+    return value;
+  } catch {
+    return null;
+  }
+};
+
+const wasRecentlySynced = (userId: string, endpoint: string): boolean => {
+  const previous = getRecentlySyncedEndpoint();
+  return Boolean(
+    previous &&
+    previous.userId === userId &&
+    previous.endpoint === endpoint &&
+    Date.now() - previous.syncedAt < PUSH_SYNC_TTL_MS
+  );
+};
+
+const markSubscriptionSynced = (userId: string, endpoint: string) => {
+  try {
+    localStorage.setItem(PUSH_SYNC_STORAGE_KEY, JSON.stringify({ endpoint, userId, syncedAt: Date.now() }));
+  } catch {
+    // Storage may be unavailable in private mode.
+  }
+};
+
+export interface PushNotificationContextValue {
+  permission: NotificationPermission;
+  isSubscribed: boolean;
+  subscribeToNotifications: () => Promise<boolean>;
+  unsubscribeFromNotifications: () => Promise<void>;
+  showIOSGuide: boolean;
+  setShowIOSGuide: Dispatch<SetStateAction<boolean>>;
+  showBatteryGuide: boolean;
+  dismissBatteryGuide: (permanent: boolean) => void;
+}
+
+const PushNotificationContext = createContext<PushNotificationContextValue | undefined>(undefined);
+
+export function PushNotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -102,6 +154,11 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
       return false;
     }
 
+    if (wasRecentlySynced(userId, subscription.endpoint)) {
+      logger.debug('[Push] Skipping DB sync — this endpoint was synced successfully within the last hour.');
+      return true;
+    }
+
     const subJson = subscription.toJSON();
     try {
       const { error } = await supabase
@@ -139,6 +196,8 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
             logger.error('[Push] DB fallback insert error:', insErr);
             return false;
           }
+          recordDbSuccess();
+          markSubscriptionSynced(userId, subscription.endpoint);
         } catch (fallbackErr) {
           if (isNetworkLikeError(fallbackErr)) recordDbFail();
           logger.error('[Push] DB fallback chain error:', fallbackErr);
@@ -146,6 +205,7 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
         }
       } else {
         recordDbSuccess();
+        markSubscriptionSynced(userId, subscription.endpoint);
       }
       return true;
     } catch (e) {
@@ -153,7 +213,7 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
       logger.error('[Push] saveSubscriptionToDb threw:', e);
       return false;
     }
-  }, []);
+  }, [user?.schoolId]);
 
   const checkSubscription = useCallback(async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !user?.id) return;
@@ -244,8 +304,10 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
         }
       }
 
-      if (user?.id && !shouldSkipDbCalls()) {
+      if (user?.id && !shouldSkipDbCalls() && !wasRecentlySynced(user.id, subscription.endpoint)) {
         saveSubscriptionToDb(user.id, subscription).catch(() => {});
+      } else if (user?.id && wasRecentlySynced(user.id, subscription.endpoint)) {
+        logger.debug('[Push] Existing subscription is already synced recently — skipping redundant upsert.');
       }
 
       setIsSubscribed(true);
@@ -497,7 +559,7 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
     }
   };
 
-  return {
+  const value: PushNotificationContextValue = {
     permission,
     isSubscribed,
     subscribeToNotifications,
@@ -507,4 +569,14 @@ const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
     showBatteryGuide,
     dismissBatteryGuide,
   };
+
+  return createElement(PushNotificationContext.Provider, { value }, children);
+}
+
+export function usePushNotifications(): PushNotificationContextValue {
+  const context = useContext(PushNotificationContext);
+  if (!context) {
+    throw new Error('usePushNotifications must be used within PushNotificationProvider');
+  }
+  return context;
 }

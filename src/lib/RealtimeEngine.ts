@@ -156,25 +156,30 @@ class RealtimeEngine {
 
   /**
    * مطابقة شروط الفلتر مع السجل (يدعم صيغ Supabase: col=eq.val و col=val)
+   * قواعد صارمة: إذا كان العمود غير موجود أو null → رفض التطابق (لمنع تسريب البيانات)
    */
   private matchFilter(filter: string, record: Record<string, any>): boolean {
-    if (!filter || !record) return true;
+    if (!filter) return true;
+    if (!record || typeof record !== 'object') return false;
 
-    // مثال: id=eq.123 أو school_id=eq.abc-xyz أو user_id=123
+    // صيغة: column=eq.value (الصيغة الأساسية في Supabase)
     const eqMatch = filter.match(/^([a-zA-Z0-9_]+)=eq\.(.+)$/);
     if (eqMatch) {
       const [, col, val] = eqMatch;
-      if (!record.hasOwnProperty(col)) return true;
-      const coercedVal = typeof record[col] === 'number' ? Number(val) : val;
-      return String(record[col]) === String(coercedVal);
+      if (!(col in record) || record[col] === null || record[col] === undefined) {
+        return false;
+      }
+      return String(record[col]).trim() === String(val).trim();
     }
 
+    // صيغة: column=value (بديل مختصر)
     const simpleMatch = filter.match(/^([a-zA-Z0-9_]+)=(.+)$/);
     if (simpleMatch) {
       const [, col, val] = simpleMatch;
-      if (!record.hasOwnProperty(col)) return true;
-      const coercedVal = typeof record[col] === 'number' ? Number(val) : val;
-      return String(record[col]) === String(coercedVal);
+      if (!(col in record) || record[col] === null || record[col] === undefined) {
+        return false;
+      }
+      return String(record[col]).trim() === String(val).trim();
     }
 
     return true;

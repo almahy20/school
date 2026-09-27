@@ -31,8 +31,8 @@ export default function PaymentPage() {
   const updateOrderMutation = useUpdateOrder();
 
   const planInfo = useMemo(() => 
-    order?.plan ? PLAN_LABELS[order.plan] : { name: order?.package_type || 'باقة مخصصة', price: 0, days: 0 },
-    [order?.plan, order?.package_type]
+    order?.plan ? PLAN_LABELS[order.plan] : { name: 'باقة مخصصة', price: 0, days: 0 },
+    [order?.plan]
   );
 
   const handleReceiptChange = (e: React.ChangeEvent<HTMLInputElement>) => {

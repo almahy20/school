@@ -31,7 +31,7 @@ export function useAllClasses() {
       return (data || []) as Class[];
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 10 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
@@ -116,7 +116,7 @@ export function useClass(id: string | undefined | null) {
       return match || 0;
     },
     enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
 }
@@ -139,7 +139,7 @@ export function useTeacherClasses(teacherId: string | undefined) {
       return data || [];
     },
     enabled: !!(session && teacherId && user?.schoolId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
   });
 }
 

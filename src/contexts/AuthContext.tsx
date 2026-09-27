@@ -605,8 +605,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const cleanInput = phone.trim();
       const isEmail = cleanInput.includes('@');
-      const primaryEmail = isEmail ? cleanInput : `${cleanInput}@edara.com`;
-      const fallbackEmail = isEmail ? null : `${cleanInput}@school.local`;
+      
+      // ✅ Smart Domain Hint: Check if a working domain was previously remembered for this phone
+      let primaryEmail = isEmail ? cleanInput : `${cleanInput}@edara.com`;
+      let fallbackEmail = isEmail ? null : `${cleanInput}@school.local`;
+
+      if (!isEmail) {
+        try {
+          const rememberedDomain = localStorage.getItem(`auth_domain_${cleanInput}`);
+          if (rememberedDomain === '@school.local') {
+            primaryEmail = `${cleanInput}@school.local`;
+            fallbackEmail = `${cleanInput}@edara.com`;
+          }
+        } catch { /* ignore */ }
+      }
 
       if (!rememberMe) {
         try {
@@ -621,24 +633,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       let { data, error } = await supabase.auth.signInWithPassword({ email: primaryEmail, password });
 
+      if (!error && data?.session && !isEmail) {
+        try {
+          const successfulDomain = primaryEmail.endsWith('@school.local') ? '@school.local' : '@edara.com';
+          localStorage.setItem(`auth_domain_${cleanInput}`, successfulDomain);
+        } catch { /* ignore */ }
+      }
+
       if (error && fallbackEmail && error.message.includes('Invalid login credentials')) {
         const fallbackRes = await supabase.auth.signInWithPassword({ email: fallbackEmail, password });
         if (!fallbackRes.error) {
           data = fallbackRes.data;
           error = null;
+          if (!isEmail) {
+            try {
+              const successfulDomain = fallbackEmail.endsWith('@school.local') ? '@school.local' : '@edara.com';
+              localStorage.setItem(`auth_domain_${cleanInput}`, successfulDomain);
+            } catch { /* ignore */ }
+          }
         }
       }
 
       if (error) {
         return error.message.includes('Invalid login credentials')
-          ? 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø£Ùˆ ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± ØºÙŠØ± ØµØ­ÙŠØ­Ø©'
+          ? 'رقم الهاتف أو كلمة المرور غير صحيحة'
           : error.message;
       }
       if (data.session) applySession(data.session);
       sessionStorage.setItem('user_signup_time', Date.now().toString());
       return null;
     } catch {
-      return 'Ø­Ø¯Ø« Ø®Ø·Ø£ ØºÙŠØ± Ù…ØªÙˆÙ‚Ø¹ Ø£Ø«Ù†Ø§Ø¡ ØªØ³Ø¬ÙŠÙ„ Ø§Ù„Ø¯Ø®ÙˆÙ„';
+      return 'حدث خطأ غير متوقع أثناء تسجيل الدخول';
     }
   };
 

@@ -69,7 +69,7 @@ export function useAllStudents() {
       return (data || []) as Student[];
     },
     enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
@@ -85,6 +85,7 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
   const queryKey = [
     'students',
     'list',
+    'v2', // bumped: added student_parents(parent_id) to select shape
     user?.schoolId,
     user?.role,
     user?.id,
@@ -116,7 +117,7 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
       // ✅ FIX: Select only needed columns for the page + count: exact
       let q = supabase
         .from('students')
-        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level)', { count: 'exact' });
+        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
 
       if (!user.isSuperAdmin && user.schoolId) {
         q = q.eq('school_id', user.schoolId);
@@ -156,8 +157,8 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
     },
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -252,12 +253,12 @@ export function useDeleteStudent() {
       toast.success('تم حذف الطالب بنجاح');
     },
     onSettled: () => {
-      // ✅ FIX: Reduced from 12 to 5 invalidations — Realtime covers cross-table updates
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['student-parent'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parents'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'] });
+      queryClient.invalidateQueries({ queryKey: ['student-parent'] });
     },
   });
 }
@@ -276,11 +277,10 @@ export function useAddStudent() {
     },
     onSuccess: () => {
       toast.success('تم إضافة الطالب بنجاح');
-      // ✅ FIX: Reduced from 7 to 3 invalidations — classes/fees/parent-children are not
-      //    immediately affected by adding a student; Realtime covers any side effects
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parents'] });
     },
   });
 }
@@ -353,11 +353,10 @@ export function useUpdateStudent() {
         };
       });
 
-      // ✅ FIX: Reduced from 6 to 2 invalidations — direct setQueriesData above already
-      //    handles students, student, and child-full-details cache. Only stats and
-      //    parent-children need server re-validation (Realtime covers other cross-table updates).
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-children-basic'] });
       
       toast.success('تم تحديث بيانات الطالب بنجاح');
     },

@@ -272,7 +272,7 @@ export function useParentChildren() {
       }
     },
     enabled: !!(user?.id && user?.role === 'parent'),
-    staleTime: 10 * 1000, // 10 ثوانٍ لتمكين التحديث الصامت السريع
+    staleTime: 20 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnMount: true, // يضمن فحص وتحديث البيانات في الخلفية

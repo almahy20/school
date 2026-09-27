@@ -260,7 +260,7 @@ export function useConversationMessages(conversationId: string | null) {
         })) as ConversationMessage[];
     },
     enabled: !!(session && conversationId),
-    staleTime: 0,
+    staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
   });
 

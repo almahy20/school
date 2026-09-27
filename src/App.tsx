@@ -13,6 +13,7 @@ import { queryClient } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PwaManager from "./components/PwaManager";
+import { PushNotificationProvider } from "./hooks/usePushNotifications";
 function RouteLoadingScreen() {
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#0a0f1e] text-white" dir="rtl">
@@ -167,7 +168,8 @@ export default function App() {
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
         <TooltipProvider>
           <AuthProvider>
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <PushNotificationProvider>
+              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <ScrollToTop />
               <GlobalErrorBoundary>
                 <AppRoutes />
@@ -180,7 +182,8 @@ export default function App() {
                 <RealtimeNotificationsManager />
               </Suspense>
               <Sonner position="top-center" dir="rtl" expand={true} richColors />
-            </BrowserRouter>
+              </BrowserRouter>
+            </PushNotificationProvider>
           </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>

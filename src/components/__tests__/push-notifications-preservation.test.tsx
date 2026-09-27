@@ -456,24 +456,28 @@ describe('Preservation 3.7 — RealtimeNotificationsManager يعرض in-app noti
     expect(existsSync(REALTIME_MANAGER)).toBe(true);
   });
 
-  it('RealtimeNotificationsManager يستخدم Supabase channel للإشعارات', () => {
+  it('RealtimeNotificationsManager يستخدم realtimeEngine الموحد للإشعارات (لا تفتح قنوات منفردة)', () => {
     const source = readFileSync(REALTIME_MANAGER, 'utf-8');
 
-    // يجب استخدام supabase channel
-    const hasSupabaseChannel =
-      source.includes('supabase') &&
-      source.includes('.channel(');
+    // يجب استخدام realtimeEngine.subscribe بدلاً من supabase.channel المباشر
+    const usesUnifiedEngine =
+      source.includes('realtimeEngine') &&
+      source.includes('.subscribe(');
 
-    expect(hasSupabaseChannel).toBe(true);
+    expect(usesUnifiedEngine).toBe(true);
+
+    // يجب أن لا يفتح قنوات منفردة مباشرة
+    const doesNotOpenDirectChannels = !source.includes('supabase.channel(');
+    expect(doesNotOpenDirectChannels).toBe(true);
   });
 
   it('RealtimeNotificationsManager يستمع لأحداث INSERT على جدول notifications', () => {
     const source = readFileSync(REALTIME_MANAGER, 'utf-8');
 
-    // يجب الاستماع للإدراج في جدول notifications
+    // يجب الاشتراك في INSERT على notifications عبر realtimeEngine
     const hasInsertListener =
-      source.includes("event: 'INSERT'") &&
-      source.includes("table: 'notifications'");
+      source.includes("'notifications'") &&
+      source.includes("event: 'INSERT'");
 
     expect(hasInsertListener).toBe(true);
   });

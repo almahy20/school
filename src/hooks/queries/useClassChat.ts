@@ -198,7 +198,7 @@ export function useClassChatMessages(roomId: string | null) {
       return (data || []) as ClassChatMessage[];
     },
     enabled: !!(session && roomId),
-    staleTime: 0,
+    staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
   });
 }

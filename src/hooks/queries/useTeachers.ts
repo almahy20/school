@@ -91,7 +91,7 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
         }) as Teacher[];
     },
     enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
@@ -184,8 +184,8 @@ export function useTeacher(id: string | undefined | null) {
     },
     enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
   });
 }
 
@@ -219,7 +219,7 @@ export function useTeacherDetailStats(id: string | undefined | null) {
       return { studentCount: studentCount || 0, curriculumProgress: avgProgress };
     },
     enabled: !!session && !!(id && user?.schoolId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
@@ -258,10 +258,10 @@ export function useDeleteTeacher() {
         predicate: (query) =>
           query.queryKey[0] === 'teachers' || query.queryKey[0] === 'teacher-detail',
       });
-      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
@@ -283,8 +283,9 @@ export function useTeacherAction() {
     },
     onSuccess: (_, variables) => {
       toast.success(`تم ${variables.status === 'approved' ? 'قبول' : 'رفض'} المعلم`);
-      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }
@@ -303,10 +304,11 @@ export function useUpdateTeacher() {
     },
     onSuccess: (_, variables) => {
       toast.success('تم تحديث بيانات المعلم');
-      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
       queryClient.invalidateQueries({ queryKey: ['teacher', variables.id] });
-      queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['teacher-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['classes'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     },
   });
 }

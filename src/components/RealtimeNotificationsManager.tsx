@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -8,6 +8,7 @@ import React from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { logger } from '@/utils/logger';
 import { useNavigate } from 'react-router-dom';
+import { realtimeEngine } from '@/lib/RealtimeEngine';
 
 const getTypeConfig = (type: string) => {
   switch (type) {
@@ -36,20 +37,13 @@ export default function RealtimeNotificationsManager() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  // 🐛 BUGFIX (Regression من البند 1): السبب الحقيقي للـ Subscribed/Closed LOOP كان
-  //     في الـ useEffect dependencies اللي كانت بتشتمل على الـ handleNewNotification
-  //     و handleNotificationUpdate (useCallback ب dependencies فيها user object و
-  //     queryClient بيعملوا reference جديد كل render) + StrictMode.
-  //     الحل: نستخدم useRef عشان نحفظ أخر قيمة لـ user.id / user.schoolId / user.role
-  //     ونحط الـ handlers جوه الـ useEffect نفسها عشان ما يبقاش في dependency array،
-  //     ودependency array يكون فقط user.id و user.schoolId كـ primitives (مش بيتغيروا
-  //     كل render لو نفس القيمة).
+  // 🛡️ Refs لحفظ أخر قيمة للـ user بدون إعادة تشغيل الـ effect عند كل render
   const userIdRef = useRef<string | undefined>(user?.id);
   const userRoleRef = useRef<string | undefined>(user?.role);
-  const schoolIdRef = useRef<string | undefined>(user?.schoolId);
+  const schoolIdRef = useRef<string | undefined>(user?.schoolId ?? undefined);
   userIdRef.current = user?.id;
   userRoleRef.current = user?.role;
-  schoolIdRef.current = user?.schoolId;
+  schoolIdRef.current = user?.schoolId ?? undefined;
 
   const queryClientRef = useRef(queryClient);
   queryClientRef.current = queryClient;
@@ -57,21 +51,22 @@ export default function RealtimeNotificationsManager() {
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
 
-  // ✅ FIX: Local ref for the debounce timer — replaces window.__notifUpdateTimer global
+  // ✅ Local ref للـ debounce timer لمنع memory leaks عند الـ unmount
   const notifUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const userId = userIdRef.current;
     const schoolId = schoolIdRef.current;
-    const role = userRoleRef.current;
 
     if (!userId) return;
 
-    // ✅ Single handler — used for all INSERT events on notifications table
+    // ── Handler: إشعار جديد (INSERT) ──────────────────────────────────────────
     const handleNewNotification = (payload: any) => {
       const qc = queryClientRef.current;
       const nav = navigateRef.current;
+      const role = userRoleRef.current;
       const newNotification = payload.new;
+
       logger.log('🔔 RealtimeNotifications: New notification', newNotification.type);
 
       sendLocalNotification(
@@ -107,31 +102,26 @@ export default function RealtimeNotificationsManager() {
         qc.setQueryData(['notifications-unread-counts', userId], (old: any) => ({
           unread: (old?.unread || 0) + 1,
         }));
-
         qc.invalidateQueries({ queryKey: ['notifications', userId] });
       }
 
       if (role === 'admin') {
         qc.invalidateQueries({ queryKey: ['admin-stats'] });
-        // New conversations system
         if (newNotification.type === 'conversation_new_message') {
           qc.invalidateQueries({ queryKey: ['conversations', 'admin'], exact: false });
           qc.invalidateQueries({ queryKey: ['conversations-unread-count'], exact: false });
         }
       }
 
-      // Parent conversation reply
       if (role === 'parent' && newNotification.type === 'conversation_admin_reply') {
         qc.invalidateQueries({ queryKey: ['conversations', 'parent'], exact: false });
         qc.invalidateQueries({ queryKey: ['conversations-parent-unread'], exact: false });
-        // Refresh the messages if conversation is open
         const convId = newNotification.metadata?.conversation_id;
         if (convId) {
           qc.invalidateQueries({ queryKey: ['conversation-messages', convId] });
         }
       }
 
-      // Class chat message — refresh conversations-parent-unread badge
       if (role === 'parent' && newNotification.type === 'class_chat_message') {
         qc.invalidateQueries({ queryKey: ['conversations-parent-unread'], exact: false });
         const roomId = newNotification.metadata?.room_id;
@@ -141,7 +131,7 @@ export default function RealtimeNotificationsManager() {
       }
     };
 
-    // Handler for UPDATE events (mark-as-read sync)
+    // ── Handler: تحديث إشعار (UPDATE — sync قراءة) ────────────────────────────
     const handleNotificationUpdate = (payload: any) => {
       const qc = queryClientRef.current;
       const { old: oldRow, new: newRow } = payload;
@@ -151,12 +141,9 @@ export default function RealtimeNotificationsManager() {
         return;
       }
 
-      // ✅ FIX: Use a component-local ref for the timer instead of window global
-      //    to avoid memory leaks on unmount / StrictMode double-invoke
       if (notifUpdateTimerRef.current) clearTimeout(notifUpdateTimerRef.current);
       notifUpdateTimerRef.current = window.setTimeout(async () => {
         try {
-          // ✅ FIX: Use count-only queries instead of fetching all rows
           const unreadRes = await (supabase as any)
             .from('notifications')
             .select('id', { count: 'exact', head: true })
@@ -175,76 +162,47 @@ export default function RealtimeNotificationsManager() {
       }, 4000);
     };
 
-    // ✅ Single channel for all notification events (INSERT + UPDATE)
-    // Filtered by user_id so each user only receives their own notifications
-    const notificationsChannel = supabase
-      .channel(`notifications-manager-${userId}`, {
-        config: {
-          broadcast: { self: false, ack: false },
-          presence: { key: '' },
-        },
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        handleNewNotification
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${userId}`,
-        },
-        handleNotificationUpdate
-      )
-      .subscribe((status) => {
-        logger.log(`[NotificationsManager] Channel status: ${status}`);
-      });
+    // ──────────────────────────────────────────────────────────────────────────
+    // ✅ التوحيد الكامل: الاشتراك عبر realtimeEngine الموحد (قناة واحدة فقط)
+    //    بدلاً من فتح قناتين منفصلتين عبر supabase.channel() مباشرة
+    // ──────────────────────────────────────────────────────────────────────────
 
-    // ✅ School branding updates channel (separate concern)
-    let brandingChannel: ReturnType<typeof supabase.channel> | null = null;
+    // 1. أحداث INSERT للإشعارات — مفلترة بـ user_id
+    const unsubInsert = realtimeEngine.subscribe(
+      'notifications',
+      handleNewNotification,
+      { event: 'INSERT', filter: `user_id=eq.${userId}` }
+    );
+
+    // 2. أحداث UPDATE للإشعارات — مفلترة بـ user_id (sync قراءة)
+    const unsubUpdate = realtimeEngine.subscribe(
+      'notifications',
+      handleNotificationUpdate,
+      { event: 'UPDATE', filter: `user_id=eq.${userId}` }
+    );
+
+    // 3. تحديثات هوية المدرسة — مفلترة بـ school id
+    let unsubBranding: (() => void) | null = null;
     if (schoolId) {
-      brandingChannel = supabase
-        .channel(`branding-${schoolId}`, {
-          config: {
-            broadcast: { self: false, ack: false },
-            presence: { key: '' },
-          },
-        })
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'schools',
-            filter: `id=eq.${schoolId}`,
-          },
-          () => {
-            const qc = queryClientRef.current;
-            logger.log('🔄 School branding updated, refreshing...');
-            qc.invalidateQueries({
-              queryKey: ['school-branding', schoolId],
-            });
-          }
-        )
-        .subscribe();
+      unsubBranding = realtimeEngine.subscribe(
+        'schools',
+        () => {
+          const qc = queryClientRef.current;
+          logger.log('🔄 School branding updated, refreshing...');
+          qc.invalidateQueries({ queryKey: ['school-branding', schoolId] });
+        },
+        { event: 'UPDATE', filter: `id=eq.${schoolId}` }
+      );
     }
 
+    // ── Cleanup: يُلغي الاشتراكات عند تغيير userId/schoolId أو unmount ────────
     return () => {
-      supabase.removeChannel(notificationsChannel);
-      if (brandingChannel) supabase.removeChannel(brandingChannel);
-      // ✅ FIX: Clear the debounce timer on cleanup to prevent memory leaks
+      unsubInsert();
+      unsubUpdate();
+      if (unsubBranding) unsubBranding();
       if (notifUpdateTimerRef.current) clearTimeout(notifUpdateTimerRef.current);
     };
-    // 🛡️ مهم جداً: الـ dependency array ده فقط user?.id و user?.schoolId (PRIMITIVES)،
-    //    مش الـ handlers ولا الـ objects، عشان ما يتغيروش كل render ويسببوا unsubscribe/resubscribe LOOP.
+    // 🛡️ dependency array: primitives فقط لمنع unsubscribe/resubscribe loop
   }, [user?.id, user?.schoolId]);
 
   return null;

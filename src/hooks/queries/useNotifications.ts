@@ -44,7 +44,7 @@ export function useNotifications(page = 1, pageSize = 15) {
       return { data: data || [], count: count || 0 };
     },
     enabled: !!(session && user?.id),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 20 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnMount: false,
@@ -71,40 +71,49 @@ export function useMarkAllAsRead() {
         .eq('is_read', false);
       if (error) throw error;
     },
-    // ✅ Optimistic Update — trust this, don't refetch immediately
+    // ✅ Optimistic Update — updates unread count and notification items in cache immediately
     onMutate: async () => {
-      // Cancel ALL in-flight queries to prevent stale data from overwriting
       await queryClient.cancelQueries({ queryKey: ['notifications-unread-counts', user?.id] });
       await queryClient.cancelQueries({ queryKey: ['notifications'] });
 
-      // Snapshot the previous value
       const previousCounts = queryClient.getQueryData(['notifications-unread-counts', user?.id]) as { unread: number } | undefined;
+      const previousNotifications = queryClient.getQueriesData({ queryKey: ['notifications'] });
 
-      // Optimistically update to zero
+      // Optimistically update unread count to zero
       queryClient.setQueryData(['notifications-unread-counts', user?.id], {
         unread: 0,
       });
 
-      return { previousCounts };
+      // Optimistically update all notification items to is_read: true
+      queryClient.setQueriesData({ queryKey: ['notifications'] }, (old: any) => {
+        if (!old) return old;
+        if (Array.isArray(old)) {
+          return old.map((n: any) => ({ ...n, is_read: true }));
+        }
+        if (old.data && Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map((n: any) => ({ ...n, is_read: true })),
+          };
+        }
+        return old;
+      });
+
+      return { previousCounts, previousNotifications };
     },
     onError: (_err, _vars, context) => {
-      // If the mutation fails, roll back
+      // Rollback on error
       if (context?.previousCounts) {
         queryClient.setQueryData(['notifications-unread-counts', user?.id], context.previousCounts);
+      }
+      if (context?.previousNotifications) {
+        context.previousNotifications.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
       }
     },
     onSuccess: () => {
       toast.success('تم تحديد الكل كمقروء');
-      // ✅ Don't refetch unread counts here — the optimistic update already set it to 0
-      // We'll do a delayed refetch to confirm with DB
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts', user?.id] });
-      }, 3000);
-    },
-    onSettled: () => {
-      // Only refresh the notifications list, NOT the unread count
-      // The unread count is already 0 from optimistic update
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
     },
   });
 }
@@ -149,7 +158,7 @@ export function useUnreadCounts() {
       return { unread: count || 0 };
     },
     enabled: !!(session && user?.id),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 20 * 1000,
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,
     refetchOnMount: false,

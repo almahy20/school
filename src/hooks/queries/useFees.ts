@@ -164,9 +164,10 @@ export function useUpdateStudentMonthlyFee() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة المالية الثابتة للطالب');
-      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fee-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
     },
   });
 }
@@ -221,9 +222,10 @@ export function useUpsertFee() {
     },
     onSuccess: () => {
       toast.success('تم تسجيل الدفعة بنجاح');
-      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fee-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
     },
   });
 }
@@ -258,10 +260,11 @@ export function useGenerateFees() {
     },
     onSuccess: () => {
       toast.success('تم تحديث المطالبة الثابتة لجميع الطلاب بنجاح');
-      // ✅ FIX: Reduced from 5 to 3 — Realtime covers child-full-details and parent-children
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fee-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['students'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
     },
   });
 }
@@ -291,9 +294,10 @@ export function useClearTermFees() {
     },
     onSuccess: () => {
       toast.success('تم تصفير سجلات هذا الشهر بنجاح');
-      // ✅ FIX: Reduced from 4 to 2 — Realtime covers child-full-details and parent-children
-      queryClient.invalidateQueries({ queryKey: ['fees'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['fees'] });
+      queryClient.invalidateQueries({ queryKey: ['fee-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
     },
   });
 }

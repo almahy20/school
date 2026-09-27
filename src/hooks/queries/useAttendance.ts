@@ -49,6 +49,7 @@ export function useClassAttendance(classId: string | null, date: string) {
     },
     enabled: !!(session && user?.schoolId && classId),
     placeholderData: keepPreviousData,
+    staleTime: 2 * 60 * 1000,
   });
 }
 
@@ -129,13 +130,11 @@ export function useUpsertAttendance() {
       }
     },
     onSettled: (data, error, variables) => {
-      if (variables.length > 0) {
-        // ✅ FIX: Reduced from 5 to 2 invalidations — optimistic update handles
-        //    the attendance cache directly; Realtime covers cross-table updates
-        queryClient.invalidateQueries({ 
-          queryKey: ['attendance', 'class', variables[0].class_id, variables[0].date] 
-        });
-        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      if (variables && variables.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ['attendance'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
       }
     },
   });
@@ -234,11 +233,11 @@ export function useTeacherAttendance(date: string) {
       }) as TeacherAttendanceRecord[];
     },
     enabled: !!(session && user?.schoolId),
-    staleTime: 1000 * 60 * 60, 
-    gcTime: 1000 * 60 * 60 * 2,
+    staleTime: 2 * 60 * 1000, 
+    gcTime: 60 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -290,11 +289,9 @@ export function useUpsertTeacherAttendance() {
       }
     },
     onSettled: (data, error, variables) => {
-      if (variables.length > 0) {
-        queryClient.invalidateQueries({ 
-          queryKey: ['teacher-attendance', variables[0].date] 
-        });
-        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+      if (variables && variables.length > 0) {
+        queryClient.invalidateQueries({ queryKey: ['teacher-attendance'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
       }
     },
   });

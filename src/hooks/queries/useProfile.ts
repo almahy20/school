@@ -84,12 +84,11 @@ export function useUpdateMyProfile() {
     },
     onSuccess: () => {
       toast.success('تم حفظ التغييرات بنجاح');
-      queryClient.invalidateQueries({ queryKey: ['profile'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['profile-by-id'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['profiles-by-ids'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['users'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
-      queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['profiles-by-ids'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['teachers'] });
+      queryClient.invalidateQueries({ queryKey: ['parents'] });
     },
   });
 }
@@ -99,7 +98,7 @@ export function useUpdateMyProfile() {
  * Used to avoid duplicate profile queries across the app
  */
 export function useProfileById(profileId: string | null | undefined) {
-  const queryKey = useMemo(() => ['profile-by-id', profileId], [profileId]);
+  const queryKey = useMemo(() => ['profile', profileId], [profileId]);
   
   return useQuery({
     queryKey,
@@ -119,8 +118,8 @@ export function useProfileById(profileId: string | null | undefined) {
       return (data as unknown) as Profile;
     },
     enabled: !!profileId,
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
-    gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
     refetchInterval: false,
     retry: 1,
@@ -163,8 +162,8 @@ export function useProfilesByIds(profileIds: string[] | null | undefined) {
       return data || [];
     },
     enabled: !!profileIds && profileIds.length > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes cache
-    gcTime: 15 * 60 * 1000, // 15 minutes garbage collection
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnMount: false,
     refetchInterval: false,
     retry: 1,

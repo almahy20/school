@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 
 const db = supabase as any;
 
@@ -343,10 +344,10 @@ export function useSaveExamQuestions() {
           p_exam_id: examId,
         });
         if (!rescoreErr && rescoreData?.attempts_updated > 0) {
-          console.log(`[Exam] Recalculated ${rescoreData.attempts_updated} student attempt(s) automatically!`);
+          logger.log(`[Exam] Recalculated ${rescoreData.attempts_updated} student attempt(s) automatically!`);
         }
       } catch (rErr) {
-        console.warn('[Exam] Server rescore skipped:', rErr);
+        logger.warn('[Exam] Server rescore skipped:', rErr);
       }
 
       return data;
@@ -485,11 +486,11 @@ export function useSubmitExamAttempt() {
         const currentSession = sessionData?.session;
         // إذا كان التوكن ينتهي خلال أقل من دقيقتين أو منتهي، نجدده فوراً
         if (!currentSession || (currentSession.expires_at && currentSession.expires_at * 1000 < Date.now() + 120000)) {
-          console.log('[Exam] Proactively refreshing auth session before submit...');
+          logger.log('[Exam] Proactively refreshing auth session before submit...');
           await supabase.auth.refreshSession();
         }
       } catch (e) {
-        console.warn('[Exam] Proactive session check warning:', e);
+        logger.warn('[Exam] Proactive session check warning:', e);
       }
 
       // 🔄 2. محاولة الإرسال عبر الـ RPC

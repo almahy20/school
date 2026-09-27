@@ -19,15 +19,15 @@ export interface School {
 export interface SchoolOrder {
   id: string;
   school_name: string;
+  school_slug?: string;
   admin_name: string;
-  admin_email: string;
   admin_phone: string;
   admin_whatsapp?: string;
   plan?: 'monthly' | 'half_yearly' | 'yearly';
-  package_type?: string;
   status: 'pending' | 'approved' | 'rejected' | 'active' | 'expired';
   receipt_url?: string | null;
   receipt_note?: string | null;
+  rejection_note?: string | null;
   created_at: string;
 }
 
@@ -61,7 +61,7 @@ export function useSchoolOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('school_orders')
-        .select('id, school_name, admin_name, admin_email, admin_phone, admin_whatsapp, plan, package_type, status, receipt_url, receipt_note, created_at')
+        .select('id, school_name, school_slug, admin_name, admin_phone, admin_whatsapp, plan, status, receipt_url, receipt_note, rejection_note, created_at')
         .order('created_at', { ascending: false })
         .limit(500); // Super Admin — طلبات الاشتراك لن تتجاوز 500
       if (error) throw error;
@@ -124,7 +124,7 @@ export function useOrder(id: string | undefined) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('school_orders')
-        .select('id, school_name, admin_name, admin_email, admin_phone, admin_whatsapp, plan, package_type, status, receipt_url, receipt_note, created_at')
+        .select('id, school_name, school_slug, admin_name, admin_phone, admin_whatsapp, plan, status, receipt_url, receipt_note, rejection_note, created_at')
         .eq('id', id)
         .single();
       if (error) throw error;

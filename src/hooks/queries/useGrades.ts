@@ -67,7 +67,7 @@ export function useExamTemplates(classId: string | null, subject: string | null,
     },
     enabled: !!session && !!(user?.schoolId && classId),
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
@@ -125,7 +125,7 @@ export function useStudentGrades(template: any | null, classId: string | null) {
     },
     enabled: !!session && !!(user?.schoolId && classId && templateId),
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
   });
 }
 
@@ -146,7 +146,10 @@ export function useCreateExamTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['exam-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['grades'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
     },
   });
 }
@@ -247,11 +250,11 @@ export function useUpsertGrades() {
       }
     },
     onSettled: (_, __, variables) => {
-      // ✅ FIX: Reduced from 7 to 3 invalidations — optimistic update already
-      //    handles student-grades cache; Realtime covers cross-table updates
       queryClient.invalidateQueries({ queryKey: ['student-grades'] });
       queryClient.invalidateQueries({ queryKey: ['grades'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
     },
   });
 }
@@ -274,7 +277,7 @@ export function useGrades(studentId: string | null) {
       return data || [];
     },
     enabled: !!studentId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
 }
@@ -311,7 +314,7 @@ export function useStudentDetailedGrades(studentId: string | null) {
       return data || [];
     },
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
 }

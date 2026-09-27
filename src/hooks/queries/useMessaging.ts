@@ -33,7 +33,7 @@ export function useProfiles(search = '', page = 1, pageSize = 20) {
       return { data: data || [], count: count || 0 };
     },
     enabled: !!(session && user?.schoolId),
-    staleTime: 10 * 60 * 1000,
+    staleTime: 15 * 1000,
     gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
   });

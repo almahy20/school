@@ -38,7 +38,7 @@ export function useAdminStats() {
       }
     },
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
-    staleTime: 2 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnMount: false,
@@ -174,7 +174,7 @@ export function useTeacherStats() {
       };
     },
     enabled: !!(session && user?.id && user?.schoolId && user?.role === 'teacher'),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 3 * 60 * 1000,
   });
 }
 
