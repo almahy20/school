@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '@/components/AppLayout';
-import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, BookOpen, Calendar, 
@@ -73,28 +71,9 @@ function gradeInfo(pct: number) {
 export default function ParentChildDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { user } = useAuth();
   
   const { data: child, isLoading, error, refetch } = useChildFullDetails(id);
-  const createComplaint = useCreateComplaint();
-  const [comment, setComment] = useState('');
-
-  const submitComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!comment.trim() || !user || !id) return;
-    
-    try {
-      await createComplaint.mutateAsync({
-        studentId: id,
-        content: comment.trim(),
-      });
-      toast({ title: 'تم إرسال التعليق' });
-      setComment('');
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-    }
-  };
 
   const gi = child ? gradeInfo(child.avgGrade) : { color: '', bg: '', bar: '', label: '' };
   const ai = child ? gradeInfo(child.attendanceRate) : { color: '', bg: '', bar: '', label: '' };
@@ -207,29 +186,23 @@ export default function ParentChildDetailPage() {
             </div>
           </section>
 
-          {/* Contact Form */}
-          <section className="bg-white border border-slate-100 rounded-[32px] p-8 space-y-6 shadow-sm">
-            <h2 className="text-xl font-black text-slate-900 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white">
-                 <MessageSquare className="w-5 h-5" />
+          {/* Contact Section */}
+          <section className="bg-white border border-slate-100 rounded-[32px] p-8 space-y-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4 text-right w-full md:w-auto">
+              <div className="w-14 h-14 rounded-2xl bg-slate-900 flex items-center justify-center text-white shrink-0">
+                 <MessageSquare className="w-7 h-7" />
               </div>
-              تواصل مع الإدارة
-            </h2>
-            <form onSubmit={submitComment} className="space-y-4">
-              <textarea
-                value={comment}
-                onChange={e => setComment(e.target.value)}
-                className="w-full h-32 rounded-2xl border border-slate-100 bg-slate-50/50 p-5 text-sm font-bold text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-4 focus:ring-slate-900/5 focus:bg-white focus:border-slate-900/20 transition-all resize-none"
-                placeholder="اكتب استفسارك أو شكواك هنا..."
-              />
-              <button
-                type="submit"
-                disabled={createComplaint.isPending}
-                className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:shadow-2xl hover:translate-y-[-2px] active:scale-95 transition-all disabled:opacity-50"
-              >
-                {createComplaint.isPending ? 'جاري الإرسال...' : 'إرسال الرسالة'}
-              </button>
-            </form>
+              <div>
+                <h2 className="text-xl font-black text-slate-900 mb-1">تواصل مع إدارة المدرسة</h2>
+                <p className="text-slate-400 text-sm font-bold">يمكنك إرسال الاستفسارات والرسائل المباشرة للإدارة والمعلمين</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/messages')}
+              className="w-full md:w-auto px-8 h-14 rounded-2xl bg-slate-900 text-white font-black text-sm shadow-xl shadow-slate-900/10 hover:shadow-2xl hover:translate-y-[-2px] active:scale-95 transition-all shrink-0"
+            >
+              فتح المحادثات والرسائل
+            </button>
           </section>
         </QueryStateHandler>
       </div>

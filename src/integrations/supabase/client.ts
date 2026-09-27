@@ -58,10 +58,7 @@ const isNetworkError = (err: unknown): boolean => {
     msg.includes('networkerror') ||
     msg.includes('cors') ||
     msg.includes('load resource') ||
-    msg.includes('abort') ||
-    msg.includes('timeout') ||
     msg.includes('gateway timeout') ||
-    (err as any).name === 'AbortError' ||
     (err as any).name === 'TypeError'
   );
 };
@@ -159,9 +156,25 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
 
       const controller = new AbortController();
       const externalSignal = options.signal;
-      const abortFromCaller = () => controller.abort();
-      externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
-      const timeoutId = window.setTimeout(() => controller.abort(), 20_000);
+      let isTimeout = false;
+      const abortFromCaller = () => {
+        try {
+          controller.abort(externalSignal?.reason);
+        } catch {
+          controller.abort();
+        }
+      };
+
+      if (externalSignal?.aborted) {
+        controller.abort(externalSignal.reason);
+      } else {
+        externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
+      }
+
+      const timeoutId = window.setTimeout(() => {
+        isTimeout = true;
+        controller.abort(new Error('Request timeout after 20000ms'));
+      }, 20_000);
 
       try {
         const res = await fetch(url, { ...options, signal: controller.signal });
@@ -238,8 +251,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
           }
         }
         return res;
-      } catch (err) {
-        if (isNetworkError(err)) {
+      } catch (err: any) {
+        const isAbort = err?.name === 'AbortError' || (typeof err?.message === 'string' && err.message.toLowerCase().includes('abort'));
+        const isClientAbort = isAbort && !isTimeout;
+
+        if (isClientAbort) {
+          // Intentional abort / cancellation from React Query or caller — do not treat as network failure
+          throw err;
+        }
+
+        if (isNetworkError(err) || isTimeout) {
           recordFailure();
           throw makeCorsSafeError(err);
         }

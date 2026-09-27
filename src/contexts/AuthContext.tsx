@@ -254,10 +254,26 @@ function preHydrateBrandingCache() {
 }
 preHydrateBrandingCache();
 
+/** Synchronously extracts persisted Supabase session from localStorage for zero-latency initial queries */
+function getPersistedSession(): Session | null {
+  try {
+    const raw = localStorage.getItem('school_auth_token');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const s = parsed?.currentSession || parsed;
+    if (s?.access_token && s?.user) {
+      return s as Session;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Session | null>(() => getPersistedSession());
   const [user, setUser] = useState<AppUser | null>(() => getCachedUser());
-  const [isLoading, setIsLoading] = useState(() => getCachedUser() === null);
+  const [isLoading, setIsLoading] = useState(() => !getPersistedSession() && getCachedUser() === null);
 
   const isSigningOutRef = useRef(false);
   const loadingUserIdRef = useRef<string | null>(null);
