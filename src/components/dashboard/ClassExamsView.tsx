@@ -3,8 +3,10 @@ import { useToast } from '@/components/ui/use-toast';
 import { useSessionState } from '@/hooks/useSessionState';
 import {
   BookOpen, Plus, Trash2, Save, FolderOpen, Sparkles, Search,
-  ArrowRight, ChevronLeft, ArrowUp, ArrowDown, RotateCcw
+  ArrowRight, ChevronLeft, ArrowUp, ArrowDown, RotateCcw,
+  CheckCircle2, Wand2, Eraser, MoreVertical, AlertCircle, FileSpreadsheet, Download
 } from 'lucide-react';
+import { CardGradesExportModal } from './CardGradesExportModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,46 +38,53 @@ interface ClassExamsViewProps {
 
 type ViewState = 'folders' | 'grading';
 
+const DESCRIPTIVE_PRESETS = ['ممتاز', 'جيد جداً', 'جيد', 'مجتاز', 'غير مجتاز'];
+
 // ── Autocomplete Input ────────────────────────────────────────────────────────
-// يعرض اقتراحات من القيم المكتوبة في نفس الكارت
 function AutocompleteInput({
   value,
   onChange,
   suggestions,
   placeholder,
+  inputRef,
+  onKeyDown,
 }: {
   value: string;
   onChange: (v: string) => void;
   suggestions: string[];
   placeholder?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // فلتر الاقتراحات بناءً على ما كتبه المستخدم
   const filtered = useMemo(() => {
     if (!value.trim()) return suggestions.slice(0, 6);
     const q = value.trim().toLowerCase();
     return suggestions.filter(s => s.toLowerCase().includes(q) && s !== value).slice(0, 6);
   }, [value, suggestions]);
 
-  // إغلاق الـ dropdown لو ضغط برا
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   return (
-    <div ref={ref} className="relative flex-1 min-w-0">
+    <div ref={containerRef} className="relative flex-1 min-w-0">
       <Input
+        ref={inputRef}
         value={value}
         onChange={e => { onChange(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
-        className="h-11 sm:h-10 text-sm sm:text-xs font-bold rounded-xl text-right bg-slate-50 border-slate-200 focus:bg-white w-full"
+        className="h-11 sm:h-10 text-sm sm:text-xs font-bold rounded-xl text-right bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-400 w-full transition-all"
       />
       {open && filtered.length > 0 && (
         <div className="absolute top-[calc(100%+4px)] right-0 left-0 z-50 bg-white border border-slate-100 rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100">
@@ -107,36 +116,86 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   const [showAddSubjectDialog, setShowAddSubjectDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteExamTargetId, setDeleteExamTargetId] = useState<string | null>(null);
+  const [deleteFolderTargetName, setDeleteFolderTargetName] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportModalFolderName, setExportModalFolderName] = useState<string>('');
 
-  // ── ترتيب مؤقت — يبقى محفوظاً طوال الجلسة لهذا الفصل، ويُمسح عند إغلاق التاب ──
+  const handleOpenExportModal = (folderName: string) => {
+    setExportModalFolderName(folderName);
+    setShowExportModal(true);
+  };
+
+  // References for keyboard navigation across student inputs
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // ── بطاقات الشهور المنشأة محلياً (لتظهر فور إنشائها حتى قبل إضافة أول مادة) ──
+  const [storedCards, setStoredCards] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`exam_cards_${classId}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveStoredCards = (cards: string[]) => {
+    setStoredCards(cards);
+    try {
+      localStorage.setItem(`exam_cards_${classId}`, JSON.stringify(cards));
+    } catch { /* ignore */ }
+  };
+
+  // ── ترتيب مؤقت للجلسة ──
   const [customOrder, setCustomOrder] = useSessionState<string[]>(`grades:order:${classId}`, []);
 
-  const { data: templatesData, isLoading: templatesLoading, error: templatesError, refetch: refetchTemplates } =
-    useExamTemplates(classId, null, 1, 100);
+  const {
+    data: templatesData,
+    isLoading: templatesLoading,
+    error: templatesError,
+    refetch: refetchTemplates
+  } = useExamTemplates(classId, null, 1, 100);
 
   const templates = useMemo(() => templatesData?.data || [], [templatesData]);
 
   const monthFolders = useMemo(() => {
     const folders: Record<string, any[]> = {};
+    
+    // 1. بطاقات الشهور المحفوظة
+    storedCards.forEach(cardName => {
+      if (cardName && cardName.trim()) {
+        folders[cardName.trim()] = [];
+      }
+    });
+
+    // 2. تجميع المواد من قاعدة البيانات
     templates.forEach(t => {
       const key = (t.title || t.term || 'تقييم شهري').trim();
       if (!folders[key]) folders[key] = [];
       folders[key].push(t);
     });
     return folders;
-  }, [templates]);
+  }, [templates, storedCards]);
 
   const monthFolderKeys = Object.keys(monthFolders);
 
-  const { data: studentGradesData, isLoading: gradesLoading, error: gradesError, refetch: refetchGrades } =
-    useStudentGrades(selectedTemplate || null, classId);
+  const {
+    data: studentGradesData,
+    isLoading: gradesLoading,
+    error: gradesError,
+    refetch: refetchGrades
+  } = useStudentGrades(selectedTemplate || null, classId);
 
   const studentGrades = useMemo(() => studentGradesData || [], [studentGradesData]);
   const [localGrades, setLocalGrades] = useState(studentGrades);
 
-  // لما تتحمّل درجات جديدة — رتّبها حسب customOrder لو موجود
+  // Sync loaded student grades
   useEffect(() => {
-    if (!studentGrades.length) return;
+    if (!studentGrades.length) {
+      setLocalGrades([]);
+      setHasUnsavedChanges(false);
+      return;
+    }
     if (customOrder.length > 0) {
       const sorted = [...studentGrades].sort((a, b) => {
         const ia = customOrder.indexOf(a.studentId);
@@ -150,9 +209,10 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     } else {
       setLocalGrades(studentGrades);
     }
+    setHasUnsavedChanges(false);
   }, [studentGrades, customOrder]);
 
-  // إعادة ضبط الترتيب فقط عند تغيير الفصل الدراسي — الانتقال بين المواد لا يُعيد الضبط
+  // Reset order when class changes
   const prevClassId = useRef(classId);
   useEffect(() => {
     if (prevClassId.current !== classId) {
@@ -163,9 +223,38 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
   const handleGradeChange = (studentId: string, score: string) => {
     setLocalGrades(prev => prev.map(g => g.studentId === studentId ? { ...g, score } : g));
+    setHasUnsavedChanges(true);
   };
 
-  // تحريك طالب لأعلى
+  // Fast Bulk Fill
+  const handleBulkFill = (scoreValue: string) => {
+    setLocalGrades(prev => prev.map(g => ({ ...g, score: scoreValue })));
+    setHasUnsavedChanges(true);
+    toast({ title: `تم تعبئة جميع الطلاب بالقيمة: "${scoreValue}"` });
+  };
+
+  const handleClearAll = () => {
+    setLocalGrades(prev => prev.map(g => ({ ...g, score: '' })));
+    setHasUnsavedChanges(true);
+    toast({ title: 'تم مسح درجات جميع الطلاب' });
+  };
+
+  // Keyboard navigation
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (index + 1 < filteredGrades.length) {
+        inputRefs.current[index + 1]?.focus();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (index - 1 >= 0) {
+        inputRefs.current[index - 1]?.focus();
+      }
+    }
+  };
+
+  // Reordering helpers
   const moveUp = useCallback((idx: number) => {
     if (idx === 0) return;
     setLocalGrades(prev => {
@@ -176,7 +265,6 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     });
   }, [setCustomOrder]);
 
-  // تحريك طالب لأسفل
   const moveDown = useCallback((idx: number) => {
     setLocalGrades(prev => {
       if (idx === prev.length - 1) return prev;
@@ -187,7 +275,6 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     });
   }, [setCustomOrder]);
 
-  // إعادة الترتيب الافتراضي
   const resetOrder = useCallback(() => {
     setCustomOrder([]);
     setLocalGrades(studentGrades);
@@ -195,18 +282,25 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
   const isCustomOrdered = customOrder.length > 0;
 
-  // ── اقتراحات Autocomplete — من القيم المكتوبة في الكارت الحالي ────────────
+  // Autocomplete suggestions
   const autocompleteSuggestions = useMemo(() => {
-    const seen = new Set<string>();
+    const seen = new Set<string>(DESCRIPTIVE_PRESETS);
     localGrades.forEach(g => {
-      if (g.score?.trim() && g.score.trim().length > 0) seen.add(g.score.trim());
+      if (g.score?.trim()) seen.add(g.score.trim());
     });
     return Array.from(seen);
   }, [localGrades]);
 
-  const filteredGrades = localGrades.filter(sg =>
-    (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredGrades = useMemo(() => {
+    return localGrades.filter(sg =>
+      (sg.studentName || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [localGrades, searchQuery]);
+
+  // Statistics
+  const gradedCount = useMemo(() => {
+    return localGrades.filter(g => g.score && String(g.score).trim() !== '').length;
+  }, [localGrades]);
 
   const createExamMutation = useCreateExamTemplate();
   const deleteExamMutation = useDeleteExamTemplate();
@@ -215,7 +309,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
   const handleSaveGrades = async () => {
     if (!selectedTemplate) return;
     const gradesToSave = localGrades
-      .filter(g => g.score.trim() !== '')
+      .filter(g => g.score && String(g.score).trim() !== '')
       .map(g => ({
         student_id: g.studentId,
         exam_template_id: selectedTemplate.id,
@@ -225,27 +319,62 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         term: selectedTemplate.term || '',
         date: new Date().toISOString(),
       }));
-    if (gradesToSave.length === 0) return;
+
     try {
-      await upsertGradesMutation.mutateAsync(gradesToSave);
+      if (gradesToSave.length > 0) {
+        await upsertGradesMutation.mutateAsync(gradesToSave);
+      }
+      setHasUnsavedChanges(false);
       toast({ title: 'تم حفظ التقييمات بنجاح 🌟' });
       refetchGrades();
     } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
+      toast({ title: 'خطأ أثناء الحفظ', description: err.message, variant: 'destructive' });
     }
   };
 
+  // ✅ FIX: Deleting a subject stays inside the card if other subjects exist!
   const handleDeleteExam = async (templateId: string) => {
     try {
       await deleteExamMutation.mutateAsync(templateId);
-      toast({ title: 'تم الحذف بنجاح' });
-      setView('folders');
-      setSelectedTemplate(null);
+      toast({ title: 'تم حذف المادة بنجاح' });
+      
+      const currentSubjects = monthFolders[selectedFolderName] || [];
+      const remaining = currentSubjects.filter(t => t.id !== templateId);
+
+      if (remaining.length > 0) {
+        // Stay in the card and select the next subject seamlessly
+        setSelectedTemplate(remaining[0]);
+      } else {
+        // If no subjects left in this card, return to folder list
+        setView('folders');
+        setSelectedTemplate(null);
+      }
       refetchTemplates();
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     } finally {
       setDeleteExamTargetId(null);
+    }
+  };
+
+  // ✅ Delete Entire Card (all subjects in this folder)
+  const handleDeleteFolder = async (folderName: string) => {
+    const subjectsInFolder = monthFolders[folderName] || [];
+    try {
+      for (const t of subjectsInFolder) {
+        await deleteExamMutation.mutateAsync(t.id);
+      }
+      saveStoredCards(storedCards.filter(c => c !== folderName));
+      toast({ title: `تم حذف كارت "${folderName}" بالكامل` });
+      if (selectedFolderName === folderName) {
+        setView('folders');
+        setSelectedTemplate(null);
+      }
+      refetchTemplates();
+    } catch (err: any) {
+      toast({ title: 'خطأ أثناء حذف الكارت', description: err.message, variant: 'destructive' });
+    } finally {
+      setDeleteFolderTargetName(null);
     }
   };
 
@@ -256,26 +385,29 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
     setView('grading');
   };
 
-  // ─── VIEW: Month Cards Grid ───────────────────────────────────────────────
+  // ─── VIEW 1: Cards/Folders Grid ──────────────────────────────────────────
   if (view === 'folders') {
     return (
-      <div className="space-y-5 animate-in fade-in duration-400 text-right" dir="rtl">
+      <div className="space-y-6 animate-in fade-in duration-400 text-right" dir="rtl">
+        {/* Top Action Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white px-6 py-5 rounded-[28px] border border-slate-100 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
               <FolderOpen className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-900">سجل التقييمات الشهرية</h2>
-              <p className="text-[11px] text-slate-400 font-bold mt-0.5">{className} • {monthFolderKeys.length} كرت تقييم</p>
+              <h2 className="text-lg font-black text-slate-900">سجل التقييمات والاختبارات</h2>
+              <p className="text-xs text-slate-400 font-bold mt-0.5">
+                {className} • {monthFolderKeys.length} كروت تقييم منشأة
+              </p>
             </div>
           </div>
           <Button
             onClick={() => setShowCreateDialog(true)}
-            className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-indigo-700 text-white font-black text-xs shadow-md gap-2"
+            className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-black text-xs shadow-md gap-2 transition-all"
           >
             <Plus className="w-4 h-4" />
-            إنشاء كارت تقييم شهري
+            إنشاء كارت تقييم جديد
           </Button>
         </div>
 
@@ -285,37 +417,94 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
           data={templates}
           onRetry={refetchTemplates}
           loadingMessage="جاري تحميل كروت التقييم..."
-          isEmpty={templates.length === 0}
-          emptyMessage="لا توجد كروت تقييم بعد. اضغط على 'إنشاء كارت تقييم شهري' للبدء."
+          isEmpty={monthFolderKeys.length === 0}
+          emptyMessage="لا توجد كروت تقييم بعد. اضغط على 'إنشاء كارت تقييم جديد' للبدء."
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {monthFolderKeys.map(folderName => {
               const folderTemplates = monthFolders[folderName] || [];
               return (
-                <button
+                <div
                   key={folderName}
-                  onClick={() => enterFolder(folderName)}
-                  className="group text-right p-6 rounded-[28px] border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-50/60 transition-all duration-300 active:scale-[0.98]"
+                  className="group relative text-right p-6 rounded-[28px] border border-slate-100 bg-white hover:border-indigo-200 hover:shadow-xl hover:shadow-indigo-50/60 transition-all duration-300 flex flex-col justify-between"
                 >
-                  <div className="flex items-start justify-between gap-3 mb-5">
-                    <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:bg-indigo-100 transition-colors shrink-0">
-                      <FolderOpen className="w-7 h-7" />
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div
+                        onClick={() => enterFolder(folderName)}
+                        className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all shrink-0 cursor-pointer shadow-sm"
+                      >
+                        <FolderOpen className="w-7 h-7" />
+                      </div>
+                      
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteFolderTargetName(folderName);
+                          }}
+                          className="w-8 h-8 rounded-lg text-slate-300 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors"
+                          title="حذف الكارت بالكامل"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => enterFolder(folderName)}
+                          className="w-8 h-8 rounded-lg text-slate-300 group-hover:text-indigo-600 flex items-center justify-center transition-colors"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
-                    <ChevronLeft className="w-5 h-5 text-slate-300 group-hover:text-indigo-500 transition-colors mt-1 shrink-0" />
+
+                    <div onClick={() => enterFolder(folderName)} className="cursor-pointer">
+                      <h3 className="font-black text-slate-900 text-base mb-1 hover:text-indigo-600 transition-colors">
+                        {folderName}
+                      </h3>
+                      <p className="text-xs text-slate-400 font-bold mb-4">
+                        {folderTemplates.length} مواد دراسية
+                      </p>
+
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {folderTemplates.slice(0, 5).map(t => (
+                          <span
+                            key={t.id}
+                            className="text-[11px] font-bold bg-slate-50 text-slate-600 border border-slate-100 px-2.5 py-1 rounded-lg"
+                          >
+                            {t.subject}
+                          </span>
+                        ))}
+                        {folderTemplates.length > 5 && (
+                          <span className="text-[11px] font-bold bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg">
+                            +{folderTemplates.length - 5}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="font-black text-slate-900 text-base mb-2">📁 {folderName}</h3>
-                  <p className="text-[11px] text-slate-400 font-bold mb-4">{folderTemplates.length} مواد دراسية</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {folderTemplates.slice(0, 4).map(t => (
-                      <span key={t.id} className="text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-100 px-2.5 py-1 rounded-lg">
-                        {t.subject}
-                      </span>
-                    ))}
-                    {folderTemplates.length > 4 && (
-                      <span className="text-[10px] font-bold bg-indigo-50 text-indigo-500 px-2 py-1 rounded-lg">+{folderTemplates.length - 4}</span>
-                    )}
+
+                  <div className="pt-4 mt-4 border-t border-slate-50 flex items-center justify-between gap-2">
+                    <Button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenExportModal(folderName);
+                      }}
+                      variant="outline"
+                      className="h-8 px-3 rounded-lg text-xs font-black border-slate-200 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 gap-1.5 transition-all shadow-2xs"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>تصدير الكشف</span>
+                    </Button>
+                    <Button
+                      onClick={() => enterFolder(folderName)}
+                      variant="ghost"
+                      className="h-8 px-3 rounded-lg text-xs font-black text-indigo-600 hover:bg-indigo-50"
+                    >
+                      فتح الكارت
+                    </Button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -323,94 +512,181 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
         {showCreateDialog && (
           <CreateMonthCardDialog
-            classId={classId}
             className={className}
             onClose={() => setShowCreateDialog(false)}
             onSuccess={(folderName) => {
               setShowCreateDialog(false);
-              refetchTemplates();
-              setTimeout(() => {
-                setSelectedFolderName(folderName);
-                setSelectedTemplate(null);
-                setView('grading');
-              }, 300);
+              saveStoredCards(Array.from(new Set([...storedCards, folderName])));
+              setSelectedFolderName(folderName);
+              setSelectedTemplate(null);
+              setView('grading');
             }}
           />
         )}
+
+        {/* Card Grades Matrix Export Modal */}
+        {showExportModal && (
+          <CardGradesExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            classId={classId}
+            className={className}
+            folderName={exportModalFolderName}
+            subjects={monthFolders[exportModalFolderName] || []}
+          />
+        )}
+
+        {/* Delete Folder Alert Dialog */}
+        <AlertDialog open={!!deleteFolderTargetName} onOpenChange={(open) => { if (!open) setDeleteFolderTargetName(null); }}>
+          <AlertDialogContent dir="rtl">
+            <AlertDialogHeader>
+              <AlertDialogTitle>حذف كارت التقييم بالكامل</AlertDialogTitle>
+              <AlertDialogDescription>
+                هل أنت متأكد من حذف كارت "{deleteFolderTargetName}" وجميع المواد ودرجات الطلاب المسجلة داخله؟ هذا الإجراء لا يمكن التراجع عنه.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="gap-2">
+              <AlertDialogCancel>إلغاء</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={() => deleteFolderTargetName && handleDeleteFolder(deleteFolderTargetName)}
+              >
+                {deleteExamMutation.isPending ? 'جاري الحذف...' : 'حذف الكارت بالكامل'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     );
   }
 
-  // ─── VIEW: Grading ────────────────────────────────────────────────────────
+  // ─── VIEW 2: Subject & Grades Management ──────────────────────────────────
   const currentFolderTemplates = monthFolders[selectedFolderName] || [];
 
   return (
     <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-400 text-right" dir="rtl">
-      {/* Breadcrumb */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Top Header & Breadcrumbs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-[28px] border border-slate-100 shadow-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={() => setView('folders')}
-            className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-2 text-sm font-black text-slate-500 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-3.5 py-2 rounded-xl transition-colors"
           >
             <ArrowRight className="w-4 h-4" />
             كروت التقييم
           </button>
           <span className="text-slate-200">/</span>
-          <span className="text-sm font-black text-slate-900">{selectedFolderName}</span>
+          <div>
+            <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-indigo-600" />
+              {selectedFolderName}
+            </h2>
+            <p className="text-[11px] text-slate-400 font-bold">{className}</p>
+          </div>
         </div>
-        <Button
-          onClick={() => setShowAddSubjectDialog(true)}
-          className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs gap-2 shadow-md"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          إضافة مادة
-        </Button>
+
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Button
+            type="button"
+            onClick={() => handleOpenExportModal(selectedFolderName)}
+            variant="outline"
+            className="h-10 px-4 rounded-xl border-slate-200 bg-white hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-slate-700 font-black text-xs gap-2 shadow-2xs transition-all"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+            <span>تصدير الكشف (PDF/Excel)</span>
+          </Button>
+
+          <Button
+            onClick={() => setShowAddSubjectDialog(true)}
+            className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs gap-2 shadow-sm transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            إضافة مادة للكارت
+          </Button>
+
+          <Button
+            onClick={() => setDeleteFolderTargetName(selectedFolderName)}
+            variant="outline"
+            className="h-10 px-3 rounded-xl border-rose-100 bg-rose-50 text-rose-600 hover:bg-rose-100 font-black text-xs gap-1.5"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">حذف الكارت</span>
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white border border-slate-100 rounded-[32px] overflow-hidden shadow-sm">
-        {/* Subject tabs */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3 overflow-x-auto hide-scrollbar">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">المواد:</span>
+        {/* Subject Tabs */}
+        <div className="p-4 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2.5 overflow-x-auto hide-scrollbar">
+          <span className="text-xs font-black text-slate-400 shrink-0 ml-1">المواد:</span>
           {currentFolderTemplates.length === 0 ? (
-            <span className="text-xs text-slate-400 font-bold">لا توجد مواد بعد — اضغط "إضافة مادة"</span>
+            <span className="text-xs text-slate-400 font-bold">لا توجد مواد دراسية بعد — أضف مادة للبدء</span>
           ) : (
             <div className="flex items-center gap-2">
-              {currentFolderTemplates.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTemplate(t)}
-                  className={cn(
-                    'px-4 py-2 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0',
-                    selectedTemplate?.id === t.id
-                      ? 'bg-slate-900 text-white shadow-lg'
-                      : 'bg-white text-slate-500 border border-slate-100 hover:border-slate-200 hover:text-slate-800'
-                  )}
-                >
-                  {t.subject}
-                </button>
-              ))}
+              {currentFolderTemplates.map(t => {
+                const isSelected = selectedTemplate?.id === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      if (hasUnsavedChanges) {
+                        handleSaveGrades();
+                      }
+                      setSelectedTemplate(t);
+                    }}
+                    className={cn(
+                      'px-4 py-2.5 rounded-xl text-xs font-black transition-all whitespace-nowrap shrink-0 flex items-center gap-2',
+                      isSelected
+                        ? 'bg-slate-900 text-white shadow-md'
+                        : 'bg-white text-slate-600 border border-slate-100 hover:border-slate-300 hover:text-slate-900'
+                    )}
+                  >
+                    <span>{t.subject}</span>
+                    {t.score_type !== 'text' && (
+                      <span className={cn(
+                        'text-[10px] px-1.5 py-0.5 rounded-md font-bold',
+                        isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'
+                      )}>
+                        من {t.max_score}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         {selectedTemplate ? (
           <>
-            {/* Header */}
-            <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-indigo-600" />
-                  {selectedTemplate.subject}
-                </h3>
-                <p className="text-xs text-slate-400 font-bold mt-1">
-                  {selectedTemplate.score_type === 'text'
-                    ? '📝 تقييم وصفي / مهارات'
-                    : `🔢 درجات رقمية (من ${selectedTemplate.max_score})`}
-                </p>
+            {/* Subject Control Toolbar */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    {selectedTemplate.subject}
+                    <Badge variant="outline" className="text-[11px] font-bold border-indigo-100 bg-indigo-50/50 text-indigo-700">
+                      {selectedTemplate.score_type === 'text' ? '📝 تقييم وصفي / مهارات' : `🔢 درجات رقمية (من ${selectedTemplate.max_score})`}
+                    </Badge>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-bold mt-0.5">
+                    تم رصد: <span className="text-indigo-600 font-black">{gradedCount}</span> من أصل <span className="font-black">{localGrades.length}</span> طالب
+                  </p>
+                </div>
               </div>
+
+              {/* Action Buttons */}
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                {/* زرار إعادة الترتيب — يظهر بس لو الترتيب اتغير */}
+                {hasUnsavedChanges && (
+                  <Badge className="bg-amber-500 text-white gap-1 text-[11px] font-bold px-2.5 py-1">
+                    <AlertCircle className="w-3 h-3" />
+                    تغييرات غير محفوظة
+                  </Badge>
+                )}
+
                 {isCustomOrdered && (
                   <button
                     onClick={resetOrder}
@@ -421,30 +697,87 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                     <span className="hidden sm:inline">إعادة الترتيب</span>
                   </button>
                 )}
+
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-300 absolute right-3 top-1/2 -translate-y-1/2" />
                   <Input
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="بحث..."
-                    className="pr-9 h-10 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl w-32 sm:w-36"
+                    placeholder="بحث عن طالب..."
+                    className="pr-9 h-10 bg-slate-50 border-slate-200 text-xs font-bold rounded-xl w-32 sm:w-44 focus:bg-white"
                   />
                 </div>
+
                 <button
-                  onClick={() => selectedTemplate && setDeleteExamTargetId(selectedTemplate.id)}
-                  className="w-10 h-10 rounded-xl bg-rose-50 text-rose-400 hover:bg-rose-100 flex items-center justify-center transition-all shrink-0"
+                  onClick={() => setDeleteExamTargetId(selectedTemplate.id)}
+                  title="حذف هذه المادة"
+                  className="w-10 h-10 rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 flex items-center justify-center transition-all shrink-0"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
+
                 <Button
                   onClick={handleSaveGrades}
                   disabled={upsertGradesMutation.isPending}
-                  className="h-10 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-md gap-2"
+                  className={cn(
+                    'h-10 px-5 rounded-xl text-white font-black text-xs shadow-md gap-2 transition-all',
+                    hasUnsavedChanges
+                      ? 'bg-emerald-600 hover:bg-emerald-700 animate-pulse'
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  )}
                 >
                   <Save className="w-4 h-4" />
-                  {upsertGradesMutation.isPending ? 'جاري الحفظ...' : 'حفظ'}
+                  {upsertGradesMutation.isPending ? 'جاري الحفظ...' : 'حفظ الدرجات'}
                 </Button>
               </div>
+            </div>
+
+            {/* Quick Bulk Presets Bar */}
+            <div className="px-5 py-3 bg-slate-50/90 border-b border-slate-100 flex items-center justify-between gap-3 overflow-x-auto hide-scrollbar">
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[11px] font-black text-slate-500 flex items-center gap-1.5">
+                  <Wand2 className="w-3.5 h-3.5 text-indigo-500" />
+                  تعبئة سريعة للكل:
+                </span>
+                {selectedTemplate.score_type === 'text' ? (
+                  DESCRIPTIVE_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleBulkFill(preset)}
+                      className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all shadow-2xs"
+                    >
+                      {preset}
+                    </button>
+                  ))
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkFill(String(selectedTemplate.max_score || 100))}
+                      className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all"
+                    >
+                      الدرجة النهائية ({selectedTemplate.max_score || 100})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkFill(String(Math.round((selectedTemplate.max_score || 100) * 0.9)))}
+                      className="px-3 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-all"
+                    >
+                      90% ({Math.round((selectedTemplate.max_score || 100) * 0.9)})
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleClearAll}
+                className="text-[11px] font-bold text-rose-500 hover:text-rose-700 flex items-center gap-1 shrink-0 px-2 py-1 rounded-lg hover:bg-rose-50 transition-colors"
+              >
+                <Eraser className="w-3 h-3" />
+                مسح الكل
+              </button>
             </div>
 
             {/* Grade rows */}
@@ -461,9 +794,8 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                     key={grade.studentId}
                     className="px-4 sm:px-6 py-3.5 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 hover:bg-slate-50/70 transition-colors border-b border-slate-50 last:border-0"
                   >
-                    {/* رقم + اسم + أسهم الترتيب */}
+                    {/* Index + Name + Reordering */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {/* أسهم الترتيب — تظهر بس لما مفيش بحث نشط */}
                       {!searchQuery && (
                         <div className="flex sm:flex-col gap-1 sm:gap-0.5 shrink-0">
                           <button
@@ -485,7 +817,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                         </div>
                       )}
 
-                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 text-slate-600 text-xs font-black flex items-center justify-center shrink-0 shadow-sm">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 text-slate-600 text-xs font-black flex items-center justify-center shrink-0 shadow-2xs">
                         {idx + 1}
                       </div>
                       <span className="font-black text-slate-900 text-sm sm:text-base leading-snug break-words">
@@ -493,25 +825,29 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
                       </span>
                     </div>
 
-                    {/* Input */}
-                    <div className="flex items-center gap-2.5 w-full sm:w-64 sm:justify-end shrink-0 pl-1">
+                    {/* Inputs */}
+                    <div className="flex items-center gap-2.5 w-full sm:w-72 sm:justify-end shrink-0 pl-1">
                       {selectedTemplate.score_type === 'text' ? (
                         <AutocompleteInput
+                          inputRef={el => (inputRefs.current[idx] = el)}
                           value={grade.score}
                           onChange={v => handleGradeChange(grade.studentId, v)}
+                          onKeyDown={e => handleKeyDown(idx, e)}
                           suggestions={autocompleteSuggestions}
                           placeholder="ممتاز، جيد جداً..."
                         />
                       ) : (
                         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                           <Input
+                            ref={el => (inputRefs.current[idx] = el)}
                             type="number"
                             value={grade.score}
                             onChange={e => handleGradeChange(grade.studentId, e.target.value)}
+                            onKeyDown={e => handleKeyDown(idx, e)}
                             placeholder="0"
-                            className="h-11 w-24 sm:w-28 text-center font-black text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-400 shadow-sm"
+                            className="h-11 w-24 sm:w-28 text-center font-black text-base rounded-xl bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-400 shadow-2xs"
                           />
-                          <span className="text-xs font-black text-slate-400 shrink-0 min-w-[40px]">
+                          <span className="text-xs font-black text-slate-400 shrink-0 min-w-[45px]">
                             من {selectedTemplate.max_score}
                           </span>
                         </div>
@@ -525,7 +861,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
         ) : (
           <div className="py-16 text-center text-slate-400 space-y-3">
             <Sparkles className="w-10 h-10 mx-auto text-slate-200" />
-            <p className="font-bold text-sm">اضغط "إضافة مادة" لإضافة أول مادة دراسية لهذا الكارت</p>
+            <p className="font-bold text-sm">اضغط "إضافة مادة للكارت" لإضافة مادة دراسية والبدء برصد الدرجات</p>
           </div>
         )}
       </div>
@@ -535,19 +871,35 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
           classId={classId}
           folderName={selectedFolderName}
           onClose={() => setShowAddSubjectDialog(false)}
-          onSuccess={() => {
+          onSuccess={(newTemplate) => {
             setShowAddSubjectDialog(false);
             refetchTemplates();
+            if (newTemplate) {
+              setSelectedTemplate(newTemplate);
+            }
           }}
         />
       )}
 
+      {/* Card Grades Matrix Export Modal */}
+      {showExportModal && (
+        <CardGradesExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          classId={classId}
+          className={className}
+          folderName={exportModalFolderName}
+          subjects={monthFolders[exportModalFolderName] || []}
+        />
+      )}
+
+      {/* Delete Subject Alert Dialog */}
       <AlertDialog open={!!deleteExamTargetId} onOpenChange={(open) => { if (!open) setDeleteExamTargetId(null); }}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>حذف التقييم نهائياً</AlertDialogTitle>
+            <AlertDialogTitle>حذف المادة من الكارت</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذا التقييم نهائياً؟ سيتم حذف جميع درجات الطلاب المرتبطة به.
+              هل أنت متأكد من حذف هذه المادة؟ سيتم حذف جميع درجات الطلاب المرتبطة بها في هذا الكارت.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
@@ -556,7 +908,7 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
               className="bg-red-600 hover:bg-red-700 text-white"
               onClick={() => deleteExamTargetId && handleDeleteExam(deleteExamTargetId)}
             >
-              {deleteExamMutation.isPending ? 'جاري الحذف...' : 'حذف نهائي'}
+              {deleteExamMutation.isPending ? 'جاري الحذف...' : 'حذف المادة'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -567,84 +919,70 @@ export default function ClassExamsView({ classId, className }: ClassExamsViewPro
 
 // ─── Create Month Card Dialog ─────────────────────────────────────────────────
 function CreateMonthCardDialog({
-  classId,
   className,
   onClose,
   onSuccess
 }: {
-  classId: string;
   className: string;
   onClose: () => void;
   onSuccess: (folderName: string) => void;
 }) {
-  const { user } = useAuth();
   const { toast } = useToast();
   const [monthTitle, setMonthTitle] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const createMutation = useCreateExamTemplate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!monthTitle.trim()) return;
-    setIsSubmitting(true);
-    try {
-      await createMutation.mutateAsync({
-        class_id: classId,
-        subject: 'مادة جديدة',
-        exam_type: 'monthly',
-        max_score: 100,
-        weight: 1,
-        term: monthTitle.trim(),
-        title: monthTitle.trim(),
-        score_type: 'text',
-        teacher_id: user?.id || ''
-      });
-      toast({ title: 'تم إنشاء كارت التقييم الشهري 🌟', description: 'يمكنك الآن إضافة المواد يدوياً' });
-      onSuccess(monthTitle.trim());
-    } catch (err: any) {
-      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
-    } finally {
-      setIsSubmitting(false);
+    const title = monthTitle.trim();
+    if (!title) {
+      toast({ title: 'يرجى إدخال اسم الشهر / الكارت', variant: 'destructive' });
+      return;
     }
+    toast({
+      title: `تم إنشاء كارت "${title}" بنجاح 🌟`,
+      description: 'يمكنك الآن إضافة المواد الدراسية للكارت'
+    });
+    onSuccess(title);
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right" onClick={onClose} dir="rtl">
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-8 rounded-[40px] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-5">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 text-right" onClick={onClose} dir="rtl">
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-6 sm:p-8 rounded-[36px] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-5">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
             <FolderOpen className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-900">إنشاء كارت تقييم شهري</h2>
+            <h2 className="text-xl font-black text-slate-900">إنشاء كارت تقييم جديد</h2>
             <p className="text-xs text-slate-400 font-bold mt-0.5">فصل: {className}</p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs font-black text-slate-700">عنوان الكارت الشهري *</label>
+            <label className="text-xs font-black text-slate-700">اسم الكارت / الشهر *</label>
             <Input
               value={monthTitle}
               onChange={e => setMonthTitle(e.target.value)}
-              className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: تقييم شهر سبتمبر"
+              className="h-12 px-4 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
+              placeholder="مثال: تقييم شهر أكتوبر"
               required
               autoFocus
             />
           </div>
 
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
-            <p className="text-xs font-bold text-slate-500">
-              💡 بعد الإنشاء ستدخل مباشرة للكارت وتضيف المواد يدوياً بضغطة "إضافة مادة"
-            </p>
-          </div>
-
-          <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-black shadow-lg text-sm">
-              {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء الكارت'}
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="submit"
+              className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-lg text-sm transition-all"
+            >
+              إنشاء الكارت
             </Button>
-            <Button type="button" onClick={onClose} variant="ghost" className="h-12 px-6 rounded-xl bg-slate-100 text-slate-600 font-black text-sm">
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="ghost"
+              className="h-12 px-6 rounded-xl bg-slate-100 text-slate-600 font-black text-sm"
+            >
               إلغاء
             </Button>
           </div>
@@ -664,7 +1002,7 @@ function AddSubjectDialog({
   classId: string;
   folderName: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (newTemplate: any) => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -679,7 +1017,7 @@ function AddSubjectDialog({
     if (!subjectName.trim()) return;
     setIsSubmitting(true);
     try {
-      await createMutation.mutateAsync({
+      const created = await createMutation.mutateAsync({
         class_id: classId,
         subject: subjectName.trim(),
         exam_type: 'monthly',
@@ -690,8 +1028,8 @@ function AddSubjectDialog({
         score_type: scoreType,
         teacher_id: user?.id || ''
       });
-      toast({ title: `تم إضافة مادة "${subjectName}" بنجاح` });
-      onSuccess();
+      toast({ title: `تم إضافة مادة "${subjectName}" بنجاح 🌟` });
+      onSuccess(created);
     } catch (err: any) {
       toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     } finally {
@@ -700,15 +1038,15 @@ function AddSubjectDialog({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-[100] p-4 text-right" onClick={onClose} dir="rtl">
-      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-8 rounded-[40px] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-3 mb-6 border-b border-slate-50 pb-5">
+    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4 text-right" onClick={onClose} dir="rtl">
+      <div className="bg-white border border-slate-100 shadow-2xl w-full max-w-md p-6 sm:p-8 rounded-[36px] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-5">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-900">إضافة مادة دراسية</h2>
-            <p className="text-xs text-slate-400 font-bold mt-0.5">ضمن كارت: {folderName}</p>
+            <h2 className="text-xl font-black text-slate-900">إضافة مادة دراسية للكارت</h2>
+            <p className="text-xs text-slate-400 font-bold mt-0.5">كارت: {folderName}</p>
           </div>
         </div>
 
@@ -718,8 +1056,8 @@ function AddSubjectDialog({
             <Input
               value={subjectName}
               onChange={e => setSubjectName(e.target.value)}
-              className="h-12 px-5 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
-              placeholder="مثال: لغتي الجميلة، الرياضيات، القرآن"
+              className="h-12 px-4 rounded-xl border-slate-200 bg-slate-50 focus:bg-white font-bold text-sm"
+              placeholder="اكتب اسم المادة هنا..."
               required
               autoFocus
             />
@@ -728,7 +1066,10 @@ function AddSubjectDialog({
           <div className="space-y-1.5">
             <label className="text-xs font-black text-slate-700">نوع التقييم</label>
             <div className="grid grid-cols-2 gap-3">
-              {[{ val: 'text', label: '📝 وصفي / مهارات' }, { val: 'numeric', label: '🔢 درجات رقمية' }].map(opt => (
+              {[
+                { val: 'text', label: 'تقييم وصفي / مهارات' },
+                { val: 'numeric', label: 'درجات رقمية' }
+              ].map(opt => (
                 <button
                   key={opt.val}
                   type="button"
@@ -758,11 +1099,20 @@ function AddSubjectDialog({
             </div>
           )}
 
-          <div className="flex gap-3 pt-1">
-            <Button type="submit" disabled={isSubmitting} className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg text-sm">
-              {isSubmitting ? 'جاري الإضافة...' : 'إضافة المادة'}
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-lg text-sm transition-all"
+            >
+              {isSubmitting ? 'جاري الإضافة...' : 'إضافة المادة والبدء بالرصد'}
             </Button>
-            <Button type="button" onClick={onClose} variant="ghost" className="h-12 px-6 rounded-xl bg-slate-100 text-slate-600 font-black text-sm">
+            <Button
+              type="button"
+              onClick={onClose}
+              variant="ghost"
+              className="h-12 px-6 rounded-xl bg-slate-100 text-slate-600 font-black text-sm"
+            >
               إلغاء
             </Button>
           </div>

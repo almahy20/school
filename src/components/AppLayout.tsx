@@ -2,7 +2,8 @@ import { useState, ReactNode, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
-import { Menu, BookOpen, Bell, Search, User, ChevronLeft } from 'lucide-react';
+import { Menu, BookOpen, Bell, Search, User, ChevronLeft, Download } from 'lucide-react';
+import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
 import { cn, getOptimizedImageUrl } from '@/lib/utils';
@@ -53,6 +54,22 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
   // Handle mandatory setup for ALL roles (PWA, Notifications)
   const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
   const { permission } = usePushNotifications();
+  const { canInstall, promptInstall } = usePWAInstall();
+  const [isInstalling, setIsInstalling] = useState(false);
+
+  const handleNavbarInstall = async () => {
+    if (isInstalling) return;
+    setIsInstalling(true);
+    try {
+      const result = await promptInstall();
+      if (result === 'accepted') {
+        // ✅ احفظ حالة التثبيت حتى لا يظهر الزر مرة أخرى
+        try { localStorage.setItem('pwa_installed', '1'); } catch { /* ignore */ }
+      }
+    } finally {
+      setIsInstalling(false);
+    }
+  };
 
   // 🔔 استقبال رسالة SYNC_NOTIFICATIONS من الـ Service Worker
   // تُرسَل عند استيقاظ Android من Doze Mode عبر Background Sync
@@ -128,6 +145,23 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
         </div>
         
         <div className="flex items-center gap-2">
+          {/* زر تثبيت التطبيق — يظهر فقط في المتصفح قبل التثبيت */}
+          {canInstall && (
+            <button
+              onClick={handleNavbarInstall}
+              disabled={isInstalling}
+              title="تثبيت البرنامج على جهازك"
+              className="flex items-center gap-1.5 px-3 h-9 sm:h-10 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-black shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 shrink-0"
+            >
+              {isInstalling ? (
+                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              <span>تثبيت البرنامج</span>
+            </button>
+          )}
+
           {/* Notification Bell for Mobile */}
           <div
             onClick={() => navigate('/notifications')}
@@ -223,6 +257,23 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
                 </div>
               )}
             </div>
+
+            {/* زر تثبيت البرنامج للديسكتوب — يظهر فقط في المتصفح قبل التثبيت */}
+            {canInstall && (
+              <button
+                onClick={handleNavbarInstall}
+                disabled={isInstalling}
+                title="تثبيت البرنامج على جهازك"
+                className="flex items-center gap-2 px-4 xl:px-5 h-11 xl:h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-xs font-black shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 shrink-0 animate-in fade-in zoom-in-95 duration-300"
+              >
+                {isInstalling ? (
+                  <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                <span>تثبيت البرنامج</span>
+              </button>
+            )}
 
             <div
               onClick={() => navigate('/notifications')}

@@ -177,7 +177,7 @@ export function useStudent(id: string | undefined) {
       let q = supabase
         .from('students')
         .select(`
-          id, name, class_id, school_id, parent_phone, monthly_fee, created_at, grade_level,
+          id, name, class_id, school_id, parent_phone, monthly_fee, created_at,
           classes:classes!students_class_id_fkey (
             id, name, grade_level, school_id, teacher_id, curriculum_id,
             teacher:profiles!classes_teacher_id_fkey(full_name)

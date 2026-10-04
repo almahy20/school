@@ -1,6 +1,6 @@
 // Network-first navigation prevents stale HTML from requesting deleted Vite bundles.
 // ⚠️ عند تحديث هذه السطر: غيّر رقم الـ version حتى الـ SW الجديد يستبدل القديم
-const CACHE_NAME = 'school-cache-v1790517361425';
+const CACHE_NAME = 'school-cache-v1791152837938';
 const MAX_CACHE_ITEMS = 200;
 
 const PRECACHE_ASSETS = [

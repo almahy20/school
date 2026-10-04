@@ -71,6 +71,11 @@ export interface PushNotificationContextValue {
 
 const PushNotificationContext = createContext<PushNotificationContextValue | undefined>(undefined);
 
+// Module-level guard for proactive re-registration (shared across all hook instances)
+let _lastProactiveAttemptTime = 0;
+let _isProactiveInProgress = false;
+const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
+
 export function PushNotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -86,11 +91,6 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
   const lastDbFailTimeRef = useRef(0);
   const DB_FAIL_COOLDOWN_MS = 60_000;
   const DB_MAX_FAILS_BEFORE_COOLDOWN = 3;
-
-// Module-level guard for proactive re-registration (shared across all hook instances)
-let _lastProactiveAttemptTime = 0;
-let _isProactiveInProgress = false;
-const PROACTIVE_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes backoff on failure
 
   const onBatteryPermissionGranted = useCallback(() => {
     const isAndroid = /Android/.test(navigator.userAgent);

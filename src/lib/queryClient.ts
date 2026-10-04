@@ -25,11 +25,11 @@ export const queryClient = new QueryClient({
     queries: {
       // ✅ Stale-While-Revalidate: عرض فوري من الكاش وتحديث صامت في الخلفية لجلب أحدث البيانات دائماً
       networkMode: 'offlineFirst',
-      staleTime: 10 * 1000, // 10 ثوانٍ: أي بيانات في الكاش تعرض فوراً ويعاد التحقق في الخلفية
-      gcTime: 60 * 60 * 1000, // ساعة كاملة في ذاكرة الـ RAM
-      refetchOnWindowFocus: true, // تحديث تلقائي عند العودة للتطبيق
+      staleTime: 5 * 60 * 1000, // 5 دقائق: تقليل عدد الـ refetches غير الضرورية
+      gcTime: 60 * 60 * 1000,   // ساعة كاملة في ذاكرة الـ RAM (مطلوب للـ offline support)
+      refetchOnWindowFocus: false, // لا تعيد الجلب لما الويندو يتفتح — تحسين الأداء
       refetchOnMount: true, // تحديث صامت في الخلفية عند دخول الصفحة
-      retry: 2,
+      retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 6000),
     },
     mutations: {
