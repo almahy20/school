@@ -188,7 +188,7 @@ export default function App() {
         </TooltipProvider>
       </ThemeProvider>
       {/* React Query Devtools — dev only, لا تظهر في production */}
-      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />}
     </QueryClientProvider>
   );
 }

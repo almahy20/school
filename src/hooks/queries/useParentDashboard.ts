@@ -229,7 +229,7 @@ export function useParentChildren() {
               class_id: s.class_id,
               className: s.classes?.name,
               avgGrade: 0,
-              attendanceRate: 100,
+              attendanceRate: 0, // لا توجد بيانات حضور — القيمة الافتراضية الصحيحة هي 0 وليس 100
               feesRemaining: Number(s.monthly_fee) || 0,
             }));
           }
@@ -261,7 +261,7 @@ export function useParentChildren() {
                 class_id: s.class_id,
                 className: s.classes?.name,
                 avgGrade: 0,
-                attendanceRate: 100,
+                attendanceRate: 0, // لا توجد بيانات حضور — القيمة الافتراضية الصحيحة هي 0 وليس 100
                 feesRemaining: Number(s.monthly_fee) || 0,
               }));
             }

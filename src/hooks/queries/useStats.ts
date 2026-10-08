@@ -62,7 +62,7 @@ async function fetchStatsFallback(user: any) {
   const [s, t, p, c, feeAgg, presAgg, absAgg] = await Promise.all([
     supabase.from('students')
       .select('id', { count: 'exact', head: true })
-      .eq(schoolFilter ? 'school_id' : 'school_id', schoolFilter ? user.schoolId : user.schoolId),
+      .eq('school_id', user.schoolId),
 
     supabase.from('user_roles')
       .select('id', { count: 'exact', head: true })
@@ -76,7 +76,7 @@ async function fetchStatsFallback(user: any) {
 
     supabase.from('classes')
       .select('id', { count: 'exact', head: true })
-      .eq(schoolFilter ? 'school_id' : 'school_id', schoolFilter ? user.schoolId : user.schoolId),
+      .eq('school_id', user.schoolId),
 
     // مجموع الرسوم — aggregate بدون جلب كل الصفوف
     (supabase as any).rpc('get_fees_summary', { p_school_id: user.schoolId })

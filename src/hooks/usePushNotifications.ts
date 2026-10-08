@@ -375,7 +375,7 @@ export function PushNotificationProvider({ children }: { children: ReactNode }) 
         document.removeEventListener('visibilitychange', handlePermissionChange);
       }
     };
-  }, [checkSubscription]);
+  }, [checkSubscription, user?.id]);
 
   const subscribeToNotifications = async (): Promise<boolean> => {
     logger.log('--- Start Notification Subscription Process ---');

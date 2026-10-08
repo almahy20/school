@@ -521,7 +521,7 @@ export function useSubmitExamAttempt() {
          rpcError.code === 'PGRST301' ||
          rpcError.status === 401)
       ) {
-        console.warn('[Exam] JWT expired during submit_exam_attempt RPC, refreshing session and retrying...');
+        logger.warn('[Exam] JWT expired during submit_exam_attempt RPC, refreshing session and retrying...');
         const { error: refreshErr } = await supabase.auth.refreshSession();
         if (!refreshErr) {
           const retryRes = await db.rpc('submit_exam_attempt', {
@@ -550,7 +550,7 @@ export function useSubmitExamAttempt() {
       }
 
       // Fallback: direct UPSERT in database if RPC not deployed
-      console.warn('[Exam] RPC not available or failed, falling back to direct upsert:', rpcError?.message);
+      logger.warn('[Exam] RPC not available or failed, falling back to direct upsert:', rpcError?.message);
       let score = 0;
       const totalScore = questions.length;
       questions.forEach(q => {

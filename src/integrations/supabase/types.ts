@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -444,6 +444,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      data_retention_policies: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          enabled: boolean | null
+          id: string
+          retention_period: string | null
+          table_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          retention_period?: string | null
+          table_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          enabled?: boolean | null
+          id?: string
+          retention_period?: string | null
+          table_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       electronic_exams: {
         Row: {
@@ -1483,7 +1513,16 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      database_size_info: {
+        Row: {
+          newest_record: string | null
+          oldest_record: string | null
+          row_count: number | null
+          size: string | null
+          table_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       claim_school_admin: {
@@ -1515,6 +1554,14 @@ export type Database = {
         Args: { p_is_super_admin: boolean; p_school_id: string }
         Returns: Json
       }
+      get_database_row_counts: {
+        Args: never
+        Returns: {
+          row_count: number
+          size_estimate: string
+          table_name: string
+        }[]
+      }
       get_fees_summary: {
         Args: { p_class_id?: string; p_school_id: string; p_term?: string }
         Returns: {
@@ -1525,7 +1572,7 @@ export type Database = {
       get_my_role: { Args: never; Returns: string }
       get_my_school_id: { Args: never; Returns: string }
       get_parent_dashboard_summary: {
-        Args: { p_parent_id: string; p_school_id: string }
+        Args: { p_parent_id: string; p_school_id?: string }
         Returns: Json
       }
       get_parent_student_ids: {
@@ -1536,6 +1583,10 @@ export type Database = {
       get_teacher_class_ids: {
         Args: { _teacher_id: string }
         Returns: string[]
+      }
+      get_teacher_dashboard_stats: {
+        Args: { p_school_id: string; p_teacher_id: string }
+        Returns: Json
       }
       get_unread_notification_counts: {
         Args: { p_user_id: string }
@@ -1578,6 +1629,7 @@ export type Database = {
         Args: { p_text: string; p_uuid: string }
         Returns: boolean
       }
+      trigger_data_cleanup: { Args: never; Returns: Json }
       uuid_eq_text: {
         Args: { p_text: string; p_uuid: string }
         Returns: boolean
