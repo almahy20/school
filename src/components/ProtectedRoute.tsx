@@ -18,14 +18,13 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
   // If user is already available, render immediately — don't wait for isLoading
   if (!user) {
     // ✅ Fix Auth Waterfall: لو في cached user — لا تحجب الصفحة أثناء token refresh
-    // يعني لو التطبيق بيجدد الـ token في الخلفية، اعرض المحتوى بيانات الـ cache مباشرة
     const cachedUser = getCachedUser();
 
     if (loading) {
       if (cachedUser) {
-        // 🔄 Token refresh جاري في الخلفية — لا تعرض spinner ولا تعيد التوجيه
-        // سيتم تحديث الـ user state تلقائياً لما الـ refresh يخلص
-        return null;
+        // 🔄 Token refresh جاري في الخلفية — اعرض المحتوى optimistically من الكاش
+        // الـ user state يتحدث تلقائياً لما الـ refresh يخلص، بدون أي flash أو spinner
+        return <>{children}</>;
       }
       // ⏳ Cold start حقيقي: مفيش session ولا cache — اعرض spinner
       return (

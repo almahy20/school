@@ -6,6 +6,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { getCachedUser } from "@/lib/userCache";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
@@ -105,11 +106,17 @@ function AppRoutes() {
               <ProtectedRoute>
                 <DashboardPage />
               </ProtectedRoute>
-            ) : loading ? (
+            ) : loading && !getCachedUser() ? (
+              // ⏳ Cold start فقط (لا session ولا cache) — اعرض spinner
               <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-3">
                 <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
                 <p className="text-sm font-bold text-muted-foreground">جاري التحميل...</p>
               </div>
+            ) : loading ? (
+              // 🔄 Token refresh جاري — عرض Dashboard من الكاش بدون انتظار
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
             ) : (
               <Navigate to="/login" replace />
             )
