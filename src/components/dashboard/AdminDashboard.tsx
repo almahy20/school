@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAdminStats, useAdminActivities } from '@/hooks/queries';
+import { useAdminDashboardSummary } from '@/hooks/queries';
 import { formatDisplayDate } from '@/lib/date-utils';
 import { 
   Users, School, CalendarCheck, Wallet, Activity, 
@@ -14,8 +14,10 @@ import { RegistrationLinksCard } from './RegistrationLinksCard';
 
 export const AdminDashboard = memo(function AdminDashboard() {
   const { user } = useAuth();
-  const { data: stats = { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 } } = useAdminStats();
-  const { data: activities = [], isLoading: activitiesLoading } = useAdminActivities();
+  const { data: summary, isLoading: summaryLoading } = useAdminDashboardSummary();
+  const stats = summary?.stats || { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 };
+  const activities = summary?.activities || [];
+  const activitiesLoading = summaryLoading;
 
   const userName = user?.fullName ? user.fullName.split(' ')[0] : 'أدمن';
 

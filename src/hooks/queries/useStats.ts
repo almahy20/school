@@ -1,24 +1,137 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
 import { logger } from '@/utils/logger';
 
+export interface DashboardStats {
+  students: number;
+  teachers: number;
+  parents: number;
+  classes: number;
+  totalDue: number;
+  totalPaid: number;
+  attendanceRate: number;
+  presentToday: number;
+  absentToday: number;
+}
+
+export interface DashboardActivity {
+  id: string;
+  type: string;
+  title: string;
+  description: string;
+  date: string;
+  status: string;
+}
+
+export function useAdminDashboardSummary() {
+  const { user, session } = useAuth();
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ['admin-dashboard-summary', user?.schoolId, user?.id], [user?.schoolId, user?.id]);
+
+  return useQuery<{ stats: DashboardStats; activities: DashboardActivity[] }>({
+    queryKey,
+    queryFn: async () => {
+      const emptyStats: DashboardStats = {
+        students: 0, teachers: 0, parents: 0, classes: 0,
+        totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0
+      };
+
+      if (!user?.schoolId || !user?.id) {
+        return { stats: emptyStats, activities: [] };
+      }
+
+      // 1. استدعاء الدالة المدمجة الجديدة أولاً (طلب شبكة واحد يجمع الإحصائيات والأنشطة)
+      try {
+        const { data, error } = await (supabase as any).rpc('get_admin_dashboard_summary', {
+          p_school_id: user.schoolId,
+          p_caller_id: user.id
+        });
+
+        if (!error && data && data.stats) {
+          const stats = data.stats as DashboardStats;
+          const activities = (data.activities || []) as DashboardActivity[];
+
+          // تحديث مفاتيح الكاش الفرعية للتوافق مع أي مكونات قد تستخدمها
+          queryClient.setQueryData(['admin-stats', user.schoolId, user.isSuperAdmin], stats);
+          queryClient.setQueryData(['admin-activities', user.schoolId, user.id], activities);
+
+          return { stats, activities };
+        }
+        logger.warn('[useAdminDashboardSummary] Combined RPC failed, falling back to legacy RPCs:', error?.message);
+      } catch (err) {
+        logger.warn('[useAdminDashboardSummary] Combined RPC threw, falling back to legacy RPCs:', err);
+      }
+
+      // 2. Fallback: استدعاء الدالتين القديمتين بالتوازي
+      const [statsRes, activitiesRes] = await Promise.all([
+        (supabase as any).rpc('get_dashboard_stats', {
+          p_school_id: user.schoolId,
+          p_is_super_admin: user.isSuperAdmin || false
+        }).then((res: any) => res.data).catch(() => null),
+        (supabase as any).rpc('get_admin_dashboard_activities', {
+          p_school_id: user.schoolId,
+          p_caller_id: user.id
+        }).then((res: any) => res.data).catch(() => [])
+      ]);
+
+      const finalStats = statsRes || await fetchStatsFallback(user);
+      const finalActivities = (activitiesRes || []) as DashboardActivity[];
+
+      queryClient.setQueryData(['admin-stats', user.schoolId, user.isSuperAdmin], finalStats);
+      queryClient.setQueryData(['admin-activities', user.schoolId, user.id], finalActivities);
+
+      return {
+        stats: finalStats,
+        activities: finalActivities
+      };
+    },
+    enabled: !!(session && user?.schoolId && user?.id && (user?.role === 'admin' || user?.isSuperAdmin)),
+    staleTime: 3 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    placeholderData: keepPreviousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+  });
+}
+
 export function useAdminStats() {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['admin-stats', user?.schoolId, user?.isSuperAdmin], [user?.schoolId, user?.isSuperAdmin]);
 
-            
   return useQuery({
     queryKey,
     queryFn: async () => {
-      const emptyStats = { 
+      const emptyStats: DashboardStats = { 
         students: 0, teachers: 0, parents: 0, classes: 0, 
         totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 
       };
       
       if (!user?.isSuperAdmin && !user?.schoolId) return emptyStats;
 
+      // فحص كاش الدالة المدمجة أولاً
+      const summaryCache = queryClient.getQueryData<{ stats: DashboardStats }>(['admin-dashboard-summary', user?.schoolId, user?.id]);
+      if (summaryCache?.stats) return summaryCache.stats;
+
+      // تجربة الدالة المدمجة الجديدة
+      try {
+        const { data, error } = await (supabase as any).rpc('get_admin_dashboard_summary', {
+          p_school_id: user.schoolId,
+          p_caller_id: user.id
+        });
+        if (!error && data?.stats) {
+          if (data.activities) {
+            queryClient.setQueryData(['admin-activities', user.schoolId, user.id], data.activities);
+          }
+          return data.stats;
+        }
+      } catch { /* ignore and use legacy fallback */ }
+
+      // Fallback: الدالة القديمة get_dashboard_stats
       try {
         const { data: stats, error } = await (supabase as any)
           .rpc('get_dashboard_stats', {
@@ -180,14 +293,34 @@ export function useTeacherStats() {
 
 export function useAdminActivities() {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['admin-activities', user?.schoolId, user?.id],
     queryFn: async () => {
       if (!user?.schoolId || !user?.id) return [];
-      
+
+      // فحص كاش الدالة المدمجة أولاً
+      const summaryCache = queryClient.getQueryData<{ activities: DashboardActivity[] }>(['admin-dashboard-summary', user?.schoolId, user?.id]);
+      if (summaryCache?.activities) return summaryCache.activities;
+
+      // تجربة الدالة المدمجة الجديدة
+      try {
+        const { data, error } = await (supabase as any).rpc('get_admin_dashboard_summary', {
+          p_school_id: user.schoolId,
+          p_caller_id: user.id
+        });
+        if (!error && data?.activities) {
+          if (data.stats) {
+            queryClient.setQueryData(['admin-stats', user.schoolId, user.isSuperAdmin], data.stats);
+          }
+          return data.activities;
+        }
+      } catch { /* ignore and use legacy fallback */ }
+
+      // Fallback: استدعاء الدالة القديمة get_admin_dashboard_activities
       const { data, error } = await (supabase as any).rpc('get_admin_dashboard_activities', {
         p_school_id: user.schoolId,
-        p_caller_id: user.id   // ← إضافة user.id صريحاً
+        p_caller_id: user.id
       });
 
       if (error) {
