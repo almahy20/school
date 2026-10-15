@@ -92,9 +92,17 @@ export function useUpdateSchool() {
 
       return { id, ...updates };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['schools'] });
       queryClient.invalidateQueries({ queryKey: ['school-branding'] });
+      if (data?.id) {
+        queryClient.setQueryData(['school-branding', data.id], (prev: any) => {
+          if (!prev) return prev;
+          const updated = { ...prev, ...data };
+          try { localStorage.setItem(`branding_${data.id}`, JSON.stringify(updated)); } catch { /* ignore */ }
+          return updated;
+        });
+      }
     },
   });
 }

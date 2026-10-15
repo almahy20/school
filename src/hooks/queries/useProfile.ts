@@ -40,7 +40,7 @@ export function useProfile() {
     enabled: !!user?.id,
     staleTime: 30 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    refetchOnMount: true,
+    refetchOnMount: false,
     refetchInterval: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

@@ -6,6 +6,7 @@ import { queryClient, clearAllCache } from '@/lib/queryClient';
 import { getCachedUser, setCachedUser } from '@/lib/userCache';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { logger } from '@/utils/logger';
+import { isNetworkError } from '@/utils/networkErrors';
 
 interface AuthContextType {
   session: Session | null;
@@ -71,6 +72,73 @@ function checkSubscriptionExpired(school: any): boolean {
   return false;
 }
 
+function autoRepairProfile(
+  userId: string,
+  profile: any,
+  fullName: string,
+  phone: string,
+  schoolId?: string
+) {
+  if (profile && (!profile.full_name || !profile.school_id) && (fullName || schoolId)) {
+    supabase.from('profiles').update({
+      ...(fullName && !profile.full_name ? { full_name: fullName } : {}),
+      ...(phone    && !profile.phone    ? { phone }               : {}),
+      ...(schoolId && !profile.school_id ? { school_id: schoolId } : {}),
+    }).eq('id', userId).then(() => { /* background, ignore result */ });
+  }
+}
+
+function buildFinalAppUser(
+  supaUser: SupabaseUser,
+  profile: any,
+  role: any,
+  school: any
+): AppUser {
+  const userMeta = (supaUser.user_metadata || {}) as any;
+  const appMeta  = (supaUser.app_metadata  || {}) as any;
+  const fullName  = profile?.full_name?.trim()  || userMeta.full_name?.trim()  || appMeta.full_name?.trim()  || '';
+  const phone     = profile?.phone?.trim()      || userMeta.phone?.trim()      || appMeta.phone?.trim()      || '';
+  const schoolId  = profile?.school_id || role?.school_id
+                    || (userMeta.school_id ? String(userMeta.school_id) : undefined)
+                    || (appMeta.school_id  ? String(appMeta.school_id)  : undefined);
+
+  autoRepairProfile(supaUser.id, profile, fullName, phone, schoolId);
+
+  if (school && schoolId) {
+    const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
+    queryClient.setQueryData(['school-branding', schoolId], b);
+    try { localStorage.setItem(`branding_${schoolId}`, JSON.stringify(b)); } catch { /* ignore */ }
+  }
+
+  if (profile && supaUser.id) {
+    const profileData = {
+      id: profile.id || supaUser.id,
+      full_name: profile.full_name || fullName || null,
+      phone: profile.phone || phone || null,
+      role: role?.role || profile.role || (role ? String(role) : null),
+      school_id: schoolId || profile.school_id || null,
+      notification_prefs: profile.notification_prefs || null,
+      created_at: profile.created_at || new Date().toISOString(),
+      ...profile,
+    };
+    queryClient.setQueryData(['profile', supaUser.id], profileData);
+  }
+
+  const userRole = (role?.role || 'parent') as AppRole;
+  return {
+    id: supaUser.id,
+    email: supaUser.email || '',
+    phone,
+    fullName,
+    role: userRole,
+    isSuperAdmin: role?.is_super_admin || false,
+    schoolId,
+    schoolStatus: school?.status || 'active',
+    approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
+    subscriptionExpired: checkSubscriptionExpired(school),
+  };
+}
+
 async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<AppUser | null> {
   try {
     const [profileRes, roleRes] = await Promise.all([
@@ -80,47 +148,19 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
     const profile = profileRes.data as any;
     const role = roleRes.data as any;
 
-    // ✅ Fallback to user_metadata if profile fields are empty (prevents name disappearing)
     const userMeta = (supaUser.user_metadata || {}) as any;
     const appMeta  = (supaUser.app_metadata  || {}) as any;
-    const fullName  = profile?.full_name?.trim()  || userMeta.full_name?.trim()  || appMeta.full_name?.trim()  || '';
-    const phone     = profile?.phone?.trim()      || userMeta.phone?.trim()      || appMeta.phone?.trim()      || '';
     const schoolId  = profile?.school_id || role?.school_id
                       || (userMeta.school_id ? String(userMeta.school_id) : undefined)
                       || (appMeta.school_id  ? String(appMeta.school_id)  : undefined);
-
-    // 🔧 Auto-repair profile row if name is missing in DB (runs silently in background)
-    if (profile && (!profile.full_name || !profile.school_id) && (fullName || schoolId)) {
-      supabase.from('profiles').update({
-        ...(fullName && !profile.full_name ? { full_name: fullName } : {}),
-        ...(phone    && !profile.phone    ? { phone }               : {}),
-        ...(schoolId && !profile.school_id ? { school_id: schoolId } : {}),
-      }).eq('id', supaUser.id).then(() => { /* background, ignore result */ });
-    }
 
     let school: any = null;
     if (schoolId) {
       const schoolRes = await supabase.from('schools').select('id, name, slug, status, logo_url, subscription_end_date').eq('id', schoolId).maybeSingle();
       school = schoolRes.data;
     }
-    if (school && schoolId) {
-      const b = { id: school.id, name: school.name, logo_url: school.logo_url || null, slug: school.slug, status: school.status };
-      queryClient.setQueryData(['school-branding', schoolId], b);
-      try { localStorage.setItem(`branding_${schoolId}`, JSON.stringify(b)); } catch { /* ignore */ }
-    }
-    const userRole = (role?.role || 'parent') as AppRole;
-    return {
-      id: supaUser.id,
-      email: supaUser.email || '',
-      phone,
-      fullName,
-      role: userRole,
-      isSuperAdmin: role?.is_super_admin || false,
-      schoolId,
-      schoolStatus: school?.status || 'active',
-      approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
-      subscriptionExpired: checkSubscriptionExpired(school),
-    };
+
+    return buildFinalAppUser(supaUser, profile, role, school);
   } catch (err) {
     logger.error('[Auth] Direct fallback query failed:', err);
     return null;
@@ -133,44 +173,7 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
     if (error || !userData) throw new Error('rpc_failed');
     const { profile, role, school } = userData as any;
 
-    // ✅ Fallback to user_metadata when profile fields are empty (prevents name flicker)
-    const userMeta = (supaUser.user_metadata || {}) as any;
-    const appMeta  = (supaUser.app_metadata  || {}) as any;
-    const fullName  = profile?.full_name?.trim()  || userMeta.full_name?.trim()  || appMeta.full_name?.trim()  || '';
-    const phone     = profile?.phone?.trim()      || userMeta.phone?.trim()      || appMeta.phone?.trim()      || '';
-    const schoolId  = profile?.school_id || role?.school_id
-                      || (userMeta.school_id ? String(userMeta.school_id) : undefined)
-                      || (appMeta.school_id  ? String(appMeta.school_id)  : undefined);
-
-    // 🔧 Auto-repair if DB profile is missing name/school_id
-    if (profile && (!profile.full_name || !profile.school_id) && (fullName || schoolId)) {
-      supabase.from('profiles').update({
-        ...(fullName  && !profile.full_name  ? { full_name: fullName } : {}),
-        ...(phone     && !profile.phone     ? { phone }                : {}),
-        ...(schoolId  && !profile.school_id ? { school_id: schoolId } : {}),
-      }).eq('id', supaUser.id).then(() => { /* background, ignore result */ });
-    }
-
-    const resolvedSchoolId = schoolId;
-    const resolvedSchool = school || null;
-    if (resolvedSchool && resolvedSchoolId) {
-      const b = { id: resolvedSchool.id, name: resolvedSchool.name, logo_url: resolvedSchool.logo_url || null, slug: resolvedSchool.slug, status: resolvedSchool.status };
-      queryClient.setQueryData(['school-branding', resolvedSchoolId], b);
-      try { localStorage.setItem(`branding_${resolvedSchoolId}`, JSON.stringify(b)); } catch { /* ignore */ }
-    }
-    const userRole = (role?.role || 'parent') as AppRole;
-    return {
-      id: supaUser.id,
-      email: supaUser.email || '',
-      phone,
-      fullName,
-      role: userRole,
-      isSuperAdmin: role?.is_super_admin || false,
-      schoolId: resolvedSchoolId,
-      schoolStatus: resolvedSchool?.status || 'active',
-      approvalStatus: (role?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected',
-      subscriptionExpired: checkSubscriptionExpired(resolvedSchool),
-    };
+    return buildFinalAppUser(supaUser, profile, role, school);
   } catch {
     return buildAppUserFromDirectQueries(supaUser);
   }
@@ -178,14 +181,7 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
 
 async function prefetchCommonQueries(appUser: AppUser) {
   try {
-    queryClient.prefetchQuery({
-      queryKey: ['profile', appUser.id],
-      queryFn: async () => {
-        const { data } = await supabase.from('profiles').select('id, full_name, phone, school_id, notification_prefs, created_at').eq('id', appUser.id).maybeSingle();
-        return data;
-      },
-      staleTime: 5 * 60 * 1000,
-    });
+    // Note: 'profile' is already cached from get_complete_user_data / buildFinalAppUser
     if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
       queryClient.prefetchQuery({
         queryKey: ['all-profiles', appUser.schoolId],
@@ -408,23 +404,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
-  const isTokenRefreshNetworkError = (e: any): boolean => {
-    if (!e) return false;
-    const msg = (e?.message || '').toLowerCase();
-    return (
-      msg.includes('failed to fetch') ||
-      msg.includes('networkerror') ||
-      msg.includes('cors') ||
-      msg.includes('load resource') ||
-      msg.includes('abort') ||
-      msg.includes('timeout') ||
-      msg.includes('gateway timeout') ||
-      msg.includes('504') ||
-      msg.includes('502') ||
-      msg.includes('503') ||
-      e?.status === 0
-    );
-  };
+  // Alias for readability — uses the shared network error detector
+  const isTokenRefreshNetworkError = isNetworkError;
 
   const silentRefresh = async (): Promise<boolean> => {
     // Guard 1: Offline — pretend success (no logout)

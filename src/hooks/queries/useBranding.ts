@@ -53,7 +53,7 @@ async function fetchBranding(schoolId: string | null): Promise<SchoolBranding | 
 }
 
 export function useBranding() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const schoolId = user?.schoolId || getCachedUser()?.schoolId || null;
   const queryKey = useMemo(() => ['school-branding', schoolId], [schoolId]);
   const queryClient = useQueryClient();
@@ -92,9 +92,13 @@ export function useBranding() {
       }
       return data;
     },
-    enabled: !!schoolId,
+    // لا يُطلق طلب شبكة إلى schools أثناء تحميل الجلسة لأن get_complete_user_data يجلبه ويضعه في الكاش.
+    // بعد اكتمال الجلسة أو عند عمل invalidateQueries من صفحة الإعدادات، يعمل queryFn بشكل طبيعي.
+    enabled: !!schoolId && (!authLoading || !!initialData),
     initialData,
     placeholderData: (previousData: any) => previousData,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     retry: 1,
     retryDelay: 1000,
     staleTime: Infinity,
