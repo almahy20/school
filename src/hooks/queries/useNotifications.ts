@@ -22,7 +22,9 @@ export interface Notification {
 
 export function useNotifications(page = 1, pageSize = 15) {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const queryKey = ['notifications', user?.id, page, pageSize];
+  const countKey = useMemo(() => ['notifications', user?.id, 'total-count'], [user?.id]);
   
   return useQuery<{ data: Notification[]; count: number }>({
     queryKey,
@@ -32,16 +34,28 @@ export function useNotifications(page = 1, pageSize = 15) {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // ✅ FIX: Select only needed columns instead of * to reduce response size
+      const cachedCount = queryClient.getQueryData<number>(countKey);
+      const needCount = cachedCount === undefined || page === 1;
+
       const { data, error, count } = await db
         .from('notifications')
-        .select('id, user_id, school_id, type, title, message, is_read, metadata, created_at', { count: 'exact' })
+        .select(
+          'id, user_id, school_id, type, title, message, is_read, metadata, created_at',
+          needCount ? { count: 'exact' } : undefined
+        )
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .range(from, to);
       
       if (error) throw error;
-      return { data: data || [], count: count || 0 };
+
+      let resolvedCount = count ?? cachedCount ?? 0;
+      if (count !== null && count !== undefined) {
+        queryClient.setQueryData(countKey, count);
+        resolvedCount = count;
+      }
+
+      return { data: data || [], count: resolvedCount };
     },
     enabled: !!(session && user?.id),
     staleTime: 20 * 1000,
