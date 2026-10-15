@@ -1,6 +1,5 @@
 import { QueryClient, QueryCache, MutationCache, focusManager, onlineManager } from "@tanstack/react-query";
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { del, get, set } from 'idb-keyval';
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,54 +47,72 @@ export const queryClient = new QueryClient({
 });
 
 // ✅ Optimization: IndexedDB Query Persistence with Smart Whitelisting
-if (typeof window !== 'undefined') {
-  // VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-  const CACHE_VERSION = 'v2.2'; // bumped: smart offline cache for instant mobile load
+// VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
+export const CACHE_VERSION = 'v2.2'; // bumped: smart offline cache for instant mobile load
 
-  const idbPersister = {
-    persistClient: async (client: any) => {
+export const idbPersister = {
+  persistClient: async (client: any) => {
+    try {
       await set('SCHOOL_APP_CACHE', client);
-    },
-    restoreClient: async () => {
-      return await get('SCHOOL_APP_CACHE');
-    },
-    removeClient: async () => {
+    } catch (e) {
+      logger.warn('[queryClient] Failed to persist cache to IndexedDB:', e);
+    }
+  },
+  restoreClient: async () => {
+    try {
+      // ⏱️ Timeout safeguard (1.5s): إذا تأخر IndexedDB عن الاستجابة لا يحجب فتح التطبيق
+      const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(undefined), 1500));
+      const getPromise = get('SCHOOL_APP_CACHE');
+      const result = await Promise.race([getPromise, timeoutPromise]);
+      return result;
+    } catch (e) {
+      logger.warn('[queryClient] Failed to restore cache from IndexedDB:', e);
+      return undefined;
+    }
+  },
+  removeClient: async () => {
+    try {
       await del('SCHOOL_APP_CACHE');
-    },
-  };
+    } catch (e) {
+      logger.warn('[queryClient] Failed to remove cache from IndexedDB:', e);
+    }
+  },
+};
 
-  persistQueryClient({
-    queryClient,
-    persister: idbPersister,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    buster: CACHE_VERSION, // ✅ Forces cache clear when version changes
-    shouldPersistQuery: (query) => {
-      // Don't persist errors, pending states, or temporary data
-      if (query.state.status !== 'success') return false;
-      if (query.meta?.persist === false) return false;
+export const persistOptions = {
+  persister: idbPersister,
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  buster: CACHE_VERSION, // ✅ Forces cache clear when version changes
+  shouldPersistQuery: (query: any) => {
+    // Don't persist errors, pending states, or temporary data
+    if (query.state.status !== 'success') return false;
+    if (query.meta?.persist === false) return false;
 
-      // ✅ استراتيجية ذكية: حفظ البيانات الرئيسية في ذاكرة الهاتف لتفتح الصفحات في أجزاء من الثانية
-      const key = String(query.queryKey[0]);
-      const allowedKeys = [
-        'school-branding',
-        'school-by-slug',
-        'profile',
-        'parent-children',
-        'child-full-details',
-        'students',
-        'classes',
-        'teachers',
-        'parents',
-        'attendance',
-        'grades',
-        'fees',
-        'notifications',
-        'curriculum'
-      ];
-      return allowedKeys.includes(key);
-    },
-  });
-}
+    // ✅ استراتيجية ذكية: حفظ البيانات الرئيسية في ذاكرة الهاتف لتفتح الصفحات في أجزاء من الثانية
+    const key = String(query.queryKey[0]);
+    const allowedKeys = [
+      'school-branding',
+      'school-by-slug',
+      'profile',
+      'parent-children',
+      'child-full-details',
+      'students',
+      'classes',
+      'teachers',
+      'parents',
+      'attendance',
+      'grades',
+      'fees',
+      'notifications',
+      'curriculum',
+      'admin-stats',
+      'admin-activities',
+      'admin-dashboard-summary',
+      'teacher-attendance'
+    ];
+    return allowedKeys.includes(key);
+  },
+};
 
 /**
  * ✅ Security: Clear all persisted cache (IndexedDB + in-memory) on logout

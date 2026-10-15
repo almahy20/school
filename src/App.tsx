@@ -1,16 +1,15 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { getCachedUser } from "@/lib/userCache";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import { GlobalErrorBoundary } from "./components/GlobalErrorBoundary";
 import ScrollToTop from "./components/ScrollToTop";
-import { queryClient } from "./lib/queryClient";
+import { queryClient, persistOptions } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PwaManager from "./components/PwaManager";
@@ -168,21 +167,44 @@ function AppRoutes() {
   );
 }
 
+// ── Page Chunks Prefetcher (Idle Time) ───────────────────────────────────────
+function prefetchCriticalPages() {
+  const prefetch = () => {
+    import("./pages/StudentsPage");
+    import("./pages/ClassesPage");
+    import("./pages/TeachersPage");
+    import("./pages/ParentsPage");
+    import("./pages/AttendancePage");
+    import("./pages/NotificationsPage");
+    import("./pages/SettingsPage");
+    import("./pages/FeesPage");
+  };
+  if (typeof window !== 'undefined') {
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(prefetch, { timeout: 4000 });
+    } else {
+      setTimeout(prefetch, 2000);
+    }
+  }
+}
+
 // ── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  useEffect(() => {
+    prefetchCriticalPages();
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
         <TooltipProvider>
           <AuthProvider>
             <PushNotificationProvider>
               <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <ScrollToTop />
-              <GlobalErrorBoundary>
                 <AppRoutes />
                 <PwaManager />
                 <PWAInstallPrompt />
-              </GlobalErrorBoundary>
               <Toaster />
               {/* RealtimeNotificationsManager must be inside BrowserRouter for useNavigate */}
               <Suspense fallback={null}>
@@ -196,6 +218,6 @@ export default function App() {
       </ThemeProvider>
       {/* React Query Devtools — dev only, لا تظهر في production */}
       {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />}
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

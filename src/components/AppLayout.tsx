@@ -1,4 +1,4 @@
-import { useState, ReactNode, useMemo, useEffect } from 'react';
+import { useState, ReactNode, useMemo, useEffect, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from './Sidebar';
@@ -52,7 +52,10 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
   }, [branding]);
 
   // Handle mandatory setup for ALL roles (PWA, Notifications)
-  const isPWA = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+  const isPWA = useMemo(
+    () => typeof window !== 'undefined' && (window.matchMedia('(display-mode: standalone)').matches || Boolean((window.navigator as any).standalone)),
+    []
+  );
   const { permission } = usePushNotifications();
   const { canInstall, promptInstall } = usePWAInstall();
   const [isInstalling, setIsInstalling] = useState(false);
@@ -303,7 +306,14 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
           "flex-1 w-full relative z-10",
           shouldHideBottomNav ? "p-0" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-6"
         )}>
-          {children}
+          <Suspense fallback={
+            <div className="w-full py-20 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-3 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin" />
+              <span className="text-xs font-bold text-slate-400">جاري فتح الصفحة...</span>
+            </div>
+          }>
+            {children}
+          </Suspense>
         </div>
 
         {/* Sticky Footer - Hidden on full-screen chat rooms */}
