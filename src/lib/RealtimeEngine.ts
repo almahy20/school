@@ -432,6 +432,7 @@ class RealtimeEngine {
       }
 
       case 'user_roles': {
+        queryClient.invalidateQueries({ queryKey: ['profile'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['teachers'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['parents'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['users'], exact: false });

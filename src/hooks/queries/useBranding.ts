@@ -92,9 +92,14 @@ export function useBranding() {
       }
       return data;
     },
-    // لا يُطلق طلب شبكة إلى schools أثناء تحميل الجلسة لأن get_complete_user_data يجلبه ويضعه في الكاش.
-    // بعد اكتمال الجلسة أو عند عمل invalidateQueries من صفحة الإعدادات، يعمل queryFn بشكل طبيعي.
-    enabled: !!schoolId && (!authLoading || !!initialData),
+    // لا يُطلق طلب شبكة إلى schools في أول تشغيل بدون كاش لأن get_complete_user_data يجلبه ويضعه في الكاش.
+    // يعمل queryFn فقط إذا كان الكاش موجوداً، أو عند عمل invalidateQueries صريح (مثلاً بعد تعديل المدرسة من الإعدادات).
+    enabled: !!schoolId && (
+      !!initialData || 
+      !!queryClient.getQueryData(queryKey) || 
+      (queryClient.getQueryState(queryKey)?.isInvalidated ?? false) ||
+      (!authLoading && !user)
+    ),
     initialData,
     placeholderData: (previousData: any) => previousData,
     refetchOnMount: false,

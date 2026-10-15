@@ -40,7 +40,6 @@ export function useProfile() {
     enabled: !!user?.id,
     staleTime: 30 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
-    refetchOnMount: false,
     refetchInterval: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
@@ -82,8 +81,14 @@ export function useUpdateMyProfile() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success('تم حفظ التغييرات بنجاح');
+      if (user?.id && data) {
+        queryClient.setQueryData(['profile', user.id], (prev: any) => ({
+          ...(prev || {}),
+          ...data,
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['profiles-by-ids'] });
       queryClient.invalidateQueries({ queryKey: ['users'] });
