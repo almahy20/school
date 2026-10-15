@@ -121,16 +121,19 @@ export function useClassElectronicExams(classId: string | null) {
 }
 
 /** أسئلة اختبار واحد */
-export function useExamQuestions(examId: string | null) {
+export function useExamQuestions(examId: string | null, options?: { excludeAnswer?: boolean }) {
   const { session } = useAuth();
 
   return useQuery<ExamQuestion[]>({
-    queryKey: ['exam-questions', examId],
+    queryKey: ['exam-questions', examId, options?.excludeAnswer ? 'no-answer' : 'with-answer'],
     queryFn: async () => {
       if (!examId) return [];
+      const fields = options?.excludeAnswer
+        ? 'id, exam_id, school_id, question_type, question_text, options, order_index, created_at'
+        : 'id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at';
       const { data, error } = await db
         .from('exam_questions')
-        .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
+        .select(fields)
         .eq('exam_id', examId)
         .order('order_index', { ascending: true });
       if (error) throw error;

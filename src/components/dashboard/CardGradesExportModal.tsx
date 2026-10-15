@@ -326,7 +326,29 @@ export function CardGradesExportModal({
           th {
             background-color: #1e293b !important;
             color: #ffffff !important;
-            font-weight: 800 !important;
+            font-weight: 900 !important;
+            border: 1.5px solid #475569 !important;
+          }
+
+          th, th *, thead tr th div, thead tr th span {
+            color: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+
+          .th-subject-name {
+            color: #ffffff !important;
+            font-weight: 900 !important;
+            font-size: 13px !important;
+            line-height: 1.3 !important;
+            display: block !important;
+          }
+
+          .th-subject-score {
+            color: #93c5fd !important;
+            font-weight: 700 !important;
+            font-size: 11px !important;
+            display: block !important;
           }
 
           .student-name-cell {
@@ -475,14 +497,19 @@ export function CardGradesExportModal({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-slate-900">تصدير كشف درجات الكارت</h2>
+                <h2 className="text-lg font-black text-slate-900">تصدير كشف الدرجات</h2>
                 <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-indigo-200 font-bold text-xs">
                   {folderName}
                 </Badge>
               </div>
-              <p className="text-xs text-slate-400 font-bold mt-0.5">
-                {className} • {subjects.length} مواد دراسية • {students.length} طالب
-              </p>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-xs text-slate-400 font-bold">
+                  {className} • {subjects.length} مواد دراسية • {students.length} طالب
+                </span>
+                <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                  💡 للحفظ كـ PDF: اختر &quot;حفظ بتنسيق PDF&quot; من نافذة الطباعة بجودة متجهة 100%
+                </span>
+              </div>
             </div>
           </div>
 
@@ -502,7 +529,7 @@ export function CardGradesExportModal({
               className="h-11 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs gap-2 shadow-md transition-all"
             >
               <Printer className="w-4 h-4" />
-              طباعة / حفظ PDF
+              حفظ PDF / طباعة الكشف
             </Button>
           </div>
         </div>
@@ -605,33 +632,37 @@ export function CardGradesExportModal({
             >
               {/* Header */}
               {showSchoolHeader && (
-                <div style={{ borderBottom: '2.5px solid #1e293b', paddingBottom: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <h1 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: '0 0 4px 0' }}>
+                <div style={{ borderBottom: '2.5px solid #1e293b', paddingBottom: '16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                  {/* Right: School & Class Info */}
+                  <div style={{ flex: '1 1 0%', textAlign: 'right' }}>
+                    <h1 style={{ fontSize: '20px', fontWeight: 900, color: '#0f172a', margin: '0 0 6px 0' }}>
                       {branding?.name || 'إدارة المدرسة'}
                     </h1>
-                    <p style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', margin: '0 0 8px 0' }}>
-                      كشف رصد وتقييم درجات الطلاب الرسمي
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '11px', fontWeight: 800 }}>
-                      <span style={{ backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
-                        الفصل: {className}
-                      </span>
-                      <span style={{ backgroundColor: '#e0e7ff', color: '#3730a3', padding: '4px 10px', borderRadius: '6px', border: '1px solid #c7d2fe' }}>
-                        الكارت: {folderName}
-                      </span>
+                    <div style={{ display: 'inline-block', backgroundColor: '#f1f5f9', padding: '4px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 800, color: '#334155' }}>
+                      الفصل: {className}
                     </div>
                   </div>
 
-                  <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                  {/* Center: Month / Folder Title in Large Font without "الكارت" */}
+                  <div style={{ flex: '2 1 0%', textAlign: 'center', padding: '0 8px' }}>
+                    <h2 style={{ fontSize: '26px', fontWeight: 900, color: '#1e1b4b', margin: '0 0 4px 0', letterSpacing: '-0.3px', lineHeight: 1.25 }}>
+                      {folderName}
+                    </h2>
+                    <p style={{ fontSize: '13px', fontWeight: 700, color: '#64748b', margin: 0 }}>
+                      كشف رصد وتقييم درجات الطلاب الرسمي
+                    </p>
+                  </div>
+
+                  {/* Left: Logo & Date */}
+                  <div style={{ flex: '1 1 0%', textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
                     {showLogo && branding?.logo_url ? (
                       <img
                         src={branding.logo_url}
                         alt="شعار المدرسة"
-                        style={{ height: '60px', width: '60px', objectFit: 'contain', borderRadius: '10px', border: '1px solid #e2e8f0' }}
+                        style={{ height: '56px', width: '56px', objectFit: 'contain', borderRadius: '10px', border: '1px solid #e2e8f0' }}
                       />
                     ) : (
-                      <div style={{ height: '52px', width: '52px', borderRadius: '12px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                      <div style={{ height: '48px', width: '48px', borderRadius: '12px', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
                         <School className="w-6 h-6" />
                       </div>
                     )}
@@ -646,31 +677,47 @@ export function CardGradesExportModal({
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', direction: 'rtl' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#1e293b', color: '#ffffff' }}>
-                    <th style={{ padding: '8px 6px', width: '36px', textAlign: 'center', border: '1.5px solid #94a3b8' }}>م</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'right', minWidth: '160px', border: '1.5px solid #94a3b8' }}>اسم الطالب</th>
+                    <th style={{ padding: '10px 6px', width: '36px', textAlign: 'center', border: '1.5px solid #64748b', backgroundColor: '#1e293b', color: '#ffffff', fontWeight: 900 }}>
+                      <span style={{ color: '#ffffff' }}>م</span>
+                    </th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right', minWidth: '160px', border: '1.5px solid #64748b', backgroundColor: '#1e293b', color: '#ffffff', fontWeight: 900 }}>
+                      <span style={{ color: '#ffffff' }}>اسم الطالب</span>
+                    </th>
                     {subjects.map(s => (
-                      <th key={s.id} style={{ padding: '8px 6px', textAlign: 'center', border: '1.5px solid #94a3b8', minWidth: '85px' }}>
-                        <div>{s.subject}</div>
+                      <th
+                        key={s.id}
+                        style={{
+                          padding: '10px 6px',
+                          textAlign: 'center',
+                          border: '1.5px solid #64748b',
+                          minWidth: '85px',
+                          backgroundColor: '#1e293b',
+                          color: '#ffffff',
+                        }}
+                      >
+                        <div className="th-subject-name" style={{ color: '#ffffff', fontWeight: 900, fontSize: '13px', lineHeight: 1.3 }}>
+                          {s.subject}
+                        </div>
                         {s.score_type !== 'text' && (
-                          <div style={{ fontSize: '10px', fontWeight: 500, color: '#cbd5e1' }}>
+                          <div className="th-subject-score" style={{ fontSize: '11px', fontWeight: 700, color: '#93c5fd', marginTop: '2px' }}>
                             ({s.max_score || 100})
                           </div>
                         )}
                       </th>
                     ))}
                     {hasNumericSubjects && showTotals && (
-                      <th className="total-header" style={{ padding: '8px 6px', textAlign: 'center', border: '1.5px solid #94a3b8', minWidth: '70px', backgroundColor: '#312e81', color: '#ffffff' }}>
-                        <div>المجموع</div>
-                        <div style={{ fontSize: '10px', fontWeight: 500, color: '#c7d2fe' }}>({totalMaxScore})</div>
+                      <th className="total-header" style={{ padding: '10px 6px', textAlign: 'center', border: '1.5px solid #64748b', minWidth: '70px', backgroundColor: '#312e81', color: '#ffffff', fontWeight: 900 }}>
+                        <div style={{ color: '#ffffff', fontWeight: 900 }}>المجموع</div>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#c7d2fe', marginTop: '2px' }}>({totalMaxScore})</div>
                       </th>
                     )}
                     {hasNumericSubjects && showPercentage && (
                       <>
-                        <th style={{ padding: '8px 6px', textAlign: 'center', border: '1.5px solid #94a3b8', minWidth: '65px', backgroundColor: '#1e1b4b', color: '#ffffff' }}>
-                          النسبة
+                        <th style={{ padding: '10px 6px', textAlign: 'center', border: '1.5px solid #64748b', minWidth: '65px', backgroundColor: '#1e1b4b', color: '#ffffff', fontWeight: 900 }}>
+                          <span style={{ color: '#ffffff' }}>النسبة</span>
                         </th>
-                        <th style={{ padding: '8px 6px', textAlign: 'center', border: '1.5px solid #94a3b8', minWidth: '80px', backgroundColor: '#0f172a', color: '#ffffff' }}>
-                          التقدير
+                        <th style={{ padding: '10px 6px', textAlign: 'center', border: '1.5px solid #64748b', minWidth: '80px', backgroundColor: '#0f172a', color: '#ffffff', fontWeight: 900 }}>
+                          <span style={{ color: '#ffffff' }}>التقدير</span>
                         </th>
                       </>
                     )}

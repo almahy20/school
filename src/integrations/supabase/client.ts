@@ -3,7 +3,7 @@ import type { Database } from './types';
 import { logger } from '@/utils/logger';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const isAuthError = (error: unknown): boolean => {
   const pgErr = error as PostgrestError;
@@ -50,18 +50,7 @@ const circuit: CircuitBreaker = {
   nextRetryTime: 0,
 };
 
-const isNetworkError = (err: unknown): boolean => {
-  if (!(err instanceof Error)) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes('failed to fetch') ||
-    msg.includes('networkerror') ||
-    msg.includes('cors') ||
-    msg.includes('load resource') ||
-    msg.includes('gateway timeout') ||
-    (err as any).name === 'TypeError'
-  );
-};
+import { isNetworkError } from '@/utils/networkErrors';
 
 const recordFailure = () => {
   const now = Date.now();
@@ -151,8 +140,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
         endpointLabel = urlString;
       }
 
-      const traceId = profiler.startRequest(endpointLabel, urlString, (options as any)?.method || 'GET');
-      profiler.markDbStart(traceId);
+      const traceId = import.meta.env.DEV ? profiler.startRequest(endpointLabel, urlString, (options as any)?.method || 'GET') : '';
+      if (import.meta.env.DEV) profiler.markDbStart(traceId);
 
       const controller = new AbortController();
       const externalSignal = options.signal;
@@ -180,24 +169,26 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
         const res = await fetch(url, { ...options, signal: controller.signal });
         recordSuccess();
 
-        profiler.markDbEnd(traceId, res.status);
-        try {
-          const clonedForProfile = res.clone();
-          clonedForProfile.text().then((text) => {
-            let count = 0;
-            try {
-              const parsed = JSON.parse(text);
-              if (Array.isArray(parsed)) count = parsed.length;
-              else if (parsed && typeof parsed === 'object') count = 1;
-            } catch {
-              count = 0;
-            }
-            profiler.markResponseParsed(traceId, new Blob([text]).size, count);
-          }).catch(() => {
+        if (import.meta.env.DEV) {
+          profiler.markDbEnd(traceId, res.status);
+          try {
+            const clonedForProfile = res.clone();
+            clonedForProfile.text().then((text) => {
+              let count = 0;
+              try {
+                const parsed = JSON.parse(text);
+                if (Array.isArray(parsed)) count = parsed.length;
+                else if (parsed && typeof parsed === 'object') count = 1;
+              } catch {
+                count = 0;
+              }
+              profiler.markResponseParsed(traceId, new Blob([text]).size, count);
+            }).catch(() => {
+              profiler.markResponseParsed(traceId, 0, 0);
+            });
+          } catch {
             profiler.markResponseParsed(traceId, 0, 0);
-          });
-        } catch {
-          profiler.markResponseParsed(traceId, 0, 0);
+          }
         }
 
         if (res.status === 400 && isAuthEndpoint(url)) {

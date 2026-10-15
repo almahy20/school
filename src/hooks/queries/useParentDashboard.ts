@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMemo } from 'react';
 import { logger } from '@/utils/logger';
+import { isNetworkError } from '@/utils/networkErrors';
 
 const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
@@ -62,6 +63,48 @@ function calcFeesRemaining(fees: any[], currentTerm: string, monthlyFee: number)
 function getCurrentTerm(): string {
   const now = new Date();
   return 'شهر ' + MONTHS_AR[now.getMonth()] + ' ' + now.getFullYear();
+}
+
+async function fetchStudentsByParentPhone(
+  user: { id: string; phone?: string; schoolId?: string },
+  autoHealLinks = true
+): Promise<any[] | null> {
+  if (!user?.phone) return null;
+  const cleanPhone = user.phone.replace(/\D/g, '');
+  if (!cleanPhone) return null;
+
+  const phoneVariants = [
+    cleanPhone,
+    cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
+    cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
+    '+20' + (cleanPhone.startsWith('0') ? cleanPhone.slice(1) : cleanPhone),
+  ].filter(Boolean);
+
+  const { data: phoneStudents, error } = await supabase
+    .from('students')
+    .select('id, name, class_id, monthly_fee, school_id, classes(name)')
+    .in('parent_phone', phoneVariants);
+
+  if (error || !phoneStudents || phoneStudents.length === 0) return null;
+
+  if (autoHealLinks) {
+    const linksToInsert = phoneStudents.map((s: any) => ({
+      school_id: s.school_id || user.schoolId,
+      student_id: s.id,
+      parent_id: user.id,
+    }));
+    supabase.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
+  }
+
+  return phoneStudents.map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    class_id: s.class_id,
+    className: s.classes?.name,
+    avgGrade: 0,
+    attendanceRate: 0,
+    feesRemaining: Number(s.monthly_fee) || 0,
+  }));
 }
 
 export function useParentChildren() {
@@ -200,39 +243,9 @@ export function useParentChildren() {
         }
 
         // If RPC returned 0 students, attempt fallback by phone matching (matching admin behavior)
-        if (user.phone) {
-          const cleanPhone = user.phone.replace(/\D/g, '');
-          const phoneVariants = [
-            cleanPhone,
-            cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
-            cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
-            '+20' + (cleanPhone.startsWith('0') ? cleanPhone.slice(1) : cleanPhone),
-          ].filter(Boolean);
-
-          const { data: phoneStudents } = await supabase
-            .from('students')
-            .select('id, name, class_id, monthly_fee, school_id, classes(name)')
-            .in('parent_phone', phoneVariants);
-
-          if (phoneStudents && phoneStudents.length > 0) {
-            // Auto-heal links in student_parents
-            const linksToInsert = phoneStudents.map((s: any) => ({
-              school_id: s.school_id || user.schoolId,
-              student_id: s.id,
-              parent_id: user.id,
-            }));
-            supabase.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
-
-            return phoneStudents.map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              class_id: s.class_id,
-              className: s.classes?.name,
-              avgGrade: 0,
-              attendanceRate: 0, // لا توجد بيانات حضور — القيمة الافتراضية الصحيحة هي 0 وليس 100
-              feesRemaining: Number(s.monthly_fee) || 0,
-            }));
-          }
+        const phoneFallback = await fetchStudentsByParentPhone(user, true);
+        if (phoneFallback) {
+          return phoneFallback;
         }
         
         return data || [];
@@ -240,33 +253,10 @@ export function useParentChildren() {
         logger.error('[useParentChildren] Unexpected error:', err);
         
         // Final catch fallback: try phone matching
-        if (user?.phone) {
-          try {
-            const cleanPhone = user.phone.replace(/\D/g, '');
-            const phoneVariants = [
-              cleanPhone,
-              cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
-              cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
-            ].filter(Boolean);
-
-            const { data: phoneStudents } = await supabase
-              .from('students')
-              .select('id, name, class_id, monthly_fee, school_id, classes(name)')
-              .in('parent_phone', phoneVariants);
-
-            if (phoneStudents && phoneStudents.length > 0) {
-              return phoneStudents.map((s: any) => ({
-                id: s.id,
-                name: s.name,
-                class_id: s.class_id,
-                className: s.classes?.name,
-                avgGrade: 0,
-                attendanceRate: 0, // لا توجد بيانات حضور — القيمة الافتراضية الصحيحة هي 0 وليس 100
-                feesRemaining: Number(s.monthly_fee) || 0,
-              }));
-            }
-          } catch (_e) { /* ignore */ }
-        }
+        try {
+          const catchFallback = await fetchStudentsByParentPhone(user, true);
+          if (catchFallback) return catchFallback;
+        } catch (_e) { /* ignore */ }
 
         throw err;
       }
@@ -293,24 +283,8 @@ export function useChildFullDetails(studentId: string | undefined) {
 
       const current_term = getCurrentTerm();
 
-      const isNetworkOrTimeoutErr = (e: any): boolean => {
-        if (!e) return false;
-        const msg = ((e?.message || '') + ' ' + (e?.details || '') + ' ' + (e?.code || '')).toLowerCase();
-        return (
-          msg.includes('failed to fetch') ||
-          msg.includes('networkerror') ||
-          msg.includes('cors') ||
-          msg.includes('load resource') ||
-          msg.includes('abort') ||
-          msg.includes('timeout') ||
-          msg.includes('gateway timeout') ||
-          msg.includes('504') ||
-          msg.includes('502') ||
-          msg.includes('503') ||
-          msg.includes('temporarily unavailable') ||
-          (typeof navigator !== 'undefined' && !navigator.onLine)
-        );
-      };
+      // Alias for readability
+      const isNetworkOrTimeoutErr = isNetworkError;
 
       const tryGetCached = (): any | null => {
         try {

@@ -1,42 +1,48 @@
 import { defineConfig } from "vitest/config";
+import { loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
-  server: {
-    host: true,
-    port: 3000,
-    strictPort: false,
-    proxy: {
-      '/supabase-auth': {
-        target: 'https://mecutwhreywjwstirpka.supabase.co',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/supabase-auth/, '/auth/v1'),
-      },
-      '/supabase-rest': {
-        target: 'https://mecutwhreywjwstirpka.supabase.co',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/supabase-rest/, '/rest/v1'),
-      },
-      '/supabase-realtime': {
-        target: 'wss://mecutwhreywjwstirpka.supabase.co',
-        changeOrigin: true,
-        secure: true,
-        ws: true,
-        rewrite: (path) => path.replace(/^\/supabase-realtime/, '/realtime/v1'),
-      },
-      '/supabase-storage': {
-        target: 'https://mecutwhreywjwstirpka.supabase.co',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/supabase-storage/, '/storage/v1'),
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const supabaseUrl = env.VITE_SUPABASE_URL || 'https://mecutwhreywjwstirpka.supabase.co';
+  const supabaseWsUrl = supabaseUrl.replace(/^http/, 'ws');
+
+  return {
+    server: {
+      host: true,
+      port: 3000,
+      strictPort: false,
+      proxy: {
+        '/supabase-auth': {
+          target: supabaseUrl,
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/supabase-auth/, '/auth/v1'),
+        },
+        '/supabase-rest': {
+          target: supabaseUrl,
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/supabase-rest/, '/rest/v1'),
+        },
+        '/supabase-realtime': {
+          target: supabaseWsUrl,
+          changeOrigin: true,
+          secure: true,
+          ws: true,
+          rewrite: (path) => path.replace(/^\/supabase-realtime/, '/realtime/v1'),
+        },
+        '/supabase-storage': {
+          target: supabaseUrl,
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/supabase-storage/, '/storage/v1'),
+        },
       },
     },
-  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -90,4 +96,5 @@ export default defineConfig(({ mode }) => ({
       'class-variance-authority', 'next-themes'
     ],
   },
-}));
+};
+});

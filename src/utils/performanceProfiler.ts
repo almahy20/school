@@ -28,6 +28,7 @@ class PerformanceProfiler {
   private traceCounter = 0;
 
   public startRequest(label: string, url: string, method = 'GET'): string {
+    if (!import.meta.env.DEV) return '';
     const id = `req_${++this.traceCounter}_${Date.now()}`;
     const now = performance.now();
     

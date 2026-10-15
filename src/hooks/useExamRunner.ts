@@ -54,7 +54,7 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
   const tabSwitchCountRef = useRef(0);
   const MAX_TAB_SWITCHES = 3;
 
-  const { data: rawQuestions = [], isLoading: qLoading } = useExamQuestions(exam.id);
+  const { data: rawQuestions = [], isLoading: qLoading } = useExamQuestions(exam.id, { excludeAnswer: true });
   const submitAttempt = useSubmitExamAttempt();
 
   // Shuffle questions and options deterministically per student

@@ -4,20 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { logger } from '@/utils/logger';
 
-const isNetworkLikeError = (e: unknown): boolean => {
-  if (!e) return false;
-  const str = (typeof e === 'string' ? e : (e as any).message || (e as any).details || '').toLowerCase();
-  return (
-    str.includes('failed to fetch') ||
-    str.includes('networkerror') ||
-    str.includes('cors') ||
-    str.includes('load resource') ||
-    str.includes('abort') ||
-    str.includes('timeout') ||
-    str.includes('gateway timeout') ||
-    str.includes('temporarily unavailable')
-  );
-};
+import { isNetworkError as isNetworkLikeError } from '@/utils/networkErrors';
 
 const PUSH_SYNC_STORAGE_KEY = 'push_synced_endpoint_v1';
 const PUSH_SYNC_TTL_MS = 60 * 60 * 1000;

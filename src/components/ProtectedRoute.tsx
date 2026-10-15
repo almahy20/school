@@ -1,7 +1,7 @@
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
 import { getCachedUser, setCachedUser } from '@/lib/userCache';
 
 interface Props {
@@ -13,7 +13,6 @@ interface Props {
 export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnly }: Props) {
   const { user, isLoading: loading } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
 
   // If user is already available, render immediately — don't wait for isLoading
   if (!user) {
@@ -64,7 +63,7 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
          <div className="bg-card p-10 rounded-3xl shadow-xl max-w-md border border-border">
             <h1 className="text-3xl font-black text-foreground mb-4 tracking-tight">الاشتراك موقوف</h1>
             <p className="text-muted-foreground font-bold mb-8">عذراً، تم إيقاف الاشتراك الخاص بمدرستك. يرجى التواصل مع إدارة النظام للمزيد من التفاصيل.</p>
-            <button onClick={() => navigate('/login', { replace: true })} className="h-12 px-8 rounded-xl bg-primary text-primary-foreground font-black hover:opacity-90 transition-all">العودة لتسجيل الدخول</button>
+            <Link to="/login" replace className="inline-flex items-center justify-center h-12 px-8 rounded-xl bg-primary text-primary-foreground font-black hover:opacity-90 transition-all">العودة لتسجيل الدخول</Link>
          </div>
       </div>
     );
