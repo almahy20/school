@@ -81,6 +81,7 @@ export function useAllStudents() {
 // ─── useStudents Hook (Server-Side Paginated, Filtered & Searched) ───────────
 export function useStudents(page = 1, pageSize = 15, search = '', classId = 'الكل') {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const cleanSearch = search.trim();
   const queryKey = [
     'students',
@@ -94,6 +95,17 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
     cleanSearch,
     classId,
   ];
+
+  // مفتاح كاش مستقل لحفظ العدد الإجمالي للفلتر والبحث الحالي لتجنب إعادة الـ count في كل صفحة
+  const countKey = useMemo(() => [
+    'students',
+    'count',
+    user?.schoolId,
+    user?.role,
+    user?.id,
+    cleanSearch,
+    classId,
+  ], [user?.schoolId, user?.role, user?.id, cleanSearch, classId]);
 
   return useQuery<{ data: Student[]; count: number }>({
     queryKey,
@@ -114,45 +126,93 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'ا�
         }
       }
 
-      // ✅ FIX: Select only needed columns for the page + count: exact
-      let q = supabase
+      // 1. استعلام بيانات الصفحة الحالية (15 صفاً فقط) بدون count: exact لتجنب الـ COUNT الثقيل مع الـ JOINs
+      let dataQuery = supabase
         .from('students')
-        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)', { count: 'exact' });
+        .select('id, name, class_id, parent_phone, school_id, created_at, classes(id, name, grade_level), student_parents(parent_id)');
 
       if (!user.isSuperAdmin && user.schoolId) {
-        q = q.eq('school_id', user.schoolId);
+        dataQuery = dataQuery.eq('school_id', user.schoolId);
       }
       if (user.role === 'teacher' && teacherClassIds.length > 0) {
-        q = q.in('class_id', teacherClassIds);
+        dataQuery = dataQuery.in('class_id', teacherClassIds);
       }
 
-      // 1. Server-side filter by class
+      // Server-side filter by class
       if (classId === 'بدون_فصل') {
-        q = q.is('class_id', null);
+        dataQuery = dataQuery.is('class_id', null);
       } else if (classId !== 'الكل' && classId !== 'بدون_ولي_امر') {
-        q = q.eq('class_id', classId);
+        dataQuery = dataQuery.eq('class_id', classId);
       }
 
-      // 2. Server-side filter by search (Name or Phone)
+      // Server-side filter by search (Name or Phone)
       if (cleanSearch) {
         const cleanPhone = cleanSearch.replace(/\D/g, '');
         if (cleanPhone && cleanPhone.length >= 3) {
-          q = q.or(`name.ilike.%${cleanSearch}%,parent_phone.ilike.%${cleanPhone}%`);
+          dataQuery = dataQuery.or(`name.ilike.%${cleanSearch}%,parent_phone.ilike.%${cleanPhone}%`);
         } else {
-          q = q.ilike('name', `%${cleanSearch}%`);
+          dataQuery = dataQuery.ilike('name', `%${cleanSearch}%`);
         }
       }
 
-      // 3. Server-side pagination via .range()
+      // Server-side pagination via .range()
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      const { data, error, count } = await q.order('name').range(from, to);
-      if (error) throw error;
+      // 2. استعلام count خفيف ومستقل على جدول students فقط وبدون أي joins إطلاقاً وبـ head: true
+      // ويتم تخطيه تماماً في الصفحات التالية (page > 1) إذا كان العدد محسوباً ومخزناً لنفس الفلتر
+      const cachedCount = queryClient.getQueryData<number>(countKey);
+      const shouldFetchCount = cachedCount === undefined || page === 1;
+
+      let countPromise: Promise<number>;
+      if (shouldFetchCount) {
+        let countQ = supabase
+          .from('students')
+          .select('*', { count: 'exact', head: true });
+
+        if (!user.isSuperAdmin && user.schoolId) {
+          countQ = countQ.eq('school_id', user.schoolId);
+        }
+        if (user.role === 'teacher' && teacherClassIds.length > 0) {
+          countQ = countQ.in('class_id', teacherClassIds);
+        }
+        if (classId === 'بدون_فصل') {
+          countQ = countQ.is('class_id', null);
+        } else if (classId !== 'الكل' && classId !== 'بدون_ولي_امر') {
+          countQ = countQ.eq('class_id', classId);
+        }
+        if (cleanSearch) {
+          const cleanPhone = cleanSearch.replace(/\D/g, '');
+          if (cleanPhone && cleanPhone.length >= 3) {
+            countQ = countQ.or(`name.ilike.%${cleanSearch}%,parent_phone.ilike.%${cleanPhone}%`);
+          } else {
+            countQ = countQ.ilike('name', `%${cleanSearch}%`);
+          }
+        }
+
+        countPromise = countQ.then(({ count, error }) => {
+          if (error) {
+            return cachedCount ?? 0;
+          }
+          const total = count ?? 0;
+          queryClient.setQueryData(countKey, total);
+          return total;
+        });
+      } else {
+        countPromise = Promise.resolve(cachedCount);
+      }
+
+      // تشغيل استعلام البيانات واستعلام الـ count بالتوازي التام عبر Promise.all
+      const [dataRes, resolvedCount] = await Promise.all([
+        dataQuery.order('name').range(from, to),
+        countPromise,
+      ]);
+
+      if (dataRes.error) throw dataRes.error;
 
       return {
-        data: (data || []) as Student[],
-        count: count || 0,
+        data: (dataRes.data || []) as Student[],
+        count: resolvedCount,
       };
     },
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
@@ -228,8 +288,8 @@ export function useDeleteStudent() {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['students'] });
 
-      // Snapshot previous value
-      const previousStudents = queryClient.getQueryData(['students']);
+      // Snapshot previous values for all matching student queries
+      const previousQueries = queryClient.getQueriesData({ queryKey: ['students'] });
 
       // Optimistically update
       queryClient.setQueriesData({ queryKey: ['students'] }, (old: any) => {
@@ -241,11 +301,13 @@ export function useDeleteStudent() {
         };
       });
 
-      return { previousStudents };
+      return { previousQueries };
     },
     onError: (err, studentId, context) => {
-      if (context?.previousStudents) {
-        queryClient.setQueryData(['students'], context.previousStudents);
+      if (context?.previousQueries) {
+        context.previousQueries.forEach(([queryKey, data]) => {
+          queryClient.setQueryData(queryKey, data);
+        });
       }
       toast.error('فشل حذف الطالب');
     },
