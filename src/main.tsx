@@ -12,6 +12,19 @@ if ('scrollRestoration' in window.history) {
   window.history.scrollRestoration = 'manual';
 }
 
+// Request persistent storage from browser to prevent cache eviction on storage pressure
+try {
+  if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.storage?.persist) {
+    navigator.storage.persist().then((persisted) => {
+      logger.log(`[Storage] Persistent storage granted: ${persisted}`);
+    }).catch((err) => {
+      logger.warn('[Storage] navigator.storage.persist failed:', err);
+    });
+  }
+} catch (err) {
+  logger.warn('[Storage] navigator.storage.persist check error:', err);
+}
+
 // ============================================================
 // 🔴 CRITICAL FIX #1 — Capture beforeinstallprompt ABSOLUTELY FIRST
 //   حدث قبل التثبيت يتطلّ قبل تسجيل الـ SW أحياناً على Vercel
