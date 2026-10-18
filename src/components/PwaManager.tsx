@@ -131,23 +131,17 @@ export default function PwaManager() {
       }
     }
 
-    // ✅ favicon (icon/shortcut icon) → width=32 لأن المتصفح بيعرضه بـ 16-32px
-    // ✅ apple-touch-icon → width=120 — نفس الـ URL المستخدم في الـ UI لضمان cache موحد
-    // ✅ الـ manifest icons بتستخدم لوجو المدرسة الديناميكي بدل أي static file
+    // ✅ استخدام رابط موحد (120px) للـ favicon و apple-touch-icon لضمان مشاركة كاش المتصفح
     const rawLogoUrl = brandingDataRef.current?.logo_url || '';
     const { getOptimizedImageUrl } = await import('@/lib/utils');
-    const faviconUrl = rawLogoUrl
-      ? getOptimizedImageUrl(rawLogoUrl, { width: 32, quality: 80 })
-      : '';
-    const appleTouchUrl = rawLogoUrl
+    const unifiedLogoUrl = rawLogoUrl
       ? getOptimizedImageUrl(rawLogoUrl, { width: 120, quality: 75 })
-      : '';
+      : (icon || '');
     const manifestIconUrl = rawLogoUrl
       ? getOptimizedImageUrl(rawLogoUrl, { width: 512, quality: 90 })
       : '';
-    const cacheBustFavicon = toValidIconUrl(faviconUrl || icon || '');
-    const cacheBustApple = toValidIconUrl(appleTouchUrl || icon || '');
-    const cacheBustManifest = toValidIconUrl(manifestIconUrl || appleTouchUrl || icon || '');
+    const cacheBustUnifiedIcon = toValidIconUrl(unifiedLogoUrl);
+    const cacheBustManifest = toValidIconUrl(manifestIconUrl || cacheBustUnifiedIcon);
 
     // @ts-expect-error - Deep type instantiation
     const manifest: Record<string, unknown> = {
@@ -172,7 +166,7 @@ export default function PwaManager() {
           purpose: "any maskable"
         },
         {
-          src: cacheBustApple || cacheBustManifest,
+          src: cacheBustUnifiedIcon || cacheBustManifest,
           sizes: "any",
           type: iconMimeType,
           purpose: "any"
@@ -214,16 +208,22 @@ export default function PwaManager() {
         link.rel = rel;
         document.head.appendChild(link);
       }
-      link.href = href;
+      if (link.href !== href) {
+        link.href = href;
+      }
     };
 
-    // ✅ Skip favicon update if URL hasn't changed — avoids redundant network requests
-    // favicon (16-32px display) uses width=32, apple-touch-icon (homescreen) uses width=120
-    if (lastIconUrlRef.current !== cacheBustFavicon) {
-      lastIconUrlRef.current = cacheBustFavicon;
-      updateIcon('icon', cacheBustFavicon);
-      updateIcon('shortcut icon', cacheBustFavicon);
-      updateIcon('apple-touch-icon', cacheBustApple);
+    // ✅ حذف link rel="shortcut icon" المكرر إن وُجد لتفادي طلبات متكررة من المتصفح
+    const existingShortcut = document.querySelector('link[rel="shortcut icon"]');
+    if (existingShortcut) {
+      existingShortcut.remove();
+    }
+
+    // ✅ استخدام نفس الرابط الموحد للـ favicon والـ apple-touch-icon بدون تحديث إلا إذا تغير فعلاً
+    if (cacheBustUnifiedIcon && lastIconUrlRef.current !== cacheBustUnifiedIcon) {
+      lastIconUrlRef.current = cacheBustUnifiedIcon;
+      updateIcon('icon', cacheBustUnifiedIcon);
+      updateIcon('apple-touch-icon', cacheBustUnifiedIcon);
     }
 
     let metaTheme = document.querySelector("meta[name='theme-color']") as HTMLMetaElement;
