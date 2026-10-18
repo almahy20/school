@@ -263,7 +263,6 @@ export function useParentChildren() {
     },
     enabled: !!(user?.id && user?.role === 'parent'),
     staleTime: 20 * 1000,
-    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnMount: true, // يضمن فحص وتحديث البيانات في الخلفية
     refetchOnWindowFocus: true,
@@ -482,7 +481,6 @@ export function useChildFullDetails(studentId: string | undefined) {
     },
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 60 * 1000,
-    gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnMount: true,
     refetchOnWindowFocus: false,

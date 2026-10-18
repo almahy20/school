@@ -70,7 +70,6 @@ export function useAllStudents() {
     },
     enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     retry: 2,
@@ -218,7 +217,6 @@ export function useStudents(page = 1, pageSize = 15, search = '', classId = 'Ø§Ù
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
@@ -260,7 +258,6 @@ export function useStudent(id: string | undefined) {
     enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }
@@ -470,7 +467,6 @@ export function useStudentParent(studentId: string | null | undefined) {
     },
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
@@ -500,7 +496,6 @@ export function useClassStudents(classId: string | null | undefined) {
     },
     enabled: !!classId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });

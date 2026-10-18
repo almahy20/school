@@ -68,7 +68,6 @@ export function useExamTemplates(classId: string | null, subject: string | null,
     enabled: !!session && !!(user?.schoolId && classId),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     retry: 1,
     retryDelay: 1000,
   });
@@ -278,7 +277,6 @@ export function useGrades(studentId: string | null) {
     },
     enabled: !!studentId,
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
   });
 }
 
@@ -315,6 +313,5 @@ export function useStudentDetailedGrades(studentId: string | null) {
     },
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
   });
 }

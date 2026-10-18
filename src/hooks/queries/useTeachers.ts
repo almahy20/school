@@ -92,7 +92,6 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
     },
     enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: 2,
@@ -185,7 +184,6 @@ export function useTeacher(id: string | undefined | null) {
     enabled: !!id && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
   });
 }
 
@@ -224,7 +222,6 @@ export function useTeacherDetailStats(id: string | undefined | null) {
     },
     enabled: !!session && !!(id && user?.schoolId),
     staleTime: 3 * 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });

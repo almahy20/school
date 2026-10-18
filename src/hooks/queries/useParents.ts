@@ -141,7 +141,6 @@ export function useAllParents() {
     },
     enabled: !!schoolId,
     staleTime: 60 * 1000,
-    gcTime: 15 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     retry: 1,
@@ -286,7 +285,6 @@ export function useParent(id: string | undefined | null) {
     enabled: !!id,
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
-    gcTime: 1000 * 60 * 60 * 2,
     refetchOnWindowFocus: false,
     refetchOnMount: true,
   });
@@ -393,7 +391,6 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
     },
     enabled: !!session && !!(parentId && user?.schoolId),
     staleTime: 60 * 1000,
-    gcTime: 1000 * 60 * 30,
     refetchOnMount: true,
   });
 }
