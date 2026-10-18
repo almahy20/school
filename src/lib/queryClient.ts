@@ -135,6 +135,35 @@ export const persistOptions = {
  * ✅ Security: Clear all persisted cache (IndexedDB + in-memory) on logout
  * Prevents cross-tenant data leakage
  */
+// قائمة المفاتيح الصريحة والبادئات المحددة المطلوب مسحها عند تسجيل الخروج أو تغيير المستخدم
+export const CACHE_LOCAL_STORAGE_KEYS = [
+  'school_auth_token',
+  'app_user_cache_v2',
+  'last_auth_sync',
+  'active_chat_room',
+  'chat_draft',
+  'conversation_draft',
+  'selected_conversation_id',
+] as const;
+
+export const CACHE_LOCAL_STORAGE_PREFIXES = [
+  'exam_cards_',
+  'branding_',
+  'dismissed-announcements-',
+  'chat_draft_',
+  'conversation_draft_',
+] as const;
+
+export const CACHE_SESSION_STORAGE_KEYS = [
+  'user_signup_time',
+  'no_remember_me',
+] as const;
+
+export const CACHE_SESSION_STORAGE_PREFIXES = [
+  'exam_attempt_',
+  'grades:order:',
+] as const;
+
 export async function clearAllCache() {
   queryClient.clear();
   try {
@@ -143,44 +172,40 @@ export async function clearAllCache() {
     logger.error('Failed to clear IndexedDB cache:', e);
   }
 
-  // تنظيف أي مفاتيح محادثات أو رسائل أو بطاقات اختبارات من localStorage
+  // تنظيف المفاتيح المحددة فقط من localStorage
   try {
+    // 1. المفاتيح الصريحة
+    CACHE_LOCAL_STORAGE_KEYS.forEach((k) => localStorage.removeItem(k));
+
+    // 2. المفاتيح ذات البادئات الديناميكية المحددة
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (
-        key &&
-        (key.includes('conversation') ||
-          key.includes('message') ||
-          key.includes('chat') ||
-          key.startsWith('exam_cards_'))
-      ) {
+      if (key && CACHE_LOCAL_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach((k) => localStorage.removeItem(k));
   } catch (e) {
-    logger.error('Failed to clear localStorage conversation/message keys:', e);
+    logger.error('Failed to clear localStorage cached keys:', e);
   }
 
-  // تنظيف أي مسودات أو جلسات اختبارات من sessionStorage
+  // تنظيف المفاتيح المحددة فقط من sessionStorage
   try {
+    // 1. المفاتيح الصريحة
+    CACHE_SESSION_STORAGE_KEYS.forEach((k) => sessionStorage.removeItem(k));
+
+    // 2. المفاتيح ذات البادئات الديناميكية المحددة
     const sessionKeysToRemove: string[] = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const key = sessionStorage.key(i);
-      if (
-        key &&
-        (key.includes('conversation') ||
-          key.includes('message') ||
-          key.includes('chat') ||
-          key.includes('exam_attempt_'))
-      ) {
+      if (key && CACHE_SESSION_STORAGE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
         sessionKeysToRemove.push(key);
       }
     }
     sessionKeysToRemove.forEach((k) => sessionStorage.removeItem(k));
   } catch (e) {
-    logger.error('Failed to clear sessionStorage conversation/message keys:', e);
+    logger.error('Failed to clear sessionStorage cached keys:', e);
   }
 }
 
