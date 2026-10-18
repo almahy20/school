@@ -206,14 +206,18 @@ export function useTeacherDetailStats(id: string | undefined | null) {
 
       const classIds = classesData.map(c => c.id);
 
-      const [{ count: studentCount }, { data: curriculumData }] = await Promise.all([
+      const [{ count: studentCount }, ...curriculumResults] = await Promise.all([
         supabase.from('students').select('*', { count: 'exact', head: true }).in('class_id', classIds),
-        // @ts-expect-error - RPC function
-        supabase.rpc('get_class_curriculum_status', { p_class_id: classIds[0] }),
+        ...classIds.map(classId =>
+          // @ts-expect-error - RPC function
+          supabase.rpc('get_class_curriculum_status', { p_class_id: classId })
+        ),
       ]);
 
-      const avgProgress = Array.isArray(curriculumData)
-        ? Math.round(curriculumData.reduce((acc: number, s: any) => acc + (s.progress || 0), 0) / (curriculumData.length || 1))
+      const allCurriculumItems = curriculumResults.flatMap(res => (Array.isArray(res.data) ? res.data : []));
+
+      const avgProgress = allCurriculumItems.length > 0
+        ? Math.round(allCurriculumItems.reduce((acc: number, s: any) => acc + (s.progress || 0), 0) / allCurriculumItems.length)
         : 0;
 
       return { studentCount: studentCount || 0, curriculumProgress: avgProgress };
