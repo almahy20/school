@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { BookOpen, Eye, EyeOff, User, Phone, Lock } from 'lucide-react';
 import { useSchoolBySlug } from '@/hooks/queries';
-import { getOptimizedImageUrl } from '@/lib/utils';
+import { useCleanBranding } from '@/hooks/useCleanBranding';
 
 export default function TeacherSignupPage() {
   const { school_slug } = useParams();
@@ -16,6 +16,7 @@ export default function TeacherSignupPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const { data: school, isLoading: schoolLoading, error: schoolError } = useSchoolBySlug(school_slug);
+  const schoolBranding = useCleanBranding(school);
   const { signup } = useAuth();
   const navigate = useNavigate();
 
@@ -69,8 +70,8 @@ export default function TeacherSignupPage() {
       <div className="w-full max-w-[480px] relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-[30px] bg-white shadow-xl shadow-slate-200/50 mb-6 border border-slate-100 group overflow-hidden">
-            {school?.logo_url ? (
-              <img src={getOptimizedImageUrl(school.logo_url, { width: 160, quality: 80 })} alt="School Logo" className="w-full h-full object-contain" />
+            {schoolBranding.logo ? (
+              <img src={schoolBranding.logo} alt="School Logo" className="w-full h-full object-contain" />
             ) : (
               <BookOpen className="w-10 h-10 text-primary" />
             )}
@@ -78,7 +79,7 @@ export default function TeacherSignupPage() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-2">تسجيل كمعلم جديد</h1>
           <p className="text-sm font-medium text-slate-400">
             الانضمام إلى مدرسة: <span className="font-bold text-slate-800">
-              {school?.name?.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim()}
+              {schoolBranding.cleanName}
             </span>
           </p>
         </div>

@@ -6,7 +6,7 @@ import { Menu, BookOpen, Bell, Search, User, ChevronLeft, Download } from 'lucid
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
-import { cn, getOptimizedImageUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';

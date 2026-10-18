@@ -12,7 +12,8 @@ import {
   Settings, X, MessageSquare, ChevronLeft, ShieldAlert, 
   Bell, CreditCard, Home, Database, ClipboardList
 } from 'lucide-react';
-import { cn, getOptimizedImageUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { useCleanBranding } from '@/hooks/useCleanBranding';
 
 interface SidebarLink {
   to: string;
@@ -71,20 +72,7 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
   const { data: branding } = useBranding();
   const [logoError, setLogoError] = useState(false);
 
-  const schoolBranding = useMemo(() => {
-    const rawLogo = branding?.logo_url || '';
-    
-    // ✅ تحسين موحد: نستخدم نفس الحجم (120) لضمان استخدام الكاش في كل مكان
-    const optimizedLogo = getOptimizedImageUrl(rawLogo, { width: 120, quality: 75 });
-    
-    const rawName = branding?.name || 'الجيل الجديد';
-    const cleanName = rawName.replace(/^مدرسة\s*/i, '').replace(/^مدرسه\s*/i, '').trim();
-
-    return {
-      name: cleanName || rawName,
-      logo: optimizedLogo,
-    };
-  }, [branding]);
+  const schoolBranding = useCleanBranding(branding);
 
   useEffect(() => {
     setLogoError(false); // Reset error when branding changes
