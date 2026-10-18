@@ -49,7 +49,7 @@ export default function SchoolBrandingSettings() {
       const { error: uploadError } = await supabase.storage
         .from('school_assets')
         .upload(filePath, finalFile, {
-          cacheControl: '3600',
+          cacheControl: '31536000',
           upsert: true
         });
 
