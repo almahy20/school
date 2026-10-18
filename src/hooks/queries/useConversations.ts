@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 import { useEffect, useMemo } from 'react';
 
 const db = supabase as any;
@@ -546,7 +547,7 @@ export function useUnreadConversationsParentCount() {
         .gt('unread_by_parent', 0);
 
       if (convErr) {
-        // Fallback gracefully without breaking UI
+        logger.warn('[useParentUnreadConversationsCount] Failed to fetch unread conversations count:', convErr);
       }
 
       // عدد إشعارات دردشة الفصل غير المقروءة
@@ -558,7 +559,7 @@ export function useUnreadConversationsParentCount() {
         .eq('is_read', false);
 
       if (notifErr) {
-        // Fallback gracefully without breaking UI
+        logger.warn('[useParentUnreadConversationsCount] Failed to fetch unread chat notifications count:', notifErr);
       }
 
       return (convCount || 0) + (chatCount || 0);
