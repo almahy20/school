@@ -259,6 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isSigningOutRef = useRef(false);
   const loadingUserIdRef = useRef<string | null>(null);
+  const activeUserIdRef = useRef<string | null>(null);
+  const activeSchoolIdRef = useRef<string | null>(null);
 
   // ── Token refresh throttling & backoff ───────────────────────────────────
   // Prevents spam of /auth/v1/token (refresh_token) during network errors/CORS/504
@@ -307,9 +309,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return s;
     });
 
+    const newUserId = s.user?.id;
+    const jwtUser = buildUserFromJwt(s.user);
+    const newSchoolId = jwtUser?.schoolId || null;
+
+    // لا يُمسح الكاش عند TOKEN_REFRESHED أو SIGNED_IN المتكرر لنفس المستخدم
+    // يُمسح فقط إذا تغير user.id أو schoolId فعلياً بين الحسابات
+    if (
+      activeUserIdRef.current &&
+      (activeUserIdRef.current !== newUserId || (activeSchoolIdRef.current && newSchoolId && activeSchoolIdRef.current !== newSchoolId))
+    ) {
+      logger.log('[Auth] User or School changed — clearing previous user cache');
+      clearAllCache();
+    }
+
+    activeUserIdRef.current = newUserId || null;
+    if (newSchoolId) activeSchoolIdRef.current = newSchoolId;
+
     const lastSync = parseInt(localStorage.getItem('last_auth_sync') || '0', 10);
 
-    const jwtUser = buildUserFromJwt(s.user);
     if (jwtUser) {
       setUser(prev => {
         if (
@@ -498,6 +516,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             } else {
               silentRefresh().then((success) => {
                 if (!success) {
+                  clearAllCache();
+                  activeUserIdRef.current = null;
+                  activeSchoolIdRef.current = null;
                   setUser(null);
                   setCachedUser(null);
                   setSession(null);
@@ -505,6 +526,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               });
             }
           }).catch(() => {
+            clearAllCache();
+            activeUserIdRef.current = null;
+            activeSchoolIdRef.current = null;
             setUser(null);
             setCachedUser(null);
             setSession(null);
