@@ -481,10 +481,10 @@ export function useChildFullDetails(studentId: string | undefined) {
       }
     },
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
-    staleTime: 30 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: 'always',
+    refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: (failureCount, error: any) => {
       if (error?.code === 'PGRST202' || (error?.status >= 400 && error?.status < 500)) {
