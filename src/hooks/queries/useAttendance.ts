@@ -232,7 +232,7 @@ export function useTeacherAttendance(date: string) {
         };
       }) as TeacherAttendanceRecord[];
     },
-    enabled: !!(session && user?.schoolId),
+    enabled: !!(session && user?.schoolId && date),
     staleTime: 2 * 60 * 1000, 
     gcTime: 60 * 60 * 1000,
     placeholderData: keepPreviousData,
