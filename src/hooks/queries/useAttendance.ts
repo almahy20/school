@@ -181,7 +181,7 @@ export interface TeacherAttendanceRecord {
 
 export function useTeacherAttendance(date: string) {
   const { user, session } = useAuth();
-  const queryKey = ['teacher-attendance', date];
+  const queryKey = ['teacher-attendance', user?.schoolId, date];
   
   return useQuery({
     queryKey,
@@ -243,6 +243,7 @@ export function useTeacherAttendance(date: string) {
 
 export function useUpsertTeacherAttendance() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   return useMutation({
     mutationFn: async (records: any[]) => {
@@ -268,7 +269,7 @@ export function useUpsertTeacherAttendance() {
     onMutate: async (newRecords) => {
       if (newRecords.length === 0) return;
       const date = newRecords[0].date;
-      const queryKey = ['teacher-attendance', date];
+      const queryKey = ['teacher-attendance', user?.schoolId, date];
 
       await queryClient.cancelQueries({ queryKey });
       const previousData = queryClient.getQueryData(queryKey);
