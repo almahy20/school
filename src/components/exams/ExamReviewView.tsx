@@ -7,7 +7,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
-  useExamQuestions,
+  useExamReviewQuestions,
   isEnglishText,
   type ElectronicExam,
   type ExamQuestion,
@@ -26,7 +26,7 @@ interface ExamReviewViewProps {
 type ReviewTab = 'flashcards' | 'mistakes_only' | 'full_list';
 
 export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
-  const { data: questions = [], isLoading } = useExamQuestions(exam.id);
+  const { data: questions = [], isLoading } = useExamReviewQuestions(exam.id);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
   const [masteredMap, setMasteredMap] = useState<Record<string, boolean>>({});

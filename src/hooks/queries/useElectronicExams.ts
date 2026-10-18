@@ -121,19 +121,27 @@ export function useClassElectronicExams(classId: string | null) {
 }
 
 /** أسئلة اختبار واحد */
-export function useExamQuestions(examId: string | null, options?: { excludeAnswer?: boolean }) {
+export function useExamQuestions(examId: string | undefined | null, options?: { excludeAnswer?: boolean }) {
   const { session } = useAuth();
 
   return useQuery<ExamQuestion[]>({
     queryKey: ['exam-questions', examId, options?.excludeAnswer ? 'no-answer' : 'with-answer'],
     queryFn: async () => {
       if (!examId) return [];
-      const fields = options?.excludeAnswer
-        ? 'id, exam_id, school_id, question_type, question_text, options, order_index, created_at'
-        : 'id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at';
+
+      if (options?.excludeAnswer) {
+        const { data, error } = await db
+          .from('student_exam_questions')
+          .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
+          .eq('exam_id', examId)
+          .order('order_index', { ascending: true });
+        if (error) throw error;
+        return (data || []) as ExamQuestion[];
+      }
+
       const { data, error } = await db
         .from('exam_questions')
-        .select(fields)
+        .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
         .eq('exam_id', examId)
         .order('order_index', { ascending: true });
       if (error) throw error;
@@ -141,6 +149,25 @@ export function useExamQuestions(examId: string | null, options?: { excludeAnswe
     },
     enabled: !!(session && examId),
     staleTime: 30 * 1000,
+  });
+}
+
+/** مراجعة أسئلة اختبار مع الإجابات النموذجية بعد تسليم المحاولة حصراً عبر RPC */
+export function useExamReviewQuestions(examId: string | undefined) {
+  const { session } = useAuth();
+
+  return useQuery<ExamQuestion[]>({
+    queryKey: ['exam-review-questions', examId],
+    queryFn: async () => {
+      if (!examId) return [];
+      const { data, error } = await db.rpc('get_exam_review_questions', {
+        p_exam_id: examId,
+      });
+      if (error) throw error;
+      return (data || []) as ExamQuestion[];
+    },
+    enabled: !!(session && examId),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -540,77 +567,20 @@ export function useSubmitExamAttempt() {
         }
       }
 
-      if (!rpcError && rpcResult) {
-        // Server returned: { score, total_score, questions_with_answers }
-        const { score, total_score: totalScore, questions: scoredQs } = rpcResult as any;
-        return {
-          score,
-          totalScore,
-          // correct_answer is revealed only AFTER server saves the attempt
-          questions: (scoredQs || questions) as ExamQuestion[],
-          answers,
-        };
+      if (rpcError || !rpcResult) {
+        logger.error('[Exam] submit_exam_attempt failed:', rpcError?.message);
+        throw new Error(rpcError?.message || 'فشل تسليم الاختبار عبر الخادم');
       }
 
-      // Fallback: direct UPSERT in database if RPC not deployed
-      logger.warn('[Exam] RPC not available or failed, falling back to direct upsert:', rpcError?.message);
-      let score = 0;
-      const totalScore = questions.length;
-      questions.forEach(q => {
-        const given = (answers[q.id] || '').trim().toLowerCase();
-        const correct = (q.correct_answer || '').trim().toLowerCase();
-        if (given && correct && given === correct) score++;
-      });
-
-      let upsertRes = await db
-        .from('exam_attempts')
-        .upsert(
-          {
-            exam_id:              examId,
-            student_id:           studentId,
-            parent_id:            user.id,
-            answers,
-            score,
-            total_score:          totalScore,
-            time_spent_seconds:   timeSpentSeconds,
-            tab_switches_count:   tabSwitchesCount,
-            completed_at:         new Date().toISOString(),
-          },
-          { onConflict: 'exam_id,student_id' }
-        )
-        .select()
-        .single();
-
-      // Retry direct upsert on JWT expired as well
-      if (
-        upsertRes.error &&
-        (upsertRes.error.message?.includes('JWT') ||
-         upsertRes.error.message?.includes('expired') ||
-         upsertRes.error.code === 'PGRST301')
-      ) {
-        await supabase.auth.refreshSession();
-        upsertRes = await db
-          .from('exam_attempts')
-          .upsert(
-            {
-              exam_id:              examId,
-              student_id:           studentId,
-              parent_id:            user.id,
-              answers,
-              score,
-              total_score:          totalScore,
-              time_spent_seconds:   timeSpentSeconds,
-              tab_switches_count:   tabSwitchesCount,
-              completed_at:         new Date().toISOString(),
-            },
-            { onConflict: 'exam_id,student_id' }
-          )
-          .select()
-          .single();
-      }
-
-      if (upsertRes.error) throw upsertRes.error;
-      return { score, totalScore, questions, answers };
+      // Server returned: { score, total_score, questions_with_answers }
+      const { score, total_score: totalScore, questions: scoredQs } = rpcResult as any;
+      return {
+        score,
+        totalScore,
+        // correct_answer is revealed only AFTER server saves the attempt
+        questions: (scoredQs || questions) as ExamQuestion[],
+        answers,
+      };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
