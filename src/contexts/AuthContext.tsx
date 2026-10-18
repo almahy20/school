@@ -179,22 +179,8 @@ async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
   }
 }
 
-async function prefetchCommonQueries(appUser: AppUser) {
-  try {
-    // Note: 'profile' is already cached from get_complete_user_data / buildFinalAppUser
-    if (appUser.schoolId && (appUser.role === 'admin' || appUser.role === 'teacher')) {
-      queryClient.prefetchQuery({
-        queryKey: ['all-profiles', appUser.schoolId],
-        queryFn: async () => {
-          const { data } = await supabase.from('profiles').select('id').eq('school_id', appUser.schoolId).neq('id', appUser.id);
-          return (data || []).map((p: any) => p.id);
-        },
-        staleTime: 5 * 60 * 1000,
-      });
-    }
-  } catch (err) {
-    logger.error('[Prefetch] Error:', err);
-  }
+async function prefetchCommonQueries(_appUser: AppUser) {
+  // Profiles are fetched on-demand in AdminConversationsPage when targetType is 'all'
 }
 
 async function performSignOut(
