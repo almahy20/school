@@ -1,8 +1,14 @@
--- Migration: Fix get_admin_dashboard_summary_legacy & get_admin_dashboard_activities_legacy
--- Reason:
---   1. Fix 42P01 error (relation "complaints" does not exist) by replacing dropped complaints with conversations.
---   2. Allow is_super_admin in get_admin_dashboard_activities_legacy identical to summary.
---   3. Apply ORDER BY date DESC LIMIT 10 on combined itself before jsonb_agg for deterministic ordering.
+-- Migration: 20261018150000_fix_dashboard_legacy_functions.sql
+-- Description: Fix get_admin_dashboard_summary_legacy & get_admin_dashboard_activities_legacy
+-- 
+-- Changes:
+--   1. Fix 42P01 error ("relation 'complaints' does not exist") by replacing dropped complaints with conversations.
+--   2. Preserve last_message_preview with fallback to subject in activity description.
+--   3. Apply ORDER BY date DESC LIMIT 10 on combined itself before jsonb_agg for accurate, deterministic sorting.
+--   4. Allow is_super_admin in get_admin_dashboard_activities_legacy identical to summary_legacy.
+--   5. Security Hardening: REVOKE EXECUTE from public, anon, authenticated and keep GRANT ONLY to service_role,
+--      ensuring legacy functions can only be executed internally via the SECURITY DEFINER wrapper functions
+--      (public.get_admin_dashboard_summary and public.get_admin_dashboard_activities).
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. get_admin_dashboard_activities_legacy
@@ -54,17 +60,20 @@ BEGIN
             FROM (
                 SELECT combined.id, combined.type, combined.title, combined.description, combined.date, combined.status
                 FROM (
-                    -- 1. أحدث المحادثات من أولياء الأمور
+                    -- 1. أحدث المحادثات من أولياء الأمور (بديل الشكاوى)
                     SELECT sub.id, sub.type, sub.title, sub.description, sub.date, sub.status
                     FROM (
                         SELECT 
                             conv.id, 
                             'conversation'::text AS type, 
                             'محادثة جديدة'::text AS title,
-                            CASE 
-                                WHEN length(conv.subject) > 60 THEN substring(conv.subject FROM 1 FOR 60) || '...' 
-                                ELSE conv.subject 
-                            END AS description,
+                            COALESCE(
+                                CASE 
+                                    WHEN length(conv.last_message_preview) > 60 THEN substring(conv.last_message_preview FROM 1 FOR 60) || '...' 
+                                    ELSE conv.last_message_preview 
+                                END,
+                                conv.subject
+                            ) AS description,
                             conv.created_at AS date, 
                             conv.status::text AS status
                         FROM conversations conv 
@@ -122,9 +131,6 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_activities_legacy(UUID, UUID) FROM public, anon;
-GRANT  EXECUTE ON FUNCTION public.get_admin_dashboard_activities_legacy(UUID, UUID) TO authenticated, service_role;
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. get_admin_dashboard_summary_legacy
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -174,7 +180,7 @@ BEGIN
         );
     END IF;
 
-    -- حساب الإحصائيات
+    -- حساب الإحصائيات (Stats)
     WITH
     student_count AS (
         SELECT COUNT(*) AS n
@@ -251,10 +257,13 @@ BEGIN
                             conv.id, 
                             'conversation'::text AS type, 
                             'محادثة جديدة'::text AS title,
-                            CASE 
-                                WHEN length(conv.subject) > 60 THEN substring(conv.subject FROM 1 FOR 60) || '...' 
-                                ELSE conv.subject 
-                            END AS description,
+                            COALESCE(
+                                CASE 
+                                    WHEN length(conv.last_message_preview) > 60 THEN substring(conv.last_message_preview FROM 1 FOR 60) || '...' 
+                                    ELSE conv.last_message_preview 
+                                END,
+                                conv.subject
+                            ) AS description,
                             conv.created_at AS date, 
                             conv.status::text AS status
                         FROM conversations conv 
@@ -318,7 +327,17 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_summary_legacy(UUID, UUID) FROM public, anon;
-GRANT  EXECUTE ON FUNCTION public.get_admin_dashboard_summary_legacy(UUID, UUID) TO authenticated, service_role;
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 3. Permissions & Access Control (Security Hardening)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- حصر صلاحيات التنفيذ لـ service_role فقط ومنع الوصول المباشر من authenticated أو anon
+-- يتم الوصول إلى هاتين الدالتين حصراً عبر الدالتين الوسيطتين SECURITY DEFINER:
+--   - public.get_admin_dashboard_summary
+--   - public.get_admin_dashboard_activities
+REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_activities_legacy(UUID, UUID) FROM public, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.get_admin_dashboard_activities_legacy(UUID, UUID) TO service_role;
+
+REVOKE EXECUTE ON FUNCTION public.get_admin_dashboard_summary_legacy(UUID, UUID) FROM public, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.get_admin_dashboard_summary_legacy(UUID, UUID) TO service_role;
 
 NOTIFY pgrst, 'reload schema';

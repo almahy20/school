@@ -313,12 +313,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const jwtUser = buildUserFromJwt(s.user);
     const newSchoolId = jwtUser?.schoolId || null;
 
-    // لا يُمسح الكاش عند TOKEN_REFRESHED أو SIGNED_IN المتكرر لنفس المستخدم
-    // يُمسح فقط إذا تغير user.id أو schoolId فعلياً بين الحسابات
-    if (
-      activeUserIdRef.current &&
-      (activeUserIdRef.current !== newUserId || (activeSchoolIdRef.current && newSchoolId && activeSchoolIdRef.current !== newSchoolId))
-    ) {
+    // لا يُمسح الكاش عند أول تحميل (من null إلى مستخدم)، ولا عند TOKEN_REFRESHED لنفس المستخدم
+    // يُمسح فقط عند اختلافه عن مستخدم سابق غير null (أي تبديل حساب فعلي)
+    const isUserSwitch = Boolean(activeUserIdRef.current && newUserId && activeUserIdRef.current !== newUserId);
+    const isSchoolSwitch = Boolean(activeUserIdRef.current && activeSchoolIdRef.current && newSchoolId && activeSchoolIdRef.current !== newSchoolId);
+
+    if (isUserSwitch || isSchoolSwitch) {
       logger.log('[Auth] User or School changed — clearing previous user cache');
       clearAllCache();
     }
