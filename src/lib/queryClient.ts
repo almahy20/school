@@ -142,5 +142,45 @@ export async function clearAllCache() {
   } catch (e) {
     logger.error('Failed to clear IndexedDB cache:', e);
   }
+
+  // تنظيف أي مفاتيح محادثات أو رسائل أو بطاقات اختبارات من localStorage
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.includes('conversation') ||
+          key.includes('message') ||
+          key.includes('chat') ||
+          key.startsWith('exam_cards_'))
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+  } catch (e) {
+    logger.error('Failed to clear localStorage conversation/message keys:', e);
+  }
+
+  // تنظيف أي مسودات أو جلسات اختبارات من sessionStorage
+  try {
+    const sessionKeysToRemove: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (
+        key &&
+        (key.includes('conversation') ||
+          key.includes('message') ||
+          key.includes('chat') ||
+          key.includes('exam_attempt_'))
+      ) {
+        sessionKeysToRemove.push(key);
+      }
+    }
+    sessionKeysToRemove.forEach((k) => sessionStorage.removeItem(k));
+  } catch (e) {
+    logger.error('Failed to clear sessionStorage conversation/message keys:', e);
+  }
 }
 

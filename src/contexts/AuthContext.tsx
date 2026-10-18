@@ -189,7 +189,7 @@ async function performSignOut(
 ) {
   try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
   try { realtimeEngine.unsubscribeAll(); } catch (_e) { /* ignore */ }
-  clearAllCache();
+  await clearAllCache();
   setUser(null);
   setSession(null);
   setCachedUser(null);
