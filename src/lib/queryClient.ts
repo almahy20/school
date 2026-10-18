@@ -47,8 +47,9 @@ export const queryClient = new QueryClient({
 });
 
 // ✅ Optimization: IndexedDB Query Persistence with Smart Whitelisting
-// VERSION: Increment this whenever you make major schema changes to force clear all clients' cache
-export const CACHE_VERSION = 'v2.2'; // bumped: smart offline cache for instant mobile load
+// ⚠️ BUSTER POLICY: يُعدل هذا المتغير يدوياً فقط عند حدوث تغيير جذري في بنية البيانات (Schema Breaking Change).
+// لا يرتبط بـ version.json أو buildTimestamp لضمان بقاء كاش البيانات مستقراً عبر التحديثات وإعادة تحميل الكود فقط.
+export const CACHE_VERSION = 'v2.2';
 
 export const idbPersister = {
   persistClient: async (client: any) => {
