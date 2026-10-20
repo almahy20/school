@@ -104,7 +104,10 @@ export function QueryStateHandler({
   // Use either the real error or the timeout error
   const finalError = error || (showTimeoutError ? new Error('تأخرت الاستجابة من السيرفر') : null);
 
-  // 1. Error State - MUST be checked first to avoid hiding errors behind loading spinner
+  // Determine if previous / cached data is present
+  const hasData = data !== undefined && data !== null && (!Array.isArray(data) || data.length > 0 || !isEmpty);
+
+  // 1. Error State
   if (finalError) {
     const isTimeout = showTimeoutError && !error;
     const loadDuration = Date.now() - loadingStartRef.current;
@@ -126,7 +129,39 @@ export function QueryStateHandler({
         displayMessage = 'حدث خطأ في الاتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.';
       }
     }
+
+    // 1a. If existing data is available: Keep showing data and display a sleek banner on top
+    if (hasData) {
+      return (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-3 min-w-0">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+              <p className="text-xs sm:text-sm font-bold truncate">
+                {isTimeout ? 'تأخرت الاستجابة من السيرفر' : displayMessage}
+                <span className="text-rose-500 font-normal mr-2 text-xs">(يتم عرض البيانات المحفوظة محلياً)</span>
+              </p>
+            </div>
+            <Button 
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setShowTimeoutError(false);
+                onRetry();
+              }}
+              disabled={isRefetching}
+              className="shrink-0 h-9 px-4 rounded-xl border-rose-200 bg-white hover:bg-rose-100 text-rose-700 font-bold text-xs flex items-center gap-2 transition-all shadow-sm"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5", isRefetching && "animate-spin")} />
+              إعادة المحاولة
+            </Button>
+          </div>
+          {children}
+        </div>
+      );
+    }
     
+    // 1b. If NO data exists at all: Show full-page error state with retry button
     return (
       <div className="min-h-[400px] flex flex-col items-center justify-center gap-8 p-10 text-center bg-white rounded-[40px] border border-rose-100 shadow-2xl shadow-rose-900/5 animate-in fade-in slide-in-from-bottom-8 duration-700 relative overflow-hidden group">
         <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/0 via-rose-500 to-rose-500/0 opacity-50"></div>
@@ -174,12 +209,8 @@ export function QueryStateHandler({
     );
   }
 
-  // 2. Loading State — يُظهر spinner فقط إذا لم تكن هناك بيانات بعد (أول جلب حقيقي)
-  //    إذا كانت هناك بيانات قديمة (placeholder/cache) نعرضها فوراً مع شريط تحديث خفيف
-  //    ملاحظة: array فاضي [] = data وصلت بالفعل، مش "loading"
-  // البيانات وصلت لو: data مش null/undefined، أو array فيها عناصر، أو object كامل
-  const dataArrived = data !== undefined && data !== null && (!Array.isArray(data) || data.length > 0);
-  if (loading && !isRefetching && !showTimeoutError && !dataArrived) {
+  // 2. Loading State — يُعرض الـ skeleton فقط عند أول تحميل إذا لم تكن هناك بيانات سابقة أو مخزنة
+  if (loading && !isRefetching && !showTimeoutError && !hasData) {
     if (skeleton) {
       return <>{skeleton}</>;
     }
@@ -187,7 +218,7 @@ export function QueryStateHandler({
   }
 
   // 3. Empty State
-  const isDataEmpty = isEmpty || (Array.isArray(data) && data.length === 0) || !dataArrived;
+  const isDataEmpty = isEmpty || (Array.isArray(data) && data.length === 0);
   
   if (isDataEmpty && !loading && !isRefetching) {
     return (
@@ -215,7 +246,7 @@ export function QueryStateHandler({
   }
 
   // 4. Success State — يعرض المحتوى مع شريط تحديث خفيف في الأعلى عند إعادة الجلب
-  const isBackgroundRefetching = (loading || isRefetching) && dataArrived;
+  const isBackgroundRefetching = (loading || isRefetching) && hasData;
   return (
     <div className="relative">
       {/* شريط تحديث شفاف في الأعلى — لا يحجب المحتوى */}

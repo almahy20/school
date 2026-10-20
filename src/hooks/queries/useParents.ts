@@ -140,6 +140,7 @@ export function useAllParents() {
       return data;
     },
     enabled: !!schoolId,
+    placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,

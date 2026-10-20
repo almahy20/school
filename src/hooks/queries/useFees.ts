@@ -36,6 +36,7 @@ export function useTermFees(term?: string) {
       return data || [];
     },
     enabled: !!(session && user?.schoolId && term),
+    placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
     refetchOnMount: false,

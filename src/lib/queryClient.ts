@@ -160,6 +160,7 @@ export const CACHE_SESSION_STORAGE_KEYS = [
 ] as const;
 
 export const CACHE_SESSION_STORAGE_PREFIXES = [
+  'exam_progress_',
   'exam_attempt_',
   'grades:order:',
 ] as const;

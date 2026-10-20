@@ -69,6 +69,7 @@ export function useAllStudents() {
       return (data || []) as Student[];
     },
     enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
+    placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnMount: true,

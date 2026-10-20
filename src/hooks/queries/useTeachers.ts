@@ -91,6 +91,7 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
         }) as Teacher[];
     },
     enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
+    placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     refetchOnMount: true,
     refetchOnWindowFocus: false,

@@ -14,11 +14,10 @@ import { ThemeProvider } from "./components/theme-provider";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 import PwaManager from "./components/PwaManager";
 import { PushNotificationProvider } from "./hooks/usePushNotifications";
-function RouteLoadingScreen() {
+function RouteLoadingBar() {
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center gap-4 bg-[#0a0f1e] text-white" dir="rtl">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-indigo-400" />
-      <p className="text-sm font-bold text-white/60">جاري فتح الصفحة...</p>
+    <div className="fixed top-0 left-0 right-0 z-[9999] h-1 overflow-hidden bg-transparent pointer-events-none" aria-hidden="true">
+      <div className="h-full w-full bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-400 animate-[shimmer_1.2s_ease-in-out_infinite] origin-left shadow-[0_0_12px_rgba(99,102,241,0.6)]" />
     </div>
   );
 }
@@ -84,7 +83,7 @@ function AppRoutes() {
 
   // Sync school favicon with branding — handled by PwaManager
   return (
-    <Suspense fallback={<RouteLoadingScreen />}>
+    <Suspense fallback={<RouteLoadingBar />}>
       <Routes>
         {/* ── Public Routes ── */}
         <Route path="/home" element={<Navigate to="/login" replace />} />

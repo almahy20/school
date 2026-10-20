@@ -67,7 +67,7 @@
           document.documentElement.style.colorScheme = theme;
 
           // 2. Immediate Branding Sync (Prevent Flicker)
-          var userCache = localStorage.getItem('app_user_cache');
+          var userCache = localStorage.getItem('app_user_cache_v2');
           if (userCache) {
             var user = JSON.parse(userCache);
             if (user && user.schoolId) {

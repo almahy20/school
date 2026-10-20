@@ -31,6 +31,7 @@ export function useAllClasses() {
       return (data || []) as Class[];
     },
     enabled: !!(user?.schoolId || user?.isSuperAdmin),
+    placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnMount: true,

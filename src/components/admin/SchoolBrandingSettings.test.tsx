@@ -19,10 +19,17 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 const mockMutate = vi.fn().mockResolvedValue({});
+const mockBranding = { logo_url: 'old-logo.png', name: 'مدرسة الاختبار' };
+
+// تزييف معالجة وضغط الصور
+vi.mock('@/lib/utils', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  compressImage: vi.fn().mockImplementation(() => Promise.resolve(new Blob(['compressed-bytes'], { type: 'image/jpeg' }))),
+}));
 
 // تزييف هوكس الجلب
 vi.mock('@/hooks/queries', () => ({
-  useBranding: () => ({ data: { logo_url: 'old-logo.png' }, isLoading: false }),
+  useBranding: () => ({ data: mockBranding, isLoading: false }),
   useUpdateSchool: () => ({ mutateAsync: mockMutate, isPending: false })
 }));
 
