@@ -61,12 +61,34 @@ class RealtimeEngine {
    * تأكد من فتح القناة الرئيسية الواحدة إذا لم تكن مفتوحة
    */
   private ensureMasterChannel(): void {
-    if (this.masterChannel && (this.masterChannelStatus === 'active' || this.masterChannelStatus === 'connecting')) {
-      return;
+    if (this.masterChannel) {
+      const state = (this.masterChannel as any).state;
+      if (state === 'joined' || state === 'joining' || this.masterChannelStatus === 'active' || this.masterChannelStatus === 'connecting') {
+        return;
+      }
     }
 
     if (this.masterChannelStatus === 'connecting') {
       return;
+    }
+
+    // فحص ما إذا كانت القناة مسجلة بالفعل في قنوات Supabase
+    const existingChannel = supabase.getChannels().find(
+      (ch) => ch.topic === `realtime:${MASTER_CHANNEL_NAME}`
+    );
+
+    if (existingChannel) {
+      const state = (existingChannel as any).state;
+      if (state === 'joined' || state === 'joining') {
+        this.masterChannel = existingChannel;
+        this.masterChannelStatus = state === 'joined' ? 'active' : 'connecting';
+        return;
+      }
+      try {
+        supabase.removeChannel(existingChannel);
+      } catch (_e) {
+        // ignore
+      }
     }
 
     this.masterChannelStatus = 'connecting';
@@ -103,9 +125,12 @@ class RealtimeEngine {
         logger.log(`[RealtimeEngine] Channel status: ${status}`);
         if (status === 'SUBSCRIBED') {
           this.masterChannelStatus = 'active';
-        } else if (status === 'CLOSED' || status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
           this.masterChannelStatus = 'closed';
           this.masterChannel = null;
+        } else if (status === 'TIMED_OUT') {
+          // لا نحذف القناة عند TIMED_OUT لأن Supabase يحاول إعادة الاتصال تلقائياً
+          this.masterChannelStatus = 'connecting';
         } else if (status === 'JOINING') {
           this.masterChannelStatus = 'connecting';
         }
