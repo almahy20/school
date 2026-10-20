@@ -144,66 +144,68 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
       {/* Dynamic Background Noise/Texture */}
       <div className="fixed inset-0 bg-white opacity-[0.03] pointer-events-none z-0" />
 
-      {/* Mobile Glass Header */}
-      <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 no-print">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900 shrink-0">
-            {schoolBranding.logo && !logoError ? (
-              <img
-                src={schoolBranding.logo}
-                alt="School Logo"
-                className="w-full h-full object-contain"
-                onError={() => setLogoError(true)}
-              />
-            ) : (
-              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
-            )}
-          </div>
-          <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.cleanName}</span>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* زر تثبيت التطبيق — يظهر فقط في المتصفح قبل التثبيت */}
-          {canInstall && (
-            <button
-              onClick={handleNavbarInstall}
-              disabled={isInstalling}
-              title="تثبيت البرنامج على جهازك"
-              className="flex items-center gap-1.5 px-3 h-9 sm:h-10 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-black shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 shrink-0"
-            >
-              {isInstalling ? (
-                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+      {/* Mobile Glass Header - Hidden on full-screen chat rooms */}
+      {!shouldHideBottomNav && (
+        <div className="lg:hidden h-16 sm:h-20 bg-white/70 backdrop-blur-2xl border-b border-slate-100 sticky top-0 z-[60] shadow-sm flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 no-print">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center text-white shadow-lg overflow-hidden bg-slate-900 shrink-0">
+              {schoolBranding.logo && !logoError ? (
+                <img
+                  src={schoolBranding.logo}
+                  alt="School Logo"
+                  className="w-full h-full object-contain"
+                  onError={() => setLogoError(true)}
+                />
               ) : (
-                <Download className="w-3.5 h-3.5" />
+                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
               )}
-              <span>تثبيت البرنامج</span>
-            </button>
-          )}
+            </div>
+            <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 truncate max-w-[150px] sm:max-w-[200px]">{schoolBranding.cleanName}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* زر تثبيت التطبيق — يظهر فقط في المتصفح قبل التثبيت */}
+            {canInstall && (
+              <button
+                onClick={handleNavbarInstall}
+                disabled={isInstalling}
+                title="تثبيت البرنامج على جهازك"
+                className="flex items-center gap-1.5 px-3 h-9 sm:h-10 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[10px] font-black shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all disabled:opacity-60 shrink-0"
+              >
+                {isInstalling ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span>تثبيت البرنامج</span>
+              </button>
+            )}
 
-          {/* Notification Bell for Mobile */}
-          <div
-            onClick={() => navigate('/notifications')}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all cursor-pointer shadow-sm relative active:scale-95 group shrink-0"
-          >
-            <Bell className="w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-12 transition-transform" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-3.5 sm:h-4 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center px-1 border-2 border-white shadow-lg">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
+            {/* Notification Bell for Mobile */}
+            <div
+              onClick={() => navigate('/notifications')}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all cursor-pointer shadow-sm relative active:scale-95 group shrink-0"
+            >
+              <Bell className="w-4 h-4 sm:w-5 sm:h-5 group-hover:rotate-12 transition-transform" style={{ color: schoolBranding.themeColor || '#1A3C8F' }} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-3.5 sm:h-4 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center px-1 border-2 border-white shadow-lg">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </div>
+
+            {/* Sidebar button - show for admin/superadmin on mobile, hide for teacher/parent who use BottomNav */}
+            {(user?.role === 'admin' || user?.isSuperAdmin) && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2.5 sm:p-3 rounded-2xl bg-white text-slate-900 hover:bg-slate-50 transition-all active:scale-95 border border-slate-100 shadow-sm shrink-0"
+              >
+                <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
             )}
           </div>
-
-          {/* Sidebar button - show for admin/superadmin on mobile, hide for teacher/parent who use BottomNav */}
-          {(user?.role === 'admin' || user?.isSuperAdmin) && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2.5 sm:p-3 rounded-2xl bg-white text-slate-900 hover:bg-slate-50 transition-all active:scale-95 border border-slate-100 shadow-sm shrink-0"
-            >
-              <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-          )}
         </div>
-      </div>
+      )}
 
       {/* Sidebar Overlay (Mobile) */}
       {sidebarOpen && (
@@ -226,7 +228,10 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
       <PushNotificationPrompt />
 
       {/* Main Content Area */}
-      <main className="lg:mr-72 min-h-screen flex flex-col bg-[#F8FAFC] transition-none relative w-full lg:w-[calc(100%-18rem)]">
+      <main className={cn(
+        "lg:mr-72 flex flex-col bg-[#F8FAFC] transition-none relative w-full lg:w-[calc(100%-18rem)]",
+        shouldHideBottomNav ? "h-screen h-[100dvh] overflow-hidden" : "min-h-screen"
+      )}>
         {/* Abstract Background Gradients */}
         <div 
           style={{ animationDuration: '10s' }} 
@@ -237,8 +242,9 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
           className="absolute bottom-[-5%] left-[-5%] w-[50%] h-[50%] bg-violet-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" 
         />
 
-      {/* Desktop Header Navigation */}
-      <div className="hidden lg:flex h-16 xl:h-20 items-center justify-between px-8 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
+        {/* Desktop Header Navigation - Hidden on full-screen chat rooms */}
+        {!shouldHideBottomNav && (
+          <div className="hidden lg:flex h-16 xl:h-20 items-center justify-between px-8 xl:px-12 relative z-50 sticky top-0 bg-[#F8FAFC]/90 backdrop-blur-2xl border-b border-slate-200/50 shrink-0 no-print">
           <div className="flex items-center gap-4">
             <div className="p-1 px-4 xl:px-5 rounded-full text-[9px] xl:text-[10px] font-black uppercase tracking-[0.2em] border bg-white text-slate-500 border-slate-200 shadow-sm">
               نظام الإدارة الذكي — {schoolBranding.cleanName}
@@ -314,12 +320,12 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden xl:block">حسابي الشخصي</span>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Content Section */}
         <div className={cn(
           "flex-1 w-full relative z-10",
-          shouldHideBottomNav ? "p-0" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6"
+          shouldHideBottomNav ? "p-0 h-full overflow-hidden" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6"
         )}>
           <Suspense fallback={
             <div className="w-full py-20 flex flex-col items-center justify-center gap-3">

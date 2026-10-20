@@ -105,10 +105,10 @@ export default function ClassChatRoomPage() {
   return (
     <div
       dir="rtl"
-      className="flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] lg:h-[calc(100dvh-4rem)] xl:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
+      className="flex flex-col h-full h-screen h-[100dvh] bg-slate-50 overflow-hidden"
     >
         {/* Header */}
-        <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
+        <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm z-20 sticky top-0">
           <button
             onClick={() => navigate(-1)}
             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors shrink-0"
