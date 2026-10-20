@@ -315,6 +315,7 @@ export function useDeleteStudent() {
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-stats'] });
       queryClient.invalidateQueries({ queryKey: ['parents'] });
       queryClient.invalidateQueries({ queryKey: ['parent-children-basic'] });
       queryClient.invalidateQueries({ queryKey: ['student-parent'] });
@@ -339,6 +340,7 @@ export function useAddStudent() {
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-stats'] });
       queryClient.invalidateQueries({ queryKey: ['parents'] });
     },
   });
@@ -415,6 +417,7 @@ export function useUpdateStudent() {
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher-stats'] });
       queryClient.invalidateQueries({ queryKey: ['parent-children-basic'] });
       
       toast.success('تم تحديث بيانات الطالب بنجاح');

@@ -53,8 +53,13 @@ export function prefetchRoute(route: string, queryClient?: QueryClient, user?: A
     case '/': {
       if (user.role === 'admin' && schoolId) {
         queryClient.prefetchQuery({
-          queryKey: ['admin-dashboard-summary', schoolId, user.id],
-          staleTime: 3 * 60 * 1000,
+          queryKey: ['admin-stats', 'summary', schoolId, user.id],
+          staleTime: 60 * 1000,
+        });
+      } else if (user.role === 'teacher' && schoolId) {
+        queryClient.prefetchQuery({
+          queryKey: ['teacher-stats', user.id, schoolId],
+          staleTime: 60 * 1000,
         });
       }
       break;

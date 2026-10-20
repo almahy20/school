@@ -124,6 +124,7 @@ export const persistOptions = {
       'unread-announcements',
       'curriculum',
       'admin-stats',
+      'teacher-stats',
       'admin-activities',
       'admin-dashboard-summary',
       'users'

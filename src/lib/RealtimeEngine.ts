@@ -321,6 +321,7 @@ class RealtimeEngine {
         }
 
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['classes', 'student-counts'], exact: false });
         break;
       }
@@ -331,13 +332,16 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         break;
       }
 
       case 'attendance': {
         queryClient.invalidateQueries({ queryKey: ['attendance'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         break;
       }
 
@@ -346,6 +350,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ queryKey: ['student-grades'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['student-grades-full'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         break;
       }
 
@@ -354,6 +359,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['parent-children'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         break;
       }
 
@@ -361,6 +367,8 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ queryKey: ['notifications'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['notifications-unread-counts'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-activities'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         break;
       }
 
@@ -440,6 +448,7 @@ class RealtimeEngine {
         queryClient.invalidateQueries({ queryKey: ['admin-users'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['pending-parents'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'], exact: false });
         break;
       }
 

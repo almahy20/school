@@ -28,7 +28,7 @@ export interface DashboardActivity {
 export function useAdminDashboardSummary() {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
-  const queryKey = useMemo(() => ['admin-dashboard-summary', user?.schoolId, user?.id], [user?.schoolId, user?.id]);
+  const queryKey = useMemo(() => ['admin-stats', 'summary', user?.schoolId, user?.id], [user?.schoolId, user?.id]);
 
   return useQuery<{ stats: DashboardStats; activities: DashboardActivity[] }>({
     queryKey,
@@ -88,11 +88,9 @@ export function useAdminDashboardSummary() {
       };
     },
     enabled: !!(session && user?.schoolId && user?.id && (user?.role === 'admin' || user?.isSuperAdmin)),
-    staleTime: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -114,7 +112,7 @@ export function useAdminStats() {
       if (!user?.isSuperAdmin && !user?.schoolId) return emptyStats;
 
       // فحص كاش الدالة المدمجة أولاً
-      const summaryCache = queryClient.getQueryData<{ stats: DashboardStats }>(['admin-dashboard-summary', user?.schoolId, user?.id]);
+      const summaryCache = queryClient.getQueryData<{ stats: DashboardStats }>(['admin-stats', 'summary', user?.schoolId, user?.id]);
       if (summaryCache?.stats) return summaryCache.stats;
 
       // تجربة الدالة المدمجة الجديدة
@@ -300,7 +298,7 @@ export function useAdminActivities() {
       if (!user?.schoolId || !user?.id) return [];
 
       // فحص كاش الدالة المدمجة أولاً
-      const summaryCache = queryClient.getQueryData<{ activities: DashboardActivity[] }>(['admin-dashboard-summary', user?.schoolId, user?.id]);
+      const summaryCache = queryClient.getQueryData<{ activities: DashboardActivity[] }>(['admin-stats', 'summary', user?.schoolId, user?.id]);
       if (summaryCache?.activities) return summaryCache.activities;
 
       // تجربة الدالة المدمجة الجديدة
@@ -331,10 +329,8 @@ export function useAdminActivities() {
       return data || [];
     },
     enabled: !!(session && user?.schoolId && user?.id && user?.role === 'admin'),
-    staleTime: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
   });
 }

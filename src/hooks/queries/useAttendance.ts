@@ -133,6 +133,8 @@ export function useUpsertAttendance() {
       if (variables && variables.length > 0) {
         queryClient.invalidateQueries({ queryKey: ['attendance'] });
         queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['teacher-stats'] });
+        queryClient.invalidateQueries({ queryKey: ['parent-children'] });
         queryClient.invalidateQueries({ queryKey: ['parent-dashboard-summary'] });
         queryClient.invalidateQueries({ queryKey: ['child-full-details'] });
       }
