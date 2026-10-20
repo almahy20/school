@@ -32,7 +32,7 @@ CREATE POLICY "exam_questions_staff_manage" ON public.exam_questions
 -- 3. إنشاء View آمن للطلاب لا يحتوي على عمود correct_answer نهائياً
 --    ومقيد بفصل الطالب أو أبناء ولي الأمر (student_parents)
 CREATE OR REPLACE VIEW public.student_exam_questions 
-WITH (security_invoker = false)
+WITH (security_invoker = true)
 AS
 SELECT 
   q.id,

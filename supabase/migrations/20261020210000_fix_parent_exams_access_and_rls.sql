@@ -187,7 +187,7 @@ CREATE POLICY "exam_questions_write_unified" ON public.exam_questions
 -- 6. إنشاء أو تحديث View الآمن student_exam_questions (بدون correct_answer)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE VIEW public.student_exam_questions 
-WITH (security_invoker = false)
+WITH (security_invoker = true)
 AS
 SELECT 
   q.id,
