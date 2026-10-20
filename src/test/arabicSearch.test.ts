@@ -95,6 +95,16 @@ describe('Arabic Search & Normalization Engine', () => {
       expect(isExamAnswerCorrect('عبد الرحمن', 'عبدالرحمن', 'fill_blank')).toBe(true);
     });
 
+    it('accepts Arabic-Indic numerals vs English digits (0-9 vs ٠-٩)', () => {
+      expect(isExamAnswerCorrect('1973', '١٩٧٣', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('١٩٧٣', '1973', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('سنة 1952', 'سنه ١٩٥٢', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('4', '٤', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('15', '١٥', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('50', '۵۰', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('٤', '4', 'multiple_choice')).toBe(true);
+    });
+
     it('supports alternative answers separated by slash or comma', () => {
       expect(isExamAnswerCorrect('القاهرة', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);
       expect(isExamAnswerCorrect('القاهره الكبرى', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);

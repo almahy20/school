@@ -20,12 +20,30 @@
 const COMPOUND_PREFIXES = ['عبد', 'ابو', 'ام', 'ابن', 'بنت', 'اهل', 'ذو', 'ذي'];
 
 /**
+ * Converts Arabic-Indic numerals (٠-٩) and Eastern Arabic numerals (۰-۹) to standard Latin digits (0-9)
+ */
+export function normalizeNumerals(text: string | null | undefined): string {
+  if (!text) return '';
+  return String(text)
+    .replace(/[٠۰]/g, '0')
+    .replace(/[١۱]/g, '1')
+    .replace(/[٢۲]/g, '2')
+    .replace(/[٣۳]/g, '3')
+    .replace(/[٤۴]/g, '4')
+    .replace(/[٥۵]/g, '5')
+    .replace(/[٦۶]/g, '6')
+    .replace(/[٧۷]/g, '7')
+    .replace(/[٨۸]/g, '8')
+    .replace(/[٩۹]/g, '9');
+}
+
+/**
  * Normalizes Arabic string to a uniform representation for search matching
  */
 export function normalizeArabic(text: string | null | undefined): string {
   if (!text) return '';
 
-  return text
+  return normalizeNumerals(text)
     // 1. Remove diacritics / Tashkeel & Tatweel (ـ)
     .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
     // 2. Remove invisible zero-width characters
@@ -188,9 +206,10 @@ export function buildArabicSearchPatterns(query: string | null | undefined): str
  * 1. Taa Marbouta vs Haa (ة <-> ه) e.g. "مدرسة" <-> "مدرسه"
  * 2. Yaa vs Alef Maqsura vs Nabrah (ي <-> ى <-> ئ) e.g. "علي" <-> "على", "مصطفى" <-> "مصطفي"
  * 3. Alef & Hamzas (أ / إ / آ / ٱ / ء <-> ا) e.g. "أحمد" <-> "احمد"
- * 4. Diacritics (Tashkeel) & Tatweel (ـ)
- * 5. Slight spacing differences e.g. "عبد الرحمن" <-> "عبدالرحمن"
- * 6. Alternative answers separated by / or ، or , (e.g. "القاهرة / القاهرة الكبرى")
+ * 4. Arabic-Indic Numerals (٠-٩) vs English Digits (0-9) e.g. "1973" <-> "١٩٧٣"
+ * 5. Diacritics (Tashkeel) & Tatweel (ـ)
+ * 6. Slight spacing differences e.g. "عبد الرحمن" <-> "عبدالرحمن"
+ * 7. Alternative answers separated by / or ، or , (e.g. "القاهرة / القاهرة الكبرى")
  */
 export function isExamAnswerCorrect(
   givenAnswer: string | null | undefined,
@@ -199,8 +218,8 @@ export function isExamAnswerCorrect(
 ): boolean {
   if (!givenAnswer || !correctAnswer) return false;
 
-  const rawGiven = String(givenAnswer).trim();
-  const rawCorrect = String(correctAnswer).trim();
+  const rawGiven = normalizeNumerals(String(givenAnswer).trim());
+  const rawCorrect = normalizeNumerals(String(correctAnswer).trim());
   if (!rawGiven || !rawCorrect) return false;
 
   // Multiple choice & True/False: case-insensitive direct match
