@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { ArrowRight, BookOpen, Calendar, ChevronLeft, Award, FileText, FolderOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useChildFullDetails } from '@/hooks/queries';
@@ -51,8 +50,7 @@ export default function StudentGradesPage() {
   }, [selectedMonth, monthGroups]);
 
   return (
-    <AppLayout>
-      <div className="max-w-5xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-5xl mx-auto space-y-6 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler
           loading={isLoading}
           error={error}
@@ -242,6 +240,5 @@ export default function StudentGradesPage() {
           )}
         </QueryStateHandler>
       </div>
-    </AppLayout>
   );
 }

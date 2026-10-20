@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   CalendarCheck, Users, Check, X, Clock, Search, 
@@ -92,8 +91,7 @@ export default function TeacherAttendancePage() {
   const loading = attendanceLoading && !isRefetching;
 
   return (
-    <AppLayout>
-      <div className="flex flex-col gap-6 md:gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000 px-2 md:px-0">
+    <div className="flex flex-col gap-6 md:gap-8 max-w-[1400px] mx-auto text-right pb-14 animate-in fade-in slide-in-from-bottom-4 duration-1000 px-2 md:px-0">
         <PageHeader
           icon={CalendarCheck}
           title="سجل حضور المعلمين"
@@ -241,7 +239,6 @@ export default function TeacherAttendancePage() {
           </div>
         </QueryStateHandler>
       </div>
-    </AppLayout>
   );
 }
 

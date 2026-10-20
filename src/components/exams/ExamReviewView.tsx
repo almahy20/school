@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import {
   ArrowRight, ArrowLeft, CheckCircle2, XCircle,
   Sparkles, BookOpen, Eye, Check, Brain, Target
@@ -87,17 +86,14 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
 
   if (isLoading) {
     return (
-      <AppLayout>
         <div className="max-w-[850px] mx-auto py-16 px-4 text-center">
           <div className="w-12 h-12 rounded-full border-4 border-violet-500 border-t-transparent animate-spin mx-auto mb-4" />
           <p className="text-sm font-black text-slate-600">جاري تحميل أسئلة الاختبار للمراجعة...</p>
         </div>
-      </AppLayout>
     );
   }
 
   return (
-    <AppLayout>
       <div className="max-w-[850px] mx-auto px-4 md:px-0 pb-24 pt-4 animate-in fade-in duration-300" dir="rtl">
         
         {/* Top Header */}
@@ -514,7 +510,6 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
         )}
 
       </div>
-    </AppLayout>
   );
 }
 

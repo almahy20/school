@@ -7,7 +7,7 @@ import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { GlobalAnnouncement } from './GlobalAnnouncement';
 import BottomNav from './layout/BottomNav';
 import { cn } from '@/lib/utils';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet, useOutletContext } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useUnreadCounts, useBranding } from '@/hooks/queries';
@@ -17,18 +17,32 @@ import PushNotificationPrompt from './PushNotificationPrompt';
 import NetworkStatusBanner from './NetworkStatusBanner';
 import GlobalSyncIndicator from './GlobalSyncIndicator';
 
+export interface AppLayoutOutletContext {
+  setHideBottomNav: (v: boolean) => void;
+}
+
+export function useAppLayoutOutlet() {
+  return useOutletContext<AppLayoutOutletContext>();
+}
+
 interface Props {
-  children: ReactNode;
+  children?: ReactNode;
   hideBottomNav?: boolean;
 }
 
 export default function AppLayout({ children, hideBottomNav }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [overrideHideBottomNav, setOverrideHideBottomNav] = useState(false);
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Reset override whenever the route changes
+  useEffect(() => {
+    setOverrideHideBottomNav(false);
+  }, [location.pathname]);
 
   const { data: unreadCounts } = useUnreadCounts();
   const unreadCount = unreadCounts?.unread || 0;
@@ -42,7 +56,7 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
     location.pathname.startsWith('/manage-conversations/class/') ||
     (/^\/manage-conversations\/[a-zA-Z0-9_-]+$/.test(location.pathname) && location.pathname !== '/manage-conversations');
 
-  const shouldHideBottomNav = Boolean(hideBottomNav || isChatRoomRoute);
+  const shouldHideBottomNav = Boolean(hideBottomNav || isChatRoomRoute || overrideHideBottomNav);
   const hasBottomNav = !shouldHideBottomNav; // BottomNav shows for ALL roles on mobile (md:hidden) unless in chat room
   
   const [logoError, setLogoError] = useState(false);
@@ -312,7 +326,7 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
               <span className="text-xs font-bold text-slate-400">جاري فتح الصفحة...</span>
             </div>
           }>
-            {children}
+            {children || <Outlet context={{ setHideBottomNav: setOverrideHideBottomNav }} />}
           </Suspense>
         </div>
 

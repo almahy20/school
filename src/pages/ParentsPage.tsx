@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useParents, usePendingParents, useParentAction, useBranding, type Parent } from '@/hooks/queries';
@@ -80,7 +79,7 @@ export default function ParentsPage() {
   const handleToggleNoChildren = () => { setFilterNoChildren(v => !v); setPage(1); };
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20 px-2 md:px-0">
         <PageHeader
           icon={UserCheck}
@@ -222,7 +221,7 @@ export default function ParentsPage() {
           </div>
         </QueryStateHandler>
       </div>
-    </AppLayout>
+    </>
   );
 }
 

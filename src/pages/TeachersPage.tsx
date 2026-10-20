@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -128,7 +127,7 @@ export default function TeachersPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
         <PageHeader
           icon={GraduationCap}
@@ -258,7 +257,7 @@ export default function TeachersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }
 

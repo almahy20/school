@@ -1,5 +1,4 @@
 import React from 'react';
-import AppLayout from '@/components/AppLayout';
 import {
   ArrowRight, Clock, XCircle,
   AlertCircle, Loader2, Check, Sparkles,
@@ -57,7 +56,6 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
   // ── Confirm Screen ────────────────────────────────────────────────────────
   if (screen === 'confirm') {
     return (
-      <AppLayout>
         <div className="max-w-[650px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
           <button
             onClick={onBack}
@@ -161,7 +159,6 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             </button>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
@@ -331,7 +328,6 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
     const pct = Math.round((score / (totalScore || 1)) * 100);
 
     return (
-      <AppLayout>
         <div className="max-w-[780px] mx-auto px-4 md:px-0 pb-20 pt-8 animate-in fade-in duration-500" dir="rtl">
           {/* Result Header Card */}
           <div className={cn(
@@ -438,7 +434,6 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             العودة لصفحة الاختبارات
           </button>
         </div>
-      </AppLayout>
     );
   }
 

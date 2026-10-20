@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSessionState } from '@/hooks/useSessionState';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useStudents, useDeleteStudent, useAddStudent, useUpdateStudent, useAllClasses } from '@/hooks/queries';
@@ -142,7 +141,7 @@ export default function StudentsPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
         <PageHeader
           icon={GraduationCap}
@@ -327,7 +326,7 @@ export default function StudentsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }
 

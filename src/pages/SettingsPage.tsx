@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { useTheme } from 'next-themes';
@@ -167,8 +166,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="page-wrapper">
+    <div className="page-wrapper">
         <header className="flex flex-col gap-3">
           <div className="flex items-center gap-3">
              <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white shadow-xl shadow-slate-200">
@@ -357,6 +355,5 @@ export default function SettingsPage() {
            <p className="text-[11px] font-black text-slate-400 tracking-[0.3em] uppercase">EDARA ARABIYA SYSTEM</p>
         </div>
       </div>
-    </AppLayout>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSessionState } from '@/hooks/useSessionState';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { 
@@ -159,7 +158,7 @@ export default function FeesPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-4 md:px-0">
         <PageHeader
           icon={CreditCard}
@@ -327,7 +326,7 @@ export default function FeesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }
 

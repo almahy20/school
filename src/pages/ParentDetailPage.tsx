@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -117,7 +116,7 @@ export default function ParentDetailPage() {
 
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-12 max-w-[1400px] mx-auto text-right pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700 px-6" dir="rtl">
         
         <QueryStateHandler
@@ -501,7 +500,7 @@ export default function ParentDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }
 

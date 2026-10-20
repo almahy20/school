@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -149,34 +148,29 @@ export default function AdminConversationDetailPage() {
   // ── حالات التحميل والخطأ ─────────────────────────────────────────────────
   if (convsLoading) {
     return (
-      <AppLayout>
-        <div className="flex items-center justify-center h-64">
+              <div className="flex items-center justify-center h-64">
           <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
         </div>
-      </AppLayout>
-    );
+          );
   }
 
   if (!conversation) {
     return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
+              <div className="flex flex-col items-center justify-center h-64 gap-4" dir="rtl">
           <MessageCircle className="w-12 h-12 text-slate-200" />
           <p className="text-sm font-bold text-slate-400">لم يتم العثور على المحادثة</p>
           <Button variant="outline" onClick={() => navigate('/manage-conversations')} className="rounded-2xl font-bold text-sm">
             العودة للقائمة
           </Button>
         </div>
-      </AppLayout>
-    );
+          );
   }
 
   const cfg = STATUS_CONFIG[conversation.status];
   const StatusIcon = cfg.icon;
 
   return (
-    <AppLayout hideBottomNav={true}>
-      <div
+          <div
         dir="rtl"
         className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
       >
@@ -318,6 +312,5 @@ export default function AdminConversationDetailPage() {
           </div>
         )}
       </div>
-    </AppLayout>
-  );
+      );
 }

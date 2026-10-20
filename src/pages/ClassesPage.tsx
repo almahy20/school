@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { useClasses, useTeachers, useAddClass, useUpdateClass, useDeleteClass, useClassStudentCounts } from '@/hooks/queries';
@@ -75,7 +74,7 @@ export default function ClassesPage() {
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
   return (
-    <AppLayout>
+    <>
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
         <PageHeader
           icon={School}
@@ -152,7 +151,7 @@ export default function ClassesPage() {
           onSuccess={() => { setShowAdd(false); queryClient.invalidateQueries({ queryKey: ['classes', user?.schoolId] }); }} 
         />
       )}
-    </AppLayout>
+    </>
   );
 }
 

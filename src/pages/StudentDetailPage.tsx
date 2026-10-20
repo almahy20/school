@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -133,7 +132,7 @@ export default function StudentDetailPage() {
   ];
 
   return (
-    <AppLayout>
+    <>
       <div className="max-w-5xl mx-auto pb-24 px-2 md:px-0 space-y-8 text-right animate-in fade-in duration-500" dir="rtl">
 
         {/* ── Hero Banner ── */}
@@ -526,7 +525,7 @@ export default function StudentDetailPage() {
           studentData={fullData}
         />
       )}
-    </AppLayout>
+    </>
   );
 }
 

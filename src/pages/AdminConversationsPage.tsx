@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import AppLayout from '@/components/AppLayout';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -539,8 +538,7 @@ export default function AdminConversationsPage() {
   const { data: unreadCount = 0 } = useUnreadConversationsCount();
 
   return (
-    <AppLayout>
-      <div
+          <div
         className={cn(
           'max-w-[900px] mx-auto animate-in fade-in duration-500 px-4 md:px-0',
           'pb-20',
@@ -601,6 +599,5 @@ export default function AdminConversationsPage() {
         {tab === 'class-chat' && <ClassChatTab />}
         {tab === 'broadcast' && <BroadcastTab />}
       </div>
-    </AppLayout>
-  );
+      );
 }

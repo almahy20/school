@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -104,8 +103,7 @@ export default function ClassChatRoomPage() {
   };
 
   return (
-    <AppLayout hideBottomNav={true}>
-      <div
+          <div
         dir="rtl"
         className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
       >
@@ -218,6 +216,5 @@ export default function ClassChatRoomPage() {
           </div>
         </div>
       </div>
-    </AppLayout>
-  );
+      );
 }

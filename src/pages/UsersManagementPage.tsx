@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppRole } from '@/types/auth';
 import { 
@@ -183,7 +182,7 @@ export default function UsersManagementPage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-8 max-w-7xl mx-auto pb-24 px-4 md:px-0 animate-in fade-in duration-500 text-right">
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-8 bg-white/40 backdrop-blur-md p-8 md:p-12 rounded-[48px] border border-white/50 shadow-xl shadow-slate-200/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
@@ -393,7 +392,7 @@ export default function UsersManagementPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </AppLayout>
+    </>
   );
 }
 

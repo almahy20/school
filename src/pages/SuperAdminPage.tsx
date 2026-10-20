@@ -1,5 +1,4 @@
-﻿import { useState, useMemo } from 'react';
-import AppLayout from '@/components/AppLayout';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { 
@@ -85,8 +84,7 @@ export default function SuperAdminPage() {
   }), [schools, orders]);
 
   return (
-    <AppLayout>
-      <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-16">
+    <div className="flex flex-col gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-16">
         <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-slate-900 text-white p-8 md:p-10 lg:p-12 rounded-[32px] md:rounded-[48px] shadow-2xl relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
           
@@ -243,7 +241,6 @@ export default function SuperAdminPage() {
           )}
         </QueryStateHandler>
       </div>
-    </AppLayout>
   );
 }
 

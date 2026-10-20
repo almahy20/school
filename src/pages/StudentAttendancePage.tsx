@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { ArrowRight, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useChildFullDetails } from '@/hooks/queries';
@@ -43,8 +42,7 @@ export default function StudentAttendancePage() {
   }, [child?.attendance]);
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler
           loading={isLoading}
           error={error}
@@ -153,6 +151,5 @@ export default function StudentAttendancePage() {
           )}
         </QueryStateHandler>
       </div>
-    </AppLayout>
   );
 }

@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   ArrowRight, BookOpen, Calendar, 
@@ -79,8 +78,7 @@ export default function ParentChildDetailPage() {
   const ai = child ? gradeInfo(child.attendanceRate) : { color: '', bg: '', bar: '', label: '' };
 
   return (
-    <AppLayout>
-      <div className="max-w-6xl mx-auto space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-6xl mx-auto space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
         <QueryStateHandler
           loading={isLoading}
           error={error}
@@ -206,6 +204,5 @@ export default function ParentChildDetailPage() {
           </section>
         </QueryStateHandler>
       </div>
-    </AppLayout>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -138,7 +137,7 @@ export default function ClassDetailPage() {
   ];
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-6 max-w-[1400px] mx-auto text-right pb-24 animate-in fade-in duration-500 px-3 md:px-0" dir="rtl">
 
         <QueryStateHandler
@@ -222,7 +221,7 @@ export default function ClassDetailPage() {
         setEditingCurriculum={setEditingCurriculum}
         handleEditCurriculum={handleEditCurriculum}
       />
-    </AppLayout>
+    </>
   );
 }
 

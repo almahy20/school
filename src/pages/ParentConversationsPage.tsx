@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -73,9 +72,14 @@ function ChatView({
   headerSubtitle: string;
   children: React.ReactNode;
 }) {
+  const { setHideBottomNav } = useOutletContext<{ setHideBottomNav?: (v: boolean) => void }>() || {};
+  useEffect(() => {
+    setHideBottomNav?.(true);
+    return () => setHideBottomNav?.(false);
+  }, [setHideBottomNav]);
+
   return (
-    <AppLayout hideBottomNav={true}>
-      <div
+    <div
         dir="rtl"
         className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
       >
@@ -95,7 +99,6 @@ function ChatView({
         </div>
         {children}
       </div>
-    </AppLayout>
   );
 }
 
@@ -370,7 +373,6 @@ export default function ParentConversationsPage() {
 
   // ── Cards landing ──
   return (
-    <AppLayout>
       <div className="max-w-[900px] mx-auto pb-20 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
         <div className="pb-6">
           <PageHeader
@@ -437,6 +439,5 @@ export default function ParentConversationsPage() {
           )}
         </section>
       </div>
-    </AppLayout>
   );
 }

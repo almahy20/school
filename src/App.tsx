@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { getCachedUser } from "@/lib/userCache";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
 import ScrollToTop from "./components/ScrollToTop";
 import { queryClient, persistOptions } from "./lib/queryClient";
 import { ThemeProvider } from "./components/theme-provider";
@@ -85,7 +86,7 @@ function AppRoutes() {
   return (
     <Suspense fallback={<RouteLoadingBar />}>
       <Routes>
-        {/* ── Public Routes ── */}
+        {/* ── Public & Standalone Routes ── */}
         <Route path="/home" element={<Navigate to="/login" replace />} />
         <Route path="/payment/:orderId" element={<PaymentPage />} />
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
@@ -95,70 +96,50 @@ function AppRoutes() {
         {isDev && DeveloperSecretLogin && (
           <Route path="/dev-secret-portal" element={<DeveloperSecretLogin />} />
         )}
-
-        {/* ── Root: Dashboard for logged-in users, Login for guests ── */}
-        <Route
-          path="/"
-          element={
-            user ? (
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            ) : loading && !getCachedUser() ? (
-              // ⏳ Cold start فقط (لا session ولا cache) — اعرض spinner
-              <div className="fixed inset-0 bg-background flex flex-col items-center justify-center gap-3">
-                <div className="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
-                <p className="text-sm font-bold text-muted-foreground">جاري التحميل...</p>
-              </div>
-            ) : loading ? (
-              // 🔄 Token refresh جاري — عرض Dashboard من الكاش بدون انتظار
-              <ProtectedRoute>
-                <DashboardPage />
-              </ProtectedRoute>
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-
-        {/* ── Protected Routes ── */}
         <Route path="/waiting-approval" element={<Navigate to="/" replace />} />
-        <Route path="/onboarding"       element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
-        <Route path="/super-admin"      element={<ProtectedRoute isSuperAdminOnly><SuperAdminPage /></ProtectedRoute>} />
-
-        <Route path="/students"     element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><StudentsPage /></ProtectedRoute>} />
-        <Route path="/students/:id" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><StudentDetailPage /></ProtectedRoute>} />
-        <Route path="/teachers"     element={<ProtectedRoute allowedRoles={['admin']}><TeachersPage /></ProtectedRoute>} />
-        <Route path="/teachers/:id" element={<ProtectedRoute allowedRoles={['admin']}><TeacherDetailPage /></ProtectedRoute>} />
-        <Route path="/parents"      element={<ProtectedRoute allowedRoles={['admin']}><ParentsPage /></ProtectedRoute>} />
-        <Route path="/parents/:id"  element={<ProtectedRoute allowedRoles={['admin']}><ParentDetailPage /></ProtectedRoute>} />
-        <Route path="/classes"      element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassesPage /></ProtectedRoute>} />
-        <Route path="/classes/:id"  element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassDetailPage /></ProtectedRoute>} />
-
-        <Route path="/attendance"      element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AttendancePage /></ProtectedRoute>} />
-        <Route path="/fees"            element={<ProtectedRoute allowedRoles={['admin']}><FeesPage /></ProtectedRoute>} />
-        <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-        <Route path="/messages"        element={<ProtectedRoute allowedRoles={['admin', 'parent']}><MessagesRouter /></ProtectedRoute>} />
-        <Route path="/users"           element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />
-        <Route path="/data-retention"  element={<ProtectedRoute allowedRoles={['admin']}><DataRetentionSettingsPage /></ProtectedRoute>} />
-        {/* ── New Conversations System ── */}
-        <Route path="/conversations"       element={<ProtectedRoute allowedRoles={['parent']}><ParentConversationsPage /></ProtectedRoute>} />
-        <Route path="/conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['parent']}><ClassChatRoomPage /></ProtectedRoute>} />
-        <Route path="/manage-conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['admin']}><AdminClassChatRoomPage /></ProtectedRoute>} />
-        <Route path="/manage-conversations" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationsPage /></ProtectedRoute>} />
-        <Route path="/manage-conversations/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationDetailPage /></ProtectedRoute>} />
-        {/* ── Electronic Exams ── */}
-        <Route path="/exams" element={<ProtectedRoute allowedRoles={['parent']}><ParentExamsPage /></ProtectedRoute>} />
-        <Route path="/settings"        element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
         <Route path="/expired"         element={<ProtectedRoute><SubscriptionExpiredPage /></ProtectedRoute>} />
 
-        {/* ── Parent child detail routes ── */}
-        <Route path="/parent/children/:id"            element={<ProtectedRoute allowedRoles={['parent']}><ParentChildDetailPage /></ProtectedRoute>} />
-        <Route path="/parent/children/:id/grades"     element={<ProtectedRoute allowedRoles={['parent']}><StudentGradesPage /></ProtectedRoute>} />
-        <Route path="/parent/children/:id/attendance" element={<ProtectedRoute allowedRoles={['parent']}><StudentAttendancePage /></ProtectedRoute>} />
-        <Route path="/parent/children/:id/financial"  element={<ProtectedRoute allowedRoles={['parent']}><StudentFinancialPage /></ProtectedRoute>} />
-        <Route path="/parent/children/:id/curriculum" element={<ProtectedRoute allowedRoles={['parent']}><StudentCurriculumPage /></ProtectedRoute>} />
-        <Route path="/parent/children/:id/data"       element={<ProtectedRoute allowedRoles={['parent']}><StudentDataPage /></ProtectedRoute>} />
+        {/* ── Authenticated App Layout (Persistent Frame with Outlet) ── */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/onboarding"       element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
+          <Route path="/super-admin"      element={<ProtectedRoute isSuperAdminOnly><SuperAdminPage /></ProtectedRoute>} />
+
+          <Route path="/students"     element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><StudentsPage /></ProtectedRoute>} />
+          <Route path="/students/:id" element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><StudentDetailPage /></ProtectedRoute>} />
+          <Route path="/teachers"     element={<ProtectedRoute allowedRoles={['admin']}><TeachersPage /></ProtectedRoute>} />
+          <Route path="/teachers/:id" element={<ProtectedRoute allowedRoles={['admin']}><TeacherDetailPage /></ProtectedRoute>} />
+          <Route path="/parents"      element={<ProtectedRoute allowedRoles={['admin']}><ParentsPage /></ProtectedRoute>} />
+          <Route path="/parents/:id"  element={<ProtectedRoute allowedRoles={['admin']}><ParentDetailPage /></ProtectedRoute>} />
+          <Route path="/classes"      element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassesPage /></ProtectedRoute>} />
+          <Route path="/classes/:id"  element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><ClassDetailPage /></ProtectedRoute>} />
+
+          <Route path="/attendance"      element={<ProtectedRoute allowedRoles={['admin', 'teacher']}><AttendancePage /></ProtectedRoute>} />
+          <Route path="/fees"            element={<ProtectedRoute allowedRoles={['admin']}><FeesPage /></ProtectedRoute>} />
+          <Route path="/notifications"   element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+          <Route path="/messages"        element={<ProtectedRoute allowedRoles={['admin', 'parent']}><MessagesRouter /></ProtectedRoute>} />
+          <Route path="/users"           element={<ProtectedRoute allowedRoles={['admin']}><UsersManagementPage /></ProtectedRoute>} />
+          <Route path="/data-retention"  element={<ProtectedRoute allowedRoles={['admin']}><DataRetentionSettingsPage /></ProtectedRoute>} />
+
+          {/* ── New Conversations System ── */}
+          <Route path="/conversations"       element={<ProtectedRoute allowedRoles={['parent']}><ParentConversationsPage /></ProtectedRoute>} />
+          <Route path="/conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['parent']}><ClassChatRoomPage /></ProtectedRoute>} />
+          <Route path="/manage-conversations/class/:roomId" element={<ProtectedRoute allowedRoles={['admin']}><AdminClassChatRoomPage /></ProtectedRoute>} />
+          <Route path="/manage-conversations" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationsPage /></ProtectedRoute>} />
+          <Route path="/manage-conversations/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminConversationDetailPage /></ProtectedRoute>} />
+
+          {/* ── Electronic Exams ── */}
+          <Route path="/exams" element={<ProtectedRoute allowedRoles={['parent']}><ParentExamsPage /></ProtectedRoute>} />
+          <Route path="/settings"        element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
+          {/* ── Parent child detail routes ── */}
+          <Route path="/parent/children/:id"            element={<ProtectedRoute allowedRoles={['parent']}><ParentChildDetailPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/grades"     element={<ProtectedRoute allowedRoles={['parent']}><StudentGradesPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/attendance" element={<ProtectedRoute allowedRoles={['parent']}><StudentAttendancePage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/financial"  element={<ProtectedRoute allowedRoles={['parent']}><StudentFinancialPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/curriculum" element={<ProtectedRoute allowedRoles={['parent']}><StudentCurriculumPage /></ProtectedRoute>} />
+          <Route path="/parent/children/:id/data"       element={<ProtectedRoute allowedRoles={['parent']}><StudentDataPage /></ProtectedRoute>} />
+        </Route>
 
         <Route path="*" element={<NotFound />} />
       </Routes>

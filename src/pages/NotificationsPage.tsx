@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { 
   useNotifications, 
   useMarkAllAsRead, 
@@ -87,8 +86,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="page-wrapper max-w-[1000px]">
+    <div className="page-wrapper max-w-[1000px]">
         <PageHeader
           icon={Bell}
           title="مركز التنبيهات"
@@ -205,6 +203,5 @@ export default function NotificationsPage() {
            <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">تتم مزامنة التنبيهات تلقائياً في الخلفية لضمان وصول المعلومات فور رصدها.</p>
         </div>
       </div>
-    </AppLayout>
   );
 }

@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import AppLayout from '@/components/AppLayout';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
@@ -85,7 +84,7 @@ export default function TeacherDetailPage() {
 
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col gap-8 max-w-7xl mx-auto pb-24 px-4 md:px-0 animate-in fade-in duration-500 text-right">
         
         <QueryStateHandler
@@ -296,7 +295,7 @@ export default function TeacherDetailPage() {
           onClose={() => { setShowEdit(false); refetchTeacher(); }} 
         />
       )}
-    </AppLayout>
+    </>
   );
 }
 
