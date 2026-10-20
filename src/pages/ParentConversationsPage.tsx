@@ -81,7 +81,7 @@ function ChatView({
   return (
     <div
       dir="rtl"
-      className="flex flex-col h-full h-screen h-[100dvh] bg-slate-50 overflow-hidden"
+      className="flex flex-col h-full w-full min-h-0 bg-slate-50 overflow-hidden"
     >
         {/* Header */}
         <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm z-20 sticky top-0">

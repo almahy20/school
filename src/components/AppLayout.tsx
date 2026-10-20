@@ -134,7 +134,10 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
   }, [searchQuery]);
 
   return (
-    <div className="min-h-screen flex flex-col w-full font-cairo selection:bg-primary/20 bg-[#F8FAFC]" dir="rtl">
+    <div className={cn(
+      "w-full font-cairo selection:bg-primary/20 bg-[#F8FAFC]",
+      shouldHideBottomNav ? "h-screen h-[100dvh] overflow-hidden flex flex-col" : "min-h-screen flex flex-col"
+    )} dir="rtl">
       {/* Network Offline/Online Status Banner */}
       <NetworkStatusBanner />
 
@@ -326,7 +329,7 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
         {/* Content Section */}
         <div className={cn(
           "flex-1 w-full relative z-10",
-          shouldHideBottomNav ? "p-0 h-full overflow-hidden" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6"
+          shouldHideBottomNav ? "p-0 h-full min-h-0 overflow-hidden flex flex-col" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6"
         )}>
           <Suspense fallback={
             <div className="w-full py-20 flex flex-col items-center justify-center gap-3">
