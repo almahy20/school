@@ -376,8 +376,9 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             </h3>
 
             <div className="space-y-4">
-              {qs.map((q, i) => {
-                const given = ans[q.id] || '';
+              {(qs || []).map((q, i) => {
+                if (!q) return null;
+                const given = (ans || {})[q.id] || '';
                 const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
                 const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
@@ -441,15 +442,17 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
   return null;
 }
 
-function renderAnswer(q: ExamQuestion, value: string, isEn = false): string {
-  if (!value || value.trim() === '') return isEn ? '(No answer)' : '(لم تتم الإجابة)';
+function renderAnswer(q: ExamQuestion, value: any, isEn = false): string {
+  const strVal = value !== null && value !== undefined ? String(value).trim() : '';
+  if (!strVal) return isEn ? '(No answer)' : '(لم تتم الإجابة)';
   if (q.question_type === 'true_false') {
+    const lower = strVal.toLowerCase();
     if (isEn) {
-      return value === 'true' ? 'True ✓' : value === 'false' ? 'False ✗' : '(No answer)';
+      return lower === 'true' ? 'True ✓' : lower === 'false' ? 'False ✗' : '(No answer)';
     }
-    return value === 'true' ? 'صح ✓' : value === 'false' ? 'خطأ ✗' : '(لم تتم الإجابة)';
+    return lower === 'true' ? 'صح ✓' : lower === 'false' ? 'خطأ ✗' : '(لم تتم الإجابة)';
   }
-  return value;
+  return strVal;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {

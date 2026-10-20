@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   useExamQuestions,
   useSubmitExamAttempt,
+  safeParseOptions,
   type ElectronicExam,
   type ExamQuestion,
 } from '@/hooks/queries/useElectronicExams';
@@ -62,8 +63,9 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
     if (rawQuestions.length === 0) return rawQuestions;
     const seed = `${exam.id}-${studentId}`;
     return seededShuffle(rawQuestions, seed).map(q => {
-      if (q.question_type === 'multiple_choice' && Array.isArray(q.options)) {
-        return { ...q, options: seededShuffle(q.options as string[], seed + q.id) };
+      if (q.question_type === 'multiple_choice') {
+        const parsedOpts = safeParseOptions(q.options);
+        return { ...q, options: seededShuffle(parsedOpts, seed + q.id) };
       }
       return q;
     });

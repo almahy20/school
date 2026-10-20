@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
+import { isExamAnswerCorrect } from '@/utils/arabicSearch';
 
 const db = supabase as any;
 
@@ -53,6 +54,38 @@ export function isEnglishText(text?: string | null): boolean {
   const cleaned = text.replace(/[^a-zA-Z\u0600-\u06FF]/g, '').trim();
   if (!cleaned) return false;
   return /^[a-zA-Z]/.test(cleaned);
+}
+
+/** تحويل وتفريغ الخيارات بأمان لمنع أي استثناء في حال كانت المخزنة نصاً أو غير مصفوفة */
+export function safeParseOptions(opts: any): string[] {
+  if (!opts) return [];
+  if (Array.isArray(opts)) return opts.map(String);
+  if (typeof opts === 'string') {
+    try {
+      const parsed = JSON.parse(opts);
+      if (Array.isArray(parsed)) return parsed.map(String);
+    } catch {
+      return [];
+    }
+  }
+  if (typeof opts === 'object') {
+    return Object.values(opts).map(String);
+  }
+  return [];
+}
+
+/** قراءة إجابات الطالب بأمان من المحاولة سواء كانت كائناً أو نص JSON */
+export function safeParseAnswers(answers: any): Record<string, string> {
+  if (!answers) return {};
+  if (typeof answers === 'string') {
+    try {
+      const parsed = JSON.parse(answers);
+      return typeof parsed === 'object' && parsed !== null ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof answers === 'object' && answers !== null ? answers : {};
 }
 
 export interface ExamAttempt {
@@ -186,22 +219,45 @@ export function useExamReviewQuestions(examId: string | undefined) {
         const { data, error } = await db.rpc('get_exam_review_questions', {
           p_exam_id: examId,
         });
-        if (!error && data) {
-          return (data || []) as ExamQuestion[];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data as ExamQuestion[];
         }
-        logger.warn('[useExamReviewQuestions] RPC error, falling back to direct table:', error?.message);
+        if (error) {
+          logger.warn('[useExamReviewQuestions] RPC error:', error?.message);
+        }
       } catch (e) {
         logger.warn('[useExamReviewQuestions] RPC exception:', e);
       }
 
-      // بديل مباشر في حال لم تكن دالة الـ RPC مطبقة بعد
-      const { data, error } = await db
-        .from('exam_questions')
-        .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
-        .eq('exam_id', examId)
-        .order('order_index', { ascending: true });
-      if (error) throw error;
-      return (data || []) as ExamQuestion[];
+      // بديل مباشر: محاولة الجلب من view أسئلة الطلاب الآمنة
+      try {
+        const { data: viewData, error: viewError } = await db
+          .from('student_exam_questions')
+          .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
+          .eq('exam_id', examId)
+          .order('order_index', { ascending: true });
+        if (!viewError && Array.isArray(viewData) && viewData.length > 0) {
+          return viewData as ExamQuestion[];
+        }
+      } catch (viewEx) {
+        logger.warn('[useExamReviewQuestions] student_exam_questions view fallback exception:', viewEx);
+      }
+
+      // بديل مباشر أخير لجدول exam_questions
+      try {
+        const { data, error } = await db
+          .from('exam_questions')
+          .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
+          .eq('exam_id', examId)
+          .order('order_index', { ascending: true });
+        if (!error && Array.isArray(data)) {
+          return data as ExamQuestion[];
+        }
+      } catch (directEx) {
+        logger.warn('[useExamReviewQuestions] exam_questions direct fallback exception:', directEx);
+      }
+
+      return [];
     },
     enabled: !!(session && examId),
     staleTime: 5 * 60 * 1000,
@@ -767,17 +823,76 @@ export function useSubmitExamAttempt() {
       }
 
       if (rpcError || !rpcResult) {
-        logger.error('[Exam] submit_exam_attempt failed:', rpcError?.message);
-        throw new Error(rpcError?.message || 'فشل تسليم الاختبار عبر الخادم');
+        logger.warn('[Exam] submit_exam_attempt RPC failed, trying resilient direct save fallback:', rpcError?.message);
+
+        // Fetch questions with correct answers
+        let reviewQuestions = questions;
+        try {
+          const { data: revData } = await db.rpc('get_exam_review_questions', { p_exam_id: examId });
+          if (revData && revData.length > 0) {
+            reviewQuestions = revData as ExamQuestion[];
+          }
+        } catch { /* ignore */ }
+
+        if (!reviewQuestions.some(q => !!q.correct_answer)) {
+          try {
+            const { data: qData } = await db
+              .from('exam_questions')
+              .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
+              .eq('exam_id', examId);
+            if (qData && qData.length > 0) {
+              reviewQuestions = qData as ExamQuestion[];
+            }
+          } catch { /* ignore */ }
+        }
+
+        // Calculate score with flexible Arabic tolerance
+        let calculatedScore = 0;
+        reviewQuestions.forEach((q) => {
+          const given = answers[q.id];
+          if (q.correct_answer && isExamAnswerCorrect(given, q.correct_answer, q.question_type)) {
+            calculatedScore++;
+          }
+        });
+
+        // Direct fallback: Upsert attempt into exam_attempts
+        const { data: fallbackAttempt, error: fallbackError } = await db
+          .from('exam_attempts')
+          .upsert({
+            exam_id:            examId,
+            student_id:         studentId,
+            parent_id:          user.id,
+            answers:            answers,
+            score:              calculatedScore,
+            total_score:        reviewQuestions.length,
+            time_spent_seconds: timeSpentSeconds,
+            tab_switches_count: tabSwitchesCount,
+            completed_at:       new Date().toISOString(),
+          }, { onConflict: 'exam_id,student_id' })
+          .select('id, score, total_score')
+          .single();
+
+        if (fallbackError) {
+          logger.error('[Exam] Direct attempt fallback also failed:', fallbackError.message);
+          throw new Error(rpcError?.message || fallbackError.message || 'فشل تسليم الاختبار');
+        }
+
+        return {
+          score: fallbackAttempt?.score ?? calculatedScore,
+          totalScore: fallbackAttempt?.total_score ?? reviewQuestions.length,
+          questions: reviewQuestions,
+          answers,
+        };
       }
 
-      // Server returned: { score, total_score, questions_with_answers }
-      const { score, total_score: totalScore, questions: scoredQs } = rpcResult as any;
+      // Server returned: { score, total_score, questions, questions_with_answers }
+      const scoredQs = (rpcResult.questions || rpcResult.questions_with_answers) as ExamQuestion[] | undefined;
+      const finalTotalScore = rpcResult.total_score ?? rpcResult.totalScore ?? questions.length;
       return {
-        score,
-        totalScore,
+        score: rpcResult.score,
+        totalScore: finalTotalScore,
         // correct_answer is revealed only AFTER server saves the attempt
-        questions: (scoredQs || questions) as ExamQuestion[],
+        questions: (scoredQs && scoredQs.length > 0 ? scoredQs : questions) as ExamQuestion[],
         answers,
       };
     },

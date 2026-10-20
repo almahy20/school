@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import {
   useExamReviewQuestions,
   isEnglishText,
+  safeParseOptions,
+  safeParseAnswers,
   type ElectronicExam,
   type ExamQuestion,
   type ExamAttempt,
@@ -32,8 +34,8 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
   const [masteredMap, setMasteredMap] = useState<Record<string, boolean>>({});
 
   const userAnswers: Record<string, string> = useMemo(() => {
-    return exam.attempt?.answers || {};
-  }, [exam.attempt]);
+    return safeParseAnswers(exam.attempt?.answers);
+  }, [exam.attempt?.answers]);
 
   // Identify wrong questions for "Mistake Mastery" mode
   const wrongQuestions = useMemo(() => {
@@ -59,18 +61,19 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
 
   // Active question list depending on tab
   const activeList = tab === 'mistakes_only' ? wrongQuestions : questions;
-  const currentQ = activeList[currentIdx];
+  const safeIdx = Math.min(Math.max(0, currentIdx), Math.max(0, activeList.length - 1));
+  const currentQ = activeList[safeIdx];
 
   const handleNext = () => {
-    if (currentIdx < activeList.length - 1) {
-      setCurrentIdx(p => p + 1);
+    if (safeIdx < activeList.length - 1) {
+      setCurrentIdx(safeIdx + 1);
       setIsRevealed(false);
     }
   };
 
   const handlePrev = () => {
-    if (currentIdx > 0) {
-      setCurrentIdx(p => p - 1);
+    if (safeIdx > 0) {
+      setCurrentIdx(safeIdx - 1);
       setIsRevealed(false);
     }
   };
@@ -89,6 +92,28 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
           <div className="w-12 h-12 rounded-full border-4 border-violet-500 border-t-transparent animate-spin mx-auto mb-4" />
           <p className="text-sm font-black text-slate-600">جاري تحميل أسئلة الاختبار للمراجعة...</p>
         </div>
+    );
+  }
+
+  if (!isLoading && questions.length === 0) {
+    return (
+      <div className="max-w-[850px] mx-auto py-16 px-4 text-center" dir="rtl">
+        <div className="bg-white border border-slate-100 rounded-[32px] p-8 md:p-10 space-y-4 shadow-sm max-w-lg mx-auto">
+          <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-2xl">
+            📋
+          </div>
+          <h3 className="text-lg font-black text-slate-900">لا تتوفر تفاصيل الأسئلة للمراجعة حالياً</h3>
+          <p className="text-xs font-bold text-slate-500 leading-relaxed">
+            تم حفظ نتيجة الاختبار بنجاح ({score} من {totalScore}). تفاصيل الأسئلة النموذجية ستكون متاحة بمجرد إتاحتها من المدرسة.
+          </p>
+          <button
+            onClick={onBack}
+            className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-black text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            العودة لقائمة الاختبارات
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -265,7 +290,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                       {/* Interactive Choices (for multiple choice) */}
                       {q.question_type === 'multiple_choice' && (
                         <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3 pt-2">
-                          {(q.options as string[] || []).map((opt, oi) => {
+                          {safeParseOptions(q.options).map((opt, oi) => {
                             const isStudentPick = given === opt;
                             const isCorrectOpt = isExamAnswerCorrect(opt, q.correct_answer, q.question_type);
 
@@ -388,7 +413,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                       <div className="flex items-center gap-3 pt-4 border-t border-slate-100">
                         <button
                           onClick={handlePrev}
-                          disabled={currentIdx === 0}
+                          disabled={safeIdx === 0}
                           className="flex-1 h-12 rounded-2xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-black text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 cursor-pointer"
                         >
                           <ArrowRight className="w-4 h-4" />
@@ -397,7 +422,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
 
                         <button
                           onClick={handleNext}
-                          disabled={currentIdx === activeList.length - 1}
+                          disabled={safeIdx >= activeList.length - 1}
                           className="flex-[2] h-12 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer"
                         >
                           التالي
@@ -416,7 +441,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                   </p>
                   <div className="flex flex-wrap gap-2 justify-center">
                     {activeList.map((question, i) => {
-                      const isCurrent = i === currentIdx;
+                      const isCurrent = i === safeIdx;
                       const isGivenCorrect = isExamAnswerCorrect(userAnswers[question.id], question.correct_answer, question.question_type);
                       const isMastered = !!masteredMap[question.id];
 
@@ -512,13 +537,15 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
   );
 }
 
-function renderAnswer(q: ExamQuestion, value: string, isEn = false): string {
-  if (!value || typeof value !== 'string' || value.trim() === '') return isEn ? '(No answer)' : '(لم تتم الإجابة)';
+function renderAnswer(q: ExamQuestion, value: any, isEn = false): string {
+  const strVal = value !== null && value !== undefined ? String(value).trim() : '';
+  if (!strVal) return isEn ? '(No answer)' : '(لم تتم الإجابة)';
   if (q.question_type === 'true_false') {
+    const lower = strVal.toLowerCase();
     if (isEn) {
-      return value === 'true' ? 'True ✓' : value === 'false' ? 'False ✗' : '(No answer)';
+      return lower === 'true' ? 'True ✓' : lower === 'false' ? 'False ✗' : '(No answer)';
     }
-    return value === 'true' ? 'صح ✓' : value === 'false' ? 'خطأ ✗' : '(لم تتم الإجابة)';
+    return lower === 'true' ? 'صح ✓' : lower === 'false' ? 'خطأ ✗' : '(لم تتم الإجابة)';
   }
-  return value;
+  return strVal;
 }

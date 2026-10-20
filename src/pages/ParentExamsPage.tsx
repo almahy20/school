@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, Component, type ReactNode } from 'react';
 import {
   ClipboardList, Clock, CheckCircle2, BookOpen,
-  ChevronLeft, Timer, Brain,
+  ChevronLeft, Timer, Brain, AlertCircle,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -216,6 +216,48 @@ function StatsBar({ exams }: { exams: ExamWithStudent[] }) {
   );
 }
 
+// ─── Local Error Boundary ───────────────────────────────────────────────────
+
+class LocalExamErrorBoundary extends Component<
+  { children: ReactNode; onBack: () => void },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(err: any) {
+    console.error('[ParentExamsPage] Exam view crash prevented:', err);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-[650px] mx-auto py-16 px-4 text-center" dir="rtl">
+          <div className="bg-white border border-rose-100 rounded-[32px] p-8 md:p-10 space-y-4 shadow-sm">
+            <div className="w-16 h-16 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto text-2xl">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg font-black text-slate-900">حدث خطأ أثناء عرض شاشة الاختبار</h3>
+            <p className="text-xs font-bold text-slate-500 leading-relaxed">
+              بياناتك ونتائجك محفوظة بأمان. يمكنك العودة لقائمة الاختبارات والمحاولة مجدداً.
+            </p>
+            <button
+              onClick={this.props.onBack}
+              className="px-6 py-2.5 rounded-xl bg-slate-900 text-white font-black text-xs hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              العودة لقائمة الاختبارات
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ParentExamsPage() {
@@ -225,22 +267,26 @@ export default function ParentExamsPage() {
 
   if (activeExam) {
     return (
-      <ExamTakingView
-        exam={activeExam}
-        studentId={activeExam.student_id}
-        studentName={activeExam.student_name}
-        onFinish={() => { setActiveExam(null); refetch(); }}
-        onBack={() => setActiveExam(null)}
-      />
+      <LocalExamErrorBoundary onBack={() => setActiveExam(null)}>
+        <ExamTakingView
+          exam={activeExam}
+          studentId={activeExam.student_id}
+          studentName={activeExam.student_name}
+          onFinish={() => { setActiveExam(null); refetch(); }}
+          onBack={() => setActiveExam(null)}
+        />
+      </LocalExamErrorBoundary>
     );
   }
 
   if (reviewExam) {
     return (
-      <ExamReviewView
-        exam={reviewExam}
-        onBack={() => setReviewExam(null)}
-      />
+      <LocalExamErrorBoundary onBack={() => setReviewExam(null)}>
+        <ExamReviewView
+          exam={reviewExam}
+          onBack={() => setReviewExam(null)}
+        />
+      </LocalExamErrorBoundary>
     );
   }
 

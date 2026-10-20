@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { isEnglishText, type ExamQuestion } from '@/hooks/queries/useElectronicExams';
+import { isEnglishText, safeParseOptions, type ExamQuestion } from '@/hooks/queries/useElectronicExams';
 
 interface QuestionCardProps {
   question: ExamQuestion;
@@ -116,7 +116,7 @@ export function QuestionCard({
 
       {question.question_type === 'multiple_choice' && (
         <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3.5 pt-2">
-          {(question.options as string[]).map((opt, oi) => {
+          {safeParseOptions(question.options).map((opt, oi) => {
             const isSelected = answer === opt;
             return (
               <button
@@ -139,7 +139,7 @@ export function QuestionCard({
                       : 'bg-white border-slate-200 text-slate-600 group-hover:border-violet-300 group-hover:text-violet-600'
                   )}
                 >
-                  {letters[oi]}
+                  {letters[oi] || (oi + 1)}
                 </span>
                 <span className={cn('text-base sm:text-lg font-bold flex-1 leading-relaxed', isEn ? 'text-left font-sans' : 'text-right')}>
                   {opt}
