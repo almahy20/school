@@ -12,6 +12,7 @@ import {
   type ExamQuestion,
   type ExamAttempt,
 } from '@/hooks/queries/useElectronicExams';
+import { isExamAnswerCorrect } from '@/utils/arabicSearch';
 
 interface ExamReviewViewProps {
   exam: ElectronicExam & {
@@ -37,9 +38,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
   // Identify wrong questions for "Mistake Mastery" mode
   const wrongQuestions = useMemo(() => {
     return questions.filter(q => {
-      const given = (userAnswers[q.id] || '').trim().toLowerCase();
-      const correct = (q.correct_answer || '').trim().toLowerCase();
-      return given !== correct;
+      return !isExamAnswerCorrect(userAnswers[q.id], q.correct_answer, q.question_type);
     });
   }, [questions, userAnswers]);
 
@@ -220,7 +219,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                 {(() => {
                   const q = currentQ;
                   const given = userAnswers[q.id] || '';
-                  const isOriginallyCorrect = given.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
+                  const isOriginallyCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
                   const isEn = exam.language === 'en' || isEnglishText(q.question_text);
                   const isMastered = !!masteredMap[q.id];
 
@@ -268,7 +267,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                         <div dir={isEn ? 'ltr' : 'rtl'} className="space-y-3 pt-2">
                           {(q.options as string[] || []).map((opt, oi) => {
                             const isStudentPick = given === opt;
-                            const isCorrectOpt = (opt || '').trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
+                            const isCorrectOpt = isExamAnswerCorrect(opt, q.correct_answer, q.question_type);
 
                             return (
                               <div
@@ -418,7 +417,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                   <div className="flex flex-wrap gap-2 justify-center">
                     {activeList.map((question, i) => {
                       const isCurrent = i === currentIdx;
-                      const isGivenCorrect = (userAnswers[question.id] || '').trim().toLowerCase() === (question.correct_answer || '').trim().toLowerCase();
+                      const isGivenCorrect = isExamAnswerCorrect(userAnswers[question.id], question.correct_answer, question.question_type);
                       const isMastered = !!masteredMap[question.id];
 
                       return (
@@ -462,7 +461,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
               <div className="space-y-4">
                 {questions.map((q, i) => {
                   const given = userAnswers[q.id] || '';
-                  const isCorrect = given.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
+                  const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
                   const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
                   return (

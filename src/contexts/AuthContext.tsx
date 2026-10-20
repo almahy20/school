@@ -24,15 +24,25 @@ function buildUserFromJwt(supaUser: SupabaseUser): AppUser | null {
   try {
     const app = supaUser.app_metadata as any;
     const meta = supaUser.user_metadata as any;
-    const role: AppRole = (app?.role || meta?.role || 'parent') as AppRole;
+    const cached = getCachedUser();
+    const isSameUser = cached?.id === supaUser.id;
+
+    const role: AppRole = (
+      app?.role ||
+      meta?.role ||
+      (isSameUser && cached?.role ? cached.role : 'parent')
+    ) as AppRole;
+
     const schoolId: string | undefined =
       (app?.school_id ? String(app.school_id) : undefined) ||
-      (meta?.school_id ? String(meta.school_id) : undefined);
+      (meta?.school_id ? String(meta.school_id) : undefined) ||
+      (isSameUser && cached?.schoolId ? cached.schoolId : undefined);
+
     // app_metadata (من JWT hook) يأتي أولاً، ثم user_metadata كـ fallback
-    const fullName: string = app?.full_name || meta?.full_name || '';
-    const phone: string = app?.phone || meta?.phone || '';
-    const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin);
-    const approvalStatus = (app?.approval_status || 'approved') as 'approved' | 'pending' | 'rejected';
+    const fullName: string = app?.full_name || meta?.full_name || (isSameUser ? cached?.fullName || '' : '');
+    const phone: string = app?.phone || meta?.phone || (isSameUser ? cached?.phone || '' : '');
+    const isSuperAdmin: boolean = !!(app?.is_super_admin || meta?.is_super_admin || (isSameUser && cached?.isSuperAdmin));
+    const approvalStatus = (app?.approval_status || meta?.approval_status || (isSameUser && cached?.approvalStatus) || 'approved') as 'approved' | 'pending' | 'rejected';
 
     let schoolStatus = 'active';
     if (schoolId) {
@@ -330,30 +340,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (jwtUser) {
       setUser(prev => {
-        if (
-          prev &&
-          prev.id === jwtUser.id &&
-          prev.role === jwtUser.role &&
-          prev.schoolId === jwtUser.schoolId &&
-          prev.approvalStatus === jwtUser.approvalStatus &&
-          prev.fullName === jwtUser.fullName &&
-          prev.phone === jwtUser.phone
-        ) {
-          return prev;
+        // Prevent session downgrade: If prev belongs to the same user and has populated role/schoolId, preserve them
+        if (prev && prev.id === jwtUser.id) {
+          const mergedSchoolId = prev.schoolId || jwtUser.schoolId;
+          const mergedRole = (jwtUser.role === 'parent' && prev.role !== 'parent') ? prev.role : jwtUser.role;
+          const mergedFullName = prev.fullName || jwtUser.fullName;
+          const mergedApproval = prev.approvalStatus || jwtUser.approvalStatus;
+
+          const mergedUser: AppUser = {
+            ...jwtUser,
+            schoolId: mergedSchoolId,
+            role: mergedRole,
+            fullName: mergedFullName,
+            approvalStatus: mergedApproval,
+            isSuperAdmin: prev.isSuperAdmin || jwtUser.isSuperAdmin,
+            schoolStatus: prev.schoolStatus || jwtUser.schoolStatus,
+            subscriptionExpired: prev.subscriptionExpired ?? jwtUser.subscriptionExpired,
+          };
+          if (mergedSchoolId) activeSchoolIdRef.current = mergedSchoolId;
+          setCachedUser(mergedUser);
+          return mergedUser;
         }
+
+        setCachedUser(jwtUser);
         return jwtUser;
       });
-      setCachedUser(jwtUser);
       localStorage.setItem('last_auth_sync', Date.now().toString());
     }
 
     if (!s.access_token || s.access_token === s.refresh_token) {
-      logger.warn('[Auth] Skipping background RPC â€” no valid access token');
+      logger.warn('[Auth] Skipping background RPC — no valid access token');
       return;
     }
 
     if (loadingUserIdRef.current === s.user.id) {
-      logger.log('[Auth] Background RPC skipped â€” already loading for this user');
+      logger.log('[Auth] Background RPC skipped — already loading for this user');
       return;
     }
 
@@ -372,7 +393,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     if ((isJwtComplete && hasApprovalStatus && isRecentlySynced) || cacheIsComplete) {
-      logger.log('[Auth] Background RPC skipped â€” JWT complete + recently synced');
+      logger.log('[Auth] Background RPC skipped — JWT complete + recently synced');
       if (cachedUser) {
         prefetchCommonQueries(cachedUser);
       }
@@ -383,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getAppUserData(s.user).then(appUser => {
       loadingUserIdRef.current = null;
       if (!appUser) return;
+      if (appUser.schoolId) activeSchoolIdRef.current = appUser.schoolId;
       setUser(prev => {
         if (
           prev &&
@@ -538,13 +560,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (event === 'TOKEN_REFRESH_FAILED') {
-          silentRefresh().then((success) => {
-            if (!success) {
-              setUser(null);
-              setCachedUser(null);
-              setSession(null);
+          // If offline, do NOT sign out — keep working on cached session
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setIsLoading(false);
+            return;
+          }
+          // Verify if session in storage is actually expired before logging out
+          supabase.auth.getSession().then(({ data: { session: current } }) => {
+            if (current && current.expires_at && current.expires_at > Math.floor(Date.now() / 1000) + 60) {
+              logger.log('[Auth] TOKEN_REFRESH_FAILED ignored — current session is still valid');
+              return;
             }
-          });
+            silentRefresh().then((success) => {
+              if (!success) {
+                logger.warn('[Auth] TOKEN_REFRESH_FAILED confirmed invalid — clearing session');
+                setUser(null);
+                setCachedUser(null);
+                setSession(null);
+              }
+            });
+          }).catch(() => { /* offline / ignore */ });
           setIsLoading(false);
           return;
         }
@@ -558,10 +593,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       supabase.auth.getSession().then(({ data: { session: current } }) => {
         if (current) {
           const expiresAt = current.expires_at ?? 0;
-          if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) silentRefresh();
+          if (expiresAt - Math.floor(Date.now() / 1000) < 3 * 60) silentRefresh();
         } else {
           silentRefresh();
         }
@@ -570,10 +606,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener('visibilitychange', handleVisibilityChange);
 
     const refreshInterval = setInterval(() => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return;
       supabase.auth.getSession().then(({ data: { session: current } }) => {
         if (!current) { silentRefresh(); return; }
         const expiresAt = current.expires_at ?? 0;
-        if (expiresAt - Math.floor(Date.now() / 1000) < 10 * 60) silentRefresh();
+        if (expiresAt - Math.floor(Date.now() / 1000) < 3 * 60) silentRefresh();
       }).catch(() => { /* ignore */ });
     }, 4 * 60 * 1000);
 
@@ -650,7 +687,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ? 'رقم الهاتف أو كلمة المرور غير صحيحة'
           : error.message;
       }
-      if (data.session) applySession(data.session);
+      if (data.session) {
+        // Hydrate complete user profile BEFORE resolving login to eliminate data delays and role flips
+        try {
+          const appUser = await getAppUserData(data.session.user);
+          if (appUser) {
+            activeUserIdRef.current = appUser.id;
+            if (appUser.schoolId) activeSchoolIdRef.current = appUser.schoolId;
+            setUser(appUser);
+            setCachedUser(appUser);
+            localStorage.setItem('last_auth_sync', Date.now().toString());
+          }
+        } catch (e) {
+          logger.warn('[Auth] Initial getAppUserData during login failed, falling back to session:', e);
+        }
+        applySession(data.session);
+      }
       sessionStorage.setItem('user_signup_time', Date.now().toString());
       return null;
     } catch {

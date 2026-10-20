@@ -180,3 +180,56 @@ export function buildArabicSearchPatterns(query: string | null | undefined): str
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
+
+/**
+ * Flexible Arabic & Multilingual Exam Answer Matcher
+ * ----------------------------------------------------
+ * Solves:
+ * 1. Taa Marbouta vs Haa (ة <-> ه) e.g. "مدرسة" <-> "مدرسه"
+ * 2. Yaa vs Alef Maqsura vs Nabrah (ي <-> ى <-> ئ) e.g. "علي" <-> "على", "مصطفى" <-> "مصطفي"
+ * 3. Alef & Hamzas (أ / إ / آ / ٱ / ء <-> ا) e.g. "أحمد" <-> "احمد"
+ * 4. Diacritics (Tashkeel) & Tatweel (ـ)
+ * 5. Slight spacing differences e.g. "عبد الرحمن" <-> "عبدالرحمن"
+ * 6. Alternative answers separated by / or ، or , (e.g. "القاهرة / القاهرة الكبرى")
+ */
+export function isExamAnswerCorrect(
+  givenAnswer: string | null | undefined,
+  correctAnswer: string | null | undefined,
+  questionType?: string
+): boolean {
+  if (!givenAnswer || !correctAnswer) return false;
+
+  const rawGiven = String(givenAnswer).trim();
+  const rawCorrect = String(correctAnswer).trim();
+  if (!rawGiven || !rawCorrect) return false;
+
+  // Multiple choice & True/False: case-insensitive direct match
+  if (questionType === 'multiple_choice' || questionType === 'true_false') {
+    return rawGiven.toLowerCase() === rawCorrect.toLowerCase();
+  }
+
+  // Fill in the blank (أكمل الفراغ): apply Arabic linguistic tolerance
+  const normGiven = normalizeArabic(rawGiven);
+  const normCorrect = normalizeArabic(rawCorrect);
+
+  if (normGiven === normCorrect) return true;
+
+  // Space-insensitive match (e.g. "عبد الرحمن" <-> "عبدالرحمن")
+  if (normGiven.replace(/\s+/g, '') === normCorrect.replace(/\s+/g, '')) {
+    return true;
+  }
+
+  // Check multiple acceptable alternatives if separated by / or ، or ,
+  if (/[\/,،]/.test(rawCorrect)) {
+    const alternatives = rawCorrect.split(/[\/,،]/).map(a => a.trim()).filter(Boolean);
+    for (const alt of alternatives) {
+      const normAlt = normalizeArabic(alt);
+      if (normGiven === normAlt || normGiven.replace(/\s+/g, '') === normAlt.replace(/\s+/g, '')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+

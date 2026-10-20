@@ -10,6 +10,7 @@ import {
   type ElectronicExam,
   type ExamQuestion,
 } from '@/hooks/queries/useElectronicExams';
+import { isExamAnswerCorrect } from '@/utils/arabicSearch';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -377,7 +378,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
             <div className="space-y-4">
               {qs.map((q, i) => {
                 const given = ans[q.id] || '';
-                const isCorrect = given.trim().toLowerCase() === q.correct_answer.trim().toLowerCase();
+                const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
                 const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
                 return (

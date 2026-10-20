@@ -5,6 +5,7 @@ import {
   stripSpaces,
   matchesArabic,
   buildArabicSearchPatterns,
+  isExamAnswerCorrect,
 } from '@/utils/arabicSearch';
 
 describe('Arabic Search & Normalization Engine', () => {
@@ -61,5 +62,48 @@ describe('Arabic Search & Normalization Engine', () => {
     const yaaPatterns = buildArabicSearchPatterns('يمنى');
     expect(yaaPatterns).toContain('يمنى');
     expect(yaaPatterns).toContain('يمني');
+  });
+
+  describe('isExamAnswerCorrect (Fill-in-the-blank Arabic tolerance)', () => {
+    it('accepts Taa Marbouta vs Haa (ة vs ه)', () => {
+      expect(isExamAnswerCorrect('مدرسه', 'مدرسة', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مدرسة', 'مدرسه', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('القاهره', 'القاهرة', 'fill_blank')).toBe(true);
+    });
+
+    it('accepts Yaa vs Alef Maqsura (ي vs ى)', () => {
+      expect(isExamAnswerCorrect('علي', 'على', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('على', 'علي', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مصطفى', 'مصطفي', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مصطفي', 'مصطفى', 'fill_blank')).toBe(true);
+    });
+
+    it('accepts Alef variations and Hamzas (أ, إ, آ, ا)', () => {
+      expect(isExamAnswerCorrect('أحمد', 'احمد', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('احمد', 'أحمد', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('إسلام', 'اسلام', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('القران', 'القرآن', 'fill_blank')).toBe(true);
+    });
+
+    it('ignores diacritics / Tashkeel & Tatweel', () => {
+      expect(isExamAnswerCorrect('مَدْرَسَةٌ', 'مدرسه', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مـحـمـد', 'محمد', 'fill_blank')).toBe(true);
+    });
+
+    it('handles spacing in compound words', () => {
+      expect(isExamAnswerCorrect('عبدالرحمن', 'عبد الرحمن', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('عبد الرحمن', 'عبدالرحمن', 'fill_blank')).toBe(true);
+    });
+
+    it('supports alternative answers separated by slash or comma', () => {
+      expect(isExamAnswerCorrect('القاهرة', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('القاهره الكبرى', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مصر', 'جمهورية مصر العربية ، مصر', 'fill_blank')).toBe(true);
+    });
+
+    it('rejects actual wrong answers', () => {
+      expect(isExamAnswerCorrect('الإسكندرية', 'القاهرة', 'fill_blank')).toBe(false);
+      expect(isExamAnswerCorrect('', 'القاهرة', 'fill_blank')).toBe(false);
+    });
   });
 });
