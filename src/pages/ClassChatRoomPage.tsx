@@ -103,10 +103,10 @@ export default function ClassChatRoomPage() {
   };
 
   return (
-          <div
-        dir="rtl"
-        className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
-      >
+    <div
+      dir="rtl"
+      className="flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] lg:h-[calc(100dvh-4rem)] xl:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
+    >
         {/* Header */}
         <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
           <button
@@ -175,7 +175,7 @@ export default function ClassChatRoomPage() {
         </div>
 
         {/* Input */}
-        <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-lg z-10">
+        <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-2.5 sm:py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] shadow-lg z-10">
           <div className="max-w-[720px] mx-auto space-y-1">
             <div className="flex items-end gap-2">
               <textarea

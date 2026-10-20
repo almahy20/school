@@ -170,10 +170,10 @@ export default function AdminConversationDetailPage() {
   const StatusIcon = cfg.icon;
 
   return (
-          <div
-        dir="rtl"
-        className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
-      >
+    <div
+      dir="rtl"
+      className="flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] lg:h-[calc(100dvh-4rem)] xl:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
+    >
         {/* ── Top bar ─────────────────────────────────────────────────────── */}
         <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
           <button
@@ -277,7 +277,7 @@ export default function AdminConversationDetailPage() {
 
         {/* ── Input bar ── ثابت في الأسفل ──────────────────────────────────── */}
         {conversation.status !== 'closed' ? (
-          <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-lg z-10">
+          <div className="shrink-0 px-4 sm:px-8 md:px-12 lg:px-20 py-2.5 sm:py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] shadow-lg z-10">
             <div className="max-w-[760px] mx-auto flex items-end gap-2">
               <Textarea
                 ref={textareaRef}
@@ -307,7 +307,7 @@ export default function AdminConversationDetailPage() {
             </div>
           </div>
         ) : (
-          <div className="shrink-0 px-4 py-3 bg-slate-50 border-t border-slate-100 text-center">
+          <div className="shrink-0 px-4 py-3 bg-slate-50 border-t border-slate-100 text-center pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)]">
             <p className="text-xs font-bold text-slate-400">تم إغلاق هذه المحادثة</p>
           </div>
         )}

@@ -136,8 +136,8 @@ function ConversationsTab() {
           />
         </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar w-full sm:w-auto pb-1 sm:pb-0">
             {FILTERS.map(f => (
               <button
                 key={f.value}
@@ -154,7 +154,7 @@ function ConversationsTab() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">
               {conversations.length} محادثة
             </span>
@@ -275,7 +275,7 @@ function BroadcastTab() {
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 space-y-8">
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5 sm:p-8 space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div className="flex items-center gap-4">
@@ -291,17 +291,17 @@ function BroadcastTab() {
         </div>
 
         {/* Toggle */}
-        <div className="flex p-1.5 bg-slate-100/60 rounded-2xl w-fit shrink-0">
+        <div className="flex p-1 sm:p-1.5 bg-slate-100/60 rounded-2xl w-full sm:w-fit shrink-0">
           <button
             onClick={() => setTargetType('all')}
-            className={cn('px-5 py-2 rounded-xl text-xs font-black transition-all',
+            className={cn('flex-1 sm:flex-initial text-center px-4 sm:px-5 py-2 rounded-xl text-xs font-black transition-all',
               targetType === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600')}
           >
             بث للجميع
           </button>
           <button
             onClick={() => setTargetType('specific')}
-            className={cn('px-5 py-2 rounded-xl text-xs font-black transition-all',
+            className={cn('flex-1 sm:flex-initial text-center px-4 sm:px-5 py-2 rounded-xl text-xs font-black transition-all',
               targetType === 'specific' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600')}
           >
             رسالة خاصة
@@ -541,7 +541,7 @@ export default function AdminConversationsPage() {
           <div
         className={cn(
           'max-w-[900px] mx-auto animate-in fade-in duration-500 px-4 md:px-0',
-          'pb-20',
+          'pb-6 md:pb-8',
         )}
         dir="rtl"
       >
@@ -556,11 +556,11 @@ export default function AdminConversationsPage() {
         </div>
 
         {/* Tab switcher */}
-        <div className="flex p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm mb-5 w-fit">
+        <div className="flex p-1 sm:p-1.5 bg-white rounded-2xl border border-slate-100 shadow-sm mb-5 w-full sm:w-fit overflow-x-auto hide-scrollbar">
           <button
             onClick={() => setTab('conversations')}
             className={cn(
-              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all',
+              'flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all shrink-0 sm:shrink flex-1 sm:flex-initial text-center',
               tab === 'conversations' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700',
             )}
           >
@@ -575,7 +575,7 @@ export default function AdminConversationsPage() {
           <button
             onClick={() => setTab('class-chat')}
             className={cn(
-              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all',
+              'flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all shrink-0 sm:shrink flex-1 sm:flex-initial text-center',
               tab === 'class-chat' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700',
             )}
           >
@@ -585,7 +585,7 @@ export default function AdminConversationsPage() {
           <button
             onClick={() => setTab('broadcast')}
             className={cn(
-              'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-black transition-all',
+              'flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all shrink-0 sm:shrink flex-1 sm:flex-initial text-center',
               tab === 'broadcast' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-400 hover:text-slate-700',
             )}
           >

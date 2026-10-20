@@ -54,7 +54,8 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
   const isChatRoomRoute =
     location.pathname.startsWith('/conversations/class/') ||
     location.pathname.startsWith('/manage-conversations/class/') ||
-    (/^\/manage-conversations\/[a-zA-Z0-9_-]+$/.test(location.pathname) && location.pathname !== '/manage-conversations');
+    (/^\/manage-conversations\/[a-zA-Z0-9_-]+$/.test(location.pathname) && location.pathname !== '/manage-conversations') ||
+    (location.pathname === '/conversations' && location.search.includes('chat=admin'));
 
   const shouldHideBottomNav = Boolean(hideBottomNav || isChatRoomRoute || overrideHideBottomNav);
   const hasBottomNav = !shouldHideBottomNav; // BottomNav shows for ALL roles on mobile (md:hidden) unless in chat room
@@ -318,7 +319,7 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
         {/* Content Section */}
         <div className={cn(
           "flex-1 w-full relative z-10",
-          shouldHideBottomNav ? "p-0" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6 pb-24 md:pb-6"
+          shouldHideBottomNav ? "p-0" : "px-4 sm:px-6 md:px-8 lg:px-10 py-5 sm:py-6"
         )}>
           <Suspense fallback={
             <div className="w-full py-20 flex flex-col items-center justify-center gap-3">
@@ -334,9 +335,9 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
         {!shouldHideBottomNav && (
           <footer className={cn(
             "py-6 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-16 relative z-10 border-t border-slate-200/50 bg-[#F8FAFC]/90 backdrop-blur-2xl mt-auto no-print",
-            hasBottomNav ? "pb-24 sm:pb-12" : "pb-8"
+            hasBottomNav ? "pb-[calc(4.5rem+env(safe-area-inset-bottom,0px))] md:pb-6" : "pb-8"
           )}>
-            <div className="flex mb-20 md:mb-0 flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 max-w-[1400px] mx-auto">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center shadow-inner border border-white overflow-hidden">
                   {schoolBranding.logo && !logoError ? (

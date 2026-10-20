@@ -91,6 +91,7 @@ export default function RealtimeNotificationsManager() {
           onClick: () => {
             const url = newNotification.metadata?.url;
             if (url) nav(url);
+            else if (newNotification.type === 'conversation_admin_reply') nav('/conversations?chat=admin');
             else nav(isMessage ? '/conversations' : '/notifications');
           },
         },

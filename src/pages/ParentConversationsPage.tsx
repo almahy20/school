@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, useOutletContext } from 'react-router-dom';
+import { useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -80,9 +80,9 @@ function ChatView({
 
   return (
     <div
-        dir="rtl"
-        className="flex flex-col h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
-      >
+      dir="rtl"
+      className="flex flex-col h-[calc(100vh-4rem)] h-[calc(100dvh-4rem)] sm:h-[calc(100dvh-5rem)] lg:h-[calc(100dvh-4rem)] xl:h-[calc(100dvh-5rem)] bg-slate-50 overflow-hidden"
+    >
         {/* Header */}
         <div className="shrink-0 flex items-center gap-3 px-5 py-3 bg-white border-b border-slate-100 shadow-sm z-10">
           <button
@@ -223,7 +223,7 @@ function AdminChatView({ onBack }: { onBack: () => void }) {
       </div>
 
       {/* Input */}
-      <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] shadow-lg z-10">
+      <div className="shrink-0 px-4 sm:px-8 md:px-16 lg:px-24 py-2.5 sm:py-3 bg-white border-t border-slate-100 pb-[calc(env(safe-area-inset-bottom,0px)+0.5rem)] shadow-lg z-10">
         <div className="max-w-[720px] mx-auto space-y-2">
           {!conversation && (children as any[]).length > 0 && (
             <div>
@@ -319,12 +319,11 @@ function ChatCard({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-type ActiveView = { type: 'none' } | { type: 'admin' };
-
 export default function ParentConversationsPage() {
-  const [active, setActive] = useState<ActiveView>({ type: 'none' });
+  const [searchParams, setSearchParams] = useSearchParams();
   const [openingClassId, setOpeningClassId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const isAdminChat = searchParams.get('chat') === 'admin';
 
   const { data: conversations = [] } = useParentConversations();
   const { data: classRooms = [], isLoading: roomsLoading } = useParentClassChatRooms();
@@ -365,15 +364,15 @@ export default function ParentConversationsPage() {
   };
 
   // ── Admin chat screen — full page ──
-  if (active.type === 'admin') {
-    return <AdminChatView onBack={() => setActive({ type: 'none' })} />;
+  if (isAdminChat) {
+    return <AdminChatView onBack={() => setSearchParams({})} />;
   }
 
   const isLoadingClasses = roomsLoading || childrenLoading;
 
   // ── Cards landing ──
   return (
-      <div className="max-w-[900px] mx-auto pb-20 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
+      <div className="max-w-[900px] mx-auto pb-6 md:pb-8 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
         <div className="pb-6">
           <PageHeader
             icon={MessageCircle}
@@ -394,7 +393,7 @@ export default function ParentConversationsPage() {
               desc={adminConv?.last_message_preview || 'محادثة خاصة مع إدارة المدرسة'}
               color="indigo"
               badge={adminUnread}
-              onClick={() => setActive({ type: 'admin' })}
+              onClick={() => setSearchParams({ chat: 'admin' })}
             />
           </div>
         </section>

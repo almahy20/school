@@ -38,6 +38,7 @@
     overflow: hidden; /* ✅ Prevent scroll on html to stop double scrollbar/jump */
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     background-color: #F8FAFC; /* Match app background to prevent white flicker */
   }
   
@@ -51,6 +52,7 @@
     padding: 0 !important;
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     overflow-x: hidden;
     overflow-y: auto;
     background-color: #F8FAFC;
