@@ -138,6 +138,42 @@ export default function QuestionBuilderStep({
   );
 }
 
+import { normalizeArabic } from '@/utils/arabicSearch';
+
+export function isOptionSelectedAsCorrect(
+  correctAnswer: string | undefined | null,
+  opt: string,
+  oi: number,
+  letters: string[]
+): boolean {
+  if (!correctAnswer || !opt || opt.trim() === '') return false;
+  const c = correctAnswer.trim();
+  const o = opt.trim();
+
+  // 1. مطابقة مباشرة
+  if (c === o) return true;
+
+  // 2. مطابقة بدون حساسية للأحرف
+  if (c.toLowerCase() === o.toLowerCase()) return true;
+
+  // 3. مطابقة بالتوحيد اللغوي العربي
+  if (normalizeArabic(c) === normalizeArabic(o)) return true;
+
+  // 4. مطابقة إذا كانت الإجابة الصحيحة مخزنة كفهرس (0, 1, 2, 3 أو 1, 2, 3, 4)
+  if (c === String(oi) || c === String(oi + 1)) return true;
+
+  // 5. مطابقة إذا كانت الإجابة الصحيحة مخزنة كحرف (أ، ب، ج، د أو A, B, C, D)
+  if (c === letters[oi] || c.toLowerCase() === ['a', 'b', 'c', 'd'][oi]) return true;
+
+  // 6. في حال كانت الإجابة مقسمة بـ /
+  if (c.includes('/') || c.includes('،') || c.includes(',')) {
+    const parts = c.split(/[\/,،|]/).map(p => p.trim());
+    if (parts.some(p => p === o || normalizeArabic(p) === normalizeArabic(o))) return true;
+  }
+
+  return false;
+}
+
 // ─── Question Editor ──────────────────────────────────────────────────────────
 
 export function QuestionEditor({
@@ -253,24 +289,33 @@ export function QuestionEditor({
             {isEn ? 'Correct Answer *' : 'الإجابة الصحيحة *'}
           </label>
           <div className="flex gap-3">
-            {(['true', 'false'] as const).map(val => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => onChange({ correct_answer: val })}
-                className={cn(
-                  'flex-1 flex items-center justify-center gap-2 h-10 rounded-2xl text-sm font-black border-2 transition-all',
-                  question.correct_answer === val
-                    ? val === 'true' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-rose-50 border-rose-400 text-rose-700'
-                    : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
-                )}
-              >
-                {val === 'true' 
-                  ? <><CheckCircle2 className="w-4 h-4" /> {isEn ? 'True' : 'صح'}</> 
-                  : <><XCircle className="w-4 h-4" /> {isEn ? 'False' : 'غلط'}</>
-                }
-              </button>
-            ))}
+            {(['true', 'false'] as const).map(val => {
+              const cur = (question.correct_answer || '').trim().toLowerCase();
+              const isSelected = (
+                cur === val ||
+                (val === 'true' && (cur === 'صح' || cur === 'صواب' || cur === '1')) ||
+                (val === 'false' && (cur === 'غلط' || cur === 'خطأ' || cur === '0'))
+              );
+
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => onChange({ correct_answer: val })}
+                  className={cn(
+                    'flex-1 flex items-center justify-center gap-2 h-10 rounded-2xl text-sm font-black border-2 transition-all',
+                    isSelected
+                      ? val === 'true' ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-rose-50 border-rose-400 text-rose-700'
+                      : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'
+                  )}
+                >
+                  {val === 'true' 
+                    ? <><CheckCircle2 className="w-4 h-4" /> {isEn ? 'True' : 'صح'}</> 
+                    : <><XCircle className="w-4 h-4" /> {isEn ? 'False' : 'غلط'}</>
+                  }
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -281,16 +326,23 @@ export function QuestionEditor({
             {isEn ? 'Options (A, B, C, D) *' : 'الخيارات (أ، ب، ج، د) *'}
           </label>
           {question.options.map((opt, oi) => {
-            const isCorrect = question.correct_answer === opt && opt.trim() !== '';
+            const isCorrect = isOptionSelectedAsCorrect(question.correct_answer, opt, oi, letters);
             return (
               <div key={oi} dir={isEn ? 'ltr' : 'rtl'} className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => opt.trim() && onChange({ correct_answer: opt })}
+                  onClick={() => {
+                    const cleanOpt = opt.trim();
+                    if (cleanOpt) {
+                      const newOpts = [...question.options];
+                      newOpts[oi] = cleanOpt;
+                      onChange({ options: newOpts, correct_answer: cleanOpt });
+                    }
+                  }}
                   className={cn(
                     'w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 border-2 transition-all',
                     isCorrect
-                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      ? 'bg-emerald-500 border-emerald-500 text-white shadow-xs'
                       : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-violet-300'
                   )}
                   title={isEn ? 'Click to mark as correct answer' : 'اضغط لتحديد كإجابة صحيحة'}
@@ -301,16 +353,20 @@ export function QuestionEditor({
                   dir={isEn ? 'ltr' : 'rtl'}
                   value={opt}
                   onChange={e => {
-                    const newOpts = [...question.options] as [string, string, string, string];
+                    const newOpts = [...question.options];
+                    const oldVal = newOpts[oi];
                     newOpts[oi] = e.target.value;
-                    const newCorrect = question.correct_answer === question.options[oi]
-                      ? e.target.value
-                      : question.correct_answer;
+                    const isThisCorrect = isOptionSelectedAsCorrect(question.correct_answer, oldVal, oi, letters);
+                    const newCorrect = isThisCorrect ? e.target.value.trim() : question.correct_answer;
                     onChange({ options: newOpts, correct_answer: newCorrect });
                   }}
                   placeholder={isEn ? `Option ${letters[oi]}` : `الخيار ${letters[oi]}`}
                   maxLength={200}
-                  className={cn("h-9 rounded-2xl text-sm flex-1", isEn ? "text-left" : "text-right")}
+                  className={cn(
+                    "h-9 rounded-2xl text-sm flex-1 font-bold",
+                    isCorrect ? "border-emerald-300 bg-emerald-50/20" : "",
+                    isEn ? "text-left" : "text-right"
+                  )}
                 />
               </div>
             );

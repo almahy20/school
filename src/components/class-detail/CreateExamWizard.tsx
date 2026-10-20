@@ -50,14 +50,42 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
 
   useEffect(() => {
     if (existingQuestions.length > 0) {
-      setQuestions(existingQuestions.map(q => ({
-        id:            q.id,
-        _key:          makeKey(),
-        question_type: q.question_type,
-        question_text: q.question_text,
-        options:       Array.isArray(q.options) ? q.options : (q.question_type === 'multiple_choice' ? ['', '', '', ''] : []),
-        correct_answer: q.correct_answer,
-      })));
+      setQuestions(existingQuestions.map(q => {
+        const rawOpts = Array.isArray(q.options)
+          ? q.options.map(o => typeof o === 'string' ? o.trim() : String(o || ''))
+          : (q.question_type === 'multiple_choice' ? ['', '', '', ''] : []);
+
+        let resolvedCorrect = (q.correct_answer || '').trim();
+
+        if (q.question_type === 'multiple_choice' && rawOpts.length > 0) {
+          const oi = ['0', '1', '2', '3'].indexOf(resolvedCorrect);
+          if (oi !== -1 && rawOpts[oi]) {
+            resolvedCorrect = rawOpts[oi];
+          } else {
+            const letterIdx = ['أ', 'ب', 'ج', 'د'].indexOf(resolvedCorrect);
+            if (letterIdx !== -1 && rawOpts[letterIdx]) {
+              resolvedCorrect = rawOpts[letterIdx];
+            } else {
+              const enLetterIdx = ['a', 'b', 'c', 'd'].indexOf(resolvedCorrect.toLowerCase());
+              if (enLetterIdx !== -1 && rawOpts[enLetterIdx]) {
+                resolvedCorrect = rawOpts[enLetterIdx];
+              } else {
+                const matched = rawOpts.find(o => o && o.toLowerCase() === resolvedCorrect.toLowerCase());
+                if (matched) resolvedCorrect = matched;
+              }
+            }
+          }
+        }
+
+        return {
+          id:            q.id,
+          _key:          makeKey(),
+          question_type: q.question_type,
+          question_text: q.question_text,
+          options:       rawOpts,
+          correct_answer: resolvedCorrect,
+        };
+      }));
     }
   }, [existingQuestions]);
 

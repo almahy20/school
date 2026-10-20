@@ -440,12 +440,16 @@ export function useSaveExamQuestions() {
 
       // 2. حفظ الأسئلة (تحديث الموجودة بالـ ID نفسه وإضافة الجديدة)
       const rows = questions.map((q, i) => {
+        const cleanOptions = Array.isArray(q.options)
+          ? q.options.map((o: any) => typeof o === 'string' ? o.trim() : o)
+          : q.options;
+
         const row: any = {
           exam_id:        examId,
           school_id:      user.schoolId,
           question_type:  q.question_type,
           question_text:  q.question_text.trim(),
-          options:        q.options,
+          options:        cleanOptions,
           correct_answer: q.correct_answer.trim(),
           order_index:    i,
         };
@@ -476,7 +480,8 @@ export function useSaveExamQuestions() {
       return data;
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['exam-questions', vars.examId] });
+      queryClient.invalidateQueries({ queryKey: ['exam-questions'] });
+      queryClient.removeQueries({ queryKey: ['exam-questions', vars.examId] });
       queryClient.invalidateQueries({ queryKey: ['exam-attempts'] });
       queryClient.invalidateQueries({ queryKey: ['electronic-exams'] });
     },

@@ -2,6 +2,7 @@ import { Eye, Send, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isEnglishText } from '@/hooks/queries/useElectronicExams';
+import { isOptionSelectedAsCorrect } from './QuestionBuilderStep';
 import type { LocalQuestion } from './types';
 
 interface ExamReviewStepProps {
@@ -103,23 +104,26 @@ export function PreviewQuestion({
 
       {question.question_type === 'multiple_choice' && (
         <div className="grid grid-cols-2 gap-2">
-          {question.options.map((opt, oi) => (
-            <div
-              key={oi}
-              className={cn(
-                'flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border-2',
-                question.correct_answer === opt && opt.trim()
-                  ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
-                  : 'bg-slate-50 border-slate-100 text-slate-600'
-              )}
-            >
-              <span className="text-xs font-black text-slate-400">{letters[oi]}</span>
-              <span className="flex-1">{opt || '—'}</span>
-              {question.correct_answer === opt && opt.trim() && (
-                <span className="text-[9px] text-emerald-600 font-black">✓</span>
-              )}
-            </div>
-          ))}
+          {question.options.map((opt, oi) => {
+            const isSelected = isOptionSelectedAsCorrect(question.correct_answer, opt, oi, letters);
+            return (
+              <div
+                key={oi}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border-2',
+                  isSelected
+                    ? 'bg-emerald-50 border-emerald-400 text-emerald-700'
+                    : 'bg-slate-50 border-slate-100 text-slate-600'
+                )}
+              >
+                <span className="text-xs font-black text-slate-400">{letters[oi]}</span>
+                <span className="flex-1">{opt || '—'}</span>
+                {isSelected && (
+                  <span className="text-[9px] text-emerald-600 font-black">✓</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
