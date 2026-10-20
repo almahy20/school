@@ -415,7 +415,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           prev.schoolStatus === appUser.schoolStatus &&
           prev.subscriptionExpired === appUser.subscriptionExpired &&
           prev.fullName === appUser.fullName &&
-          prev.phone === appUser.phone
+          prev.phone === appUser.phone &&
+          prev.isSuperAdmin === appUser.isSuperAdmin
         ) {
           return prev;
         }

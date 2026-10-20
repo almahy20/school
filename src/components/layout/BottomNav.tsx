@@ -41,8 +41,8 @@ export default function BottomNav() {
   ];
 
   const links =
-    user.isSuperAdmin    ? superAdminLinks :
-    user.role === 'admin'   ? adminLinks :
+    (user.isSuperAdmin && !user.schoolId) ? superAdminLinks :
+    (user.role === 'admin' || user.schoolId) ? adminLinks :
     user.role === 'teacher' ? teacherLinks :
     parentLinks;
 

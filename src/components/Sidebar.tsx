@@ -80,8 +80,16 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
   }, [branding]);
 
   const getLinks = () => {
-    if (user?.isSuperAdmin) return superAdminLinks;
-    if (user?.role === 'admin') return adminLinks;
+    if (user?.isSuperAdmin && !user?.schoolId) return superAdminLinks;
+    if (user?.role === 'admin' || user?.schoolId) {
+      if (user?.isSuperAdmin) {
+        return [
+          ...adminLinks,
+          { to: '/super-admin', label: 'إدارة المدارس', icon: ShieldAlert },
+        ];
+      }
+      return adminLinks;
+    }
     if (user?.role === 'teacher') return teacherLinks;
     return parentLinks;
   };
@@ -100,8 +108,8 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
     }
   };
 
-  const roleLabel = user?.isSuperAdmin ? 'المشرف العام'
-    : user?.role === 'admin' ? 'مدير النظام'
+  const roleLabel = (user?.isSuperAdmin && !user?.schoolId) ? 'المشرف العام'
+    : (user?.role === 'admin' || user?.schoolId) ? 'مدير النظام'
     : user?.role === 'teacher' ? 'معلم ممارس'
     : 'ولي أمر معتمد';
 

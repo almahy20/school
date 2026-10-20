@@ -10,7 +10,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user?.isSuperAdmin) {
+    // Only redirect to /super-admin if user is a pure platform Super Admin without an attached school
+    if (user?.isSuperAdmin && !user?.schoolId) {
       navigate('/super-admin', { replace: true });
     }
   }, [user, navigate]);
@@ -19,7 +20,7 @@ export default function DashboardPage() {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-1000">
       {user?.role === 'parent' ? <ParentDashboard />
         : user?.role === 'teacher' ? <TeacherDashboard />
-        : user?.role === 'admin' ? <AdminDashboard />
+        : (user?.role === 'admin' || user?.schoolId) ? <AdminDashboard />
         : null}
     </div>
   );

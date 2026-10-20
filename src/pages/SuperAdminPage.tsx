@@ -24,7 +24,7 @@ export default function SuperAdminPage() {
   const [activeTab, setActiveTab] = useState<'schools' | 'orders' | 'database'>('schools');
   const [search, setSearch] = useState('');
 
-  // â”€â”€ Queries â”€â”€
+  // ── Queries ──
   const { 
     data: schools = [], 
     isLoading: schoolsLoading, 
@@ -45,7 +45,7 @@ export default function SuperAdminPage() {
     refetch: refetchDbStats
   } = useDatabaseStats();
 
-  // â”€â”€ Mutations â”€â”€
+  // ── Mutations ──
   const updateSchoolMutation = useUpdateSchool();
   const updateOrderMutation = useUpdateOrder();
 
@@ -53,18 +53,18 @@ export default function SuperAdminPage() {
     const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
     try {
       await updateSchoolMutation.mutateAsync({ id: schoolId, status: newStatus as any });
-      toast({ title: 'ØªÙ… ØªØ­Ø¯ÙŠØ« Ø­Ø§Ù„Ø© Ø§Ù„Ù…Ø¯Ø±Ø³Ø© Ø¨Ù†Ø¬Ø§Ø­' });
+      toast({ title: 'تم تحديث حالة المدرسة بنجاح' });
     } catch (err: any) {
-      toast({ title: 'Ø®Ø·Ø£', description: err.message, variant: 'destructive' });
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
   const handleOrderAction = async (id: string, status: 'approved' | 'rejected') => {
     try {
       await updateOrderMutation.mutateAsync({ id, status });
-      toast({ title: status === 'approved' ? 'ØªÙ…Øª Ø§Ù„Ù…ÙˆØ§ÙÙ‚Ø© Ø¹Ù„Ù‰ Ø§Ù„Ø·Ù„Ø¨' : 'ØªÙ… Ø±ÙØ¶ Ø§Ù„Ø·Ù„Ø¨' });
+      toast({ title: status === 'approved' ? 'تمت الموافقة على الطلب' : 'تم رفض الطلب' });
     } catch (err: any) {
-      toast({ title: 'Ø®Ø·Ø£', description: err.message, variant: 'destructive' });
+      toast({ title: 'خطأ', description: err.message, variant: 'destructive' });
     }
   };
 
@@ -93,9 +93,9 @@ export default function SuperAdminPage() {
                <div className="w-14 h-14 rounded-[20px] bg-rose-500 flex items-center justify-center text-white shadow-xl rotate-3 group-hover:rotate-0 transition-all duration-500">
                   <ShieldAlert className="w-7 h-7" />
                </div>
-               <h1 className="text-2xl md:text-4xl font-black tracking-tight leading-none">Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ù…Ù†ØµØ© Ø§Ù„Ù…Ø±ÙƒØ²ÙŠØ©</h1>
+               <h1 className="text-2xl md:text-4xl font-black tracking-tight leading-none">إدارة المنصة المركزية</h1>
             </div>
-            <p className="text-slate-400 font-medium text-base pr-1 max-w-2xl">Ø§Ù„ØªØ­ÙƒÙ… Ø§Ù„Ø´Ø§Ù…Ù„ ÙÙŠ Ø§Ø³ØªÙ…Ø±Ø§Ø±ÙŠØ© Ø§Ù„Ø®Ø¯Ù…Ø§Øª Ø§Ù„ØªØ¹Ù„ÙŠÙ…ÙŠØ© ÙˆØ¥Ø¯Ø§Ø±Ø© Ø¯ÙˆØ±Ø© Ø­ÙŠØ§Ø© Ø§Ø´ØªØ±Ø§ÙƒØ§Øª Ø§Ù„Ù…Ø¯Ø§Ø±Ø³.</p>
+            <p className="text-slate-400 font-medium text-base pr-1 max-w-2xl">التحكم الشامل في استمرارية الخدمات التعليمية وإدارة دورة حياة اشتراكات المدارس.</p>
           </div>
           
           <div className="flex items-center gap-6 relative z-10">
@@ -103,27 +103,27 @@ export default function SuperAdminPage() {
                 <button 
                   onClick={() => setActiveTab('schools')}
                   className={cn("px-8 py-3 rounded-xl text-xs font-black transition-all", activeTab === 'schools' ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white")}
-                >Ø§Ù„Ù…Ø¯Ø§Ø±Ø³ Ø§Ù„Ù…Ø´ØªØ±ÙƒØ©</button>
+                >المدارس المشتركة</button>
                 <button 
                   onClick={() => setActiveTab('orders')}
                   className={cn("px-8 py-3 rounded-xl text-xs font-black transition-all", activeTab === 'orders' ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white")}
-                >Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø§Ù†Ø¶Ù…Ø§Ù… {stats.pendingOrders > 0 && <Badge className="mr-2 h-5 min-w-5 px-1 bg-rose-500 text-white border-none text-[8px] animate-pulse">{stats.pendingOrders}</Badge>} </button>
+                >طلبات الانضمام {stats.pendingOrders > 0 && <Badge className="mr-2 h-5 min-w-5 px-1 bg-rose-500 text-white border-none text-[8px] animate-pulse">{stats.pendingOrders}</Badge>} </button>
                 <button 
                   onClick={() => setActiveTab('database')}
                   className={cn("px-8 py-3 rounded-xl text-xs font-black transition-all", activeTab === 'database' ? "bg-white text-slate-900 shadow-xl" : "text-slate-400 hover:text-white")}
-                >Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª</button>
+                >قاعدة البيانات</button>
              </div>
              <Button className="h-14 px-8 rounded-2xl bg-indigo-600 text-white font-black text-xs hover:bg-indigo-700 transition-all gap-4 shadow-2xl shadow-indigo-500/20">
-               <Plus className="w-4 h-4" /> Ø¥Ø¶Ø§ÙØ© Ù…Ø¯Ø±Ø³Ø©
+               <Plus className="w-4 h-4" /> إضافة مدرسة
              </Button>
           </div>
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-           <SuperAdminStatsCard title="Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ù…Ø¯Ø§Ø±Ø³" value={stats.total} icon={Building2} color="indigo" />
-           <SuperAdminStatsCard title="Ø§Ù„Ù…Ø¯Ø§Ø±Ø³ Ø§Ù„Ù†Ø´Ø·Ø©" value={stats.active} icon={CheckCircle2} color="emerald" />
-           <SuperAdminStatsCard title="Ù…Ø¯Ø§Ø±Ø³ Ù…Ø¹Ù„Ù‚Ø©" value={stats.suspended} icon={XCircle} color="rose" />
-           <SuperAdminStatsCard title="Ø·Ù„Ø¨Ø§Øª Ù…Ø¹Ù„Ù‚Ø©" value={stats.pendingOrders} icon={Clock} color="amber" />
+           <SuperAdminStatsCard title="إجمالي المدارس" value={stats.total} icon={Building2} color="indigo" />
+           <SuperAdminStatsCard title="المدارس النشطة" value={stats.active} icon={CheckCircle2} color="emerald" />
+           <SuperAdminStatsCard title="مدارس معلقة" value={stats.suspended} icon={XCircle} color="rose" />
+           <SuperAdminStatsCard title="طلبات معلقة" value={stats.pendingOrders} icon={Clock} color="amber" />
         </div>
 
         {/* Database Management Tab */}
@@ -137,8 +137,8 @@ export default function SuperAdminPage() {
                     <Database className="w-8 h-8 text-indigo-400" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-black">Ø¥Ø¯Ø§Ø±Ø© Ù‚Ø§Ø¹Ø¯Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª</h2>
-                    <p className="text-slate-400 text-sm mt-1">Ù…Ø±Ø§Ù‚Ø¨Ø© Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ù„Ù…Ø³Ø§Ø­Ø© ÙˆØ§Ù„Ø£Ø¯Ø§Ø¡</p>
+                    <h2 className="text-2xl font-black">إدارة قاعدة البيانات</h2>
+                    <p className="text-slate-400 text-sm mt-1">مراقبة استخدام المساحة والأداء</p>
                   </div>
                 </div>
                 <Button
@@ -146,7 +146,7 @@ export default function SuperAdminPage() {
                   disabled={dbStatsLoading}
                   className="h-12 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 font-black text-xs"
                 >
-                  {dbStatsLoading ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„ØªØ­Ø¯ÙŠØ«...' : 'ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø¥Ø­ØµØ§Ø¦ÙŠØ§Øª'}
+                  {dbStatsLoading ? 'جاري التحديث...' : 'تحديث الإحصائيات'}
                 </Button>
               </div>
 
@@ -156,21 +156,21 @@ export default function SuperAdminPage() {
                   <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
                     <div className="flex items-center gap-3 mb-2">
                       <Table className="w-5 h-5 text-indigo-400" />
-                      <p className="text-xs font-bold text-slate-400">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„</p>
+                      <p className="text-xs font-bold text-slate-400">إجمالي الجداول</p>
                     </div>
                     <p className="text-3xl font-black">{dbStats.totalTables}</p>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
                     <div className="flex items-center gap-3 mb-2">
                       <Users className="w-5 h-5 text-emerald-400" />
-                      <p className="text-xs font-bold text-slate-400">Ø¥Ø¬Ù…Ø§Ù„ÙŠ Ø§Ù„Ø³Ø¬Ù„Ø§Øª</p>
+                      <p className="text-xs font-bold text-slate-400">إجمالي السجلات</p>
                     </div>
                     <p className="text-3xl font-black">{dbStats.totalRows.toLocaleString('ar-EG')}</p>
                   </div>
                   <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
                     <div className="flex items-center gap-3 mb-2">
                       <HardDrive className="w-5 h-5 text-amber-400" />
-                      <p className="text-xs font-bold text-slate-400">Ø¢Ø®Ø± ØªØ­Ø¯ÙŠØ«</p>
+                      <p className="text-xs font-bold text-slate-400">آخر تحديث</p>
                     </div>
                     <p className="text-sm font-bold">{new Date(dbStats.lastUpdated).toLocaleTimeString('ar-EG')}</p>
                   </div>
@@ -184,19 +184,19 @@ export default function SuperAdminPage() {
                 </div>
               ) : dbStats ? (
                 <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8">
-                  <h3 className="text-lg font-black mb-6">ØªÙØ§ØµÙŠÙ„ Ø§Ù„Ø¬Ø¯Ø§ÙˆÙ„</h3>
+                  <h3 className="text-lg font-black mb-6">تفاصيل الجداول</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {Object.entries(dbStats.tables).map(([tableName, stats]: [string, any]) => (
                       <div key={tableName} className="bg-white/10 p-5 rounded-xl hover:bg-white/15 transition-all">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="font-black text-sm capitalize">{tableName}</h4>
                           <Badge className="bg-indigo-500/20 text-indigo-300 border-none text-[10px]">
-                            {stats.count.toLocaleString('ar-EG')} Ø³Ø¬Ù„
+                            {stats.count.toLocaleString('ar-EG')} سجل
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-slate-400">
                           <HardDrive className="w-4 h-4" />
-                          <span>Ø§Ù„Ù…Ø³Ø§Ø­Ø© Ø§Ù„ØªÙ‚Ø¯ÙŠØ±ÙŠØ©: <span className="text-white font-bold">{stats.size_estimate}</span></span>
+                          <span>المساحة التقديرية: <span className="text-white font-bold">{stats.size_estimate}</span></span>
                         </div>
                       </div>
                     ))}
@@ -210,7 +210,7 @@ export default function SuperAdminPage() {
         <div className="relative group w-full lg:max-w-2xl self-start">
            <Search className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
            <Input 
-             placeholder={activeTab === 'schools' ? "Ø§Ù„Ø¨Ø­Ø« Ø¨Ø§Ø³Ù… Ø§Ù„Ù…Ø¯Ø±Ø³Ø© Ø£Ùˆ Ø§Ù„Ù…Ø¹Ø±Ù..." : "Ø§Ù„Ø¨Ø­Ø« ÙÙŠ Ø·Ù„Ø¨Ø§Øª Ø§Ù„Ø§Ù†Ø¶Ù…Ø§Ù…..."} 
+             placeholder={activeTab === 'schools' ? "البحث باسم المدرسة أو المعرّف..." : "البحث في طلبات الانضمام..."} 
              value={search}
              onChange={e => setSearch(e.target.value)}
              className="h-14 pr-14 pl-6 rounded-[28px] border-none bg-white text-base font-bold shadow-xl shadow-slate-200/20 focus:ring-4 focus:ring-indigo-600/5 transition-all" 
@@ -223,8 +223,8 @@ export default function SuperAdminPage() {
           data={activeTab === 'schools' ? schools : orders}
           onRetry={activeTab === 'schools' ? refetchSchools : refetchOrders}
           isEmpty={(activeTab === 'schools' ? filteredSchools.length : filteredOrders.length) === 0}
-          loadingMessage="Ø¬Ø§Ø±ÙŠ Ø¬Ù„Ø¨ Ø£Ø­Ø¯Ø« Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª..."
-          emptyMessage="Ù„Ù… ÙŠØªÙ… Ø§Ù„Ø¹Ø«ÙˆØ± Ø¹Ù„Ù‰ Ù†ØªØ§Ø¦Ø¬ ØªØ·Ø§Ø¨Ù‚ Ù…Ø¹Ø§ÙŠÙŠØ± Ø§Ù„Ø¨Ø­Ø«."
+          loadingMessage="جاري جلب أحدث البيانات..."
+          emptyMessage="لم يتم العثور على نتائج تطابق معايير البحث."
         >
           {activeTab === 'schools' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -276,7 +276,7 @@ function SchoolCard({ school, onToggle, isPending }: { school: any; onToggle: (i
              <Badge className={cn(
                 "rounded-lg px-3 py-1 font-black text-[9px] uppercase tracking-widest border-none",
                 school.status === 'active' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-             )}>{school.status === 'active' ? 'Ù†Ø´Ø·' : 'Ù…Ø¹Ù„Ù‚'}</Badge>
+             )}>{school.status === 'active' ? 'نشط' : 'معلق'}</Badge>
           </div>
           
           <div>
@@ -286,11 +286,11 @@ function SchoolCard({ school, onToggle, isPending }: { school: any; onToggle: (i
 
           <div className="flex flex-col gap-4">
              <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-                <span>ØªØ§Ø±ÙŠØ® Ø§Ù„Ø§Ø´ØªØ±Ø§Ùƒ:</span>
+                <span>تاريخ الاشتراك:</span>
                 <span className="text-slate-900">{new Date(school.created_at).toLocaleDateString('ar-EG')}</span>
              </div>
              <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-                <span>Ù†Ù‡Ø§ÙŠØ© Ø§Ù„ØµÙ„Ø§Ø­ÙŠØ©:</span>
+                <span>نهاية الصلاحية:</span>
                 <span className="text-rose-500">{new Date(school.subscription_end_date).toLocaleDateString('ar-EG')}</span>
              </div>
           </div>
@@ -300,7 +300,7 @@ function SchoolCard({ school, onToggle, isPending }: { school: any; onToggle: (i
                variant="outline" 
                className="flex-1 h-12 rounded-2xl border-slate-100 font-black text-xs hover:bg-slate-50 transition-all"
              >
-                ØªØ­Ø±ÙŠØ± Ø§Ù„Ù…ÙˆØ§Ø±Ø¯
+                تحرير الموارد
              </Button>
              <Button 
                onClick={() => onToggle(school.id, school.status)}
@@ -310,7 +310,7 @@ function SchoolCard({ school, onToggle, isPending }: { school: any; onToggle: (i
                  school.status === 'active' ? "bg-rose-500 hover:bg-rose-600 shadow-rose-200" : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200"
                )}
              >
-                {isPending ? 'Ø¬Ø§Ø±ÙŠ...' : (school.status === 'active' ? 'ØªØ¹Ù„ÙŠÙ‚ Ø§Ù„Ø®Ø¯Ù…Ø§Øª' : 'ØªÙØ¹ÙŠÙ„ Ø§Ù„Ø®Ø¯Ù…Ø§Øª')}
+                {isPending ? 'جاري...' : (school.status === 'active' ? 'تعليق الخدمات' : 'تفعيل الخدمات')}
              </Button>
           </div>
        </div>
@@ -351,21 +351,20 @@ function OrderCard({ order, onAction, isPending }: { order: any; onAction: (id: 
             <>
                <Button onClick={() => onAction(order.id, 'rejected')} disabled={isPending}
                  className="flex-1 md:flex-none h-12 px-8 rounded-2xl bg-white text-rose-500 border-2 border-rose-100 hover:bg-rose-50 transition-all font-black text-xs gap-3">
-                  <PackageX className="w-4 h-4" /> Ø±ÙØ¶
+                  <PackageX className="w-4 h-4" /> رفض
                </Button>
                <Button onClick={() => onAction(order.id, 'approved')} disabled={isPending}
                  className="flex-1 md:flex-none h-12 px-8 rounded-2xl bg-emerald-500 text-white font-black text-xs shadow-xl shadow-emerald-200 hover:scale-[1.02] transition-all gap-3">
-                  <PackageCheck className="w-4 h-4" /> ØªÙØ¹ÙŠÙ„ ÙˆÙ‚Ø¨ÙˆÙ„
+                  <PackageCheck className="w-4 h-4" /> تفعيل وقبول
                </Button>
             </>
           ) : (
             <Badge className={cn(
               "h-12 px-8 rounded-2xl font-black text-xs border-none",
               order.status === 'approved' ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"
-            )}>{order.status === 'approved' ? 'Ù…Ù‚Ø¨ÙˆÙ„' : 'Ù…Ø±ÙÙˆØ¶'}</Badge>
+            )}>{order.status === 'approved' ? 'مقبول' : 'مرفوض'}</Badge>
           )}
        </div>
     </div>
   );
 }
-
