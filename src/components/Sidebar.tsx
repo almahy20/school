@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCleanBranding } from '@/hooks/useCleanBranding';
+import { prefetchRoute } from '@/utils/routePrefetch';
 
 interface SidebarLink {
   to: string;
@@ -167,6 +168,8 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
             to={link.to} 
             end={link.to === '/'}
             onClick={onClose}
+            onMouseEnter={() => prefetchRoute(link.to, queryClient, user)}
+            onTouchStart={() => prefetchRoute(link.to, queryClient, user)}
             className={({ isActive }) => cn(
               "flex items-center justify-between px-4 h-13 rounded-2xl transition-all duration-300 group text-right whitespace-nowrap relative overflow-hidden",
               isActive 

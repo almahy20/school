@@ -223,3 +223,57 @@ export function useUpdateClass() {
     },
   });
 }
+
+// ─── useClassStudentCounts Hook (Ultra-lightweight student count per class) ─
+export function useClassStudentCounts() {
+  const { user, session } = useAuth();
+  const queryKey = useMemo(
+    () => ['classes', 'student-counts', user?.schoolId, user?.role, user?.id],
+    [user?.schoolId, user?.role, user?.id]
+  );
+
+  return useQuery({
+    queryKey,
+    queryFn: async (): Promise<Record<string, number>> => {
+      if (!user?.schoolId && !user?.isSuperAdmin) return {};
+
+      let q = supabase
+        .from('students')
+        .select('class_id');
+
+      if (!user.isSuperAdmin && user.schoolId) {
+        q = q.eq('school_id', user.schoolId);
+      }
+
+      if (user.role === 'teacher') {
+        const { data: teacherClasses } = await supabase
+          .from('classes')
+          .select('id')
+          .eq('teacher_id', user.id);
+
+        if (teacherClasses && teacherClasses.length > 0) {
+          q = q.in('class_id', teacherClasses.map((c: any) => c.id));
+        } else {
+          return {};
+        }
+      }
+
+      const { data, error } = await q.not('class_id', 'is', null);
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      (data || []).forEach((row: any) => {
+        if (row.class_id) {
+          counts[row.class_id] = (counts[row.class_id] || 0) + 1;
+        }
+      });
+      return counts;
+    },
+    enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
+    placeholderData: keepPreviousData,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+  });
+}

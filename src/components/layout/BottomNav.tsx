@@ -1,11 +1,14 @@
 import { NavLink } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { Home, MessageSquare, Settings, ShieldAlert, Users, School, ClipboardList } from 'lucide-react';
 import { useUnreadConversationsCount, useUnreadConversationsParentCount } from '@/hooks/queries/useConversations';
+import { prefetchRoute } from '@/utils/routePrefetch';
 
 export default function BottomNav() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { data: unreadAdminConversations = 0 } = useUnreadConversationsCount();
   const { data: unreadConversations = 0 } = useUnreadConversationsParentCount();
 
@@ -54,6 +57,8 @@ export default function BottomNav() {
             key={link.to}
             to={link.to}
             end={link.to === '/'}
+            onMouseEnter={() => prefetchRoute(link.to, queryClient, user)}
+            onTouchStart={() => prefetchRoute(link.to, queryClient, user)}
             className={({ isActive }) =>
               cn(
                 'relative flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 py-1 px-0.5 transition-all duration-300',

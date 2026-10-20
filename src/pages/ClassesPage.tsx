@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
-import { useClasses, useTeachers, useAddClass, useUpdateClass, useDeleteClass, useAllStudents } from '@/hooks/queries';
+import { useClasses, useTeachers, useAddClass, useUpdateClass, useDeleteClass, useClassStudentCounts } from '@/hooks/queries';
 import { useQueryClient } from '@tanstack/react-query';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
@@ -53,24 +53,24 @@ export default function ClassesPage() {
   const { data: teachersData } = useTeachers(1, 1000, '', 'الكل', { enabled: showAdd });
   const teachers = useMemo(() => teachersData?.data || [], [teachersData]);
   
-  // عدد الطلاب يُستنتج مباشرة من كاش الطلاب العام في الذاكرة دون طلب إضافي من السيرفر
-  const { data: allStudentsData, isLoading: studentsLoading } = useAllStudents();
-  const allStudents = allStudentsData || [];
+  // جلب إحصائيات أعداد الطلاب لكل فصل باستعلام خفيف ومباشر
+  const { data: studentCountsData, isLoading: countsLoading } = useClassStudentCounts();
+  const studentCounts = studentCountsData || {};
 
   const addMutation = useAddClass();
   const deleteMutation = useDeleteClass();
 
-  // حساب أعداد الطلاب لكل فصل من الذاكرة مباشرة
+  // دمج أعداد الطلاب واسم المعلم لكل فصل
   const classes = useMemo(() => {
     return (classesData?.data || []).map(c => ({
       ...c,
       teacher_name: teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
-      student_count: allStudents.filter(s => s.class_id === c.id).length
+      student_count: studentCounts[c.id] || 0
     }));
-  }, [classesData, teachers, allStudents]);
+  }, [classesData, teachers, studentCounts]);
 
   const totalItems = classesData?.count || 0;
-  const loading = classesLoading || (studentsLoading && !classesData);
+  const loading = classesLoading || (countsLoading && !classesData);
 
   const handleSearch = (val: string) => { setSearch(val); setPage(1); };
 
