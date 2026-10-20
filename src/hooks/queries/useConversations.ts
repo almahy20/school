@@ -95,7 +95,9 @@ export function useAdminConversations(status: string = 'all', search: string = '
       })) as Conversation[];
     },
     enabled: !!(session && user?.schoolId),
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000,
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
     gcTime: 5 * 60 * 1000,
     placeholderData: (prev: any) => prev,
   });
@@ -177,9 +179,11 @@ export function useParentConversations() {
       })) as Conversation[];
     },
     enabled: !!(session && user?.id),
-    staleTime: 30 * 1000,
-    gcTime: 5 * 60 * 1000,
+    staleTime: 5 * 1000,
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
     placeholderData: (prev: any) => prev,
+    gcTime: 5 * 60 * 1000,
   });
 }
 
@@ -196,9 +200,12 @@ export function useConversationMessages(conversationId: string | null) {
     const un1 = realtimeEngine.subscribe(
       'conversation_messages',
       (payload: any) => {
-        // أضف الرسالة الجديدة لآخر صفحة في الـ cache مباشرة
+        // أضف الرسالة الجديدة لآخر صفحة في الـ cache مباشرة لسرعة فورية (<100ms)
         queryClient.setQueryData(queryKey, (old: any) => {
-          if (!old?.pages?.length) return old;
+          if (!old?.pages?.length) {
+            queryClient.invalidateQueries({ queryKey });
+            return old;
+          }
           const pages = [...old.pages];
           const lastPage = pages[pages.length - 1];
           // تجنب التكرار
@@ -206,6 +213,12 @@ export function useConversationMessages(conversationId: string | null) {
           pages[pages.length - 1] = [...lastPage, payload.new as ConversationMessage];
           return { ...old, pages };
         });
+
+        // تحديث إضافي فوري لجلب بيانات المرسل وقوائم المحادثات
+        queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
+        queryClient.invalidateQueries({ queryKey: ['conversations'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['conversations-unread-count'] });
+        queryClient.invalidateQueries({ queryKey: ['conversations-parent-unread'] });
       },
       { event: 'INSERT', filter: `conversation_id=eq.${conversationId}` }
     );
@@ -261,7 +274,9 @@ export function useConversationMessages(conversationId: string | null) {
         })) as ConversationMessage[];
     },
     enabled: !!(session && conversationId),
-    staleTime: 30 * 1000,
+    staleTime: 0, // داخل الشات: البيانات تعتبر فورية ويتم جلبها فوراً
+    refetchInterval: 2500, // استطلاع دوري فائق السرعة كل 2.5 ثانية كشبكة أمان
+    refetchOnWindowFocus: true,
     gcTime: 5 * 60 * 1000,
   });
 
