@@ -280,10 +280,14 @@ export default function ParentExamsPage() {
   }
 
   if (reviewExam) {
+    const liveReviewExam = (exams as ExamWithStudent[]).find(
+      e => e.id === reviewExam.id && e.student_id === reviewExam.student_id
+    ) || reviewExam;
+
     return (
       <LocalExamErrorBoundary onBack={() => setReviewExam(null)}>
         <ExamReviewView
-          exam={reviewExam}
+          exam={liveReviewExam}
           onBack={() => setReviewExam(null)}
         />
       </LocalExamErrorBoundary>

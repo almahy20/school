@@ -211,41 +211,97 @@ export function buildArabicSearchPatterns(query: string | null | undefined): str
  * 6. Slight spacing differences e.g. "عبد الرحمن" <-> "عبدالرحمن"
  * 7. Alternative answers separated by / or ، or , (e.g. "القاهرة / القاهرة الكبرى")
  */
+function isLevenshteinOne(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let diffs = 0;
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] !== b[j]) {
+      diffs++;
+      if (diffs > 1) return false;
+      if (a.length > b.length) {
+        i++;
+      } else if (b.length > a.length) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    } else {
+      i++;
+      j++;
+    }
+  }
+  if (i < a.length || j < b.length) diffs++;
+  return diffs <= 1;
+}
+
+function singleAnswerMatches(normGiven: string, rawTarget: string): boolean {
+  const normTarget = normalizeArabic(normalizeNumerals(rawTarget.trim()));
+  if (!normTarget) return false;
+
+  if (normGiven === normTarget) return true;
+
+  const strippedGiven = normGiven.replace(/\s+/g, '');
+  const strippedTarget = normTarget.replace(/\s+/g, '');
+  if (strippedGiven === strippedTarget) return true;
+
+  // Typo tolerance: Allow 1-letter typo if word length >= 5 (e.g. النيتروجين / النيترجين)
+  if (strippedGiven.length >= 5 && strippedTarget.length >= 5) {
+    if (isLevenshteinOne(strippedGiven, strippedTarget)) return true;
+  }
+
+  return false;
+}
+
 export function isExamAnswerCorrect(
   givenAnswer: string | null | undefined,
   correctAnswer: string | null | undefined,
-  questionType?: string
+  questionType?: string,
+  options?: any
 ): boolean {
-  if (!givenAnswer || !correctAnswer) return false;
+  if (!givenAnswer || (!correctAnswer && (!options || !Array.isArray(options) || options.length === 0))) return false;
 
   const rawGiven = normalizeNumerals(String(givenAnswer).trim());
-  const rawCorrect = normalizeNumerals(String(correctAnswer).trim());
-  if (!rawGiven || !rawCorrect) return false;
+  if (!rawGiven) return false;
 
   // Multiple choice & True/False: case-insensitive direct match
   if (questionType === 'multiple_choice' || questionType === 'true_false') {
+    const rawCorrect = normalizeNumerals(String(correctAnswer || '').trim());
     return rawGiven.toLowerCase() === rawCorrect.toLowerCase();
   }
 
-  // Fill in the blank (أكمل الفراغ): apply Arabic linguistic tolerance
+  // Fill in the blank (أكمل الفراغ): apply Arabic linguistic tolerance + alternatives
   const normGiven = normalizeArabic(rawGiven);
-  const normCorrect = normalizeArabic(rawCorrect);
 
-  if (normGiven === normCorrect) return true;
-
-  // Space-insensitive match (e.g. "عبد الرحمن" <-> "عبدالرحمن")
-  if (normGiven.replace(/\s+/g, '') === normCorrect.replace(/\s+/g, '')) {
-    return true;
+  // 1. Gather all acceptable alternatives
+  const targets = new Set<string>();
+  if (correctAnswer) {
+    const parts = String(correctAnswer).split(/[\/,،|]/);
+    parts.forEach(p => {
+      const trimmed = p.trim();
+      if (trimmed) targets.add(trimmed);
+    });
   }
 
-  // Check multiple acceptable alternatives if separated by / or ، or ,
-  if (/[\/,،]/.test(rawCorrect)) {
-    const alternatives = rawCorrect.split(/[\/,،]/).map(a => a.trim()).filter(Boolean);
-    for (const alt of alternatives) {
-      const normAlt = normalizeArabic(alt);
-      if (normGiven === normAlt || normGiven.replace(/\s+/g, '') === normAlt.replace(/\s+/g, '')) {
-        return true;
+  // 2. Also inspect options if it contains alternative strings (for fill_blank)
+  if (Array.isArray(options)) {
+    options.forEach(opt => {
+      if (typeof opt === 'string' && opt.trim()) {
+        const parts = opt.split(/[\/,،|]/);
+        parts.forEach(p => {
+          const trimmed = p.trim();
+          if (trimmed) targets.add(trimmed);
+        });
       }
+    });
+  }
+
+  // 3. Match against any target
+  for (const target of targets) {
+    if (singleAnswerMatches(normGiven, target)) {
+      return true;
     }
   }
 

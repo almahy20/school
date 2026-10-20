@@ -17,7 +17,7 @@ export interface LocalQuestion {
   _key: string; // local unique id
   question_type: QuestionType;
   question_text: string;
-  options: [string, string, string, string]; // MCQ only
+  options: string[]; // MCQ options or fill_blank alternatives
   correct_answer: string;
 }
 
@@ -30,7 +30,7 @@ export function emptyQuestion(type: QuestionType = 'true_false'): LocalQuestion 
     _key: makeKey(),
     question_type: type,
     question_text: '',
-    options: ['', '', '', ''],
+    options: type === 'multiple_choice' ? ['', '', '', ''] : [],
     correct_answer: type === 'true_false' ? 'true' : '',
   };
 }

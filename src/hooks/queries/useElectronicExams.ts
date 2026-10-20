@@ -521,17 +521,29 @@ export function useParentElectronicExams() {
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['electronic-exams', 'parent', user?.id], [user?.id]);
 
-  // Realtime: لما يُنشر اختبار جديد يظهر فوراً
+  // Realtime: لما يُنشر اختبار جديد أو تتعدل نتيجة أو محاولة طالب تنعكس مباشرة
   useEffect(() => {
     if (!user?.id) return;
 
-    return realtimeEngine.subscribe(
+    const unsubExams = realtimeEngine.subscribe(
       'electronic_exams',
       () => {
         queryClient.invalidateQueries({ queryKey });
       },
       user?.schoolId ? { filter: `school_id=eq.${user.schoolId}` } : undefined
     );
+
+    const unsubAttempts = realtimeEngine.subscribe(
+      'exam_attempts',
+      () => {
+        queryClient.invalidateQueries({ queryKey });
+      }
+    );
+
+    return () => {
+      unsubExams();
+      unsubAttempts();
+    };
   }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>>({
@@ -850,7 +862,7 @@ export function useSubmitExamAttempt() {
         let calculatedScore = 0;
         reviewQuestions.forEach((q) => {
           const given = answers[q.id];
-          if (q.correct_answer && isExamAnswerCorrect(given, q.correct_answer, q.question_type)) {
+          if (q.correct_answer && isExamAnswerCorrect(given, q.correct_answer, q.question_type, q.options)) {
             calculatedScore++;
           }
         });

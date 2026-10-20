@@ -379,7 +379,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               {(qs || []).map((q, i) => {
                 if (!q) return null;
                 const given = (ans || {})[q.id] || '';
-                const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
+                const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type, q.options);
                 const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
                 return (

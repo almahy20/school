@@ -40,7 +40,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
   // Identify wrong questions for "Mistake Mastery" mode
   const wrongQuestions = useMemo(() => {
     return questions.filter(q => {
-      return !isExamAnswerCorrect(userAnswers[q.id], q.correct_answer, q.question_type);
+      return !isExamAnswerCorrect(userAnswers[q.id], q.correct_answer, q.question_type, q.options);
     });
   }, [questions, userAnswers]);
 
@@ -244,7 +244,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                 {(() => {
                   const q = currentQ;
                   const given = userAnswers[q.id] || '';
-                  const isOriginallyCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
+                  const isOriginallyCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type, q.options);
                   const isEn = exam.language === 'en' || isEnglishText(q.question_text);
                   const isMastered = !!masteredMap[q.id];
 
@@ -442,7 +442,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
                   <div className="flex flex-wrap gap-2 justify-center">
                     {activeList.map((question, i) => {
                       const isCurrent = i === safeIdx;
-                      const isGivenCorrect = isExamAnswerCorrect(userAnswers[question.id], question.correct_answer, question.question_type);
+                      const isGivenCorrect = isExamAnswerCorrect(userAnswers[question.id], question.correct_answer, question.question_type, question.options);
                       const isMastered = !!masteredMap[question.id];
 
                       return (
@@ -486,7 +486,7 @@ export default function ExamReviewView({ exam, onBack }: ExamReviewViewProps) {
               <div className="space-y-4">
                 {questions.map((q, i) => {
                   const given = userAnswers[q.id] || '';
-                  const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type);
+                  const isCorrect = isExamAnswerCorrect(given, q.correct_answer, q.question_type, q.options);
                   const qIsEn = exam.language === 'en' || isEnglishText(q.question_text);
 
                   return (

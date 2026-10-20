@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Plus, Trash2, ArrowUp, ArrowDown, Eye, Send, Loader2,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, Sparkles, X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -324,20 +324,169 @@ export function QuestionEditor({
       )}
 
       {question.question_type === 'fill_blank' && (
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            {isEn ? 'Correct Answer *' : 'الإجابة الصحيحة *'}
+        <FillBlankEditor
+          question={question}
+          isEn={isEn}
+          onChange={onChange}
+        />
+      )}
+    </div>
+  );
+}
+
+function FillBlankEditor({
+  question,
+  isEn,
+  onChange,
+}: {
+  question: LocalQuestion;
+  isEn: boolean;
+  onChange: (patch: Partial<LocalQuestion>) => void;
+}) {
+  const [altInput, setAltInput] = useState('');
+
+  // استخراج الإجابة الأساسية والبدائل المتعددة
+  const rawParts = useMemo(() => {
+    const fromCorrect = (question.correct_answer || '')
+      .split(/[\/,،|]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    const fromOptions = (Array.isArray(question.options) ? question.options : [])
+      .map(s => String(s).trim())
+      .filter(Boolean);
+
+    const primary = fromCorrect[0] || '';
+    const extraAlts = new Set<string>();
+    fromCorrect.slice(1).forEach(a => extraAlts.add(a));
+    fromOptions.forEach(a => {
+      if (a !== primary) extraAlts.add(a);
+    });
+
+    return {
+      primary,
+      alternatives: Array.from(extraAlts),
+    };
+  }, [question.correct_answer, question.options]);
+
+  const handlePrimaryChange = (val: string) => {
+    const newCorrect = [val.trim(), ...rawParts.alternatives].filter(Boolean).join(' / ');
+    onChange({
+      correct_answer: newCorrect,
+      options: rawParts.alternatives,
+    });
+  };
+
+  const handleAddAlt = () => {
+    const trimmed = altInput.trim();
+    if (!trimmed) return;
+    if (trimmed === rawParts.primary || rawParts.alternatives.includes(trimmed)) {
+      setAltInput('');
+      return;
+    }
+    const newAlts = [...rawParts.alternatives, trimmed];
+    const newCorrect = [rawParts.primary, ...newAlts].filter(Boolean).join(' / ');
+    onChange({
+      correct_answer: newCorrect,
+      options: newAlts,
+    });
+    setAltInput('');
+  };
+
+  const handleRemoveAlt = (idxToRemove: number) => {
+    const newAlts = rawParts.alternatives.filter((_, i) => i !== idxToRemove);
+    const newCorrect = [rawParts.primary, ...newAlts].filter(Boolean).join(' / ');
+    onChange({
+      correct_answer: newCorrect,
+      options: newAlts,
+    });
+  };
+
+  return (
+    <div className="space-y-3 pt-1">
+      {/* Primary Answer */}
+      <div className="space-y-1.5">
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+          <span>{isEn ? 'Primary Correct Answer *' : 'الإجابة النموذجية الأولى *'}</span>
+          <span className="text-emerald-600 font-bold normal-case text-[10px]">
+            {isEn ? 'Required' : 'مطلوبة'}
+          </span>
+        </label>
+        <Input
+          dir={isEn ? 'ltr' : 'rtl'}
+          value={rawParts.primary}
+          onChange={e => handlePrimaryChange(e.target.value)}
+          placeholder={isEn ? 'e.g. Cairo' : 'مثال: القاهرة'}
+          maxLength={200}
+          className={cn("h-10 rounded-2xl bg-white border-slate-200 focus:border-violet-500 font-bold text-slate-800", isEn ? "text-left" : "text-right")}
+        />
+      </div>
+
+      {/* Alternative Answers Input & Chips */}
+      <div className="space-y-2 bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-black text-slate-700 flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+            <span>{isEn ? 'Alternative Accepted Answers (Optional)' : 'احتمالات وبدائل أخرى صحيحة (اختياري)'}</span>
           </label>
+          <span className="text-[10px] font-bold text-slate-400">
+            {rawParts.alternatives.length} {isEn ? 'alternatives' : 'احتمالات مسجلة'}
+          </span>
+        </div>
+
+        <p className="text-[11px] font-medium text-slate-500 leading-relaxed">
+          {isEn
+            ? 'Add any other acceptable phrasing (e.g. "Greater Cairo", "City of Cairo"). The system also automatically tolerates 1-letter typos and Arabic variations.'
+            : 'أضف أي صياغة أخرى تعتبرها صحيحة (مثال: "مدينة القاهرة"، "القاهرة الكبرى"). النظام يتسامح تلقائياً أيضاً مع الهمزات وسقطات الكيبورد.'}
+        </p>
+
+        <div className="flex gap-2">
           <Input
             dir={isEn ? 'ltr' : 'rtl'}
-            value={question.correct_answer}
-            onChange={e => onChange({ correct_answer: e.target.value })}
-            placeholder={isEn ? 'Correct answer for the blank' : 'الإجابة الصحيحة للفراغ'}
-            maxLength={200}
-            className={cn("h-10 rounded-2xl", isEn ? "text-left" : "text-right")}
+            value={altInput}
+            onChange={e => setAltInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddAlt();
+              }
+            }}
+            placeholder={isEn ? 'Type alternative & press Enter or Add...' : 'اكتب احتمالاً بديلاً ثم اضغط إضافة أو Enter...'}
+            maxLength={100}
+            className={cn("h-9 rounded-xl bg-white text-xs font-bold", isEn ? "text-left" : "text-right")}
           />
+          <button
+            type="button"
+            onClick={handleAddAlt}
+            disabled={!altInput.trim()}
+            className="px-3.5 h-9 rounded-xl bg-violet-600 hover:bg-violet-700 active:scale-95 disabled:opacity-40 text-white text-xs font-black shrink-0 transition-all cursor-pointer"
+          >
+            + {isEn ? 'Add' : 'إضافة'}
+          </button>
         </div>
-      )}
+
+        {/* Alternatives Chips List */}
+        {rawParts.alternatives.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {rawParts.alternatives.map((alt, ai) => (
+              <span
+                key={ai}
+                className="inline-flex items-center gap-1.5 bg-white border border-violet-200 text-violet-700 px-2.5 py-1 rounded-xl text-xs font-black shadow-xs animate-in fade-in zoom-in-95 duration-150"
+              >
+                <span>{alt}</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAlt(ai)}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-violet-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                  title={isEn ? 'Remove alternative' : 'حذف هذا الاحتمال'}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

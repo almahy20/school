@@ -55,7 +55,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
         _key:          makeKey(),
         question_type: q.question_type,
         question_text: q.question_text,
-        options:       (q.options as [string, string, string, string]) || ['', '', '', ''],
+        options:       Array.isArray(q.options) ? q.options : (q.question_type === 'multiple_choice' ? ['', '', '', ''] : []),
         correct_answer: q.correct_answer,
       })));
     }
@@ -130,7 +130,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
           id:             q.id,
           question_type:  q.question_type,
           question_text:  q.question_text,
-          options:        q.question_type === 'multiple_choice' ? q.options : null,
+          options:        (q.question_type === 'multiple_choice' || q.question_type === 'fill_blank') ? q.options : null,
           correct_answer: q.correct_answer,
           order_index:    i,
         })),
@@ -201,7 +201,7 @@ export default function CreateExamWizard({ classId, className, onBack, editExam 
     updateQuestion(idx, {
       question_type:  type,
       correct_answer: type === 'true_false' ? 'true' : '',
-      options:        ['', '', '', ''],
+      options:        type === 'multiple_choice' ? ['', '', '', ''] : [],
     });
   };
 

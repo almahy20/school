@@ -105,15 +105,23 @@ describe('Arabic Search & Normalization Engine', () => {
       expect(isExamAnswerCorrect('٤', '4', 'multiple_choice')).toBe(true);
     });
 
-    it('supports alternative answers separated by slash or comma', () => {
+    it('supports alternative answers separated by slash or comma or options array', () => {
       expect(isExamAnswerCorrect('القاهرة', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);
       expect(isExamAnswerCorrect('القاهره الكبرى', 'القاهرة / القاهرة الكبرى', 'fill_blank')).toBe(true);
       expect(isExamAnswerCorrect('مصر', 'جمهورية مصر العربية ، مصر', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('مدينة القاهرة', 'القاهرة', 'fill_blank', ['مدينة القاهرة', 'القاهرة الكبرى'])).toBe(true);
+    });
+
+    it('tolerates 1-letter typos for words with length >= 5', () => {
+      expect(isExamAnswerCorrect('النيتروجينن', 'النيتروجين', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('النيترجين', 'النيتروجين', 'fill_blank')).toBe(true);
+      expect(isExamAnswerCorrect('المغناطسية', 'المغناطيسية', 'fill_blank')).toBe(true);
     });
 
     it('rejects actual wrong answers', () => {
       expect(isExamAnswerCorrect('الإسكندرية', 'القاهرة', 'fill_blank')).toBe(false);
       expect(isExamAnswerCorrect('', 'القاهرة', 'fill_blank')).toBe(false);
+      expect(isExamAnswerCorrect('مصر', 'سوريا', 'fill_blank')).toBe(false);
     });
   });
 });
