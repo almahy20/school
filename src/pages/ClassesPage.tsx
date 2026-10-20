@@ -64,9 +64,9 @@ export default function ClassesPage() {
     return (classesData?.data || []).map(c => ({
       ...c,
       teacher_name: teachers.find(t => t.id === c.teacher_id)?.full_name || 'غير محدد',
-      student_count: studentCounts[c.id] || 0
+      student_count: studentCounts[c.id] !== undefined ? studentCounts[c.id] : (countsLoading ? undefined : 0)
     }));
-  }, [classesData, teachers, studentCounts]);
+  }, [classesData, teachers, studentCounts, countsLoading]);
 
   const totalItems = classesData?.count || 0;
   const loading = classesLoading || (countsLoading && !classesData);
@@ -188,7 +188,7 @@ function ClassCard({ classItem, onClick }: { classItem: ClassItem; onClick: () =
           <div className="flex justify-between items-center text-[11px] font-bold">
             <span className="text-slate-400">الطلاب</span>
             <span className={cn("font-black text-sm", percentage > 90 ? "text-rose-500" : "text-indigo-600")}>
-              {classItem.student_count} / {capacity}
+              {classItem.student_count !== undefined ? classItem.student_count : '...'} / {capacity}
             </span>
           </div>
           <Progress value={percentage} className="h-1.5 bg-slate-100" />

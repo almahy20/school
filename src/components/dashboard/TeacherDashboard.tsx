@@ -15,7 +15,7 @@ export function TeacherDashboard() {
   
   // ✅ Optimization: Use teacher-specific classes hook
   const { data: myClasses = [] } = useTeacherClasses(user?.id);
-  const { data: stats = { classes: 0, students: 0 } } = useTeacherStats();
+  const { data: stats, isLoading: statsLoading } = useTeacherStats();
 
   return (
     <div className="flex flex-col gap-10 max-w-[1500px] mx-auto text-right px-4 md:px-0">
@@ -49,8 +49,18 @@ export function TeacherDashboard() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard title="إجمالي الفصول" value={stats.classes} icon={School} color="indigo" />
-        <StatsCard title="عدد الطلاب" value={stats.students} icon={Users} color="emerald" />
+        <StatsCard 
+          title="إجمالي الفصول" 
+          value={stats ? stats.classes : (statsLoading ? '...' : 0)} 
+          icon={School} 
+          color="indigo" 
+        />
+        <StatsCard 
+          title="عدد الطلاب" 
+          value={stats ? stats.students : (statsLoading ? '...' : 0)} 
+          icon={Users} 
+          color="emerald" 
+        />
       </div>
 
       <div className="space-y-6">

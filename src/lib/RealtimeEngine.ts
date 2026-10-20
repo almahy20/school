@@ -276,6 +276,76 @@ class RealtimeEngine {
 
     switch (table) {
       case 'students': {
+        // ✅ Optimistic Delta Update: تعديل إجمالي الطلاب في كاش الداشبورد فوراً (+1 / -1)
+        if (eventType === 'INSERT' || eventType === 'DELETE') {
+          const delta = eventType === 'INSERT' ? 1 : -1;
+
+          // 1. تحديث إحصائيات لوحة تحكم المدير
+          const allAdminStatsQueries = queryClient.getQueryCache().findAll({ queryKey: ['admin-stats'] });
+          for (const q of allAdminStatsQueries) {
+            queryClient.setQueryData(q.queryKey, (oldData: any) => {
+              if (!oldData) return oldData;
+              if (oldData.stats) {
+                return {
+                  ...oldData,
+                  stats: {
+                    ...oldData.stats,
+                    students: Math.max(0, (oldData.stats.students || 0) + delta),
+                  },
+                };
+              }
+              if (typeof oldData.students === 'number') {
+                return {
+                  ...oldData,
+                  students: Math.max(0, oldData.students + delta),
+                };
+              }
+              return oldData;
+            });
+          }
+
+          // 2. تحديث إحصائيات لوحة تحكم المعلم
+          const allTeacherStatsQueries = queryClient.getQueryCache().findAll({ queryKey: ['teacher-stats'] });
+          for (const q of allTeacherStatsQueries) {
+            queryClient.setQueryData(q.queryKey, (oldData: any) => {
+              if (!oldData || typeof oldData.students !== 'number') return oldData;
+              return { ...oldData, students: Math.max(0, oldData.students + delta) };
+            });
+          }
+
+          // 3. تحديث أعداد طلاب الفصول
+          const targetClassId = eventType === 'INSERT' ? newRec?.class_id : oldRec?.class_id;
+          if (targetClassId) {
+            const allCountsQueries = queryClient.getQueryCache().findAll({ queryKey: ['classes', 'student-counts'] });
+            for (const q of allCountsQueries) {
+              queryClient.setQueryData(q.queryKey, (oldCounts: Record<string, number> | undefined) => {
+                if (!oldCounts) return oldCounts;
+                return {
+                  ...oldCounts,
+                  [targetClassId]: Math.max(0, (oldCounts[targetClassId] || 0) + delta),
+                };
+              });
+            }
+          }
+        }
+
+        if (eventType === 'UPDATE' && oldRec?.class_id !== newRec?.class_id) {
+          const allCountsQueries = queryClient.getQueryCache().findAll({ queryKey: ['classes', 'student-counts'] });
+          for (const q of allCountsQueries) {
+            queryClient.setQueryData(q.queryKey, (oldCounts: Record<string, number> | undefined) => {
+              if (!oldCounts) return oldCounts;
+              const next = { ...oldCounts };
+              if (oldRec?.class_id) {
+                next[oldRec.class_id] = Math.max(0, (next[oldRec.class_id] || 0) - 1);
+              }
+              if (newRec?.class_id) {
+                next[newRec.class_id] = (next[newRec.class_id] || 0) + 1;
+              }
+              return next;
+            });
+          }
+        }
+
         if (eventType === 'INSERT') {
           // On INSERT: Invalidate students queries to fetch full relation data (classes, student_parents)
           queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
@@ -327,6 +397,28 @@ class RealtimeEngine {
       }
 
       case 'classes': {
+        if (eventType === 'INSERT' || eventType === 'DELETE') {
+          const delta = eventType === 'INSERT' ? 1 : -1;
+          const allAdminStatsQueries = queryClient.getQueryCache().findAll({ queryKey: ['admin-stats'] });
+          for (const q of allAdminStatsQueries) {
+            queryClient.setQueryData(q.queryKey, (oldData: any) => {
+              if (!oldData) return oldData;
+              if (oldData.stats) {
+                return {
+                  ...oldData,
+                  stats: {
+                    ...oldData.stats,
+                    classes: Math.max(0, (oldData.stats.classes || 0) + delta),
+                  },
+                };
+              }
+              if (typeof oldData.classes === 'number') {
+                return { ...oldData, classes: Math.max(0, oldData.classes + delta) };
+              }
+              return oldData;
+            });
+          }
+        }
         queryClient.invalidateQueries({ queryKey: ['classes'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['students'], exact: false });
         queryClient.invalidateQueries({ queryKey: ['child-full-details'], exact: false });

@@ -152,7 +152,13 @@ export default function TeacherDetailPage() {
           {/* Teacher Metrics Grid - Remove curriculum progress and status cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
              <StatsCard title="النصاب التعليمي" value={classes.length} sub="فصول مسندة" icon={School} color="indigo" />
-             <StatsCard title="إجمالي الطلاب" value={stats.studentCount} sub="شخص تحت الإشراف" icon={Users} color="emerald" />
+             <StatsCard 
+               title="إجمالي الطلاب" 
+               value={stats ? stats.studentCount : (statsLoading ? '...' : 0)} 
+               sub="شخص تحت الإشراف" 
+               icon={Users} 
+               color="emerald" 
+             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">

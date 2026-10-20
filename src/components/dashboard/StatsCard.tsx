@@ -44,7 +44,13 @@ export function StatsCard({ title, value, icon: Icon, color, trend, subValue }: 
       </div>
       <div className="mt-4">
         <p className={cn("text-[9px] md:text-[10px] font-bold uppercase tracking-wide mb-1 opacity-70")}>{title}</p>
-        <h3 className="text-xl md:text-2xl font-bold leading-none tracking-tight">{value}</h3>
+        <h3 className="text-xl md:text-2xl font-bold leading-none tracking-tight">
+          {value === '...' ? (
+            <span className="inline-block w-16 h-6 bg-current opacity-20 rounded-lg animate-pulse align-middle" />
+          ) : (
+            value
+          )}
+        </h3>
         {subValue && <p className="text-[8px] md:text-[10px] mt-1.5 opacity-80 font-medium">{subValue}</p>}
       </div>
     </div>

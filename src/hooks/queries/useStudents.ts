@@ -312,6 +312,16 @@ export function useDeleteStudent() {
       toast.success('تم حذف الطالب بنجاح');
     },
     onSettled: () => {
+      // ✅ تعديل فوري تراكمي (-1) لإجمالي الطلاب
+      const allAdminStats = queryClient.getQueryCache().findAll({ queryKey: ['admin-stats'] });
+      for (const q of allAdminStats) {
+        queryClient.setQueryData(q.queryKey, (old: any) => {
+          if (!old) return old;
+          if (old.stats) return { ...old, stats: { ...old.stats, students: Math.max(0, (old.stats.students || 0) - 1) } };
+          if (typeof old.students === 'number') return { ...old, students: Math.max(0, old.students - 1) };
+          return old;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
@@ -335,8 +345,27 @@ export function useAddStudent() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast.success('تم إضافة الطالب بنجاح');
+      // ✅ تعديل فوري تراكمي (+1) لإجمالي الطلاب
+      const allAdminStats = queryClient.getQueryCache().findAll({ queryKey: ['admin-stats'] });
+      for (const q of allAdminStats) {
+        queryClient.setQueryData(q.queryKey, (old: any) => {
+          if (!old) return old;
+          if (old.stats) return { ...old, stats: { ...old.stats, students: (old.stats.students || 0) + 1 } };
+          if (typeof old.students === 'number') return { ...old, students: old.students + 1 };
+          return old;
+        });
+      }
+      if (data?.class_id) {
+        const allCounts = queryClient.getQueryCache().findAll({ queryKey: ['classes', 'student-counts'] });
+        for (const q of allCounts) {
+          queryClient.setQueryData(q.queryKey, (oldCounts: Record<string, number> | undefined) => {
+            if (!oldCounts) return oldCounts;
+            return { ...oldCounts, [data.class_id]: (oldCounts[data.class_id] || 0) + 1 };
+          });
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['students'] });
       queryClient.invalidateQueries({ queryKey: ['classes'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });

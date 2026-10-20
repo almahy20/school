@@ -89,7 +89,7 @@ export default function StudentsPage() {
   } = useStudents(page, PAGE_SIZE, search, filterClassId);
   
   const students = data?.data || [];
-  const totalItems = data?.count || 0;
+  const totalItems = data?.count;
 
   const { data: classesData } = useAllClasses();
   // Normalize classes to always be an array
@@ -262,7 +262,7 @@ export default function StudentsPage() {
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {totalItems} طالب — الصفحة {page}
+                      {totalItems !== undefined ? `${totalItems} طالب` : (loading ? '...' : '0 طالب')} — الصفحة {page}
                     </span>
                   </div>
                 </div>
@@ -275,7 +275,7 @@ export default function StudentsPage() {
 
                 <DataPagination
                   currentPage={page}
-                  totalItems={totalItems}
+                  totalItems={totalItems || 0}
                   pageSize={PAGE_SIZE}
                   onPageChange={setPage}
                 />

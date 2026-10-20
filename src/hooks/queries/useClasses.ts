@@ -229,6 +229,7 @@ export function useUpdateClass() {
 // ─── useClassStudentCounts Hook (Ultra-lightweight student count per class) ─
 export function useClassStudentCounts() {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const queryKey = useMemo(
     () => ['classes', 'student-counts', user?.schoolId, user?.role, user?.id],
     [user?.schoolId, user?.role, user?.id]
@@ -272,9 +273,9 @@ export function useClassStudentCounts() {
       return counts;
     },
     enabled: !!(session && (user?.schoolId || user?.isSuperAdmin)),
-    placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    placeholderData: (previousData) => previousData ?? queryClient.getQueryData(queryKey),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 }

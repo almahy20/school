@@ -189,8 +189,11 @@ export function useTeacher(id: string | undefined | null) {
 
 export function useTeacherDetailStats(id: string | undefined | null) {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
+  const queryKey = useMemo(() => ['teacher-stats', id, user?.schoolId], [id, user?.schoolId]);
+
   return useQuery({
-    queryKey: ['teacher-stats', id, user?.schoolId],
+    queryKey,
     queryFn: async () => {
       if (!id || !user?.schoolId) return { studentCount: 0, curriculumProgress: 0 };
 
@@ -221,7 +224,9 @@ export function useTeacherDetailStats(id: string | undefined | null) {
       return { studentCount: studentCount || 0, curriculumProgress: avgProgress };
     },
     enabled: !!session && !!(id && user?.schoolId),
-    staleTime: 3 * 60 * 1000,
+    placeholderData: (previousData) => previousData ?? queryClient.getQueryData(queryKey),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });

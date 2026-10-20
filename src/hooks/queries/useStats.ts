@@ -88,9 +88,16 @@ export function useAdminDashboardSummary() {
       };
     },
     enabled: !!(session && user?.schoolId && user?.id && (user?.role === 'admin' || user?.isSuperAdmin)),
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData) => {
+      if (previousData) return previousData;
+      const cached = queryClient.getQueryData<{ stats: DashboardStats; activities: DashboardActivity[] }>(queryKey);
+      if (cached) return cached;
+      const legacyStats = queryClient.getQueryData<DashboardStats>(['admin-stats', user?.schoolId, user?.isSuperAdmin]);
+      if (legacyStats) return { stats: legacyStats, activities: [] };
+      return undefined;
+    },
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });
@@ -235,6 +242,7 @@ async function fetchStatsFallback(user: any) {
 
 export function useTeacherStats() {
   const { user, session } = useAuth();
+  const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['teacher-stats', user?.id, user?.schoolId], [user?.id, user?.schoolId]);
 
   return useQuery({
@@ -285,7 +293,9 @@ export function useTeacherStats() {
       };
     },
     enabled: !!(session && user?.id && user?.schoolId && user?.role === 'teacher'),
-    staleTime: 3 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 24 * 60 * 60 * 1000,
+    placeholderData: (previousData) => previousData ?? queryClient.getQueryData(queryKey),
   });
 }
 

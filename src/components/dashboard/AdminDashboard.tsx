@@ -15,9 +15,9 @@ import { RegistrationLinksCard } from './RegistrationLinksCard';
 export const AdminDashboard = memo(function AdminDashboard() {
   const { user } = useAuth();
   const { data: summary, isLoading: summaryLoading } = useAdminDashboardSummary();
-  const stats = summary?.stats || { students: 0, teachers: 0, parents: 0, classes: 0, totalDue: 0, totalPaid: 0, attendanceRate: 0, presentToday: 0, absentToday: 0 };
+  const stats = summary?.stats;
   const activities = summary?.activities || [];
-  const activitiesLoading = summaryLoading;
+  const activitiesLoading = summaryLoading && !summary;
 
   const userName = user?.fullName ? user.fullName.split(' ')[0] : 'أدمن';
 
@@ -55,22 +55,33 @@ export const AdminDashboard = memo(function AdminDashboard() {
       </header>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
-        <StatsCard title="إجمالي الطلاب" value={stats.students || 0} icon={Users} color="white" trend="نشط" />
+        <StatsCard 
+          title="إجمالي الطلاب" 
+          value={stats ? stats.students : (summaryLoading ? '...' : 0)} 
+          icon={Users} 
+          color="white" 
+          trend="نشط" 
+        />
         <StatsCard 
           title="التحصيل المالي" 
-          value={`${(stats.totalPaid || 0).toLocaleString()} ج.م`} 
-          subValue={`من ${(stats.totalDue || 0).toLocaleString()}`} 
+          value={stats ? `${(stats.totalPaid || 0).toLocaleString()} ج.م` : (summaryLoading ? '...' : '0 ج.م')} 
+          subValue={stats ? `من ${(stats.totalDue || 0).toLocaleString()}` : undefined} 
           icon={Wallet} 
           color="indigo" 
         />
         <StatsCard 
           title="حضور اليوم" 
-          value={`${stats.presentToday || 0} حاضر`} 
-          subValue={`${stats.absentToday || 0} غائب`} 
+          value={stats ? `${stats.presentToday || 0} حاضر` : (summaryLoading ? '...' : '0 حاضر')} 
+          subValue={stats ? `${stats.absentToday || 0} غائب` : undefined} 
           icon={CalendarCheck} 
           color="emerald" 
         />
-        <StatsCard title="كادر المعلمين" value={stats.teachers || 0} icon={Users} color="primary" />
+        <StatsCard 
+          title="كادر المعلمين" 
+          value={stats ? stats.teachers : (summaryLoading ? '...' : 0)} 
+          icon={Users} 
+          color="primary" 
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
