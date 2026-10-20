@@ -432,6 +432,33 @@ export function useSaveExamQuestions() {
 
 // ─── Parent Hooks ──────────────────────────────────────────────────────────────
 
+/** دالة مساعدة لتوليد كافة صيغ أرقام الهواتف المحتملة (المحلية، الدولية، بدون أصفار، مع +20 وغيرها) */
+function getAllPhoneVariants(phone?: string | null): string[] {
+  if (!phone) return [];
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return [trimmed];
+
+  const variants = new Set<string>();
+  variants.add(trimmed);
+  variants.add(digits);
+
+  if (digits.length >= 9) {
+    const last10 = digits.slice(-10);
+    const last9 = digits.slice(-9);
+
+    variants.add(last10);
+    variants.add(`0${last10}`);
+    variants.add(`20${last10}`);
+    variants.add(`+20${last10}`);
+    variants.add(`0020${last10}`);
+
+    variants.add(last9);
+    variants.add(`0${last9}`);
+  }
+  return Array.from(variants);
+}
+
 /** اختبارات ولي الأمر (كل أبنائه) */
 export function useParentElectronicExams() {
   const { user, session } = useAuth();
@@ -463,7 +490,7 @@ export function useParentElectronicExams() {
           p_school_id: user.schoolId || null,
         });
 
-        if (!rpcErr && Array.isArray(rpcData)) {
+        if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
           return rpcData as Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>;
         }
         if (rpcErr) {
@@ -473,58 +500,69 @@ export function useParentElectronicExams() {
         logger.warn('[useParentElectronicExams] RPC exception:', rpcEx);
       }
 
-      // ── 2. البديل المباشر: استعلامات مرنة مع معالجة الربط التلقائي برقم الهاتف ──
-      let childrenList: Array<{ student_id: string; student: any }> = [];
+      // ── 2. البديل المباشر الموثوق: استعلامات شاملة للأبناء عبر student_parents + الهاتف مع معالجة الربط التلقائي ──
+      const studentMap = new Map<string, { student_id: string; student: any }>();
 
-      // 2أ. جلب الأبناء المرتبطين عبر student_parents
+      // 2أ. جلب الأبناء المرتبطين مسبقاً عبر student_parents
       try {
         const { data: spData, error: spErr } = await db
           .from('student_parents')
           .select('student_id, students(id, name, class_id, school_id, classes(name))')
           .eq('parent_id', user.id);
 
-        if (!spErr && spData && spData.length > 0) {
-          childrenList = spData
-            .map((c: any) => ({
-              student_id: c.student_id,
-              student: c.students,
-            }))
-            .filter((c: any) => !!c.student);
+        if (!spErr && spData) {
+          spData.forEach((c: any) => {
+            if (c.student_id && c.students) {
+              studentMap.set(c.student_id, {
+                student_id: c.student_id,
+                student: c.students,
+              });
+            }
+          });
         }
       } catch (spCatch) {
         logger.warn('[useParentElectronicExams] student_parents query warning:', spCatch);
       }
 
-      // 2ب. إذا لم نجد أبناء في student_parents، نبحث برقم هاتف ولي الأمر ونصلح الربط تلقائياً
-      if (childrenList.length === 0 && user.phone) {
+      // 2ب. جلب الأبناء برقم هاتف ولي الأمر (لضمان شمول كافة الأبناء حتى لو لم يتم ربطهم بعد)
+      let effectivePhone = user.phone;
+      if (!effectivePhone) {
         try {
-          const cleanPhone = user.phone.replace(/\D/g, '');
-          if (cleanPhone) {
-            const phoneVariants = [
-              cleanPhone,
-              cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
-              cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
-              '+20' + (cleanPhone.startsWith('0') ? cleanPhone.slice(1) : cleanPhone),
-            ].filter(Boolean);
+          const { data: prof } = await db.from('profiles').select('phone').eq('id', user.id).maybeSingle();
+          if (prof?.phone) effectivePhone = prof.phone;
+        } catch { /* ignore */ }
+      }
 
-            const { data: phoneStudents } = await db
+      if (effectivePhone) {
+        try {
+          const phoneVariants = getAllPhoneVariants(effectivePhone);
+          if (phoneVariants.length > 0) {
+            const { data: phoneStudents, error: pErr } = await db
               .from('students')
               .select('id, name, class_id, school_id, classes(name)')
               .in('parent_phone', phoneVariants);
 
-            if (phoneStudents && phoneStudents.length > 0) {
-              childrenList = phoneStudents.map((s: any) => ({
-                student_id: s.id,
-                student: s,
-              }));
+            if (!pErr && phoneStudents && phoneStudents.length > 0) {
+              const unlinked: any[] = [];
+              phoneStudents.forEach((s: any) => {
+                if (!studentMap.has(s.id)) {
+                  studentMap.set(s.id, {
+                    student_id: s.id,
+                    student: s,
+                  });
+                  unlinked.push(s);
+                }
+              });
 
-              // إصلاح الربط في الخلفية بدون تعطيل المستخدم
-              const linksToInsert = phoneStudents.map((s: any) => ({
-                school_id: s.school_id || user.schoolId,
-                student_id: s.id,
-                parent_id: user.id,
-              }));
-              db.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
+              // إصلاح وربط تلقائي بالخلفية لعدم تكرار البحث مستقبلاً
+              if (unlinked.length > 0) {
+                const linksToInsert = unlinked.map((s: any) => ({
+                  school_id: s.school_id || user.schoolId,
+                  student_id: s.id,
+                  parent_id: user.id,
+                }));
+                db.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
+              }
             }
           }
         } catch (phoneErr) {
@@ -532,6 +570,7 @@ export function useParentElectronicExams() {
         }
       }
 
+      const childrenList = Array.from(studentMap.values());
       if (!childrenList.length) return [];
 
       const classIds = [...new Set(
@@ -540,23 +579,17 @@ export function useParentElectronicExams() {
 
       if (!classIds.length) return [];
 
-      // 2ج. جلب الاختبارات المنشورة للفصول
+      // 2ج. جلب الاختبارات المنشورة للفصول التابعة لأبناء ولي الأمر
       let exams: any[] = [];
       try {
-        let query = db
+        const { data: examsData, error: exErr } = await db
           .from('electronic_exams')
           .select('*, classes(name)')
           .eq('status', 'published')
           .in('class_id', classIds)
           .order('created_at', { ascending: false })
-          .limit(30);
+          .limit(50);
 
-        const effectiveSchoolId = user.schoolId || childrenList[0]?.student?.school_id;
-        if (effectiveSchoolId) {
-          query = query.eq('school_id', effectiveSchoolId);
-        }
-
-        const { data: examsData, error: exErr } = await query;
         if (!exErr && examsData) {
           exams = examsData;
         } else {
@@ -567,7 +600,7 @@ export function useParentElectronicExams() {
             .eq('status', 'published')
             .in('class_id', classIds)
             .order('created_at', { ascending: false })
-            .limit(30);
+            .limit(50);
           exams = simpleExams || [];
         }
       } catch (exErr) {
@@ -600,34 +633,50 @@ export function useParentElectronicExams() {
         } catch { /* ignore */ }
       }
 
-      // 2هـ. جلب محاولات ولي الأمر
-      const attemptsByExam: Record<string, ExamAttempt> = {};
+      // 2هـ. جلب محاولات ولي الأمر / الأبناء بدقة مع دعم التوأم والأخوة
+      const studentIds = childrenList.map((c) => c.student_id);
+      const attemptsMap = new Map<string, ExamAttempt>();
       try {
-        const { data: attempts } = await db
+        let attemptsQuery = db
           .from('exam_attempts')
           .select('id, exam_id, student_id, parent_id, score, total_score, completed_at, answers')
-          .eq('parent_id', user.id)
           .in('exam_id', examIds);
+
+        if (studentIds.length > 0) {
+          attemptsQuery = attemptsQuery.or(`parent_id.eq.${user.id},student_id.in.(${studentIds.join(',')})`);
+        } else {
+          attemptsQuery = attemptsQuery.eq('parent_id', user.id);
+        }
+
+        const { data: attempts } = await attemptsQuery;
         (attempts || []).forEach((a: any) => {
-          attemptsByExam[a.exam_id] = a;
+          if (a.student_id) {
+            attemptsMap.set(`${a.exam_id}_${a.student_id}`, a);
+          }
+          if (!attemptsMap.has(a.exam_id)) {
+            attemptsMap.set(a.exam_id, a);
+          }
         });
       } catch (attErr) {
         logger.warn('[useParentElectronicExams] attempts query warning:', attErr);
       }
 
-      // 2و. دمج النتائج مع بيانات الطلاب
+      // 2و. دمج النتائج مع بيانات الطلاب (دعم كامل للأخوة في نفس الفصل)
       const result: any[] = [];
       for (const exam of exams) {
-        const childItem = childrenList.find((c) => c.student?.class_id === exam.class_id);
-        if (!childItem?.student) continue;
-        result.push({
-          ...exam,
-          class_name:      exam.classes?.name || childItem.student?.classes?.name || '',
-          questions_count: questionCounts[exam.id] || 0,
-          student_id:      childItem.student.id,
-          student_name:    childItem.student.name,
-          attempt:         attemptsByExam[exam.id] || null,
-        });
+        const matchingChildren = childrenList.filter((c) => c.student?.class_id === exam.class_id);
+        for (const childItem of matchingChildren) {
+          if (!childItem?.student) continue;
+          const attempt = attemptsMap.get(`${exam.id}_${childItem.student.id}`) || attemptsMap.get(exam.id) || null;
+          result.push({
+            ...exam,
+            class_name:      exam.classes?.name || childItem.student?.classes?.name || '',
+            questions_count: questionCounts[exam.id] || 0,
+            student_id:      childItem.student.id,
+            student_name:    childItem.student.name,
+            attempt,
+          });
+        }
       }
       return result;
     },

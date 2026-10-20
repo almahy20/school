@@ -100,13 +100,17 @@ export function useAllParents() {
         linksByParent.get(l.parent_id)!.push(l);
       });
 
-      // Group students by phone for O(1) lookup
+      // Group students by normalized phone (last 10 digits) for O(1) lookup
       const studentsByPhoneMap = new Map<string, any[]>();
       studentsByPhone.forEach((s: any) => {
-        const phone = s.parent_phone?.trim();
-        if (phone) {
-          if (!studentsByPhoneMap.has(phone)) studentsByPhoneMap.set(phone, []);
-          studentsByPhoneMap.get(phone)!.push(s);
+        const raw = s.parent_phone?.trim();
+        if (raw) {
+          const digits = raw.replace(/\D/g, '');
+          const key = digits.length >= 10 ? digits.slice(-10) : digits;
+          if (key) {
+            if (!studentsByPhoneMap.has(key)) studentsByPhoneMap.set(key, []);
+            studentsByPhoneMap.get(key)!.push(s);
+          }
         }
       });
 
@@ -114,7 +118,10 @@ export function useAllParents() {
         const roleRecord = userRolesMap.get(profile.id);
         const parentLinks = linksByParent.get(profile.id) || [];
         const linkedStudents = parentLinks.map((l: any) => l.students).filter(Boolean);
-        const phoneStudents = profile.phone ? (studentsByPhoneMap.get(profile.phone.trim()) || []) : [];
+        
+        const profileDigits = profile.phone ? profile.phone.replace(/\D/g, '') : '';
+        const lookupKey = profileDigits.length >= 10 ? profileDigits.slice(-10) : profileDigits;
+        const phoneStudents = lookupKey ? (studentsByPhoneMap.get(lookupKey) || []) : [];
 
         // Combine & deduplicate
         const studentMap = new Map<string, any>();
@@ -132,6 +139,28 @@ export function useAllParents() {
           })),
         };
       }) as Parent[];
+
+      // Auto-heal missing links in background
+      try {
+        const missingLinks: any[] = [];
+        data.forEach((p) => {
+          const parentLinks = linksByParent.get(p.id) || [];
+          const existingStudentIds = new Set(parentLinks.map((l: any) => l.student_id));
+          (p.children || []).forEach((c) => {
+            if (!existingStudentIds.has(c.id)) {
+              missingLinks.push({
+                school_id: schoolId,
+                student_id: c.id,
+                parent_id: p.id,
+              });
+            }
+          });
+        });
+
+        if (missingLinks.length > 0) {
+          supabase.from('student_parents').upsert(missingLinks, { onConflict: 'student_id,parent_id' }).then();
+        }
+      } catch { /* ignore background heal errors */ }
 
       return data;
     },
@@ -331,14 +360,24 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
         (missingStudents || []).forEach(s => studentMap.set(s.id, s));
       }
 
-      // 4. Also fetch by parent phone
+      // 4. Also fetch by parent phone (using all format variants)
       if (parentProfile?.phone) {
-        const cleanPhone = parentProfile.phone.trim();
+        const rawPhone = parentProfile.phone.trim();
+        const digits = rawPhone.replace(/\D/g, '');
+        const variants = new Set<string>([rawPhone, digits]);
+        if (digits.length >= 9) {
+          const last10 = digits.slice(-10);
+          variants.add(last10);
+          variants.add(`0${last10}`);
+          variants.add(`20${last10}`);
+          variants.add(`+20${last10}`);
+        }
+
         const { data: phoneStudents } = await supabase
           .from('students')
           .select('id, name, class_id, parent_phone')
           .eq('school_id', user.schoolId)
-          .eq('parent_phone', cleanPhone);
+          .in('parent_phone', Array.from(variants));
         
         (phoneStudents || []).forEach(s => {
           if (!studentMap.has(s.id)) {
