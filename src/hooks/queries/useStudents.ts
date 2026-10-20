@@ -72,7 +72,6 @@ export function useAllStudents() {
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
   });

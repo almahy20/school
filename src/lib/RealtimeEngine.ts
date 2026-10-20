@@ -321,6 +321,7 @@ class RealtimeEngine {
         }
 
         queryClient.invalidateQueries({ queryKey: ['admin-stats'], exact: false });
+        queryClient.invalidateQueries({ queryKey: ['classes', 'student-counts'], exact: false });
         break;
       }
 

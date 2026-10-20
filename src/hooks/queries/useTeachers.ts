@@ -93,7 +93,6 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
     enabled: (options?.enabled ?? true) && !!(user?.schoolId || user?.isSuperAdmin),
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
-    refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),

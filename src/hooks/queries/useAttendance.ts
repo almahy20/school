@@ -236,8 +236,6 @@ export function useTeacherAttendance(date: string) {
     staleTime: 2 * 60 * 1000, 
     gcTime: 60 * 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
   });
 }
 

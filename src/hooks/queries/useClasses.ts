@@ -34,8 +34,6 @@ export function useAllClasses() {
     placeholderData: keepPreviousData,
     staleTime: 3 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
   });
 }
 
@@ -274,6 +272,5 @@ export function useClassStudentCounts() {
     staleTime: 3 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
   });
 }

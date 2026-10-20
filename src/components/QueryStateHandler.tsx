@@ -245,19 +245,9 @@ export function QueryStateHandler({
     );
   }
 
-  // 4. Success State — يعرض المحتوى مع شريط تحديث خفيف في الأعلى عند إعادة الجلب
-  const isBackgroundRefetching = (loading || isRefetching) && hasData;
+  // 4. Success State — يعرض المحتوى فوراً وبشكل هادئ ومستقر
   return (
     <div className="relative">
-      {/* شريط تحديث شفاف في الأعلى — لا يحجب المحتوى */}
-      {isBackgroundRefetching && (
-        <div
-          className="absolute top-0 left-0 right-0 h-0.5 z-50 overflow-hidden rounded-full"
-          aria-hidden="true"
-        >
-          <div className="h-full bg-indigo-500 animate-[shimmer_1.2s_ease-in-out_infinite] origin-left" />
-        </div>
-      )}
       {children}
     </div>
   );

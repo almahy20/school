@@ -264,8 +264,6 @@ export function useParentChildren() {
     enabled: !!(user?.id && user?.role === 'parent'),
     staleTime: 20 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: true, // يضمن فحص وتحديث البيانات في الخلفية
-    refetchOnWindowFocus: true,
     retry: 1,
     retryDelay: 1000,
   });
@@ -482,7 +480,6 @@ export function useChildFullDetails(studentId: string | undefined) {
     enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
-    refetchOnMount: true,
     refetchOnWindowFocus: false,
     retry: (failureCount, error: any) => {
       if (error?.code === 'PGRST202' || (error?.status >= 400 && error?.status < 500)) {
