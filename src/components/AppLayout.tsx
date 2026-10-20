@@ -320,7 +320,8 @@ export default function AppLayout({ children, hideBottomNav }: Props) {
               <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden xl:block">حسابي الشخصي</span>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
         {/* Content Section */}
         <div className={cn(
