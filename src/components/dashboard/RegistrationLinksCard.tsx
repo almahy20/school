@@ -5,10 +5,14 @@ import { Link as LinkIcon, Copy as CopyIcon } from 'lucide-react';
 
 export function RegistrationLinksCard() {
   const { toast } = useToast();
-  const { data: branding } = useBranding();
+  const { data: branding, isLoading } = useBranding();
   const slug = branding?.slug || '';
 
   const copy = (type: 'teachers' | 'parents') => {
+    if (!slug) {
+      toast({ title: 'تنبيه', description: 'جاري تحميل رابط المدرسة، يرجى المحاولة بعد لحظات...', variant: 'default' });
+      return;
+    }
     const link = `${window.location.origin}/register/${type}/${slug}`;
     navigator.clipboard.writeText(link);
     toast({ title: 'تم النسخ', description: `تم نسخ رابط تسجيل ${type === 'teachers' ? 'المعلمين' : 'أولياء الأمور'}` });
@@ -28,9 +32,9 @@ export function RegistrationLinksCard() {
              <label className="text-[9px] sm:text-[10px] font-black text-indigo-600/50 uppercase tracking-widest mr-1">رابط المعلمين</label>
              <div className="flex gap-2">
                 <div className="flex-1 h-11 sm:h-12 px-3 sm:px-4 rounded-xl bg-white border border-indigo-100 flex items-center text-[10px] sm:text-xs font-bold text-slate-500 overflow-hidden whitespace-nowrap" dir="ltr">
-                   .../register/teachers/{slug}
+                   {slug ? `.../register/teachers/${slug}` : (isLoading ? 'جاري التحميل...' : 'غير محدد')}
                 </div>
-                <Button onClick={() => copy('teachers')} className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white p-0 shrink-0">
+                <Button onClick={() => copy('teachers')} disabled={!slug} className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white p-0 shrink-0">
                    <CopyIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
              </div>
@@ -40,9 +44,9 @@ export function RegistrationLinksCard() {
              <label className="text-[9px] sm:text-[10px] font-black text-indigo-600/50 uppercase tracking-widest mr-1">رابط أولياء الأمور</label>
              <div className="flex gap-2">
                 <div className="flex-1 h-11 sm:h-12 px-3 sm:px-4 rounded-xl bg-white border border-indigo-100 flex items-center text-[10px] sm:text-xs font-bold text-slate-500 overflow-hidden whitespace-nowrap" dir="ltr">
-                   .../register/parents/{slug}
+                   {slug ? `.../register/parents/${slug}` : (isLoading ? 'جاري التحميل...' : 'غير محدد')}
                 </div>
-                <Button onClick={() => copy('parents')} className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white p-0 shrink-0">
+                <Button onClick={() => copy('parents')} disabled={!slug} className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white p-0 shrink-0">
                    <CopyIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                 </Button>
              </div>
