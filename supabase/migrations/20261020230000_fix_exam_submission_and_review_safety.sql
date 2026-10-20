@@ -1,29 +1,18 @@
 -- ==============================================================================
 -- Migration: 20261020230000_fix_exam_submission_and_review_safety.sql
 -- Purpose  : حل أخطاء تسليم الاختبارات الإلكترونية والشاشة البيضاء عند مراجعة الإجابات:
---            1. إضافة عمود points إذا كان مفقوداً في الجداول لمنع خطأ column points does not exist
---            2. إزالة قيد NOT NULL عن parent_id في exam_attempts لتفادي فشل الحفظ
---            3. ضمان إنشاء profile تلقائي لولي الأمر داخل submit_exam_attempt قبل الإدراج
---            4. إرجاع الأسئلة باسميها 'questions' و 'questions_with_answers' للتوافق مع الواجهة
---            5. ربط الطالب بولي الأمر تلقائياً في student_parents عند تسليم الاختبار
---            6. ترقية get_exam_review_questions لدعم الربط بالهاتف وعدم رمي Exception إذا لم يُسلّم بعد
---            7. ضمان سياسة RLS لـ exam_questions لتشغيل student_exam_questions بأمان
+--            1. تحديث submit_exam_attempt لإنشاء Profile لولي الأمر تلقائياً لمنع خطأ Foreign Key
+--            2. إرجاع الأسئلة باسميها 'questions' و 'questions_with_answers' للتوافق مع الواجهة
+--            3. قبول التسليم حتى لو تم إغلاق الاختبار أثناء حل الطالب
+--            4. ربط الطالب بولي الأمر تلقائياً في student_parents عند تسليم الاختبار
+--            5. ترقية get_exam_review_questions لدعم التحقق بالهاتف والعودة الآمنة بـ 0 صفوف
+--            NOTE: هذه الدالات تعمل بنظام CREATE OR REPLACE فائق السرعة بدون قفل الجداول (Zero Lock Contentions)
 -- ==============================================================================
 
 SET search_path TO public;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 1. التأكد من وجود عمود points وتخفيف القيود على exam_attempts
--- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE public.exam_questions ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 1;
-ALTER TABLE public.exam_attempts  ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 0;
-ALTER TABLE public.students       ADD COLUMN IF NOT EXISTS points NUMERIC DEFAULT 0;
-
-ALTER TABLE public.exam_attempts ALTER COLUMN parent_id DROP NOT NULL;
-
-
--- ─────────────────────────────────────────────────────────────────────────────
--- 2. تحديث دالة submit_exam_attempt لتكون درع حماية متكامل
+-- 1. تحديث دالة submit_exam_attempt لتكون درع حماية متكامل فوري التنفيذ
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.submit_exam_attempt(
   p_exam_id            UUID,
@@ -96,8 +85,7 @@ BEGIN
       question_text, 
       options, 
       correct_answer, 
-      order_index,
-      COALESCE(points, 1) AS points
+      order_index
     FROM public.exam_questions
     WHERE exam_id = p_exam_id
     ORDER BY order_index ASC
@@ -112,15 +100,14 @@ BEGIN
       v_score := v_score + 1;
     END IF;
 
-    -- بناء كائن السؤال مع الإجابة النموذجية المعتمدة والنقاط
+    -- بناء كائن السؤال مع الإجابة النموذجية المعتمدة
     v_question_obj := jsonb_build_object(
       'id',             v_question.id,
       'question_type',  v_question.question_type,
       'question_text',  v_question.question_text,
       'options',        v_question.options,
       'correct_answer', v_question.correct_answer,
-      'order_index',    v_question.order_index,
-      'points',         v_question.points
+      'order_index',    v_question.order_index
     );
     v_questions_json := v_questions_json || jsonb_build_array(v_question_obj);
   END LOOP;
@@ -133,7 +120,6 @@ BEGIN
     answers,
     score,
     total_score,
-    points,
     time_spent_seconds,
     tab_switches_count,
     completed_at
@@ -144,7 +130,6 @@ BEGIN
     p_answers,
     v_score,
     v_total,
-    v_score,
     p_time_spent_seconds,
     p_tab_switches_count,
     NOW()
@@ -153,7 +138,6 @@ BEGIN
     answers            = EXCLUDED.answers,
     score              = EXCLUDED.score,
     total_score        = EXCLUDED.total_score,
-    points             = EXCLUDED.points,
     time_spent_seconds = EXCLUDED.time_spent_seconds,
     tab_switches_count = EXCLUDED.tab_switches_count,
     completed_at       = NOW()
@@ -175,7 +159,7 @@ GRANT EXECUTE ON FUNCTION public.submit_exam_attempt(UUID, UUID, UUID, JSONB, IN
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. ترقية دالة get_exam_review_questions لدعم التحقق بالهاتف والعودة الآمنة
+-- 2. ترقية دالة get_exam_review_questions لدعم التحقق بالهاتف والعودة الآمنة
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.get_exam_review_questions(p_exam_id UUID)
 RETURNS TABLE (
@@ -203,7 +187,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- 1. المعلمون والإدارة والسوبر أدمن يمكنهم مراجعة الإجابات دائماً
+  -- أ) المعلمون والإدارة والسوبر أدمن يمكنهم مراجعة الإجابات دائماً
   IF v_is_super OR v_role IN ('admin', 'teacher') THEN
     RETURN QUERY
     SELECT 
@@ -215,7 +199,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- 2. بالنسبة لولي الأمر / الطالب: فحص وجود محاولة تخص المستخدم أو أبنائه (سواء عبر الربط المباشر أو رقم الهاتف)
+  -- ب) بالنسبة لولي الأمر / الطالب: فحص وجود محاولة تخص المستخدم أو أبنائه (سواء عبر الربط المباشر أو رقم الهاتف)
   SELECT EXISTS (
     SELECT 1 
     FROM public.exam_attempts ea
@@ -246,7 +230,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- 3. إرجاع الأسئلة متضمنة correct_answer
+  -- ج) إرجاع الأسئلة متضمنة correct_answer
   RETURN QUERY
   SELECT 
     q.id, q.exam_id, q.school_id, q.question_type, 
@@ -258,41 +242,5 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.get_exam_review_questions(UUID) TO authenticated, service_role;
-
-
--- ─────────────────────────────────────────────────────────────────────────────
--- 4. ضمان تشغيل View student_exam_questions الآمن بسياسة RLS موحدة
--- ─────────────────────────────────────────────────────────────────────────────
-DROP POLICY IF EXISTS "exam_questions_select_unified" ON public.exam_questions;
-CREATE POLICY "exam_questions_select_unified" ON public.exam_questions
-  FOR SELECT TO authenticated
-  USING (
-    get_auth_is_super_admin()
-    OR school_id = get_auth_school_id()
-    OR EXISTS (
-      SELECT 1 FROM public.electronic_exams ee
-      WHERE ee.id = exam_questions.exam_id
-        AND ee.status = 'published'
-        AND (
-          ee.school_id = get_auth_school_id()
-          OR EXISTS (
-            SELECT 1 FROM public.student_parents sp
-            JOIN public.students s ON s.id = sp.student_id
-            WHERE sp.parent_id = auth.uid() AND s.class_id = ee.class_id
-          )
-          OR EXISTS (
-            SELECT 1 FROM public.students s
-            JOIN public.profiles p ON p.id = auth.uid()
-            WHERE s.class_id = ee.class_id
-              AND (
-                s.parent_phone = p.phone 
-                OR s.parent_phone = p.phone_normalized
-                OR right(regexp_replace(COALESCE(s.parent_phone,''), '[^0-9]', '', 'g'), 9) = 
-                   right(regexp_replace(COALESCE(p.phone,''), '[^0-9]', '', 'g'), 9)
-              )
-          )
-        )
-    )
-  );
 
 NOTIFY pgrst, 'reload schema';
