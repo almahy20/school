@@ -26,6 +26,14 @@ const prefetchedRoutes = new Set<string>();
  * when the user intends to navigate (onMouseEnter or onTouchStart).
  */
 export function prefetchRoute(route: string, queryClient?: QueryClient, user?: AppUser | null) {
+  // Avoid prefetching on slow connections or when data saver mode is enabled
+  if (typeof navigator !== 'undefined') {
+    const conn = (navigator as any).connection;
+    if (conn?.saveData || conn?.effectiveType === 'slow-2g' || conn?.effectiveType === '2g') {
+      return;
+    }
+  }
+
   // Always trigger chunk import
   const loader = chunkLoaders[route];
   if (loader && !prefetchedRoutes.has(route)) {
@@ -87,7 +95,7 @@ export function prefetchRoute(route: string, queryClient?: QueryClient, user?: A
       break;
     }
     case '/parents': {
-      if (schoolId) {
+      if (schoolId && (user.role === 'admin' || isSuperAdmin)) {
         queryClient.prefetchQuery({
           queryKey: ['parents', 'all', schoolId],
           staleTime: 60 * 1000,
@@ -96,7 +104,7 @@ export function prefetchRoute(route: string, queryClient?: QueryClient, user?: A
       break;
     }
     case '/attendance': {
-      if (schoolId) {
+      if (schoolId && (user.role === 'admin' || user.role === 'teacher' || isSuperAdmin)) {
         const today = new Date().toISOString().split('T')[0];
         queryClient.prefetchQuery({
           queryKey: ['teacher-attendance', schoolId, today],
@@ -106,7 +114,7 @@ export function prefetchRoute(route: string, queryClient?: QueryClient, user?: A
       break;
     }
     case '/manage-conversations': {
-      if (schoolId) {
+      if (schoolId && (user.role === 'admin' || isSuperAdmin)) {
         queryClient.prefetchQuery({
           queryKey: ['conversations', schoolId, 'all', 1, 15],
           staleTime: 30 * 1000,
