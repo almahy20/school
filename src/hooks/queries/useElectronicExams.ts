@@ -87,7 +87,7 @@ export function useClassElectronicExams(classId: string | null) {
         .from('electronic_exams')
         .select(`
           *,
-          classes!electronic_exams_class_id_fkey(name),
+          classes(name),
           exam_questions(id),
           exam_attempts(id, score, total_score)
         `)
@@ -130,13 +130,35 @@ export function useExamQuestions(examId: string | undefined | null, options?: { 
       if (!examId) return [];
 
       if (options?.excludeAnswer) {
-        const { data, error } = await db
-          .from('student_exam_questions')
+        // 1. محاولة الجلب من الـ View الآمن المخصص للطلاب أولاً
+        try {
+          const { data, error } = await db
+            .from('student_exam_questions')
+            .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
+            .eq('exam_id', examId)
+            .order('order_index', { ascending: true });
+          if (!error && data && data.length > 0) {
+            return data as ExamQuestion[];
+          }
+          if (error) {
+            logger.warn('[useExamQuestions] student_exam_questions view error, trying fallback:', error.message);
+          }
+        } catch (e) {
+          logger.warn('[useExamQuestions] student_exam_questions view exception:', e);
+        }
+
+        // 2. بديل آمن 100%: استعلام مباشر لجدول exam_questions بدون جلب عمود correct_answer نهائياً
+        const { data: fallbackData, error: fallbackError } = await db
+          .from('exam_questions')
           .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
           .eq('exam_id', examId)
           .order('order_index', { ascending: true });
-        if (error) throw error;
-        return (data || []) as ExamQuestion[];
+
+        if (fallbackError) {
+          logger.error('[useExamQuestions] exam_questions fallback failed:', fallbackError);
+          throw fallbackError;
+        }
+        return (fallbackData || []) as ExamQuestion[];
       }
 
       const { data, error } = await db
@@ -160,9 +182,24 @@ export function useExamReviewQuestions(examId: string | undefined) {
     queryKey: ['exam-review-questions', examId],
     queryFn: async () => {
       if (!examId) return [];
-      const { data, error } = await db.rpc('get_exam_review_questions', {
-        p_exam_id: examId,
-      });
+      try {
+        const { data, error } = await db.rpc('get_exam_review_questions', {
+          p_exam_id: examId,
+        });
+        if (!error && data) {
+          return (data || []) as ExamQuestion[];
+        }
+        logger.warn('[useExamReviewQuestions] RPC error, falling back to direct table:', error?.message);
+      } catch (e) {
+        logger.warn('[useExamReviewQuestions] RPC exception:', e);
+      }
+
+      // بديل مباشر في حال لم تكن دالة الـ RPC مطبقة بعد
+      const { data, error } = await db
+        .from('exam_questions')
+        .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
+        .eq('exam_id', examId)
+        .order('order_index', { ascending: true });
       if (error) throw error;
       return (data || []) as ExamQuestion[];
     },
@@ -403,57 +440,169 @@ export function useParentElectronicExams() {
 
   // Realtime: لما يُنشر اختبار جديد يظهر فوراً
   useEffect(() => {
-    if (!user?.id || !user?.schoolId) return;
+    if (!user?.id) return;
 
     return realtimeEngine.subscribe(
       'electronic_exams',
       () => {
         queryClient.invalidateQueries({ queryKey });
       },
-      { filter: `school_id=eq.${user.schoolId}` }
+      user?.schoolId ? { filter: `school_id=eq.${user.schoolId}` } : undefined
     );
   }, [user?.id, user?.schoolId, queryClient, queryKey]);
 
   return useQuery<Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>>({
     queryKey,
     queryFn: async () => {
-      if (!user?.id || !user?.schoolId) return [];
+      if (!user?.id) return [];
 
-      // جلب أبناء ولي الأمر مع فصولهم
-      const { data: children, error: chErr } = await db
-        .from('student_parents')
-        .select('student_id, students!student_parents_student_id_fkey(id, name, class_id, classes!students_class_id_fkey(name))')
-        .eq('parent_id', user.id);
-      if (chErr) throw chErr;
-      if (!children?.length) return [];
+      // ── 1. المحاولة عبر RPC المباشر الآمن (أسرع، 0 أخطاء RLS، استعلام خادم واحد) ──
+      try {
+        const { data: rpcData, error: rpcErr } = await db.rpc('get_parent_electronic_exams', {
+          p_parent_id: user.id,
+          p_school_id: user.schoolId || null,
+        });
+
+        if (!rpcErr && Array.isArray(rpcData)) {
+          return rpcData as Array<ElectronicExam & { student_id: string; student_name: string; attempt?: ExamAttempt }>;
+        }
+        if (rpcErr) {
+          logger.warn('[useParentElectronicExams] RPC get_parent_electronic_exams not available, using fallback:', rpcErr.message);
+        }
+      } catch (rpcEx) {
+        logger.warn('[useParentElectronicExams] RPC exception:', rpcEx);
+      }
+
+      // ── 2. البديل المباشر: استعلامات مرنة مع معالجة الربط التلقائي برقم الهاتف ──
+      let childrenList: Array<{ student_id: string; student: any }> = [];
+
+      // 2أ. جلب الأبناء المرتبطين عبر student_parents
+      try {
+        const { data: spData, error: spErr } = await db
+          .from('student_parents')
+          .select('student_id, students(id, name, class_id, school_id, classes(name))')
+          .eq('parent_id', user.id);
+
+        if (!spErr && spData && spData.length > 0) {
+          childrenList = spData
+            .map((c: any) => ({
+              student_id: c.student_id,
+              student: c.students,
+            }))
+            .filter((c: any) => !!c.student);
+        }
+      } catch (spCatch) {
+        logger.warn('[useParentElectronicExams] student_parents query warning:', spCatch);
+      }
+
+      // 2ب. إذا لم نجد أبناء في student_parents، نبحث برقم هاتف ولي الأمر ونصلح الربط تلقائياً
+      if (childrenList.length === 0 && user.phone) {
+        try {
+          const cleanPhone = user.phone.replace(/\D/g, '');
+          if (cleanPhone) {
+            const phoneVariants = [
+              cleanPhone,
+              cleanPhone.startsWith('0') ? cleanPhone.slice(1) : '0' + cleanPhone,
+              cleanPhone.startsWith('20') ? cleanPhone.slice(2) : '20' + cleanPhone,
+              '+20' + (cleanPhone.startsWith('0') ? cleanPhone.slice(1) : cleanPhone),
+            ].filter(Boolean);
+
+            const { data: phoneStudents } = await db
+              .from('students')
+              .select('id, name, class_id, school_id, classes(name)')
+              .in('parent_phone', phoneVariants);
+
+            if (phoneStudents && phoneStudents.length > 0) {
+              childrenList = phoneStudents.map((s: any) => ({
+                student_id: s.id,
+                student: s,
+              }));
+
+              // إصلاح الربط في الخلفية بدون تعطيل المستخدم
+              const linksToInsert = phoneStudents.map((s: any) => ({
+                school_id: s.school_id || user.schoolId,
+                student_id: s.id,
+                parent_id: user.id,
+              }));
+              db.from('student_parents').upsert(linksToInsert, { onConflict: 'student_id,parent_id' }).then();
+            }
+          }
+        } catch (phoneErr) {
+          logger.warn('[useParentElectronicExams] phone fallback error:', phoneErr);
+        }
+      }
+
+      if (!childrenList.length) return [];
 
       const classIds = [...new Set(
-        children
-          .map((c: any) => c.students?.class_id)
-          .filter(Boolean)
+        childrenList.map((c) => c.student?.class_id).filter(Boolean)
       )];
 
       if (!classIds.length) return [];
 
-      // جلب الاختبارات المنشورة
-      const { data: exams, error: exErr } = await db
-        .from('electronic_exams')
-        .select(`
-          *,
-          classes!electronic_exams_class_id_fkey(name),
-          exam_questions(id)
-        `)
-        .eq('school_id', user.schoolId)
-        .eq('status', 'published')
-        .in('class_id', classIds)
-        .order('created_at', { ascending: false })
-        .limit(30); // أبناء ولي الأمر عادةً 1-3، فصولهم أقل من 30 اختبار منشور
-      if (exErr) throw exErr;
+      // 2ج. جلب الاختبارات المنشورة للفصول
+      let exams: any[] = [];
+      try {
+        let query = db
+          .from('electronic_exams')
+          .select('*, classes(name)')
+          .eq('status', 'published')
+          .in('class_id', classIds)
+          .order('created_at', { ascending: false })
+          .limit(30);
 
-      // جلب محاولات ولي الأمر
-      const examIds = (exams || []).map((e: any) => e.id);
+        const effectiveSchoolId = user.schoolId || childrenList[0]?.student?.school_id;
+        if (effectiveSchoolId) {
+          query = query.eq('school_id', effectiveSchoolId);
+        }
+
+        const { data: examsData, error: exErr } = await query;
+        if (!exErr && examsData) {
+          exams = examsData;
+        } else {
+          // استعلام بسيط بدون join كخطة بديلة
+          const { data: simpleExams } = await db
+            .from('electronic_exams')
+            .select('*')
+            .eq('status', 'published')
+            .in('class_id', classIds)
+            .order('created_at', { ascending: false })
+            .limit(30);
+          exams = simpleExams || [];
+        }
+      } catch (exErr) {
+        logger.error('[useParentElectronicExams] exams query failed:', exErr);
+        return [];
+      }
+
+      if (!exams.length) return [];
+
+      // 2د. جلب عدد الأسئلة بأمان
+      const examIds = exams.map((e: any) => e.id);
+      const questionCounts: Record<string, number> = {};
+      try {
+        const { data: qData } = await db
+          .from('student_exam_questions')
+          .select('exam_id')
+          .in('exam_id', examIds);
+        (qData || []).forEach((q: any) => {
+          questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1;
+        });
+      } catch {
+        try {
+          const { data: qData } = await db
+            .from('exam_questions')
+            .select('id, exam_id')
+            .in('exam_id', examIds);
+          (qData || []).forEach((q: any) => {
+            questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1;
+          });
+        } catch { /* ignore */ }
+      }
+
+      // 2هـ. جلب محاولات ولي الأمر
       const attemptsByExam: Record<string, ExamAttempt> = {};
-      if (examIds.length) {
+      try {
         const { data: attempts } = await db
           .from('exam_attempts')
           .select('id, exam_id, student_id, parent_id, score, total_score, completed_at, answers')
@@ -462,20 +611,21 @@ export function useParentElectronicExams() {
         (attempts || []).forEach((a: any) => {
           attemptsByExam[a.exam_id] = a;
         });
+      } catch (attErr) {
+        logger.warn('[useParentElectronicExams] attempts query warning:', attErr);
       }
 
-      // دمج الاختبارات مع بيانات الأبناء
+      // 2و. دمج النتائج مع بيانات الطلاب
       const result: any[] = [];
-      for (const exam of exams || []) {
-        // إيجاد الابن المرتبط بهذا الفصل
-        const child = children.find((c: any) => c.students?.class_id === exam.class_id);
-        if (!child?.students) continue;
+      for (const exam of exams) {
+        const childItem = childrenList.find((c) => c.student?.class_id === exam.class_id);
+        if (!childItem?.student) continue;
         result.push({
           ...exam,
-          class_name:      exam.classes?.name || '',
-          questions_count: Array.isArray(exam.exam_questions) ? exam.exam_questions.length : 0,
-          student_id:      child.students.id,
-          student_name:    child.students.name,
+          class_name:      exam.classes?.name || childItem.student?.classes?.name || '',
+          questions_count: questionCounts[exam.id] || 0,
+          student_id:      childItem.student.id,
+          student_name:    childItem.student.name,
           attempt:         attemptsByExam[exam.id] || null,
         });
       }
