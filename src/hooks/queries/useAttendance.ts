@@ -190,25 +190,17 @@ export function useTeacherAttendance(date: string) {
     queryFn: async () => {
       if (!user?.schoolId) return [];
 
-      // Step 1: جلب IDs المعلمين المعتمدين
-      const { data: rolesData, error: rolesError } = await (supabase
-        .from('user_roles') as any)
-        .select('user_id')
-        .eq('school_id', user.schoolId)
-        .eq('role', 'teacher')
-        .eq('approval_status', 'approved');
-        
-      if (rolesError) throw rolesError;
-      if (!rolesData?.length) return [];
-      
-      const teacherIds = rolesData.map(r => r.user_id);
-
-      // Step 2: جلب profiles و attendance بالتوازي بدل الـ waterfall
-      const [profilesRes, attendanceRes] = await Promise.all([
+      // جلب roles و profiles و attendance بالتوازي التام في طلب شبكة واحد (Zero Waterfall)
+      const [rolesRes, profilesRes, attendanceRes] = await Promise.all([
+        (supabase.from('user_roles') as any)
+          .select('user_id')
+          .eq('school_id', user.schoolId)
+          .eq('role', 'teacher')
+          .eq('approval_status', 'approved'),
         supabase
           .from('profiles')
           .select('id, full_name')
-          .in('id', teacherIds)
+          .eq('school_id', user.schoolId)
           .order('full_name'),
         (supabase as any)
           .from('teacher_attendance')
@@ -217,11 +209,13 @@ export function useTeacherAttendance(date: string) {
           .eq('date', date),
       ]);
 
+      if (rolesRes.error) throw rolesRes.error;
       if (profilesRes.error) throw profilesRes.error;
       if (attendanceRes.error) throw attendanceRes.error;
 
-      const teachers = profilesRes.data || [];
-      const records  = attendanceRes.data || [];
+      const approvedTeacherIds = new Set((rolesRes.data || []).map((r: any) => r.user_id));
+      const teachers = (profilesRes.data || []).filter((p: any) => approvedTeacherIds.has(p.id));
+      const records = attendanceRes.data || [];
 
       if (!teachers.length) return [];
 

@@ -42,29 +42,7 @@ export function useAdminDashboardSummary() {
         return { stats: emptyStats, activities: [] };
       }
 
-      // 1. استدعاء الدالة المدمجة الجديدة أولاً (طلب شبكة واحد يجمع الإحصائيات والأنشطة)
-      try {
-        const { data, error } = await (supabase as any).rpc('get_admin_dashboard_summary', {
-          p_school_id: user.schoolId,
-          p_caller_id: user.id
-        });
-
-        if (!error && data && data.stats) {
-          const stats = data.stats as DashboardStats;
-          const activities = (data.activities || []) as DashboardActivity[];
-
-          // تحديث مفاتيح الكاش الفرعية للتوافق مع أي مكونات قد تستخدمها
-          queryClient.setQueryData(['admin-stats', user.schoolId, user.isSuperAdmin], stats);
-          queryClient.setQueryData(['admin-activities', user.schoolId, user.id], activities);
-
-          return { stats, activities };
-        }
-        logger.warn('[useAdminDashboardSummary] Combined RPC failed, falling back to legacy RPCs:', error?.message);
-      } catch (err) {
-        logger.warn('[useAdminDashboardSummary] Combined RPC threw, falling back to legacy RPCs:', err);
-      }
-
-      // 2. Fallback: استدعاء الدالتين القديمتين بالتوازي
+      // استدعاء دالتي الإحصائيات والأنشطة بالتوازي مباشرة (سريعة ومستقرة ~480ms)
       const [statsRes, activitiesRes] = await Promise.all([
         (supabase as any).rpc('get_dashboard_stats', {
           p_school_id: user.schoolId,
@@ -122,21 +100,7 @@ export function useAdminStats() {
       const summaryCache = queryClient.getQueryData<{ stats: DashboardStats }>(['admin-stats', 'summary', user?.schoolId, user?.id]);
       if (summaryCache?.stats) return summaryCache.stats;
 
-      // تجربة الدالة المدمجة الجديدة
-      try {
-        const { data, error } = await (supabase as any).rpc('get_admin_dashboard_summary', {
-          p_school_id: user.schoolId,
-          p_caller_id: user.id
-        });
-        if (!error && data?.stats) {
-          if (data.activities) {
-            queryClient.setQueryData(['admin-activities', user.schoolId, user.id], data.activities);
-          }
-          return data.stats;
-        }
-      } catch { /* ignore and use legacy fallback */ }
-
-      // Fallback: الدالة القديمة get_dashboard_stats
+      // استدعاء get_dashboard_stats مباشرة
       try {
         const { data: stats, error } = await (supabase as any)
           .rpc('get_dashboard_stats', {

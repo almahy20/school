@@ -53,9 +53,8 @@ export function useAllParents() {
     queryFn: async (): Promise<Parent[]> => {
       if (!schoolId) return [];
 
-      // ✅ FIX: Parallelized Execution — All auxiliary tables (classes, student_parents, students)
-      // fetch in parallel with user_roles in ONE network roundtrip (eliminates 3-tier Waterfall).
-      const [userRolesRes, classesRes, linksRes, studentsRes] = await Promise.all([
+      // ✅ Parallelized Execution: Run ALL queries concurrently in ONE roundtrip (Zero Waterfall)
+      const [userRolesRes, classesRes, linksRes, studentsRes, profilesRes] = await Promise.all([
         supabase
           .from('user_roles')
           .select('user_id, id, approval_status, role, school_id')
@@ -72,21 +71,18 @@ export function useAllParents() {
           .eq('school_id', schoolId)
           .not('parent_phone', 'is', null)
           .limit(2000),
+        supabase
+          .from('profiles')
+          .select('id, full_name, phone, email, school_id, created_at')
+          .or(`school_id.eq.${schoolId},school_id.is.null`)
+          .order('full_name'),
       ]);
 
       if (userRolesRes.error) throw userRolesRes.error;
+      if (profilesRes.error) throw profilesRes.error;
       const userRoles = userRolesRes.data || [];
-      if (userRoles.length === 0) return [];
-
-      const userIds = userRoles.map(ur => ur.user_id);
-      const { data: profilesRaw, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, email, school_id, created_at')
-        .in('id', userIds)
-        .order('full_name');
-
-      if (profileError) throw profileError;
-      if (!profilesRaw) return [];
+      const profilesRaw = profilesRes.data || [];
+      if (userRoles.length === 0 || profilesRaw.length === 0) return [];
 
       const userRolesMap = new Map<string, any>();
       userRoles.forEach(ur => userRolesMap.set(ur.user_id, ur));
@@ -141,7 +137,8 @@ export function useAllParents() {
     },
     enabled: !!schoolId,
     placeholderData: keepPreviousData,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,
   });
