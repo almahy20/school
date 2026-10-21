@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { cleanBrandingData } from '@/hooks/useCleanBranding';
 import { useBranding } from '@/hooks/queries/useBranding';
 import { logger } from '@/utils/logger';
+import { getOptimizedImageUrl } from '@/lib/utils';
 
 const FALLBACK_PWA_ICON = "/icons/badge-72.png";
 
@@ -133,7 +134,6 @@ export default function PwaManager() {
 
     // ✅ استخدام رابط موحد (120px) للـ favicon و apple-touch-icon لضمان مشاركة كاش المتصفح
     const rawLogoUrl = brandingDataRef.current?.logo_url || '';
-    const { getOptimizedImageUrl } = await import('@/lib/utils');
     const unifiedLogoUrl = rawLogoUrl
       ? getOptimizedImageUrl(rawLogoUrl, { width: 120, quality: 75 })
       : (icon || '');
