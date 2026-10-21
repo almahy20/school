@@ -21,6 +21,11 @@ export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnl
 
     if (loading) {
       if (cachedUser) {
+        // حماية مبكرة: فحص الصلاحيات على الكاش لمنع تسريب الصفحة أو وميض محتوى غير مصرح به
+        if (isSuperAdminOnly && !cachedUser.isSuperAdmin) return <Navigate to="/" replace />;
+        if (allowedRoles && !allowedRoles.includes(cachedUser.role) && !cachedUser.isSuperAdmin) {
+          return <Navigate to="/" replace />;
+        }
         // 🔄 Token refresh جاري في الخلفية — اعرض المحتوى optimistically من الكاش
         // الـ user state يتحدث تلقائياً لما الـ refresh يخلص، بدون أي flash أو spinner
         return <>{children}</>;

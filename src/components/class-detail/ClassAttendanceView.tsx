@@ -13,7 +13,8 @@ interface ClassAttendanceViewProps {
 export function ClassAttendanceView({ classId, className, onBack }: ClassAttendanceViewProps) {
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
-  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  // استخدام en-CA لضمان الحصول على تاريخ اليوم بالتوقيت المحلي بدلاً من توقيت UTC
+  const [attendanceDate, setAttendanceDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const { data: dbAttendanceData } = useClassAttendance(classId, attendanceDate);
   const dbAttendance = useMemo(() => dbAttendanceData || [], [dbAttendanceData]);
   const [localAttendance, setLocalAttendance] = useState<any[]>([]);

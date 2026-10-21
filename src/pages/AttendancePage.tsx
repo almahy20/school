@@ -24,8 +24,8 @@ export default function TeacherAttendancePage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // State
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  // State (استخدام en-CA لضمان حساب تاريخ اليوم بالتوقيت المحلي بدلاً من UTC)
+  const [date, setDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [search, setSearch] = useState('');
 
   // ── Queries ──
