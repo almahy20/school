@@ -365,7 +365,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCachedUser(jwtUser);
         return jwtUser;
       });
-      localStorage.setItem('last_auth_sync', Date.now().toString());
     }
 
     if (!s.access_token || s.access_token === s.refresh_token) {
@@ -381,19 +380,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cachedUser = getCachedUser();
     const isJwtComplete = !!(jwtUser?.role && jwtUser?.schoolId);
     const hasApprovalStatus = !!(jwtUser?.approvalStatus || cachedUser?.approvalStatus);
-    // 2 hours instead of 30 min — reduces RPC calls on page navigation
-    const isRecentlySynced = Date.now() - lastSync < 2 * 60 * 60 * 1000;
 
-    // Skip RPC if cache already has complete data (role + schoolId + name)
-    const cacheIsComplete = !!(
-      cachedUser?.role &&
-      cachedUser?.schoolId &&
-      cachedUser?.approvalStatus &&
-      cachedUser?.fullName
-    );
+    // ✅ ذكاء المزامنة: المزامنة الدورية تحدث كل 30 دقيقة للـ JWT المكتمل، أو كل 5 دقائق للبيانات الناقصة
+    // يحل نهائياً مشكلة عدم تحديث الصلاحيات إلا بعد تسجيل الخروج والدخول مجدداً
+    const SYNC_INTERVAL_MS = isJwtComplete ? 30 * 60 * 1000 : 5 * 60 * 1000;
+    const isRecentlySynced = lastSync > 0 && (Date.now() - lastSync < SYNC_INTERVAL_MS);
 
-    if ((isJwtComplete && hasApprovalStatus && isRecentlySynced) || cacheIsComplete) {
-      logger.log('[Auth] Background RPC skipped — JWT complete + recently synced');
+    // تخطي الـ RPC فقط إذا كانت المزامنة حديثة فعلياً من السيرفر
+    if (isRecentlySynced && ((isJwtComplete && hasApprovalStatus) || (cachedUser?.role && cachedUser?.schoolId))) {
+      logger.log('[Auth] Background RPC skipped — synced recently');
       if (cachedUser) {
         prefetchCommonQueries(cachedUser);
       }

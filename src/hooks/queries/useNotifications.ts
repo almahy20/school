@@ -145,7 +145,8 @@ export function useDeleteNotification() {
     },
     onSuccess: () => {
       toast.success('تم حذف التنبيه');
-      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      // ? ?????: exact: false ?????? ?? queries ????????? (??? ????? ?? page/pageSize)
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id], exact: false });
       queryClient.refetchQueries({ 
         queryKey: ['notifications-unread-counts', user?.id] 
       });

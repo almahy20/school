@@ -753,7 +753,8 @@ export function useParentElectronicExams() {
       }
       return result;
     },
-    enabled: !!(session && user?.id),
+    // ✅ لا يتم جلب اختبارات أولياء الأمور إلا إذا كان المستخدم ولي أمر فعلياً
+    enabled: !!(session && user?.id && user?.role === 'parent'),
     staleTime: 30 * 1000,
     gcTime: 5 * 60 * 1000,
   });

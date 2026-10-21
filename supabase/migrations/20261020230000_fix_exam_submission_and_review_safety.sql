@@ -217,7 +217,7 @@ BEGIN
           WHERE s.id = ea.student_id
             AND (
               s.parent_phone = p.phone 
-              OR s.parent_phone = p.phone_normalized
+              -- phone match (normalized via regex)
               OR right(regexp_replace(COALESCE(s.parent_phone,''), '[^0-9]', '', 'g'), 9) = 
                  right(regexp_replace(COALESCE(p.phone,''), '[^0-9]', '', 'g'), 9)
             )
