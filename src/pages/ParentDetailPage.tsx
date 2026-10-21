@@ -117,7 +117,7 @@ export default function ParentDetailPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-12 max-w-[1400px] mx-auto text-right pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700 px-6" dir="rtl">
+      <div className="flex flex-col gap-12 max-w-[1400px] mx-auto text-right pb-28 md:pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700 px-4 md:px-0" dir="rtl">
         
         <QueryStateHandler
           loading={parentLoading}
@@ -127,9 +127,9 @@ export default function ParentDetailPage() {
           loadingMessage="جاري مزامنة بيانات حساب ولي الأمر..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative group mb-2">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-amber-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-6 sm:p-8 md:p-12 rounded-3xl md:rounded-[48px] relative group mb-2">
             {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
-            <div className="absolute inset-0 rounded-[48px] overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 rounded-3xl md:rounded-[48px] overflow-hidden pointer-events-none">
               <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-amber-500/15 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 mix-blend-screen" />
               <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-emerald-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 mix-blend-screen" />
             </div>

@@ -140,6 +140,25 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
         endpointLabel = urlString;
       }
 
+      // ✅ Race-Condition Protection: اضمن إرسال access_token دائماً إذا كان مخزناً ومكتبة Supabase في طور الـ Initialization
+      if (!isAuthEndpoint(urlString)) {
+        try {
+          const raw = localStorage.getItem('school_auth_token');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const token = parsed?.currentSession?.access_token || parsed?.access_token;
+            if (token) {
+              const headersObj = new Headers(options.headers || {});
+              const currentAuth = headersObj.get('Authorization') || headersObj.get('authorization');
+              if (!currentAuth || currentAuth === `Bearer ${SUPABASE_ANON_KEY}`) {
+                headersObj.set('Authorization', `Bearer ${token}`);
+                options.headers = headersObj;
+              }
+            }
+          }
+        } catch { /* ignore */ }
+      }
+
       const traceId = import.meta.env.DEV ? profiler.startRequest(endpointLabel, urlString, (options as any)?.method || 'GET') : '';
       if (import.meta.env.DEV) profiler.markDbStart(traceId);
 

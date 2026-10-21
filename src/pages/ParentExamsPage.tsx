@@ -299,7 +299,7 @@ export default function ParentExamsPage() {
   const done    = typedExams.filter(e => !!e.attempt);
 
   return (
-      <div className="max-w-[900px] mx-auto pb-20 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
+      <div className="max-w-[900px] mx-auto pb-28 md:pb-20 px-4 md:px-0 animate-in fade-in duration-500" dir="rtl">
         <div className="pb-5">
           <PageHeader
             icon={ClipboardList}

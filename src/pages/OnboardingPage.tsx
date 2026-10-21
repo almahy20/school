@@ -9,8 +9,8 @@ export default function OnboardingPage() {
   const roleLabel = user?.role === 'admin' ? 'مدير نظام' : user?.role === 'teacher' ? 'معلم' : 'ولي أمر';
 
   return (
-    <div className="max-w-2xl mx-auto text-right py-16 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-        <div className="bg-white border border-slate-100 rounded-[40px] p-12 shadow-sm text-center relative overflow-hidden">
+    <div className="max-w-2xl mx-auto text-right py-16 pb-28 md:pb-16 px-4 animate-in fade-in slide-in-from-bottom-8 duration-1000">
+        <div className="bg-white border border-slate-100 rounded-3xl md:rounded-[40px] p-6 sm:p-12 shadow-sm text-center relative overflow-hidden">
           {/* Decorative background */}
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
           

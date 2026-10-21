@@ -506,8 +506,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (eventSession) {
             applySession(eventSession);
             setIsLoading(false);
-            // ✅ ضمان تحديث أي استعلامات انطلقت قبل اكتمال جلسة المستخدم في الـ SDK
-            queryClient.invalidateQueries();
+            // ✅ إلغاء أي استعلامات قديمة وإعادة جلب البيانات بالتوكن المستعاد
+            queryClient.cancelQueries().then(() => {
+              queryClient.invalidateQueries({ refetchType: 'active' });
+            });
           } else {
             silentRefresh().then((success) => {
               if (!success) {
@@ -534,19 +536,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isSigningOutRef.current) return;
           supabase.auth.getSession().then(({ data: { session: current } }) => {
             if (current) {
-              logger.log('[Auth] SIGNED_OUT ignored â€” active session exists (token rotation)');
+              logger.log('[Auth] SIGNED_OUT ignored — active session exists (token rotation)');
               applySession(current);
             } else {
-              silentRefresh().then((success) => {
-                if (!success) {
-                  clearAllCache();
-                  activeUserIdRef.current = null;
-                  activeSchoolIdRef.current = null;
-                  setUser(null);
-                  setCachedUser(null);
-                  setSession(null);
-                }
-              });
+              // ✅ لا تقم بعمل silentRefresh عند تسجيل الخروج — نظّف الكاش فوراً
+              clearAllCache();
+              activeUserIdRef.current = null;
+              activeSchoolIdRef.current = null;
+              setUser(null);
+              setCachedUser(null);
+              setSession(null);
             }
           }).catch(() => {
             clearAllCache();
@@ -626,8 +625,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     isSigningOutRef.current = true;
-    await performSignOut(setUser, setSession);
-    isSigningOutRef.current = false;
+    try {
+      await performSignOut(setUser, setSession);
+    } finally {
+      // إبقاء flag الخروج نشطاً لمهلة كافية لمنع معالجة أحداث SIGNED_OUT غير المتزامنة ومحاولة الـ refresh
+      setTimeout(() => {
+        isSigningOutRef.current = false;
+      }, 1500);
+    }
   };
 
   const login = async (phone: string, password: string, rememberMe = true): Promise<string | null> => {
@@ -689,6 +694,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           : error.message;
       }
       if (data.session) {
+        // عند تسجيل الدخول بحساب مختلف عن المستخدم السابق: تنظيف شامل للكاش
+        const prevUserId = activeUserIdRef.current || getCachedUser()?.id;
+        if (prevUserId && prevUserId !== data.session.user.id) {
+          logger.log('[Auth] Switching account — clearing old cache');
+          try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
+          await clearAllCache();
+        }
+
         // Hydrate complete user profile BEFORE resolving login to eliminate data delays and role flips
         try {
           const appUser = await getAppUserData(data.session.user);

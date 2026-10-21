@@ -7,7 +7,7 @@ export default function SubscriptionExpiredPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 font-cairo text-right" dir="rtl">
-      <div className="max-w-md w-full bg-white rounded-[48px] shadow-2xl shadow-slate-200 border border-slate-100 p-12 text-center animate-in zoom-in-95 duration-500">
+      <div className="max-w-md w-full bg-white rounded-3xl md:rounded-[48px] shadow-2xl shadow-slate-200 border border-slate-100 p-6 sm:p-12 text-center animate-in zoom-in-95 duration-500">
         <div className="w-24 h-24 rounded-[32px] bg-rose-50 flex items-center justify-center mx-auto mb-8 border border-rose-100 animate-bounce">
           <AlertTriangle className="w-12 h-12 text-rose-500" />
         </div>

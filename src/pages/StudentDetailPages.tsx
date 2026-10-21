@@ -46,7 +46,7 @@ export function StudentFinancialPage() {
   const MONTHS_AR = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-28 md:pb-20 px-4 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
           <SubPageHeader
             onBack={() => navigate(`/parent/children/${id}`)}
@@ -144,7 +144,7 @@ export function StudentCurriculumPage() {
   if (selectedMonth) {
     const subjects = curriculumByMonth[selectedMonth] || [];
     return (
-      <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20 px-2 md:px-0" dir="rtl">
+      <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-28 md:pb-20 px-4 md:px-0" dir="rtl">
           <SubPageHeader
             onBack={() => setSelectedMonth(null)}
             icon={BookOpen}
@@ -182,7 +182,7 @@ export function StudentCurriculumPage() {
 
   // Main view — month cards grid
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-28 md:pb-20 px-4 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
           <SubPageHeader
             onBack={() => navigate(`/parent/children/${id}`)}
@@ -255,7 +255,7 @@ export function StudentDataPage() {
   ];
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-2 md:px-0" dir="rtl">
+    <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-28 md:pb-20 px-4 md:px-0" dir="rtl">
         <QueryStateHandler loading={isLoading} error={error} data={child} onRetry={refetch}>
           <SubPageHeader
             onBack={() => navigate(`/parent/children/${id}`)}

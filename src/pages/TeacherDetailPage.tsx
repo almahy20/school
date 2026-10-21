@@ -85,7 +85,7 @@ export default function TeacherDetailPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-8 max-w-7xl mx-auto pb-24 px-4 md:px-0 animate-in fade-in duration-500 text-right">
+      <div className="flex flex-col gap-8 max-w-7xl mx-auto pb-28 md:pb-24 px-4 md:px-0 animate-in fade-in duration-500 text-right">
         
         <QueryStateHandler
           loading={teacherLoading}
@@ -95,9 +95,9 @@ export default function TeacherDetailPage() {
           loadingMessage="جاري استرجاع ملف المعلم وتاريخه المهني..."
         >
           {/* Ultra-Premium Hero Banner */}
-          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-8 md:p-12 rounded-[48px] relative group">
+          <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 bg-gradient-to-l from-slate-900 via-emerald-950 to-slate-900 border-[0.5px] border-white/10 shadow-2xl p-6 sm:p-8 md:p-12 rounded-3xl md:rounded-[48px] relative group">
             {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
-            <div className="absolute inset-0 rounded-[48px] overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 rounded-3xl md:rounded-[48px] overflow-hidden pointer-events-none">
               <div className="absolute top-0 right-0 w-[40rem] h-[40rem] bg-emerald-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/3 mix-blend-screen" />
               <div className="absolute bottom-0 left-0 w-[25rem] h-[25rem] bg-indigo-500/10 rounded-full blur-[80px] translate-y-1/3 -translate-x-1/3 mix-blend-screen" />
             </div>

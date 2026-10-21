@@ -133,10 +133,10 @@ export default function StudentDetailPage() {
 
   return (
     <>
-      <div className="max-w-5xl mx-auto pb-24 px-2 md:px-0 space-y-8 text-right animate-in fade-in duration-500" dir="rtl">
+      <div className="max-w-5xl mx-auto pb-28 md:pb-24 px-4 md:px-0 space-y-8 text-right animate-in fade-in duration-500" dir="rtl">
 
         {/* ── Hero Banner ── */}
-        <header className="relative bg-slate-900 rounded-[40px] p-8 md:p-10 min-h-[200px] flex flex-col justify-between border border-white/5 shadow-2xl">
+        <header className="relative bg-slate-900 rounded-3xl md:rounded-[40px] p-6 sm:p-8 md:p-10 min-h-[200px] flex flex-col justify-between border border-white/5 shadow-2xl">
           {/* Background blobs — wrapper منفصل يحتجزهم بدون قطع الـ shadow */}
           <div className="absolute inset-0 rounded-[40px] overflow-hidden pointer-events-none">
             <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/20 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/4" />
@@ -563,11 +563,11 @@ function AttendanceLegend({ label, color }: { label: string; color: string }) {
 
 function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
   return (
-    <div className="py-20 text-center bg-white border border-dashed border-slate-100 rounded-[32px] space-y-4">
-      <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-200 mx-auto">
+    <div className="py-20 text-center bg-white border border-dashed border-slate-200 rounded-[32px] space-y-4">
+      <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 mx-auto">
         <Icon className="w-8 h-8" />
       </div>
-      <p className="text-slate-400 font-bold text-sm">{message}</p>
+      <p className="text-slate-500 font-bold text-sm">{message}</p>
     </div>
   );
 }

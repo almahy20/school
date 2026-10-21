@@ -541,7 +541,7 @@ export default function AdminConversationsPage() {
           <div
         className={cn(
           'max-w-[900px] mx-auto animate-in fade-in duration-500 px-4 md:px-0',
-          'pb-6 md:pb-8',
+          'pb-28 md:pb-8',
         )}
         dir="rtl"
       >
