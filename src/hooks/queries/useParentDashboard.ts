@@ -261,8 +261,8 @@ export function useParentChildren() {
         throw err;
       }
     },
-    // ✅ إضافة schoolId للـ enabled guard — بدونه يُرسَل RPC بـ p_school_id: null → 401
-    enabled: !!(user?.id && user?.role === 'parent' && user?.schoolId),
+    // ✅ إضافة session و schoolId للـ enabled guard لمنع انطلاق الاستعلام قبل مصادقة الـ SDK
+    enabled: !!(session && user?.id && user?.role === 'parent' && user?.schoolId),
     staleTime: 20 * 1000,
     placeholderData: keepPreviousData,
     retry: 1,

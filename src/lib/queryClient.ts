@@ -22,13 +22,13 @@ if (typeof window !== 'undefined') {
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // ✅ Event-Driven Caching: الانتقال بين الصفحات فوري (0ms) ولا يطلب من الشبكة إلا إذا أُبطل الكاش عبر Realtime أو Mutation
+      // ✅ Event-Driven Caching: الانتقال بين الصفحات فوري (0ms) مع إعادة التحقق في الخلفية إن كانت البيانات قديمة
       networkMode: 'offlineFirst',
-      staleTime: 5 * 60 * 1000, // 5 دقائق: حماية إضافية ضد الـ refetches المتكررة
-      gcTime: 24 * 60 * 60 * 1000, // 24 ساعة (مطابق لـ maxAge لضمان استمرارية الكاش وعدم حذفه مبكراً)
+      staleTime: 60 * 1000, // 1 دقيقة لتوازن مثالي بين السرعة وتحديث البيانات
+      gcTime: 24 * 60 * 60 * 1000, // 24 ساعة (مطابق لـ maxAge لضمان استمرارية الكاش)
       refetchOnWindowFocus: false, // لا تعيد الجلب عند فوكس النافذة — هدوء واستقرار تام
       refetchOnReconnect: true, // صمام أمان: فحص التحديثات تلقائياً عند عودة الاتصال بالإنترنت
-      refetchOnMount: (query: any) => query.state.isInvalidated, // 0ms عند الانتقال، ولا يجلب إلا إذا طرأ تغيير فعلي أحدثه السيرفر أو المستخدم
+      refetchOnMount: true, // ✅ عرض فوري من الكاش أولاً (0ms) مع تحديث هادئ بالخلفية إذا كانت البيانات فارغة أو stale
       retry: 1,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 6000),
     },

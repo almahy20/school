@@ -281,7 +281,7 @@ export function useGrades(studentId: string | null) {
 }
 
 export function useStudentDetailedGrades(studentId: string | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = useMemo(() => ['grades', 'detailed', studentId, user?.schoolId], [studentId, user?.schoolId]);
   
   return useQuery({
@@ -311,7 +311,7 @@ export function useStudentDetailedGrades(studentId: string | null) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!(session && studentId && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 3 * 60 * 1000,
   });
 }

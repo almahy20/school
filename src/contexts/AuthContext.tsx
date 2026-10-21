@@ -506,6 +506,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (eventSession) {
             applySession(eventSession);
             setIsLoading(false);
+            // ✅ ضمان تحديث أي استعلامات انطلقت قبل اكتمال جلسة المستخدم في الـ SDK
+            queryClient.invalidateQueries();
           } else {
             silentRefresh().then((success) => {
               if (!success) {
@@ -520,7 +522,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          if (eventSession) applySession(eventSession);
+          if (eventSession) {
+            applySession(eventSession);
+            queryClient.invalidateQueries();
+          }
           setIsLoading(false);
           return;
         }

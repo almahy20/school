@@ -143,7 +143,7 @@ export function useUpsertAttendance() {
 }
 
 export function useStudentAttendance(studentId: string | null) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryKey = ['attendance', 'student', studentId, user?.schoolId];
   
   return useQuery({
@@ -166,7 +166,7 @@ export function useStudentAttendance(studentId: string | null) {
       if (error) throw error;
       return data || [];
     },
-    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!(session && studentId && (user?.schoolId || user?.isSuperAdmin)),
     placeholderData: keepPreviousData,
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,

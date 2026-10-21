@@ -164,9 +164,9 @@ export function useAllParents() {
 
       return data;
     },
-    enabled: !!schoolId,
+    enabled: !!(session && schoolId),
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
     gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 1,

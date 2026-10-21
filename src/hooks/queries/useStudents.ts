@@ -68,9 +68,10 @@ export function useAllStudents() {
       if (error) throw error;
       return (data || []) as Student[];
     },
-    enabled: !!(user?.id && (user?.schoolId || user?.isSuperAdmin)),
+    enabled: !!(session && user?.id && (user?.schoolId || user?.isSuperAdmin)),
     placeholderData: keepPreviousData,
-    staleTime: 3 * 60 * 1000,
+    staleTime: 60 * 1000,
+    gcTime: 60 * 60 * 1000,
     refetchOnWindowFocus: false,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
