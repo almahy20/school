@@ -1,17 +1,71 @@
 -- ==============================================================================
 -- Migration: 20261021100000_fix_all_permissions_and_phone_normalized.sql
--- Purpose  : إصلاح شامل ونهائي لجميع أخطاء الصلاحيات والـ RLS:
---            1. إصلاح phone_normalized (عمود غير موجود) في get_exam_review_questions
---            2. حل خطأ 42501 (permission denied for function is_super_admin)
---            3. منح صلاحيات الجداول بشكل ديناميكي آمن (تخطي أي جدول غير موجود تلقائياً لمنع خطأ 42P01)
---            4. منح EXECUTE لكافة دوال الـ RLS والـ RPC لـ authenticated و service_role
+-- Purpose  : حل نهائي شامل لجميع أخطاء الصلاحيات والـ RLS:
+--            1. حل خطأ 42501 (is_school_admin & is_super_admin) بمنح EXECUTE لـ anon و authenticated
+--            2. ضمان تعريف دوال الأمان (is_school_admin) بكافة التوقيعات مع فحص auth.uid()
+--            3. منح صلاحيات الجداول ديناميكياً بأمان تام
+--            4. إصلاح phone_normalized في get_exam_review_questions
 --            5. إعادة تحميل كاش PostgREST
 -- ==============================================================================
 
 SET search_path TO public;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 1. إصلاح get_exam_review_questions: حذف phone_normalized واستبداله بـ regex
+-- 1. إعادة تعريف is_school_admin بأمان لكافة الحالات وتوقيعات المعاملات
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.is_school_admin(target_school_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND (
+        is_super_admin = TRUE
+        OR (
+          role = 'admin' 
+          AND approval_status = 'approved' 
+          AND (school_id = target_school_id OR target_school_id IS NULL)
+        )
+      )
+  );
+END;
+$$;
+
+-- توقيع بدون معاملات في حال استدعائها بدون target_school_id
+CREATE OR REPLACE FUNCTION public.is_school_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND (
+        is_super_admin = TRUE
+        OR (role = 'admin' AND approval_status = 'approved')
+      )
+  );
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 2. إصلاح get_exam_review_questions: حذف phone_normalized واستبداله بـ regex
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.get_exam_review_questions(p_exam_id UUID)
 RETURNS TABLE (
@@ -39,7 +93,6 @@ BEGIN
     RETURN;
   END IF;
 
-  -- فحص الدور والسوبر أدمن بأمان
   BEGIN
     v_role     := public.get_auth_role();
     v_is_super := public.get_auth_is_super_admin();
@@ -55,7 +108,6 @@ BEGIN
     );
   END;
 
-  -- أ) المعلمون والإدارة والسوبر أدمن يمكنهم المراجعة دائماً
   IF COALESCE(v_is_super, FALSE) OR v_role IN ('admin', 'teacher') THEN
     RETURN QUERY
     SELECT 
@@ -67,7 +119,6 @@ BEGIN
     RETURN;
   END IF;
 
-  -- ب) ولي الأمر / الطالب: فحص وجود محاولة مرتبطة بالمستخدم
   SELECT EXISTS (
     SELECT 1 
     FROM public.exam_attempts ea
@@ -80,7 +131,6 @@ BEGIN
           WHERE sp.parent_id = v_user_id AND sp.student_id = ea.student_id
         )
         OR EXISTS (
-          -- تطابق رقم الهاتف عبر regex (آخر 9 أرقام) دون الحاجة لعمود phone_normalized
           SELECT 1 
           FROM public.students s
           JOIN public.profiles p ON p.id = v_user_id
@@ -92,12 +142,10 @@ BEGIN
       )
   ) INTO v_has_attempt;
 
-  -- إذا لم تُوجد محاولة، نرجع فارغاً بهدوء
   IF NOT v_has_attempt THEN
     RETURN;
   END IF;
 
-  -- ج) إرجاع الأسئلة مع correct_answer
   RETURN QUERY
   SELECT 
     q.id, q.exam_id, q.school_id, q.question_type, 
@@ -109,7 +157,7 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2. منح صلاحيات الجداول الأساسية بشكل ديناميكي (Safe Dynamic Table Granting)
+-- 3. منح صلاحيات الجداول الأساسية بشكل ديناميكي آمن
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
@@ -123,7 +171,6 @@ DECLARE
   ];
 BEGIN
   FOREACH t IN ARRAY tbls LOOP
-    -- فحص وجود الجدول أولاً لتجنب خطأ relation does not exist (42P01)
     IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
       BEGIN
         IF t = 'schools' THEN
@@ -132,20 +179,19 @@ BEGIN
           EXECUTE format('GRANT SELECT, UPDATE ON TABLE public.%I TO authenticated', t);
           EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
         ELSIF t = 'user_roles' THEN
-          EXECUTE format('GRANT SELECT ON TABLE public.%I TO authenticated', t);
+          EXECUTE format('GRANT SELECT ON TABLE public.%I TO anon, authenticated', t);
           EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
         ELSE
           EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO authenticated, service_role', t);
         END IF;
       EXCEPTION WHEN OTHERS THEN
-        -- تجاهل أي خطأ عابر والانتقال للجدول التالي
       END;
     END IF;
   END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. حل خطأ 42501 (permission denied for function is_super_admin) ومنح صلاحيات الدوال
+-- 4. حل أخطاء 42501 بالكامل: منح EXECUTE لكافة دوال الأمان والـ RLS لـ anon و authenticated
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 DECLARE
@@ -155,7 +201,8 @@ BEGIN
     SELECT proname, oid::regprocedure AS func_sig
     FROM pg_proc
     WHERE proname IN (
-      -- دوال الأمان والـ RLS (التي تسبب خطأ 42501 عند فحص السياسات)
+      -- دوال الأمان والـ RLS (تتطلب منحها لـ anon و authenticated لأن السياسات تستدعيها)
+      'is_school_admin',
       'is_super_admin',
       'get_my_school_id',
       'get_my_role',
@@ -170,9 +217,8 @@ BEGIN
       'normalize_phone',
       'phones_match',
       'get_school_id_by_slug',
-      'is_school_admin',
       
-      -- دوال RPC الخاصة بواجهات المستخدم
+      -- دوال الواجهات والـ RPC
       'get_complete_user_data',
       'get_parent_dashboard_summary',
       'get_child_full_details',
@@ -191,34 +237,44 @@ BEGIN
     AND pronamespace = 'public'::regnamespace
   ) LOOP
     BEGIN
+      -- منح authenticated و service_role لجميع الدوال
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', r.func_sig);
-      -- السماح للـ anon بالدوال التي يحتاجها أثناء تسجيل الدخول أو استعراض المدارس
-      IF r.proname IN ('is_super_admin', 'get_auth_role', 'get_auth_school_id', 'get_auth_is_super_admin', 'get_school_id_by_slug') THEN
+
+      -- منح anon أيضاً للدوال المستخدمة في سياسات الـ RLS المشتركة أو المفتوحة
+      IF r.proname IN (
+        'is_school_admin',
+        'is_super_admin',
+        'get_auth_role',
+        'get_auth_school_id',
+        'get_auth_is_super_admin',
+        'get_school_id_by_slug',
+        'has_role',
+        'get_user_role',
+        'get_my_school_id',
+        'get_my_role'
+      ) THEN
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon', r.func_sig);
       END IF;
     EXCEPTION WHEN OTHERS THEN
-      -- تجاهل أي دالة بها خطأ فردي والانتقال للتالية بأمان
     END;
   END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4. ضبط سياسات push_subscriptions بشكل آمن
+-- 5. ضبط سياسات push_subscriptions
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'push_subscriptions') THEN
     EXECUTE 'ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY';
-    
     EXECUTE 'DROP POLICY IF EXISTS "push_subscriptions_user_access" ON public.push_subscriptions';
     EXECUTE 'CREATE POLICY "push_subscriptions_user_access" ON public.push_subscriptions FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid())';
-    
     EXECUTE 'DROP POLICY IF EXISTS "push_subscriptions_service_role" ON public.push_subscriptions';
     EXECUTE 'CREATE POLICY "push_subscriptions_service_role" ON public.push_subscriptions FOR ALL TO service_role USING (true) WITH CHECK (true)';
   END IF;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5. تحديث كاش الـ Schema لـ PostgREST
+-- 6. تحديث كاش schema في PostgREST
 -- ─────────────────────────────────────────────────────────────────────────────
 NOTIFY pgrst, 'reload schema';
