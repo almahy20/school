@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowRight, User, Phone, Users, Info, 
   MapPin, Mail, Shield, ChevronLeft, CreditCard,
@@ -27,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function ParentDetailPage() {
   const { id } = useParams();
@@ -35,7 +35,6 @@ export default function ParentDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [notificationStats] = useState<any>(null);
-  const [parentLastSeen, setParentLastSeen] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
@@ -43,35 +42,11 @@ export default function ParentDetailPage() {
 
   // ── Queries ──
   const { data: parent, isLoading: parentLoading, error: parentError, refetch: refetchParent } = useParent(id);
-  const { data: children = [], isLoading: childrenLoading } = useParentChildrenBasic(id);
+  // undefined = بيانات ولي الأمر لم تُحمَّل بعد | null = ولي الأمر غير موجود
+  const parentPhone = parent === undefined ? undefined : (parent?.phone ?? null);
+  // نمرّر الهاتف من useParent لمنع استعلام مكرر على نفس صف profiles
+  const { data: children = [], isLoading: childrenLoading } = useParentChildrenBasic(id, parentPhone);
   const deleteParentMutation = useDeleteParent();
-  
-  // Fetch last_seen using useQuery
-  const { data: parentExtraData } = useQuery({
-    queryKey: ['parent-extra-data', id],
-    queryFn: async () => {
-      if (!id) return null;
-        
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('last_seen')
-        .eq('id', id)
-        .maybeSingle();
-
-      return {
-        lastSeen: profileData?.last_seen,
-      };
-    },
-    enabled: !!id,
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    refetchOnWindowFocus: false,
-  });
-  
-  useEffect(() => {
-    if (parentExtraData?.lastSeen) {
-      setParentLastSeen(parentExtraData.lastSeen);
-    }
-  }, [parentExtraData]);
 
   const handleDelete = async () => {
     if (!id) return;
@@ -330,8 +305,8 @@ export default function ParentDetailPage() {
                         <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">آخر ظهور</p>
                      </div>
                      <p className="text-lg font-black text-slate-900">
-                       {parentLastSeen 
-                         ? new Date(parentLastSeen).toLocaleString('ar-EG', { 
+                       {parent?.last_seen
+                         ? new Date(parent.last_seen).toLocaleString('ar-EG', { 
                              year: 'numeric', 
                              month: 'long', 
                              day: 'numeric',

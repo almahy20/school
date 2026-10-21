@@ -11,16 +11,19 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, allowedRoles, isSuperAdminOnly }: Props) {
-  const { user, isLoading: loading } = useAuth();
+  const { user, session, isLoading: loading } = useAuth();
   const location = useLocation();
 
   // If user is already available, render immediately — don't wait for isLoading
   if (!user) {
     // ✅ Fix Auth Waterfall: لو في cached user — لا تحجب الصفحة أثناء token refresh
     const cachedUser = getCachedUser();
+    // ✅ لا نثق بالكاش إلا إذا كان يخص صاحب الجلسة الحالية، وإلا عُرِض التطبيق
+    // بهوية حساب آخر → استعلامات معطّلة وصفحات فارغة حتى تسجيل الخروج والدخول.
+    const isForeignCache = !!cachedUser && !!session?.user?.id && cachedUser.id !== session.user.id;
 
     if (loading) {
-      if (cachedUser) {
+      if (cachedUser && !isForeignCache) {
         // حماية مبكرة: فحص الصلاحيات على الكاش لمنع تسريب الصفحة أو وميض محتوى غير مصرح به
         if (isSuperAdminOnly && !cachedUser.isSuperAdmin) return <Navigate to="/" replace />;
         if (allowedRoles && !allowedRoles.includes(cachedUser.role) && !cachedUser.isSuperAdmin) {

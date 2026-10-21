@@ -13,6 +13,8 @@ export interface Parent {
   phone: string;
   school_id: string | null;
   created_at: string;
+  /** آخر ظهور للحساب — يُجلب مع بيانات ولي الأمر بدلاً من استعلام منفصل */
+  last_seen?: string | null;
   approval_status?: string;
   user_role_id?: string;
   children?: { id: string; name: string; class_name?: string }[];
@@ -73,7 +75,7 @@ export function useAllParents() {
           .limit(2000),
         supabase
           .from('profiles')
-          .select('id, full_name, phone, email, school_id, created_at')
+          .select('id, full_name, phone, email, school_id, created_at, last_seen')
           .or(`school_id.eq.${schoolId},school_id.is.null`)
           .order('full_name'),
       ]);
@@ -287,7 +289,7 @@ export function useParent(id: string | undefined | null) {
       if (!id) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, email, school_id, created_at')
+        .select('id, full_name, phone, email, school_id, created_at, last_seen')
         .eq('id', id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') throw error;
@@ -321,19 +323,23 @@ export const useParentDetails = useParent;
 //    and was dead code (exported but never imported/used anywhere in the project).
 //    useParentChildrenBasic covers the same functionality with the same query pattern.
 
-export function useParentChildrenBasic(parentId: string | undefined | null) {
+export function useParentChildrenBasic(
+  parentId: string | undefined | null,
+  /**
+   * هاتف ولي الأمر القادم من useParent (نفس صف profiles).
+   * تمريره يمنع استعلاماً مكرراً لنفس الصف.
+   * undefined = لم تُحمَّل بيانات ولي الأمر بعد ⇒ لا نُشغّل الاستعلام انتظاراً لها.
+   */
+  parentPhone?: string | null,
+) {
   const { user, session } = useAuth();
   return useQuery({
     queryKey: ['parent-children-basic', parentId, user?.schoolId],
     queryFn: async () => {
       if (!parentId || !user?.schoolId) return [];
 
-      // 1. Fetch parent profile (phone)
-      const { data: parentProfile } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone, school_id')
-        .eq('id', parentId)
-        .maybeSingle();
+      // 1. هاتف ولي الأمر يأتي جاهزاً من useParent — لا استعلام منفصل على profiles
+      const parentProfile = { phone: parentPhone ?? null };
 
       // 2. Fetch direct links from student_parents
       const { data: links } = await supabase
@@ -424,7 +430,7 @@ export function useParentChildrenBasic(parentId: string | undefined | null) {
         };
       });
     },
-    enabled: !!session && !!(parentId && user?.schoolId),
+    enabled: !!session && !!(parentId && user?.schoolId) && parentPhone !== undefined,
     staleTime: 60 * 1000,
   });
 }

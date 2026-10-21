@@ -103,7 +103,6 @@ export const persistOptions = {
       'teachers',
       'teacher-classes',
       'parents',
-      'parent-extra-data',
       'attendance',
       'student-attendance',
       'student-attendance-summary',
@@ -150,6 +149,7 @@ export const CACHE_LOCAL_STORAGE_KEYS = [
 
 export const CACHE_LOCAL_STORAGE_PREFIXES = [
   'exam_cards_',
+  'exam_progress_',
   'branding_',
   'dismissed-announcements-',
   'chat_draft_',
@@ -162,7 +162,6 @@ export const CACHE_SESSION_STORAGE_KEYS = [
 ] as const;
 
 export const CACHE_SESSION_STORAGE_PREFIXES = [
-  'exam_progress_',
   'exam_attempt_',
   'grades:order:',
 ] as const;
@@ -213,7 +212,7 @@ export async function clearAllCache() {
 }
 
 /**
- * ✅ تنظيف كاش البيانات فقط (IndexedDB + queryClient) عند تبديل الحساب
+ * ✅ تنظيف كاش البيانات + كاش الهوية عند تبديل الحساب
  * دون المساس بـ school_auth_token التي تم إنشاؤها للتو
  */
 export async function clearDataCacheOnly() {
@@ -222,6 +221,15 @@ export async function clearDataCacheOnly() {
     await del('SCHOOL_APP_CACHE');
   } catch (e) {
     logger.error('Failed to clear IndexedDB cache:', e);
+  }
+
+  // ✅ مسح كاش الهوية أيضاً: بدونه تتسرب بيانات الحساب السابق (schoolId/role)
+  // إلى الحساب الجديد، فتُبنى user ناقصة وتتعطّل كل استعلامات البيانات.
+  try {
+    localStorage.removeItem('app_user_cache_v2');
+    localStorage.removeItem('last_auth_sync');
+  } catch (e) {
+    logger.error('Failed to clear identity cache keys:', e);
   }
 }
 

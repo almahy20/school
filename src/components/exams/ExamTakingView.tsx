@@ -2,7 +2,7 @@ import React from 'react';
 import {
   ArrowRight, Clock, XCircle,
   AlertCircle, Loader2, Check, Sparkles,
-  ShieldAlert, BookOpen
+  ShieldAlert, BookOpen, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -25,11 +25,23 @@ interface ExamTakingViewProps {
   exam: ElectronicExam;
   studentId: string;
   studentName: string;
+  /** رقم المحاولة الجارية (يبدأ من 1) — يُستخدم لإظهار تنبيه عند إعادة الاختبار */
+  attemptNumber?: number;
+  /** إجمالي المحاولات المسموح بها */
+  maxAttempts?: number;
   onFinish: () => void;
   onBack: () => void;
 }
 
-export default function ExamTakingView({ exam, studentId, studentName, onFinish, onBack }: ExamTakingViewProps) {
+export default function ExamTakingView({
+  exam,
+  studentId,
+  studentName,
+  attemptNumber = 1,
+  maxAttempts = 1,
+  onFinish,
+  onBack,
+}: ExamTakingViewProps) {
   const {
     screen,
     currentQ,
@@ -125,6 +137,18 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               </div>
             )}
 
+            {attemptNumber > 1 && !isExpired && !isNotStarted && (
+              <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-1">
+                <div className="flex items-center gap-2 text-violet-700 font-black">
+                  <RefreshCw className="w-5 h-5" />
+                  <span>هذه إعادة للاختبار — المحاولة {attemptNumber} من {maxAttempts}</span>
+                </div>
+                <p className="text-xs font-bold text-violet-800">
+                  ستبدأ الاختبار من جديد بإجابات فارغة، وستُعتمد درجة هذه المحاولة الأخيرة بدلاً من درجتك السابقة.
+                </p>
+              </div>
+            )}
+
             {exam.instructions && (
               <div className="bg-amber-50/70 border border-amber-200/60 rounded-2xl p-5 space-y-2">
                 <div className="flex items-center gap-2 text-amber-700">
@@ -154,7 +178,7 @@ export default function ExamTakingView({ exam, studentId, studentName, onFinish,
               ) : (
                 <>
                   <Sparkles className="w-5 h-5" />
-                  ابدأ الاختبار الآن
+                  {attemptNumber > 1 ? `ابدأ المحاولة رقم ${attemptNumber}` : 'ابدأ الاختبار الآن'}
                 </>
               )}
             </button>

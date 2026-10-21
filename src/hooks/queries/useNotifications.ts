@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDeferredSecondaryQueries } from '@/hooks/useDeferredSecondaryQueries';
 
 // Cast supabase to 'any' for the notifications table since it's not in the auto-generated types
 // but exists in the actual database. This is safe because we control the schema.
@@ -157,6 +158,8 @@ export function useDeleteNotification() {
 export function useUnreadCounts() {
   const { user, session } = useAuth();
   const queryKey = useMemo(() => ['notifications-unread-counts', user?.id], [user?.id]);
+  // ⚡ شارة غير حرجة — نؤجّلها حتى لا تُزاحم استعلامات المحتوى الأساسي
+  const deferredReady = useDeferredSecondaryQueries();
   
   return useQuery<{ unread: number }>({
     queryKey,
@@ -172,7 +175,7 @@ export function useUnreadCounts() {
       if (error) throw error;
       return { unread: count || 0 };
     },
-    enabled: !!(session && user?.id),
+    enabled: !!(deferredReady && session && user?.id),
     staleTime: 20 * 1000,
     gcTime: 1000 * 60 * 60,
     refetchOnWindowFocus: false,

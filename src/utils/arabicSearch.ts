@@ -278,7 +278,7 @@ export function isExamAnswerCorrect(
   // 1. Gather all acceptable alternatives
   const targets = new Set<string>();
   if (correctAnswer) {
-    const parts = String(correctAnswer).split(/[\/,،|]/);
+    const parts = String(correctAnswer).split(new RegExp('[/,،|]'));
     parts.forEach(p => {
       const trimmed = p.trim();
       if (trimmed) targets.add(trimmed);
@@ -289,7 +289,7 @@ export function isExamAnswerCorrect(
   if (Array.isArray(options)) {
     options.forEach(opt => {
       if (typeof opt === 'string' && opt.trim()) {
-        const parts = opt.split(/[\/,،|]/);
+        const parts = opt.split(new RegExp('[/,،|]'));
         parts.forEach(p => {
           const trimmed = p.trim();
           if (trimmed) targets.add(trimmed);

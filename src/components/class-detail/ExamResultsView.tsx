@@ -1,7 +1,17 @@
-import { Download, Users, BarChart3, Clock, Trophy, ChevronRight, Medal, Timer, ShieldAlert, ShieldOff } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Download, Users, BarChart3, Clock, Trophy, ChevronRight, Medal, Timer, ShieldAlert, ShieldOff, RotateCcw, Plus, Search } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useExamAttempts, type ElectronicExam, type ExamAttempt } from '@/hooks/queries/useElectronicExams';
+import {
+  useExamAttempts,
+  useExamRetakeGrants,
+  useGrantExamRetake,
+  type ElectronicExam,
+  type ExamAttempt,
+} from '@/hooks/queries/useElectronicExams';
+import { useClassStudents } from '@/hooks/queries/useStudents';
 import { QueryStateHandler } from '@/components/QueryStateHandler';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface ExamResultsViewProps {
   exam: ElectronicExam;
@@ -41,7 +51,7 @@ function IntegrityBadge({ count }: { count: number }) {
 
 // ─── Student Result Card ──────────────────────────────────────────────────────
 
-function StudentResultCard({ attempt, rank }: { attempt: ExamAttempt; rank: number }) {
+function StudentResultCard({ attempt, rank, granted }: { attempt: ExamAttempt; rank: number; granted: number }) {
   const pct = Math.round((attempt.score / (attempt.total_score || 1)) * 100);
   const cfg = getScoreConfig(pct);
   const tabCount = attempt.tab_switches_count ?? 0;
@@ -72,6 +82,16 @@ function StudentResultCard({ attempt, rank }: { attempt: ExamAttempt; rank: numb
           {rank <= 3 && (
             <p className="text-[10px] font-bold text-slate-400">
               {rank === 1 ? 'الأول' : rank === 2 ? 'الثاني' : 'الثالث'}
+            </p>
+          )}
+          {(attempt.attempts_taken ?? 1) > 1 && (
+            <p className="text-[10px] font-bold text-violet-500">
+              آخر محاولة ({attempt.attempt_number ?? attempt.attempts_taken} من {attempt.attempts_taken})
+            </p>
+          )}
+          {granted > 0 && (
+            <p className="text-[10px] font-bold text-emerald-600">
+              +{granted} محاولة إضافية ممنوحة
             </p>
           )}
         </div>
@@ -133,6 +153,38 @@ function StatCard({ icon, label, value, color }: {
 
 export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamResultsViewProps) {
   const { data: attempts = [], isLoading, error, refetch } = useExamAttempts(exam.id);
+  const { data: grants = [] } = useExamRetakeGrants(exam.id);
+  const { data: classStudents = [] } = useClassStudents(classId);
+  const grantRetake = useGrantExamRetake();
+
+  const [grantsOpen, setGrantsOpen] = useState(false);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [grantingId, setGrantingId] = useState<string | null>(null);
+
+  // عدد المحاولات الإضافية الممنوحة لكل طالب على حدة
+  const grantsByStudent = useMemo(() => {
+    const map = new Map<string, number>();
+    grants.forEach(g => map.set(g.student_id, (map.get(g.student_id) || 0) + 1));
+    return map;
+  }, [grants]);
+
+  const filteredStudents = useMemo(() => {
+    const term = studentSearch.trim();
+    if (!term) return classStudents;
+    return classStudents.filter(s => s.name?.includes(term));
+  }, [classStudents, studentSearch]);
+
+  const handleGrant = async (studentId: string, studentName: string) => {
+    setGrantingId(studentId);
+    try {
+      await grantRetake.mutateAsync({ examId: exam.id, studentId });
+      toast.success(`تم منح ${studentName} محاولة إضافية لإعادة الاختبار`);
+    } catch {
+      // toast error already shown by mutation onError
+    } finally {
+      setGrantingId(null);
+    }
+  };
 
   // Sort by score descending
   const sorted = [...attempts].sort((a, b) => {
@@ -151,7 +203,7 @@ export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamR
 
   const handleExportCSV = () => {
     if (!attempts.length) return;
-    const header = ['الترتيب', 'اسم الطالب', 'الدرجة', 'الدرجة الكلية', 'النسبة', 'الوقت'];
+    const header = ['الترتيب', 'اسم الطالب', 'الدرجة', 'الدرجة الكلية', 'النسبة', 'الوقت', 'عدد المحاولات'];
     const rows = sorted.map((a, i) => [
       i + 1,
       a.student_name || 'طالب',
@@ -159,6 +211,7 @@ export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamR
       a.total_score,
       `${Math.round((a.score / (a.total_score || 1)) * 100)}%`,
       formatTime(a.time_spent_seconds),
+      a.attempts_taken ?? 1,
     ]);
     const csv = [header, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -174,7 +227,7 @@ export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamR
     <div className="space-y-5" dir="rtl">
 
       {/* ── Header ── */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={onBack}
           className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
@@ -187,6 +240,16 @@ export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamR
           <p className="text-xs text-slate-400 font-bold mt-0.5">نتائج الطلاب</p>
         </div>
         
+        {/* منح محاولة إضافية لطالب بعينه — بجانب زر تعديل الأسئلة */}
+        <button
+          onClick={() => setGrantsOpen(true)}
+          className="flex items-center gap-1.5 h-9 px-3.5 rounded-2xl bg-emerald-50 text-emerald-700 text-xs font-black hover:bg-emerald-100 transition-colors shrink-0"
+          title="اختر طالباً وامنحه محاولة إضافية لإعادة الاختبار"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          إضافة محاولة
+        </button>
+
         {onEdit && (
           <button
             onClick={onEdit}
@@ -239,11 +302,67 @@ export default function ExamResultsView({ exam, classId, onBack, onEdit }: ExamR
         >
           <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {sorted.map((attempt, i) => (
-              <StudentResultCard key={attempt.id} attempt={attempt} rank={i + 1} />
+              <StudentResultCard
+                key={attempt.id}
+                attempt={attempt}
+                rank={i + 1}
+                granted={grantsByStudent.get(attempt.student_id) || 0}
+              />
             ))}
           </div>
         </QueryStateHandler>
       </div>
+
+      {/* ── نافذة إضافة محاولة لطالب ── */}
+      <Dialog open={grantsOpen} onOpenChange={setGrantsOpen}>
+        <DialogContent dir="rtl" className="rounded-[28px] max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-black text-slate-900">إضافة محاولة لطالب</DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium">
+              اختر الطالب لمنحه محاولة إضافية لإعادة الاختبار. الدرجة المعتمدة هي درجة آخر محاولة.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute top-1/2 -translate-y-1/2 right-3" />
+            <input
+              value={studentSearch}
+              onChange={e => setStudentSearch(e.target.value)}
+              placeholder="ابحث باسم الطالب..."
+              className="w-full h-10 pr-9 pl-3 rounded-2xl border border-slate-200 text-sm font-bold outline-none focus:border-emerald-300"
+            />
+          </div>
+
+          <div className="max-h-80 overflow-y-auto space-y-2">
+            {filteredStudents.length === 0 ? (
+              <p className="text-center text-xs font-bold text-slate-400 py-8">لا يوجد طالب بهذا الاسم</p>
+            ) : (
+              filteredStudents.map(s => {
+                const granted = grantsByStudent.get(s.id) || 0;
+                return (
+                  <div key={s.id} className="flex items-center gap-3 p-3 rounded-2xl border border-slate-100 bg-white">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-black text-slate-900 text-sm truncate">{s.name}</p>
+                      <p className="text-[10px] font-bold text-slate-400">
+                        المحاولات المسموح بها: {1 + granted}
+                        {granted > 0 && <span className="text-emerald-600"> (+{granted} إضافية)</span>}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleGrant(s.id, s.name)}
+                      disabled={grantingId === s.id}
+                      className="flex items-center gap-1.5 h-8 px-3 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-black hover:bg-emerald-100 disabled:opacity-50 transition-colors shrink-0"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      {grantingId === s.id ? 'جارٍ...' : 'منح محاولة'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

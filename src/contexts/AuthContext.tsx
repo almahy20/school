@@ -177,15 +177,32 @@ async function buildAppUserFromDirectQueries(supaUser: SupabaseUser): Promise<Ap
   }
 }
 
-async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
-  try {
-    const { data: userData, error } = await supabase.rpc('get_complete_user_data', { p_user_id: supaUser.id });
-    if (error || !userData) throw new Error('rpc_failed');
-    const { profile, role, school } = userData as any;
+// ✅ dedupe: حدث SIGNED_IN من onAuthStateChange يصل قبل انتهاء signInWithPassword،
+// فينفّذ applySession الـ RPC، ثم login() ينفّذه مرة أخرى لنفس المستخدم في نفس اللحظة.
+// بدون هذه الخريطة يُطلق طلبان متطابقان على get_complete_user_data (≈300-500ms مهدورة).
+const inFlightUserData = new Map<string, Promise<AppUser | null>>();
 
-    return buildFinalAppUser(supaUser, profile, role, school);
-  } catch {
-    return buildAppUserFromDirectQueries(supaUser);
+async function getAppUserData(supaUser: SupabaseUser): Promise<AppUser | null> {
+  const inFlight = inFlightUserData.get(supaUser.id);
+  if (inFlight) return inFlight;
+
+  const request = (async (): Promise<AppUser | null> => {
+    try {
+      const { data: userData, error } = await supabase.rpc('get_complete_user_data', { p_user_id: supaUser.id });
+      if (error || !userData) throw new Error('rpc_failed');
+      const { profile, role, school } = userData as any;
+
+      return buildFinalAppUser(supaUser, profile, role, school);
+    } catch {
+      return buildAppUserFromDirectQueries(supaUser);
+    }
+  })();
+
+  inFlightUserData.set(supaUser.id, request);
+  try {
+    return await request;
+  } finally {
+    inFlightUserData.delete(supaUser.id);
   }
 }
 
@@ -378,7 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const cachedUser = getCachedUser();
-    const isJwtComplete = !!(jwtUser?.role && jwtUser?.schoolId);
+    const isJwtComplete = !!(jwtUser?.role && (jwtUser?.schoolId || jwtUser?.isSuperAdmin));
     const hasApprovalStatus = !!(jwtUser?.approvalStatus || cachedUser?.approvalStatus);
 
     // ✅ ذكاء المزامنة: المزامنة الدورية تحدث كل 30 دقيقة للـ JWT المكتمل، أو كل 5 دقائق للبيانات الناقصة
@@ -386,8 +403,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const SYNC_INTERVAL_MS = isJwtComplete ? 30 * 60 * 1000 : 5 * 60 * 1000;
     const isRecentlySynced = lastSync > 0 && (Date.now() - lastSync < SYNC_INTERVAL_MS);
 
-    // تخطي الـ RPC فقط إذا كانت المزامنة حديثة فعلياً من السيرفر
-    if (isRecentlySynced && ((isJwtComplete && hasApprovalStatus) || (cachedUser?.role && cachedUser?.schoolId))) {
+    // ✅ لا نتخطى الـ RPC إلا إذا كانت الهوية مكتملة فعلاً (دور + مدرسة/سوبر أدمن) ومخزّنة محلياً.
+    // تخطّيه مع JWT ناقص يجعل user بلا schoolId → تتعطّل كل استعلامات البيانات بصمت.
+    const hasStoredIdentity = !!(cachedUser?.role && (cachedUser?.schoolId || cachedUser?.isSuperAdmin));
+    if (isRecentlySynced && isJwtComplete && hasApprovalStatus && hasStoredIdentity) {
       logger.log('[Auth] Background RPC skipped — synced recently');
       if (cachedUser) {
         prefetchCommonQueries(cachedUser);
@@ -525,8 +544,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
           if (eventSession) {
+            // ✅ Supabase يطلق SIGNED_IN أيضاً عند كل رجوع للتبويب (استرجاع الجلسة)،
+            // وكان إبطال الكاش بلا فلتر يُطلق موجة إعادة جلب كاملة (~10 طلبات) بلا أي داعٍ.
+            // لا نُبطل إلا عند تغيّر هوية المستخدم فعلاً، أو عند تغيّر بيانات المستخدم (USER_UPDATED).
+            const identityChanged = activeUserIdRef.current !== eventSession.user.id;
             applySession(eventSession);
-            queryClient.invalidateQueries();
+            if (identityChanged || event === 'USER_UPDATED') {
+              queryClient.invalidateQueries({ refetchType: 'active' });
+            }
           }
           setIsLoading(false);
           return;
@@ -700,6 +725,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           logger.log('[Auth] Switching account — clearing old query cache');
           try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
           await clearDataCacheOnly();
+          // ✅ أعد ضبط المراجع فوراً حتى لا يُحتسب التبديل مرتين داخل applySession
+          activeUserIdRef.current = null;
+          activeSchoolIdRef.current = null;
         }
 
         // Hydrate complete user profile BEFORE resolving login to eliminate data delays and role flips
@@ -710,7 +738,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (appUser.schoolId) activeSchoolIdRef.current = appUser.schoolId;
             setUser(appUser);
             setCachedUser(appUser);
-            localStorage.setItem('last_auth_sync', Date.now().toString());
+            // ✅ لا تُعلن "المزامنة الأخيرة" إلا عند اكتمال الهوية (مدرسة أو سوبر أدمن)
+            // وإلا سيتخطى applySession الـ RPC الموثوق ويعتمد على JWT ناقص → لا بيانات
+            if (appUser.schoolId || appUser.isSuperAdmin) {
+              localStorage.setItem('last_auth_sync', Date.now().toString());
+            }
           }
         } catch (e) {
           logger.warn('[Auth] Initial getAppUserData during login failed, falling back to session:', e);

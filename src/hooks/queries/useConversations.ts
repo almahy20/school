@@ -10,6 +10,7 @@ import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
 import { useEffect, useMemo } from 'react';
+import { useDeferredSecondaryQueries } from '@/hooks/useDeferredSecondaryQueries';
 
 const db = supabase as any;
 
@@ -524,6 +525,8 @@ export function useMarkConversationRead() {
 /** عدد المحادثات غير المقروءة للأدمن */
 export function useUnreadConversationsCount() {
   const { user, session } = useAuth();
+  // ⚡ شارة غير حرجة — نؤجّلها حتى لا تُزاحم استعلامات المحتوى الأساسي
+  const deferredReady = useDeferredSecondaryQueries();
 
   return useQuery<number>({
     queryKey: ['conversations-unread-count', user?.schoolId],
@@ -538,7 +541,7 @@ export function useUnreadConversationsCount() {
       if (error) return 0;
       return count || 0;
     },
-    enabled: !!(session && user?.schoolId && user?.role === 'admin'),
+    enabled: !!(deferredReady && session && user?.schoolId && user?.role === 'admin'),
     staleTime: 60 * 1000,
     // ✅ FIX: Removed refetchInterval — RealtimeNotificationsManager already
     //    invalidates 'conversations-unread-count' on new conversation messages
@@ -548,6 +551,8 @@ export function useUnreadConversationsCount() {
 /** عدد الرسائل غير المقروءة لولي الأمر (محادثات الإدارة + دردشة الفصول) */
 export function useUnreadConversationsParentCount() {
   const { user, session } = useAuth();
+  // ⚡ شارة غير حرجة — نؤجّلها حتى لا تُزاحم استعلامات المحتوى الأساسي
+  const deferredReady = useDeferredSecondaryQueries();
 
   return useQuery<number>({
     queryKey: ['conversations-parent-unread', user?.id],
@@ -579,7 +584,7 @@ export function useUnreadConversationsParentCount() {
 
       return (convCount || 0) + (chatCount || 0);
     },
-    enabled: !!(session && user?.id && user?.role === 'parent'),
+    enabled: !!(deferredReady && session && user?.id && user?.role === 'parent'),
     staleTime: 30 * 1000,
     // ✅ FIX: Removed refetchInterval — RealtimeNotificationsManager already
     //    invalidates 'conversations-parent-unread' on new messages/class chat

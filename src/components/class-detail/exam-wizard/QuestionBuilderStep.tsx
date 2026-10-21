@@ -167,7 +167,7 @@ export function isOptionSelectedAsCorrect(
 
   // 6. في حال كانت الإجابة مقسمة بـ /
   if (c.includes('/') || c.includes('،') || c.includes(',')) {
-    const parts = c.split(/[\/,،|]/).map(p => p.trim());
+    const parts = c.split(new RegExp('[/,،|]')).map(p => p.trim());
     if (parts.some(p => p === o || normalizeArabic(p) === normalizeArabic(o))) return true;
   }
 
@@ -404,7 +404,7 @@ function FillBlankEditor({
   // استخراج الإجابة الأساسية والبدائل المتعددة
   const rawParts = useMemo(() => {
     const fromCorrect = (question.correct_answer || '')
-      .split(/[\/,،|]/)
+      .split(new RegExp('[/,،|]'))
       .map(s => s.trim())
       .filter(Boolean);
 

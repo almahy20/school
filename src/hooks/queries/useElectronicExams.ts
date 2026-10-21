@@ -39,6 +39,8 @@ export interface ElectronicExam {
   available_from?: string | null;
   available_until?: string | null;
   language?: 'ar' | 'en';
+  /** الحد الأساسي للمحاولات (1 افتراضياً) + المحاولات الإضافية الممنوحة للطالب */
+  max_attempts?: number;
   created_at: string;
   updated_at: string;
   // joined
@@ -46,6 +48,20 @@ export interface ElectronicExam {
   questions_count?: number;
   attempts_count?: number;
   avg_score?: number;
+  /** لولي الأمر: عدد المحاولات التي استهلكها الطالب فعلاً */
+  attempts_used?: number;
+  /** لولي الأمر: عدد المحاولات الإضافية الممنوحة لهذا الطالب تحديداً */
+  granted_attempts?: number;
+}
+
+/** محاولة إضافية ممنوحة لطالب بعينه (كل صف = محاولة إضافية واحدة) */
+export interface ExamRetakeGrant {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  school_id: string;
+  granted_by: string | null;
+  created_at: string;
 }
 
 /** فحص ما إذا كان النص مكتوباً بالإنجليزية لتحديد اتجاه LTR وترقيم A/B/C/D */
@@ -98,10 +114,14 @@ export interface ExamAttempt {
   total_score: number;
   time_spent_seconds: number;
   tab_switches_count: number; // anti-cheat: number of tab/window switches during exam
+  /** رقم المحاولة للطالب في نفس الاختبار — يبدأ من 1 */
+  attempt_number?: number;
   started_at: string;
   completed_at: string | null;
   // joined
   student_name?: string;
+  /** إجمالي المحاولات التي أداها هذا الطالب في الاختبار */
+  attempts_taken?: number;
 }
 
 // ─── Admin/Teacher Hooks ───────────────────────────────────────────────────────
@@ -163,21 +183,19 @@ export function useExamQuestions(examId: string | undefined | null, options?: { 
       if (!examId) return [];
 
       if (options?.excludeAnswer) {
-        // 1. محاولة الجلب من الـ View الآمن المخصص للطلاب أولاً
+        // 1. الجلب من دالة RPC الآمنة المخصصة للطلاب أولاً (بدون correct_answer)
         try {
-          const { data, error } = await db
-            .from('student_exam_questions')
-            .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
-            .eq('exam_id', examId)
-            .order('order_index', { ascending: true });
+          const { data, error } = await db.rpc('get_student_exam_questions', {
+            p_exam_ids: [examId],
+          });
           if (!error && data && data.length > 0) {
             return data as ExamQuestion[];
           }
           if (error) {
-            logger.warn('[useExamQuestions] student_exam_questions view error, trying fallback:', error.message);
+            logger.warn('[useExamQuestions] get_student_exam_questions RPC error, trying fallback:', error.message);
           }
         } catch (e) {
-          logger.warn('[useExamQuestions] student_exam_questions view exception:', e);
+          logger.warn('[useExamQuestions] get_student_exam_questions RPC exception:', e);
         }
 
         // 2. بديل آمن 100%: استعلام مباشر لجدول exam_questions بدون جلب عمود correct_answer نهائياً
@@ -229,18 +247,16 @@ export function useExamReviewQuestions(examId: string | undefined) {
         logger.warn('[useExamReviewQuestions] RPC exception:', e);
       }
 
-      // بديل مباشر: محاولة الجلب من view أسئلة الطلاب الآمنة
+      // بديل مباشر: دالة RPC الآمنة لأسئلة الطلاب (بدون correct_answer)
       try {
-        const { data: viewData, error: viewError } = await db
-          .from('student_exam_questions')
-          .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
-          .eq('exam_id', examId)
-          .order('order_index', { ascending: true });
-        if (!viewError && Array.isArray(viewData) && viewData.length > 0) {
-          return viewData as ExamQuestion[];
+        const { data: rpcData, error: rpcError } = await db.rpc('get_student_exam_questions', {
+          p_exam_ids: [examId],
+        });
+        if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+          return rpcData as ExamQuestion[];
         }
-      } catch (viewEx) {
-        logger.warn('[useExamReviewQuestions] student_exam_questions view fallback exception:', viewEx);
+      } catch (rpcEx) {
+        logger.warn('[useExamReviewQuestions] get_student_exam_questions RPC fallback exception:', rpcEx);
       }
 
       // بديل مباشر أخير لجدول exam_questions
@@ -265,7 +281,7 @@ export function useExamReviewQuestions(examId: string | undefined) {
 }
 
 
-/** محاولات اختبار واحد — للأدمن */
+/** محاولات اختبار واحد — للأدمن. تُعاد أحدث محاولة لكل طالب (الدرجة المعتمدة = آخر محاولة) */
 export function useExamAttempts(examId: string | null) {
   const { user, session } = useAuth();
 
@@ -280,16 +296,80 @@ export function useExamAttempts(examId: string | null) {
           student:students!exam_attempts_student_id_fkey(name)
         `)
         .eq('exam_id', examId)
-        .order('completed_at', { ascending: false })
-        .limit(200); // محاولات اختبار واحد — 200 تكفي فصلاً كاملاً مع تكرار
+        .order('attempt_number', { ascending: false })
+        .limit(500); // محاولات اختبار واحد — 500 تكفي فصلاً كاملاً مع تكرار المحاولات
       if (error) throw error;
-      return (data || []).map((a: any) => ({
+
+      // ✅ الطالب قد يملك عدة محاولات: نُبقي الأحدث لكل طالب مع عدد محاولاته الكلي
+      const latestByStudent = new Map<string, ExamAttempt>();
+      const countByStudent = new Map<string, number>();
+
+      (data || []).forEach((a: any) => {
+        countByStudent.set(a.student_id, (countByStudent.get(a.student_id) || 0) + 1);
+        const prev = latestByStudent.get(a.student_id);
+        const aNum = a.attempt_number ?? 1;
+        const prevNum = prev?.attempt_number ?? 1;
+        if (!prev || aNum > prevNum) {
+          latestByStudent.set(a.student_id, {
+            ...a,
+            student_name: a.student?.name || 'طالب',
+          } as ExamAttempt);
+        }
+      });
+
+      return Array.from(latestByStudent.values()).map(a => ({
         ...a,
-        student_name: a.student?.name || 'طالب',
-      })) as ExamAttempt[];
+        attempts_taken: countByStudent.get(a.student_id) || 1,
+      }));
     },
     enabled: !!(session && examId),
     staleTime: 15 * 1000,
+  });
+}
+
+/** كل المحاولات الإضافية الممنوحة لطلاب اختبار معيّن — للأدمن/المعلم */
+export function useExamRetakeGrants(examId: string | null) {
+  const { session } = useAuth();
+
+  return useQuery<ExamRetakeGrant[]>({
+    queryKey: ['exam-retake-grants', examId],
+    queryFn: async () => {
+      if (!examId) return [];
+      const { data, error } = await db
+        .from('exam_retake_grants')
+        .select('*')
+        .eq('exam_id', examId)
+        .order('created_at', { ascending: true })
+        .limit(1000);
+      if (error) throw error;
+      return (data || []) as ExamRetakeGrant[];
+    },
+    enabled: !!(session && examId),
+    staleTime: 15 * 1000,
+  });
+}
+
+/** منح طالب بعينه محاولة إضافية واحدة لإعادة الاختبار */
+export function useGrantExamRetake() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ examId, studentId }: { examId: string; studentId: string }) => {
+      const { data, error } = await db.rpc('grant_exam_retake', {
+        p_exam_id: examId,
+        p_student_id: studentId,
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_data, variables) => {
+      // ✅ إبطال مقصود: قائمة المنح فقط. إبطال 'electronic-exams' كان يعيد جلب
+      // الـ select المتشعّب (classes/questions/attempts) بلا داعٍ ويستغرق ثوانٍ.
+      queryClient.invalidateQueries({ queryKey: ['exam-retake-grants', variables.examId] });
+    },
+    onError: (err: any) => {
+      toast.error('فشل منح المحاولة', { description: err.message });
+    },
   });
 }
 
@@ -687,10 +767,9 @@ export function useParentElectronicExams() {
       const examIds = exams.map((e: any) => e.id);
       const questionCounts: Record<string, number> = {};
       try {
-        const { data: qData } = await db
-          .from('student_exam_questions')
-          .select('exam_id')
-          .in('exam_id', examIds);
+        const { data: qData } = await db.rpc('get_student_exam_questions', {
+          p_exam_ids: examIds,
+        });
         (qData || []).forEach((q: any) => {
           questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1;
         });
@@ -709,10 +788,11 @@ export function useParentElectronicExams() {
       // 2هـ. جلب محاولات ولي الأمر / الأبناء بدقة مع دعم التوأم والأخوة
       const studentIds = childrenList.map((c) => c.student_id);
       const attemptsMap = new Map<string, ExamAttempt>();
+      const attemptsCountMap = new Map<string, number>();
       try {
         let attemptsQuery = db
           .from('exam_attempts')
-          .select('id, exam_id, student_id, parent_id, score, total_score, completed_at, answers')
+          .select('id, exam_id, student_id, parent_id, score, total_score, attempt_number, time_spent_seconds, tab_switches_count, started_at, completed_at, answers')
           .in('exam_id', examIds);
 
         if (studentIds.length > 0) {
@@ -723,9 +803,12 @@ export function useParentElectronicExams() {
 
         const { data: attempts } = await attemptsQuery;
         (attempts || []).forEach((a: any) => {
-          if (a.student_id) {
-            attemptsMap.set(`${a.exam_id}_${a.student_id}`, a);
+          const key = `${a.exam_id}_${a.student_id}`;
+          const prev = attemptsMap.get(key);
+          if (!prev || (a.attempt_number ?? 1) > (prev.attempt_number ?? 1)) {
+            attemptsMap.set(key, a);
           }
+          attemptsCountMap.set(key, (attemptsCountMap.get(key) || 0) + 1);
           if (!attemptsMap.has(a.exam_id)) {
             attemptsMap.set(a.exam_id, a);
           }
@@ -734,17 +817,37 @@ export function useParentElectronicExams() {
         logger.warn('[useParentElectronicExams] attempts query warning:', attErr);
       }
 
-      // 2و. دمج النتائج مع بيانات الطلاب (دعم كامل للأخوة في نفس الفصل)
+      // 2و. جلب المحاولات الإضافية الممنوحة لكل طالب على حدة
+      const grantsCountMap = new Map<string, number>();
+      try {
+        const { data: grantsData } = await db
+          .from('exam_retake_grants')
+          .select('exam_id, student_id')
+          .in('exam_id', examIds);
+        (grantsData || []).forEach((g: any) => {
+          const key = `${g.exam_id}_${g.student_id}`;
+          grantsCountMap.set(key, (grantsCountMap.get(key) || 0) + 1);
+        });
+      } catch (grErr) {
+        logger.warn('[useParentElectronicExams] retake grants query warning:', grErr);
+      }
+
+      // 2ز. دمج النتائج مع بيانات الطلاب (دعم كامل للأخوة في نفس الفصل)
       const result: any[] = [];
       for (const exam of exams) {
         const matchingChildren = childrenList.filter((c) => c.student?.class_id === exam.class_id);
         for (const childItem of matchingChildren) {
           if (!childItem?.student) continue;
-          const attempt = attemptsMap.get(`${exam.id}_${childItem.student.id}`) || attemptsMap.get(exam.id) || null;
+          const attemptKey = `${exam.id}_${childItem.student.id}`;
+          const attempt = attemptsMap.get(attemptKey) || attemptsMap.get(exam.id) || null;
+          const granted = grantsCountMap.get(attemptKey) || 0;
           result.push({
             ...exam,
             class_name:      exam.classes?.name || childItem.student?.classes?.name || '',
             questions_count: questionCounts[exam.id] || 0,
+            max_attempts:    (exam.max_attempts ?? 1) + granted,
+            granted_attempts: granted,
+            attempts_used:   attemptsCountMap.get(attemptKey) || (attempt ? 1 : 0),
             student_id:      childItem.student.id,
             student_name:    childItem.student.name,
             attempt,
@@ -840,6 +943,12 @@ export function useSubmitExamAttempt() {
         }
       }
 
+      // ✅ لو الرفض سببه استنفاذ المحاولات فمنع التسليم قرار نهائي من السيرفر —
+      // لا يجوز تجاوزه بالمسار الاحتياطي الذي يكتب في الجدول مباشرة.
+      if (rpcError && /استنفذ/.test(rpcError.message || '')) {
+        throw new Error(rpcError.message);
+      }
+
       if (rpcError || !rpcResult) {
         logger.warn('[Exam] submit_exam_attempt RPC failed, trying resilient direct save fallback:', rpcError?.message);
 
@@ -873,10 +982,21 @@ export function useSubmitExamAttempt() {
           }
         });
 
-        // Direct fallback: Upsert attempt into exam_attempts
+        // Direct fallback: insert a new attempt row (كل محاولة صف مستقل برقمها)
+        const { data: lastAttempt } = await db
+          .from('exam_attempts')
+          .select('attempt_number')
+          .eq('exam_id', examId)
+          .eq('student_id', studentId)
+          .order('attempt_number', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const nextAttemptNumber = (lastAttempt?.attempt_number ?? 0) + 1;
+
         const { data: fallbackAttempt, error: fallbackError } = await db
           .from('exam_attempts')
-          .upsert({
+          .insert({
             exam_id:            examId,
             student_id:         studentId,
             parent_id:          user.id,
@@ -885,8 +1005,9 @@ export function useSubmitExamAttempt() {
             total_score:        reviewQuestions.length,
             time_spent_seconds: timeSpentSeconds,
             tab_switches_count: tabSwitchesCount,
+            attempt_number:     nextAttemptNumber,
             completed_at:       new Date().toISOString(),
-          }, { onConflict: 'exam_id,student_id' })
+          })
           .select('id, score, total_score')
           .single();
 
@@ -923,4 +1044,77 @@ export function useSubmitExamAttempt() {
       toast.error('فشل إرسال الاختبار', { description: err.message });
     },
   });
+}
+
+// ─── المسودة الجارية (Autosave / استرجاع بعد انقطاع) ─────────────────────────
+
+export interface ExamAttemptDraft {
+  exam_id: string;
+  student_id: string;
+  parent_id: string;
+  school_id: string;
+  answers: Record<string, string>;
+  current_question_index: number;
+  tab_switches_count: number;
+  started_at: string;
+}
+
+/** قراءة المسودة الجارية للطالب في اختبار معيّن — أساس استرجاع الاختبار بعد انقطاع الجهاز */
+export async function fetchExamDraft(
+  examId: string,
+  studentId: string,
+): Promise<ExamAttemptDraft | null> {
+  try {
+    const { data, error } = await db
+      .from('exam_attempt_drafts')
+      .select('exam_id, student_id, parent_id, school_id, answers, current_question_index, tab_switches_count, started_at')
+      .eq('exam_id', examId)
+      .eq('student_id', studentId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      ...data,
+      answers: safeParseAnswers(data.answers),
+    } as ExamAttemptDraft;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * حفظ تقدّم الاختبار على السيرفر (كل ~15 ثانية وعند مغادرة الشاشة).
+ * لا نرمي استثناء عند الفشل — الحفظ التدريجي تحسين وليس شرطاً لإكمال الاختبار.
+ */
+export async function saveExamDraft(draft: ExamAttemptDraft): Promise<void> {
+  try {
+    await db.from('exam_attempt_drafts').upsert(
+      {
+        exam_id:                draft.exam_id,
+        student_id:             draft.student_id,
+        parent_id:              draft.parent_id,
+        school_id:              draft.school_id,
+        answers:                draft.answers,
+        current_question_index: draft.current_question_index,
+        tab_switches_count:     draft.tab_switches_count,
+        started_at:             draft.started_at,
+        updated_at:             new Date().toISOString(),
+      },
+      { onConflict: 'exam_id,student_id' },
+    );
+  } catch {
+    // فشل شبكة/انقطاع — المحاولة القادمة ستُحدّث المسودة
+  }
+}
+
+/** حذف المسودة بعد التسليم الناجح (نجاح التسليم هو الإشارة الوحيدة للحذف) */
+export async function deleteExamDraft(examId: string, studentId: string): Promise<void> {
+  try {
+    await db
+      .from('exam_attempt_drafts')
+      .delete()
+      .eq('exam_id', examId)
+      .eq('student_id', studentId);
+  } catch {
+    // غير حرج — تُنظَّف المسودة تلقائياً عند التسليم التالي
+  }
 }

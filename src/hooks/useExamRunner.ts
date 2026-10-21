@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   useExamQuestions,
   useSubmitExamAttempt,
   safeParseOptions,
+  fetchExamDraft,
+  saveExamDraft,
+  deleteExamDraft,
   type ElectronicExam,
   type ExamQuestion,
 } from '@/hooks/queries/useElectronicExams';
@@ -36,7 +40,14 @@ export interface UseExamRunnerParams {
   studentId: string;
 }
 
+/** فاصل الحفظ التدريجي على السيرفر أثناء الحل */
+const DRAFT_AUTOSAVE_MS = 15_000;
+
 export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
+  const { user } = useAuth();
+  const parentId = user?.id ?? '';
+  const schoolId = exam.school_id || user?.schoolId || '';
+
   const [screen, setScreen] = useState<ExamScreen>('confirm');
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -44,16 +55,21 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
   const [showEndDialog, setShowEndDialog] = useState(false);
   const [submitResult, setSubmitResult] = useState<SubmitResult | null>(null);
   const startTimeRef = useRef<number>(0);
+  const currentQRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const answersRef = useRef<Record<string, string>>({});
   const isSubmittingRef = useRef<boolean>(false);
+  /** وقت البداية الحقيقي (ISO) — يُحفظ على السيرفر ليعرف الزمن المستهلك حتى لو مات الجهاز */
+  const draftStartedAtRef = useRef<string>(new Date().toISOString());
 
   // ── Anti-Cheat State ────────────────────────────────────────────────────────
+  // ملاحظة تصميمية: كل مغادرة للشاشة (hidden) تُحتسب في سجل النزاهة،
+  // لكن لا يوجد تسليم تلقائي عند تجاوز حد معيّن — لأن انقطاع الجهاز أو مكالمة
+  // واردة كانا يُسقطان الاختبار بالإجابات الناقصة. القرار النهائي للمعلم.
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [showCheatWarning, setShowCheatWarning] = useState(false);
   const [cheatWarningMsg, setCheatWarningMsg] = useState('');
   const tabSwitchCountRef = useRef(0);
-  const MAX_TAB_SWITCHES = 3;
 
   const { data: rawQuestions = [], isLoading: qLoading } = useExamQuestions(exam.id, { excludeAnswer: true });
   const submitAttempt = useSubmitExamAttempt();
@@ -76,79 +92,152 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
 
   const storageKey = `exam_progress_${exam.id}_${studentId}`;
 
-  // Restore active session on page reload if exam is still in progress
+  // ── نسخة محلية (localStorage) — تصمد أمام إغلاق التاب وموت الجهاز ──────────
+  const persistLocal = useCallback(
+    (overrides?: Partial<{ answers: Record<string, string>; currentQ: number; tabSwitchCount: number }>) => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          startTime: startTimeRef.current,
+          startedAt: draftStartedAtRef.current,
+          answers: overrides?.answers ?? answersRef.current,
+          currentQ: overrides?.currentQ ?? currentQRef.current,
+          tabSwitchCount: overrides?.tabSwitchCount ?? tabSwitchCountRef.current,
+        }));
+      } catch {
+        // localStorage غير متاح — غير حرج
+      }
+    },
+    [storageKey],
+  );
+
+  // ── حفظ تدريجي على السيرفر (كل 15 ثانية وعند كل مغادرة للشاشة) ─────────────
+  const persistDraft = useCallback(() => {
+    if (!parentId || !schoolId || !startTimeRef.current) return;
+    void saveExamDraft({
+      exam_id: exam.id,
+      student_id: studentId,
+      parent_id: parentId,
+      school_id: schoolId,
+      answers: answersRef.current,
+      current_question_index: currentQRef.current,
+      tab_switches_count: tabSwitchCountRef.current,
+      started_at: draftStartedAtRef.current,
+    });
+  }, [exam.id, studentId, parentId, schoolId]);
+
+  // ── استرجاع الاختبار الجاري (من السيرفر أولاً ثم من النسخة المحلية) ─────────
   useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        const spent = Math.floor((Date.now() - parsed.startTime) / 1000);
-        const remaining = (exam.duration_minutes * 60) - spent;
-        if (remaining > 5 && parsed.answers) {
-          startTimeRef.current = parsed.startTime;
-          setTimeLeft(remaining);
-          answersRef.current = parsed.answers;
-          setAnswers(parsed.answers);
-          if (typeof parsed.currentQ === 'number' && parsed.currentQ >= 0) {
-            setCurrentQ(parsed.currentQ);
+    let cancelled = false;
+
+    const applyRestore = (
+      startMs: number,
+      restoredAnswers: Record<string, string>,
+      restoredQ: number,
+      restoredTabSwitches: number,
+      startedAtIso: string,
+    ) => {
+      startTimeRef.current = startMs;
+      draftStartedAtRef.current = startedAtIso;
+      answersRef.current = restoredAnswers;
+      setAnswers(restoredAnswers);
+      currentQRef.current = restoredQ;
+      setCurrentQ(restoredQ);
+      tabSwitchCountRef.current = restoredTabSwitches;
+      setTabSwitchCount(restoredTabSwitches);
+      setTimeLeft(Math.max(0, exam.duration_minutes * 60 - Math.floor((Date.now() - startMs) / 1000)));
+      setScreen('taking');
+    };
+
+    const restore = async () => {
+      // 1) النسخة المحلية — أحدث الإجابات دائماً (تُكتب لحظياً مع كل ضغطة)
+      let localAnswers: Record<string, string> = {};
+      let localStartMs = 0;
+      let localStartedAt = '';
+      let localQ = 0;
+      let localTabSwitches = 0;
+      let localValid = false;
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed?.startTime && parsed.answers && typeof parsed.answers === 'object') {
+            localStartMs = parsed.startTime;
+            localStartedAt = parsed.startedAt || new Date(parsed.startTime).toISOString();
+            localAnswers = parsed.answers;
+            localQ = typeof parsed.currentQ === 'number' ? parsed.currentQ : 0;
+            localTabSwitches = parsed.tabSwitchCount || 0;
+            localValid = (exam.duration_minutes * 60 - Math.floor((Date.now() - localStartMs) / 1000)) > 5;
           }
-          if (parsed.tabSwitchCount) {
-            tabSwitchCountRef.current = parsed.tabSwitchCount;
-            setTabSwitchCount(parsed.tabSwitchCount);
-          }
-          setScreen('taking');
-          toast.info('تم استعادة إجاباتك ومتابعة الاختبار 🔄');
-        } else {
-          sessionStorage.removeItem(storageKey);
+          if (!localValid) localStorage.removeItem(storageKey);
+        }
+      } catch {
+        // نسخة محلية تالفة — نتجاهلها ونكمل من السيرفر
+      }
+
+      // 2) مسودة السيرفر — المرجع الحقيقي لوقت البداية (يُحسم عند تغيير الجهاز)
+      let draft = null as Awaited<ReturnType<typeof fetchExamDraft>>;
+      try {
+        draft = await fetchExamDraft(exam.id, studentId);
+      } catch {
+        draft = null;
+      }
+      if (cancelled || startTimeRef.current !== 0) return; // الطالب بدأ يدوياً بالفعل
+
+      if (draft) {
+        const draftStartMs = new Date(draft.started_at).getTime();
+        if (!Number.isNaN(draftStartMs)) {
+          // دمج الإجابات: المحلية تتقدّم لأنها الأحدث، والمسودة تغطي ما لم يُكتب محلياً
+          const merged = { ...draft.answers, ...localAnswers };
+          const hasMergedAnswers = Object.keys(merged).length > 0;
+          applyRestore(
+            draftStartMs,
+            merged,
+            hasMergedAnswers ? draft.current_question_index : localQ,
+            Math.max(draft.tab_switches_count, localTabSwitches),
+            draft.started_at,
+          );
+          persistLocal({ answers: merged });
+          toast.info('تم استرجاع إجاباتك ومتابعة الاختبار من حيث توقفت 🔄');
+          return;
         }
       }
-    } catch {
-      // sessionStorage unavailable or corrupted — start fresh
-    }
-  }, [storageKey, exam.duration_minutes]);
 
-  // Always keep answersRef in sync with latest answers and auto-save
+      if (localValid) {
+        applyRestore(localStartMs, localAnswers, localQ, localTabSwitches, localStartedAt);
+        toast.info('تم استرجاع إجاباتك ومتابعة الاختبار 🔄');
+      }
+    };
+
+    void restore();
+    return () => { cancelled = true; };
+  }, [storageKey, exam.id, studentId, exam.duration_minutes, persistLocal]);
+
+  // Always keep answersRef in sync with latest answers and auto-save locally
   const updateAnswer = useCallback((questionId: string, value: string) => {
     setAnswers(prev => {
       const next = { ...prev, [questionId]: value };
       answersRef.current = next;
-      try {
-        sessionStorage.setItem(storageKey, JSON.stringify({
-          startTime: startTimeRef.current,
-          answers: next,
-          currentQ,
-          tabSwitchCount: tabSwitchCountRef.current,
-        }));
-      } catch {
-        // sessionStorage write failed — non-critical
-      }
+      persistLocal({ answers: next });
       return next;
     });
-  }, [storageKey, currentQ]);
+  }, [persistLocal]);
 
-  // Update currentQ in storage on change
   const navigateToQ = useCallback((idx: number) => {
+    currentQRef.current = idx;
     setCurrentQ(idx);
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        sessionStorage.setItem(storageKey, JSON.stringify({
-          ...parsed,
-          currentQ: idx,
-        }));
-      }
-    } catch {
-      // sessionStorage unavailable — non-critical
-    }
-  }, [storageKey]);
+    persistLocal({ currentQ: idx });
+  }, [persistLocal]);
 
   const handleSubmit = useCallback(async (auto = false) => {
     if (isSubmittingRef.current) return;
     isSubmittingRef.current = true;
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
 
-    const spent = Math.round((Date.now() - startTimeRef.current) / 1000);
+    const startedMs = startTimeRef.current || Date.now();
+    const spent = Math.round((Date.now() - startedMs) / 1000);
     // Always use the latest answers from answersRef to prevent stale closure data loss
     const currentAnswers = { ...answersRef.current };
 
@@ -161,11 +250,14 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
         questions,
         tabSwitchesCount: tabSwitchCountRef.current,
       });
+      // نُنظّف المسودة والنسخة المحلية بعد نجاح التسليم فقط
       try {
-        sessionStorage.removeItem(storageKey);
+        localStorage.removeItem(storageKey);
       } catch {
-        // sessionStorage unavailable — non-critical
+        // localStorage غير متاح — غير حرج
       }
+      // ننتظر الحذف حتى لا تبقى مسودة قديمة تُعيد الطالب للاختبار بعد تسليمه
+      await deleteExamDraft(exam.id, studentId);
       setSubmitResult({
         score: result.score,
         totalScore: result.totalScore,
@@ -188,23 +280,33 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
 
-  // Timer
+  /** يقيس الوقت من الساعة الحقيقية — لا يعتمد على نُقرات setInterval المخنوقة في التاب المخفي */
+  const resyncTime = useCallback(() => {
+    if (!startTimeRef.current) return;
+    const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    const remaining = Math.max(0, exam.duration_minutes * 60 - elapsed);
+    setTimeLeft(remaining);
+    if (remaining <= 0) {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      handleSubmitRef.current(true);
+    }
+  }, [exam.duration_minutes]);
+
+  // Timer — الزمن الحقيقي الفعلي وليس عدد النُقرات
   useEffect(() => {
     if (screen !== 'taking') return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          handleSubmitRef.current(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    resyncTime();
+    timerRef.current = setInterval(resyncTime, 1000);
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     };
-  }, [screen]);
+  }, [screen, resyncTime]);
 
   // Keep Supabase session fresh during the exam so JWT never expires
   useEffect(() => {
@@ -219,7 +321,15 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
     return () => clearInterval(keepAliveTimer);
   }, [screen]);
 
-  // ── Anti-Cheat: Visibility change detection only (safe for mobile) ────────
+  // ── حفظ تدريجي دوري أثناء الحل ─────────────────────────────────────────────
+  useEffect(() => {
+    if (screen !== 'taking') return;
+    persistDraft();
+    const id = setInterval(persistDraft, DRAFT_AUTOSAVE_MS);
+    return () => clearInterval(id);
+  }, [screen, persistDraft]);
+
+  // ── Anti-Cheat: رصد مغادرة الشاشة (بدون تسليم تلقائي) ──────────────────────
   useEffect(() => {
     if (screen !== 'taking') return;
 
@@ -229,15 +339,16 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
         tabSwitchCountRef.current += 1;
         const count = tabSwitchCountRef.current;
         setTabSwitchCount(count);
-
-        if (count >= MAX_TAB_SWITCHES) {
-          toast.error('⚠️ تم رصد مغادرة متكررة لشاشة الاختبار — سيتم تسليم الاختبار تلقائياً!');
-          handleSubmitRef.current(true);
-        } else {
-          const remaining = MAX_TAB_SWITCHES - count;
-          setCheatWarningMsg(`⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count} من ${MAX_TAB_SWITCHES}). يرجى البقاء في صفحة الاختبار.`);
-          setShowCheatWarning(true);
-        }
+        persistLocal({ tabSwitchCount: count });
+        setCheatWarningMsg(
+          `⚠️ تنبيه أمني: تم رصد مغادرة شاشة الاختبار! (مخالفة ${count}). يُرجى البقاء في صفحة الاختبار — كل مغادرة تُسجَّل في تقرير النزاهة.`,
+        );
+        setShowCheatWarning(true);
+        // احفظ التقدّم فور مغادرة الشاشة حتى يصمد أمام موت الجهاز أو انقطاع الشبكة
+        persistDraft();
+      } else {
+        // عاد الطالب — أعِد حساب الوقت الحقيقي فوراً (المؤقّت كان مُخنَقاً أثناء الغياب)
+        resyncTime();
       }
     };
 
@@ -245,7 +356,7 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [screen]);
+  }, [screen, persistDraft, persistLocal, resyncTime]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -257,24 +368,17 @@ export function useExamRunner({ exam, studentId }: UseExamRunnerParams) {
     if (isExpired || isNotStarted) return;
     const now = Date.now();
     startTimeRef.current = now;
+    draftStartedAtRef.current = new Date(now).toISOString();
     setTimeLeft(exam.duration_minutes * 60);
     answersRef.current = {};
     setAnswers({});
+    currentQRef.current = 0;
     setCurrentQ(0);
     isSubmittingRef.current = false;
     tabSwitchCountRef.current = 0;
     setTabSwitchCount(0);
     setShowCheatWarning(false);
-    try {
-      sessionStorage.setItem(storageKey, JSON.stringify({
-        startTime: now,
-        answers: {},
-        currentQ: 0,
-        tabSwitchCount: 0,
-      }));
-    } catch {
-      // sessionStorage unavailable — non-critical
-    }
+    persistLocal({ answers: {}, currentQ: 0, tabSwitchCount: 0 });
     try {
       if (typeof document !== 'undefined' && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});

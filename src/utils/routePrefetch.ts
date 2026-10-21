@@ -2,8 +2,8 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { AppUser } from '@/types/auth';
 
 // ── 1. Page Chunk Loaders ───────────────────────────────────────────────────
+// ملاحظة: الصفحة الرئيسية DashboardPage محملة مسبقاً في المسار الحرج (Critical path) داخل App.tsx
 const chunkLoaders: Record<string, () => Promise<any>> = {
-  '/': () => import('@/pages/DashboardPage'),
   '/students': () => import('@/pages/StudentsPage'),
   '/classes': () => import('@/pages/ClassesPage'),
   '/teachers': () => import('@/pages/TeachersPage'),

@@ -1,7 +1,7 @@
 import { useState, Component, type ReactNode } from 'react';
 import {
   ClipboardList, Clock, CheckCircle2, BookOpen,
-  ChevronLeft, Timer, Brain, AlertCircle,
+  ChevronLeft, Timer, Brain, AlertCircle, RefreshCw,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -64,11 +64,13 @@ function MetaChip({ icon, label }: { icon: React.ReactNode; label: string }) {
 function ExamCard({
   exam,
   onStart,
-  onReview
+  onReview,
+  onRetake
 }: {
   exam: ExamWithStudent;
   onStart: () => void;
   onReview: () => void;
+  onRetake: () => void;
 }) {
   const isDone = !!exam.attempt;
   const isExpired = !isDone && exam.available_until ? new Date() > new Date(exam.available_until) : false;
@@ -76,6 +78,12 @@ function ExamCard({
   const pct = isDone && exam.attempt
     ? Math.round((exam.attempt.score / (exam.attempt.total_score || 1)) * 100)
     : null;
+
+  const maxAttempts = exam.max_attempts ?? 1;
+  const attemptsUsed = exam.attempts_used ?? (isDone ? 1 : 0);
+  const attemptsLeft = Math.max(maxAttempts - attemptsUsed, 0);
+  const retakeExpired = exam.available_until ? new Date() > new Date(exam.available_until) : false;
+  const canRetake = isDone && attemptsLeft > 0 && !retakeExpired;
 
   return (
     <div className={cn(
@@ -126,6 +134,12 @@ function ExamCard({
             label={exam.student_name}
           />
         )}
+        {maxAttempts > 1 && (
+          <MetaChip
+            icon={<RefreshCw className={cn('w-3 h-3', attemptsLeft > 0 ? 'text-violet-500' : 'text-slate-400')} />}
+            label={`المحاولات: ${attemptsUsed} من ${maxAttempts}`}
+          />
+        )}
         {exam.available_until && !isDone && (
           <MetaChip
             icon={<Clock className={cn("w-3 h-3", isExpired ? "text-rose-500" : "text-amber-500")} />}
@@ -170,6 +184,25 @@ function ExamCard({
             مراجعة الأسئلة وتثبيت المعلومة 👨‍👦
             <ChevronLeft className="w-4 h-4" />
           </button>
+
+          {canRetake && (
+            <button
+              onClick={onRetake}
+              className="w-full h-11 rounded-[18px] text-xs sm:text-sm font-black transition-all flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 cursor-pointer active:scale-[0.98]"
+            >
+              <RefreshCw className="w-4 h-4" />
+              إعادة الاختبار
+              <span className="text-[10px] font-black bg-emerald-600 text-white rounded-full px-2 py-0.5">
+                متبقي {attemptsLeft}
+              </span>
+            </button>
+          )}
+
+          {isDone && attemptsLeft === 0 && maxAttempts > 1 && !retakeExpired && (
+            <p className="text-center text-[10px] font-black text-slate-400">
+              استُهلكت جميع المحاولات المسموح بها ({maxAttempts})
+            </p>
+          )}
         </div>
       ) : (
         <button
@@ -272,6 +305,8 @@ export default function ParentExamsPage() {
           exam={activeExam}
           studentId={activeExam.student_id}
           studentName={activeExam.student_name}
+          attemptNumber={(activeExam.attempts_used ?? 0) + 1}
+          maxAttempts={activeExam.max_attempts ?? 1}
           onFinish={() => { setActiveExam(null); refetch(); }}
           onBack={() => setActiveExam(null)}
         />
@@ -335,6 +370,7 @@ export default function ParentExamsPage() {
                     exam={exam}
                     onStart={() => setActiveExam(exam)}
                     onReview={() => setReviewExam(exam)}
+                    onRetake={() => setActiveExam(exam)}
                   />
                 ))}
               </div>
@@ -357,6 +393,7 @@ export default function ParentExamsPage() {
                     exam={exam}
                     onStart={() => setActiveExam(exam)}
                     onReview={() => setReviewExam(exam)}
+                    onRetake={() => setActiveExam(exam)}
                   />
                 ))}
               </div>
