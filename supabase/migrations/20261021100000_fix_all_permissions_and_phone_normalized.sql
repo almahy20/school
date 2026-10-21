@@ -134,84 +134,44 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications
   TO authenticated, service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. منح صلاحيات الـ RPC الأساسية للمصادقة (BUG-03)
+-- 3. منح صلاحيات الـ RPC الأساسية للمصادقة (طريقة ديناميكية بالـ regprocedure تمنع أي mismatch في المعاملات)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DO $$
+DECLARE
+  r RECORD;
 BEGIN
-  -- get_complete_user_data
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_complete_user_data') THEN
-    GRANT EXECUTE ON FUNCTION public.get_complete_user_data(uuid) 
-      TO authenticated, service_role;
-  END IF;
-
-  -- get_parent_dashboard_summary
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_parent_dashboard_summary') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_parent_dashboard_summary(uuid, uuid) TO authenticated, service_role';
-  END IF;
-
-  -- get_child_full_details
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_child_full_details') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_child_full_details(uuid, uuid) TO authenticated, service_role';
-  END IF;
-
-  -- get_parent_electronic_exams
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_parent_electronic_exams') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_parent_electronic_exams(uuid, uuid) TO authenticated, service_role';
-  END IF;
-
-  -- submit_exam_attempt
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'submit_exam_attempt') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.submit_exam_attempt(uuid, uuid, uuid, jsonb, integer, integer) TO authenticated, service_role';
-  END IF;
-
-  -- get_auth_role
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_auth_role') THEN
-    GRANT EXECUTE ON FUNCTION public.get_auth_role() 
-      TO authenticated, service_role, anon;
-  END IF;
-
-  -- get_auth_school_id
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_auth_school_id') THEN
-    GRANT EXECUTE ON FUNCTION public.get_auth_school_id() 
-      TO authenticated, service_role, anon;
-  END IF;
-
-  -- get_auth_is_super_admin
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_auth_is_super_admin') THEN
-    GRANT EXECUTE ON FUNCTION public.get_auth_is_super_admin() 
-      TO authenticated, service_role, anon;
-  END IF;
-
-  -- get_dashboard_stats
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_dashboard_stats') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_dashboard_stats(uuid, boolean) TO authenticated, service_role';
-  END IF;
-
-  -- get_admin_dashboard_activities
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_admin_dashboard_activities') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_admin_dashboard_activities(uuid, uuid) TO authenticated, service_role';
-  END IF;
-
-  -- get_fees_summary
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_fees_summary') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_fees_summary(uuid) TO authenticated, service_role';
-  END IF;
-
-  -- get_teacher_dashboard_stats
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_teacher_dashboard_stats') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_teacher_dashboard_stats(uuid, uuid) TO authenticated, service_role';
-  END IF;
-
-  -- recalculate_exam_scores
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'recalculate_exam_scores') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.recalculate_exam_scores(uuid) TO authenticated, service_role';
-  END IF;
-
-  -- check_exam_answer_matches
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'check_exam_answer_matches') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.check_exam_answer_matches(text, text, text) TO authenticated, service_role';
-  END IF;
+  FOR r IN (
+    SELECT proname, oid::regprocedure AS func_sig
+    FROM pg_proc
+    WHERE proname IN (
+      'get_complete_user_data',
+      'get_parent_dashboard_summary',
+      'get_child_full_details',
+      'get_parent_electronic_exams',
+      'submit_exam_attempt',
+      'get_auth_role',
+      'get_auth_school_id',
+      'get_auth_is_super_admin',
+      'get_dashboard_stats',
+      'get_admin_dashboard_activities',
+      'get_fees_summary',
+      'get_teacher_dashboard_stats',
+      'recalculate_exam_scores',
+      'check_exam_answer_matches',
+      'get_exam_review_questions'
+    )
+    AND pronamespace = 'public'::regnamespace
+  ) LOOP
+    BEGIN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', r.func_sig);
+      IF r.proname IN ('get_auth_role', 'get_auth_school_id', 'get_auth_is_super_admin') THEN
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon', r.func_sig);
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      -- تجاهل أي دالة بها خطأ فردي والانتقال للتالية بأمان تام
+    END;
+  END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
