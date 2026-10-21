@@ -453,11 +453,14 @@ function AddStudentModal({ classes, user, onClose, onSuccess }: any) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل الدراسي</label>
-              <select value={classId} onChange={e => setClassId(e.target.value)}
-                className="w-full h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
-                <option value="">بدون فصل</option>
-                {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
-              </select>
+              <div className="relative">
+                <select value={classId} onChange={e => setClassId(e.target.value)}
+                  className="w-full h-12 sm:h-14 pr-4 sm:pr-6 pl-10 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner cursor-pointer">
+                  <option value="">بدون فصل</option>
+                  {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                </select>
+                <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>
@@ -531,11 +534,14 @@ export function EditStudentModal({ student, classes, user, onClose, onSuccess }:
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">الفصل</label>
-                <select value={classId} onChange={e => setClassId(e.target.value)}
-                  className="w-full h-12 sm:h-14 px-4 sm:px-6 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner">
-                  <option value="">بدون فصل</option>
-                  {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
-                </select>
+                <div className="relative">
+                  <select value={classId} onChange={e => setClassId(e.target.value)}
+                    className="w-full h-12 sm:h-14 pr-4 sm:pr-6 pl-10 rounded-xl sm:rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-primary/5 transition-all font-bold text-sm appearance-none shadow-inner cursor-pointer">
+                    <option value="">بدون فصل</option>
+                    {normalizedClasses.map((cls: any) => <option key={cls.id} value={cls.id}>{cls.name}</option>)}
+                  </select>
+                  <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-400 mr-2 uppercase tracking-widest">رقم هاتف ولي الأمر</label>

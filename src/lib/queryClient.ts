@@ -212,3 +212,16 @@ export async function clearAllCache() {
   }
 }
 
+/**
+ * ✅ تنظيف كاش البيانات فقط (IndexedDB + queryClient) عند تبديل الحساب
+ * دون المساس بـ school_auth_token التي تم إنشاؤها للتو
+ */
+export async function clearDataCacheOnly() {
+  queryClient.clear();
+  try {
+    await del('SCHOOL_APP_CACHE');
+  } catch (e) {
+    logger.error('Failed to clear IndexedDB cache:', e);
+  }
+}
+

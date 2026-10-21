@@ -5,7 +5,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { 
   CreditCard, Search, Plus, TrendingUp, Wallet, Clock, User,
   CheckCircle, AlertCircle, Download, MoreHorizontal, Calendar,
-  Users, Trash2, Edit2
+  Users, Trash2, Edit2, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -169,10 +169,11 @@ export default function FeesPage() {
               <div className="relative group">
                 <Users className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <select value={selectedClassId} onChange={e => handleClassChange(e.target.value)}
-                  className="pr-10 pl-6 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer">
+                  className="pr-10 pl-8 h-12 rounded-2xl border-none bg-white text-slate-900 font-black text-xs shadow-xl shadow-slate-200/10 focus:ring-4 focus:ring-indigo-600/5 transition-all appearance-none cursor-pointer">
                   <option value="all">جميع الفصول</option>
                   {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+                <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
               </div>
               <Button onClick={() => setShowGenerateModal(true)} className="h-12 px-6 rounded-2xl bg-slate-900 text-white font-black text-xs shadow-xl gap-3">
                 <TrendingUp className="w-4 h-4" /> توليد رسوم جماعية
@@ -212,9 +213,10 @@ export default function FeesPage() {
                <div className="relative group w-full sm:min-w-[240px]">
                  <Calendar className="absolute right-5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-300 group-focus-within:text-indigo-600 transition-colors" />
                  <select value={selectedTerm} onChange={e => handleTermChange(e.target.value)}
-                   className="h-12 pr-12 pl-6 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 appearance-none w-full cursor-pointer">
+                   className="h-12 pr-12 pl-8 rounded-[20px] border-none bg-white text-sm font-bold shadow-sm focus:ring-4 focus:ring-indigo-600/5 appearance-none w-full cursor-pointer">
                    {TERMS.map(t => <option key={t} value={t}>{t}</option>)}
                  </select>
+                 <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                </div>
 
                <div className="relative group w-full sm:min-w-[300px] text-right">

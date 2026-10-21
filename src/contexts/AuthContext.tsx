@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, ReactNod
 import { supabase } from '@/integrations/supabase/client';
 import { AppUser, AppRole } from '@/types/auth';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
-import { queryClient, clearAllCache } from '@/lib/queryClient';
+import { queryClient, clearAllCache, clearDataCacheOnly } from '@/lib/queryClient';
 import { getCachedUser, setCachedUser } from '@/lib/userCache';
 import { realtimeEngine } from '@/lib/RealtimeEngine';
 import { logger } from '@/utils/logger';
@@ -330,7 +330,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isUserSwitch || isSchoolSwitch) {
       logger.log('[Auth] User or School changed — clearing previous user cache');
-      clearAllCache();
+      clearDataCacheOnly();
     }
 
     activeUserIdRef.current = newUserId || null;
@@ -697,9 +697,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // عند تسجيل الدخول بحساب مختلف عن المستخدم السابق: تنظيف شامل للكاش
         const prevUserId = activeUserIdRef.current || getCachedUser()?.id;
         if (prevUserId && prevUserId !== data.session.user.id) {
-          logger.log('[Auth] Switching account — clearing old cache');
+          logger.log('[Auth] Switching account — clearing old query cache');
           try { queryClient.cancelQueries(); } catch (_e) { /* ignore */ }
-          await clearAllCache();
+          await clearDataCacheOnly();
         }
 
         // Hydrate complete user profile BEFORE resolving login to eliminate data delays and role flips

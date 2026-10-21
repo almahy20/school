@@ -212,7 +212,7 @@ export default function Sidebar({ onClose, className }: SidebarProps) {
       </nav>
 
       {/* Logout Footer */}
-      <div className="p-4 border-t border-white/5 bg-white/[0.01]">
+      <div className="p-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] border-t border-white/5 bg-white/[0.01]">
         <button 
           onClick={handleLogout}
           className="w-full h-11 rounded-xl flex items-center justify-center gap-2 text-rose-400 hover:text-white hover:bg-rose-500/20 transition-all duration-300 font-bold text-xs group"

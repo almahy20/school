@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import DataPagination from '@/components/ui/DataPagination';
 import { 
   Plus, Users, School, User, Search, Filter, 
-  MoreHorizontal, ChevronLeft, ArrowRight, Trash2, Edit3
+  MoreHorizontal, ChevronLeft, ChevronDown, ArrowRight, Trash2, Edit3
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -266,11 +266,14 @@ function AddClassModal({ teachers, user, onClose, onSuccess }: { teachers: any; 
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المعلم الرئيسي</label>
-            <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none">
-              <option value="">بدون معلم رئيسي</option>
-              {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            </select>
+            <div className="relative">
+              <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
+                className="w-full h-14 pr-6 pl-10 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none cursor-pointer">
+                <option value="">بدون معلم رئيسي</option>
+                {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+              <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
           <div className="flex gap-4 pt-4">
             <Button type="submit" disabled={addMutation.isPending}
@@ -323,11 +326,14 @@ export function EditClassModal({ classItem, teachers, onClose, onSuccess }: any)
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 pr-1 uppercase tracking-widest block">المعلم الرئيسي</label>
-            <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-              className="w-full h-14 px-6 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none">
-              <option value="">بدون معلم رئيسي</option>
-              {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            </select>
+            <div className="relative">
+              <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
+                className="w-full h-14 pr-6 pl-10 rounded-2xl border border-slate-100 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 transition-all font-bold text-sm appearance-none cursor-pointer">
+                <option value="">بدون معلم رئيسي</option>
+                {teachersArray.map((t: any) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+              </select>
+              <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
           </div>
           <div className="flex gap-4 pt-4">
             <Button type="submit" disabled={updateMutation.isPending}
