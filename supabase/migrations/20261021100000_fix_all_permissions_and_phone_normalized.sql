@@ -1,10 +1,11 @@
 -- ==============================================================================
 -- Migration: 20261021100000_fix_all_permissions_and_phone_normalized.sql
--- Purpose  : إصلاح شامل لكل الأخطاء المكتشفة:
+-- Purpose  : إصلاح شامل ونهائي لجميع أخطاء الصلاحيات والـ RLS:
 --            1. إصلاح phone_normalized (عمود غير موجود) في get_exam_review_questions
---            2. منح صلاحيات مفقودة لـ push_subscriptions, user_roles, profiles, schools
---            3. منح صلاحيات تنفيذ لـ RPCs الأساسية (get_parent_dashboard_summary, get_complete_user_data)
---            4. منح صلاحيات get_auth_role, get_auth_school_id, get_auth_is_super_admin
+--            2. حل خطأ 42501 (permission denied for function is_super_admin)
+--            3. منح صلاحيات الجداول (teacher_attendance, conversations, chat, user_roles...)
+--            4. منح EXECUTE لكافة دوال الـ RLS والـ RPC لـ authenticated و service_role
+--            5. إعادة تحميل كاش PostgREST
 -- ==============================================================================
 
 SET search_path TO public;
@@ -38,7 +39,7 @@ BEGIN
     RETURN;
   END IF;
 
-  -- استخدام get_auth_role() إن وُجدت، وإلا fallback للـ JWT
+  -- فحص الدور والسوبر أدمن بأمان
   BEGIN
     v_role     := public.get_auth_role();
     v_is_super := public.get_auth_is_super_admin();
@@ -55,7 +56,7 @@ BEGIN
   END;
 
   -- أ) المعلمون والإدارة والسوبر أدمن يمكنهم المراجعة دائماً
-  IF v_is_super OR v_role IN ('admin', 'teacher') THEN
+  IF COALESCE(v_is_super, FALSE) OR v_role IN ('admin', 'teacher') THEN
     RETURN QUERY
     SELECT 
       q.id, q.exam_id, q.school_id, q.question_type, 
@@ -67,7 +68,6 @@ BEGIN
   END IF;
 
   -- ب) ولي الأمر / الطالب: فحص وجود محاولة مرتبطة بالمستخدم
-  --    (عبر parent_id المباشر، أو student_parents، أو تطابق رقم الهاتف)
   SELECT EXISTS (
     SELECT 1 
     FROM public.exam_attempts ea
@@ -80,7 +80,7 @@ BEGIN
           WHERE sp.parent_id = v_user_id AND sp.student_id = ea.student_id
         )
         OR EXISTS (
-          -- تطابق رقم الهاتف: آخر 9 أرقام فقط (إصلاح BUG-01: لا phone_normalized)
+          -- تطابق رقم الهاتف عبر regex (آخر 9 أرقام) دون الحاجة لعمود phone_normalized
           SELECT 1 
           FROM public.students s
           JOIN public.profiles p ON p.id = v_user_id
@@ -108,43 +108,50 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_exam_review_questions(UUID) 
-  TO authenticated, service_role;
-
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2. منح صلاحيات جداول الأمان الأساسية (BUG-03, BUG-06)
+-- 2. منح صلاحيات الجداول الأساسية (حل أخطاء 401 على الجداول)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- push_subscriptions
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.push_subscriptions 
-  TO authenticated, service_role;
+-- جداول الحضور للمعلمين والطلاب
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.teacher_attendance TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.attendance TO authenticated, service_role;
 
--- user_roles (قراءة فقط للـ authenticated — الكتابة للـ service_role فقط لأسباب أمنية)
-GRANT SELECT ON public.user_roles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_roles TO service_role;
+-- جداول المحادثات والإشعارات
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.conversations TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.conversation_messages TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.class_chat_rooms TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.class_chat_messages TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.notifications TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.push_subscriptions TO authenticated, service_role;
 
--- profiles
-GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated, service_role;
+-- جداول المستخدمين والمدارس
+GRANT SELECT ON TABLE public.schools TO anon, authenticated, service_role;
+GRANT SELECT, UPDATE ON TABLE public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.profiles TO service_role;
+GRANT SELECT ON TABLE public.user_roles TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_roles TO service_role;
 
--- schools (قراءة فقط)
-GRANT SELECT ON public.schools TO authenticated;
+-- جداول الطلاب والفصول والدرجات والرسوم
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.students TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.classes TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.student_parents TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.grades TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fees TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fee_payments TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.complaints TO authenticated, service_role;
 
--- notifications
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications 
-  TO authenticated, service_role;
-
--- conversations & chat
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversations 
-  TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_messages 
-  TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.class_chat_rooms 
-  TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.class_chat_messages 
-  TO authenticated, service_role;
+-- جداول الاختبارات الإلكترونية إن وُجدت
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'electronic_exams') THEN
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.electronic_exams TO authenticated, service_role';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.exam_questions TO authenticated, service_role';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.exam_attempts TO authenticated, service_role';
+  END IF;
+END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 3. منح صلاحيات الـ RPC الأساسية للمصادقة (طريقة ديناميكية بالـ regprocedure تمنع أي mismatch في المعاملات)
+-- 3. حل خطأ 42501 (permission denied for function is_super_admin) ومنح صلاحيات الدوال
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DO $$
@@ -155,37 +162,55 @@ BEGIN
     SELECT proname, oid::regprocedure AS func_sig
     FROM pg_proc
     WHERE proname IN (
+      -- دوال الأمان والـ RLS (التي تسبب خطأ 42501 عند فحص السياسات)
+      'is_super_admin',
+      'get_my_school_id',
+      'get_my_role',
+      'get_my_approval_status',
+      'has_role',
+      'get_user_role',
+      'get_auth_role',
+      'get_auth_school_id',
+      'get_auth_is_super_admin',
+      'get_teacher_class_ids',
+      'get_parent_student_ids',
+      'normalize_phone',
+      'phones_match',
+      'get_school_id_by_slug',
+      'is_school_admin',
+      
+      -- دوال RPC الخاصة بواجهات المستخدم
       'get_complete_user_data',
       'get_parent_dashboard_summary',
       'get_child_full_details',
       'get_parent_electronic_exams',
       'submit_exam_attempt',
-      'get_auth_role',
-      'get_auth_school_id',
-      'get_auth_is_super_admin',
       'get_dashboard_stats',
       'get_admin_dashboard_activities',
       'get_fees_summary',
       'get_teacher_dashboard_stats',
       'recalculate_exam_scores',
       'check_exam_answer_matches',
-      'get_exam_review_questions'
+      'get_exam_review_questions',
+      'get_database_row_counts',
+      'get_unread_notification_counts'
     )
     AND pronamespace = 'public'::regnamespace
   ) LOOP
     BEGIN
       EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', r.func_sig);
-      IF r.proname IN ('get_auth_role', 'get_auth_school_id', 'get_auth_is_super_admin') THEN
+      -- السماح للـ anon بالدوال التي يحتاجها أثناء تسجيل الدخول أو استعراض المدارس
+      IF r.proname IN ('is_super_admin', 'get_auth_role', 'get_auth_school_id', 'get_auth_is_super_admin', 'get_school_id_by_slug') THEN
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO anon', r.func_sig);
       END IF;
     EXCEPTION WHEN OTHERS THEN
-      -- تجاهل أي دالة بها خطأ فردي والانتقال للتالية بأمان تام
+      -- تجاهل أي دالة بها خطأ فردي والانتقال للتالية بأمان
     END;
   END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4. تأكد من وجود RLS policies صحيحة لـ push_subscriptions
+-- 4. ضبط سياسات push_subscriptions
 -- ─────────────────────────────────────────────────────────────────────────────
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
@@ -195,7 +220,6 @@ CREATE POLICY "push_subscriptions_user_access" ON public.push_subscriptions
   USING (user_id = auth.uid())
   WITH CHECK (user_id = auth.uid());
 
--- service_role يمكنه قراءة الكل (لإرسال الإشعارات من Edge Functions)
 DROP POLICY IF EXISTS "push_subscriptions_service_role" ON public.push_subscriptions;
 CREATE POLICY "push_subscriptions_service_role" ON public.push_subscriptions
   FOR ALL TO service_role
@@ -203,6 +227,6 @@ CREATE POLICY "push_subscriptions_service_role" ON public.push_subscriptions
   WITH CHECK (true);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 5. Reload PostgREST schema cache
+-- 5. تحديث كاش الـ Schema لـ PostgREST
 -- ─────────────────────────────────────────────────────────────────────────────
 NOTIFY pgrst, 'reload schema';
