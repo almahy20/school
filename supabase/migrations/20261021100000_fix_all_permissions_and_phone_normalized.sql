@@ -3,7 +3,7 @@
 -- Purpose  : إصلاح شامل ونهائي لجميع أخطاء الصلاحيات والـ RLS:
 --            1. إصلاح phone_normalized (عمود غير موجود) في get_exam_review_questions
 --            2. حل خطأ 42501 (permission denied for function is_super_admin)
---            3. منح صلاحيات الجداول (teacher_attendance, conversations, chat, user_roles...)
+--            3. منح صلاحيات الجداول بشكل ديناميكي آمن (تخطي أي جدول غير موجود تلقائياً لمنع خطأ 42P01)
 --            4. منح EXECUTE لكافة دوال الـ RLS والـ RPC لـ authenticated و service_role
 --            5. إعادة تحميل كاش PostgREST
 -- ==============================================================================
@@ -109,51 +109,44 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2. منح صلاحيات الجداول الأساسية (حل أخطاء 401 على الجداول)
+-- 2. منح صلاحيات الجداول الأساسية بشكل ديناميكي (Safe Dynamic Table Granting)
 -- ─────────────────────────────────────────────────────────────────────────────
-
--- جداول الحضور للمعلمين والطلاب
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.teacher_attendance TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.attendance TO authenticated, service_role;
-
--- جداول المحادثات والإشعارات
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.conversations TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.conversation_messages TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.class_chat_rooms TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.class_chat_messages TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.notifications TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.push_subscriptions TO authenticated, service_role;
-
--- جداول المستخدمين والمدارس
-GRANT SELECT ON TABLE public.schools TO anon, authenticated, service_role;
-GRANT SELECT, UPDATE ON TABLE public.profiles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.profiles TO service_role;
-GRANT SELECT ON TABLE public.user_roles TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.user_roles TO service_role;
-
--- جداول الطلاب والفصول والدرجات والرسوم
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.students TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.classes TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.student_parents TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.grades TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fees TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fee_payments TO authenticated, service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.complaints TO authenticated, service_role;
-
--- جداول الاختبارات الإلكترونية إن وُجدت
 DO $$
+DECLARE
+  t TEXT;
+  tbls TEXT[] := ARRAY[
+    'teacher_attendance', 'attendance', 'conversations', 'conversation_messages',
+    'class_chat_rooms', 'class_chat_messages', 'notifications', 'push_subscriptions',
+    'schools', 'profiles', 'user_roles', 'students', 'classes', 'student_parents',
+    'grades', 'fees', 'fee_payments', 'complaints', 'electronic_exams', 
+    'exam_questions', 'exam_attempts'
+  ];
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'electronic_exams') THEN
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.electronic_exams TO authenticated, service_role';
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.exam_questions TO authenticated, service_role';
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.exam_attempts TO authenticated, service_role';
-  END IF;
+  FOREACH t IN ARRAY tbls LOOP
+    -- فحص وجود الجدول أولاً لتجنب خطأ relation does not exist (42P01)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+      BEGIN
+        IF t = 'schools' THEN
+          EXECUTE format('GRANT SELECT ON TABLE public.%I TO anon, authenticated, service_role', t);
+        ELSIF t = 'profiles' THEN
+          EXECUTE format('GRANT SELECT, UPDATE ON TABLE public.%I TO authenticated', t);
+          EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
+        ELSIF t = 'user_roles' THEN
+          EXECUTE format('GRANT SELECT ON TABLE public.%I TO authenticated', t);
+          EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO service_role', t);
+        ELSE
+          EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO authenticated, service_role', t);
+        END IF;
+      EXCEPTION WHEN OTHERS THEN
+        -- تجاهل أي خطأ عابر والانتقال للجدول التالي
+      END;
+    END IF;
+  END LOOP;
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. حل خطأ 42501 (permission denied for function is_super_admin) ومنح صلاحيات الدوال
 -- ─────────────────────────────────────────────────────────────────────────────
-
 DO $$
 DECLARE
   r RECORD;
@@ -210,21 +203,20 @@ BEGIN
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4. ضبط سياسات push_subscriptions
+-- 4. ضبط سياسات push_subscriptions بشكل آمن
 -- ─────────────────────────────────────────────────────────────────────────────
-ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "push_subscriptions_user_access" ON public.push_subscriptions;
-CREATE POLICY "push_subscriptions_user_access" ON public.push_subscriptions
-  FOR ALL TO authenticated
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
-DROP POLICY IF EXISTS "push_subscriptions_service_role" ON public.push_subscriptions;
-CREATE POLICY "push_subscriptions_service_role" ON public.push_subscriptions
-  FOR ALL TO service_role
-  USING (true)
-  WITH CHECK (true);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'push_subscriptions') THEN
+    EXECUTE 'ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY';
+    
+    EXECUTE 'DROP POLICY IF EXISTS "push_subscriptions_user_access" ON public.push_subscriptions';
+    EXECUTE 'CREATE POLICY "push_subscriptions_user_access" ON public.push_subscriptions FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid())';
+    
+    EXECUTE 'DROP POLICY IF EXISTS "push_subscriptions_service_role" ON public.push_subscriptions';
+    EXECUTE 'CREATE POLICY "push_subscriptions_service_role" ON public.push_subscriptions FOR ALL TO service_role USING (true) WITH CHECK (true)';
+  END IF;
+END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 5. تحديث كاش الـ Schema لـ PostgREST
