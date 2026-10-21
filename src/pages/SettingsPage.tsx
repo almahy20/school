@@ -1,3 +1,4 @@
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/utils/logger';
@@ -7,12 +8,10 @@ import {
   Users, Database, LogOut, Edit2, Plus, ArrowLeft,
   Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon, Download
 } from 'lucide-react';
-const SchoolBrandingSettings = lazy(() => import('@/components/admin/SchoolBrandingSettings'));
 import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { sendPushToUser } from '@/utils/pushNotifications';
-import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { 
@@ -25,6 +24,8 @@ import { QueryStateHandler } from '@/components/QueryStateHandler';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+
+const SchoolBrandingSettings = lazy(() => import('@/components/admin/SchoolBrandingSettings'));
 
 export default function SettingsPage() {
   const { signOut, user } = useAuth();
