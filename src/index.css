@@ -301,6 +301,10 @@
   .glass-card {
     @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl border border-white/50 dark:border-slate-800 shadow-2xl;
   }
+
+  .page-wrapper {
+    @apply flex flex-col gap-6 md:gap-8 max-w-[1400px] mx-auto text-right pb-28 md:pb-12 px-4 md:px-0 animate-in fade-in slide-in-from-bottom-4 duration-500;
+  }
   
   .status-badge {
     @apply px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest border transition-all;

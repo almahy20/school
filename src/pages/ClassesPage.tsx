@@ -75,7 +75,7 @@ export default function ClassesPage() {
 
   return (
     <>
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-28 md:pb-10 px-2 md:px-0">
         <PageHeader
           icon={School}
           title="إدارة الفصول الدراسية"
@@ -118,7 +118,11 @@ export default function ClassesPage() {
               isRefetching={isRefetching}
               loadingMessage="جاري مزامنة بيانات الفصول..."
               errorMessage="فشل تحميل قائمة الفصول."
+              emptyMessage="لا توجد فصول دراسية مضافة حتى الآن."
               isEmpty={classes.length === 0}
+              actionLabel={user?.role === 'admin' ? "إنشاء فصل جديد" : undefined}
+              onAction={user?.role === 'admin' ? () => setShowAdd(true) : undefined}
+              actionIcon={<Plus className="w-4 h-4 ml-1.5" />}
             >
               <div className="space-y-5">
                 <div className="flex items-center justify-between px-1">

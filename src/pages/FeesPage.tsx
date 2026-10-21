@@ -159,7 +159,7 @@ export default function FeesPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-4 md:px-0">
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-28 md:pb-10 px-4 md:px-0">
         <PageHeader
           icon={CreditCard}
           title="إدارة الرسوم المالية"

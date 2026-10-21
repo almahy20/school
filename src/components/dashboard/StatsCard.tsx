@@ -23,35 +23,35 @@ export function StatsCard({ title, value, icon: Icon, color, trend, subValue }: 
 
   return (
     <div className={cn(
-      "group premium-card flex flex-col justify-between border shadow-sm hover:shadow-md transition-all duration-300 p-5 md:p-6",
+      "group premium-card flex flex-col justify-between border shadow-sm hover:shadow-md transition-all duration-300 p-4 sm:p-5 md:p-6 active:scale-[0.99]",
       colors[color || 'white']
     )}>
       <div className="flex items-start justify-between">
         <div className={cn(
-          "w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-transform group-hover:rotate-3",
+          "w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition-transform group-hover:rotate-3 shrink-0",
           color === 'white' ? 'bg-slate-50 text-slate-400' : 'bg-white/20 text-white'
         )}>
           <Icon className="w-4 h-4 md:w-5 md:h-5" />
         </div>
         {trend && (
           <div className={cn(
-            "px-2 py-0.5 rounded-full text-[8px] md:text-[10px] font-bold flex items-center gap-1",
+            "px-2 py-0.5 rounded-full text-[8px] md:text-[10px] font-bold flex items-center gap-1 shrink-0",
             color === 'white' ? 'bg-emerald-50 text-emerald-600' : 'bg-white/20 text-white'
           )}>
             {trend}
           </div>
         )}
       </div>
-      <div className="mt-4">
-        <p className={cn("text-[9px] md:text-[10px] font-bold uppercase tracking-wide mb-1 opacity-70")}>{title}</p>
-        <h3 className="text-xl md:text-2xl font-bold leading-none tracking-tight">
+      <div className="mt-3 sm:mt-4 min-w-0">
+        <p className={cn("text-[9px] md:text-[10px] font-bold uppercase tracking-wide mb-1 opacity-70 truncate")}>{title}</p>
+        <h3 className="text-base sm:text-lg md:text-2xl font-bold leading-tight tracking-tight truncate">
           {value === '...' ? (
-            <span className="inline-block w-16 h-6 bg-current opacity-20 rounded-lg animate-pulse align-middle" />
+            <span className="inline-block w-16 md:w-20 h-5 md:h-6 bg-current opacity-25 rounded-md animate-pulse align-middle" />
           ) : (
             value
           )}
         </h3>
-        {subValue && <p className="text-[8px] md:text-[10px] mt-1.5 opacity-80 font-medium">{subValue}</p>}
+        {subValue && <p className="text-[8px] md:text-[10px] mt-1 opacity-80 font-medium truncate">{subValue}</p>}
       </div>
     </div>
   );

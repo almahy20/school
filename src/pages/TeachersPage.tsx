@@ -128,7 +128,7 @@ export default function TeachersPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-10 px-2 md:px-0">
+      <div className="flex flex-col gap-6 md:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-28 md:pb-10 px-2 md:px-0">
         <PageHeader
           icon={GraduationCap}
           title="إدارة الكادر التعليمي"
@@ -216,6 +216,9 @@ export default function TeachersPage() {
           errorMessage="فشل تحميل قائمة المعلمين."
           emptyMessage="لا يوجد معلمون مسجلون حالياً."
           isEmpty={teachers.length === 0}
+          actionLabel="نسخ رابط انضمام المعلمين"
+          onAction={copyLink}
+          actionIcon={<Copy className="w-4 h-4 ml-1.5" />}
         >
           <div className="space-y-6">
             <div className="flex items-center justify-between px-1">

@@ -80,7 +80,7 @@ export default function ParentsPage() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-20 px-2 md:px-0">
+      <div className="flex flex-col gap-6 md:gap-10 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1400px] mx-auto text-right pb-28 md:pb-14 px-2 md:px-0">
         <PageHeader
           icon={UserCheck}
           title="أولياء الأمور"
@@ -197,7 +197,11 @@ export default function ParentsPage() {
           isRefetching={isRefetching}
           loadingMessage="جاري مزامنة بيانات أولياء الأمور..."
           errorMessage="فشل تحميل قائمة أولياء الأمور."
+          emptyMessage="لا يوجد أولياء أمور مسجلون حالياً."
           isEmpty={filteredParents.length === 0}
+          actionLabel="نسخ رابط تسجيل أولياء الأمور"
+          onAction={copyLink}
+          actionIcon={<Copy className="w-4 h-4 ml-1.5" />}
         >
           <div className="space-y-10">
             <div className="flex items-center justify-between px-1">

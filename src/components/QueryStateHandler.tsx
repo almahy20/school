@@ -16,6 +16,9 @@ interface QueryStateHandlerProps {
   children: React.ReactNode;
   isEmpty?: boolean;
   skeleton?: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionIcon?: React.ReactNode;
 }
 
 function DefaultGridSkeleton() {
@@ -64,6 +67,9 @@ export function QueryStateHandler({
   children,
   isEmpty = false,
   skeleton,
+  actionLabel,
+  onAction,
+  actionIcon,
 }: QueryStateHandlerProps) {
   
   const [showTimeoutError, setShowTimeoutError] = React.useState(false);
@@ -231,16 +237,27 @@ export function QueryStateHandler({
         </div>
         <div className="space-y-3 max-w-md relative z-10">
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">لا توجد سجلات</h2>
-          <p className="text-slate-400 font-bold leading-relaxed">{emptyMessage}</p>
+          <p className="text-slate-500 font-bold leading-relaxed">{emptyMessage}</p>
         </div>
-        <Button 
-          onClick={onRetry}
-          variant="outline"
-          className="h-12 px-8 rounded-xl border-2 border-slate-100 hover:border-slate-200 hover:bg-slate-50 text-slate-600 font-bold hover:text-slate-900 transition-all relative z-10"
-        >
-          <RefreshCw className="w-4 h-4 ml-2" />
-          تحديث الصفحة
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-3 relative z-10">
+          {onAction && actionLabel && (
+            <Button
+              onClick={onAction}
+              className="h-12 px-8 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-lg shadow-indigo-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+            >
+              {actionIcon}
+              <span>{actionLabel}</span>
+            </Button>
+          )}
+          <Button 
+            onClick={onRetry}
+            variant="outline"
+            className="h-12 px-6 rounded-xl border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-bold transition-all"
+          >
+            <RefreshCw className="w-4 h-4 ml-2 text-slate-500" />
+            تحديث الصفحة
+          </Button>
+        </div>
       </div>
     );
   }

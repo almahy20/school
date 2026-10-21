@@ -22,8 +22,8 @@ export const AdminDashboard = memo(function AdminDashboard() {
   const userName = user?.fullName ? user.fullName.split(' ')[0] : 'أدمن';
 
   return (
-    <div className="flex flex-col gap-6 md:gap-8 lg:gap-10 max-w-[1400px] xl:max-w-[1500px] mx-auto text-right px-4 md:px-0">
-      <header className="bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 p-8 md:p-12 rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
+    <div className="flex flex-col gap-6 md:gap-8 lg:gap-10 max-w-[1400px] xl:max-w-[1500px] mx-auto text-right px-4 md:px-0 pb-28 md:pb-12">
+      <header className="bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 p-6 sm:p-8 md:p-12 rounded-3xl md:rounded-[48px] text-white shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.15),transparent)] pointer-events-none" />
         {/* Removed external image dependency for better performance */}
         

@@ -142,7 +142,7 @@ export default function StudentsPage() {
 
   return (
     <>
-      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1500px] mx-auto text-right pb-14 px-2 md:px-0">
+      <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-[1500px] mx-auto text-right pb-28 md:pb-14 px-2 md:px-0">
         <PageHeader
           icon={GraduationCap}
           title="إدارة شؤون الطلاب"
@@ -256,6 +256,9 @@ export default function StudentsPage() {
               emptyMessage="لا يوجد طلاب مسجلين حالياً في المدرسة."
               isEmpty={students.length === 0}
               skeleton={<StudentsGridSkeleton />}
+              actionLabel={user?.role === 'admin' ? "إضافة طالب جديد" : undefined}
+              onAction={user?.role === 'admin' ? () => setShowAdd(true) : undefined}
+              actionIcon={<Plus className="w-4 h-4 ml-1.5" />}
             >
               <div className="space-y-6">
                 <div className="flex items-center justify-between px-1">
