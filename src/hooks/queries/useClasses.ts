@@ -40,7 +40,7 @@ export function useAllClasses() {
 // ─── useClasses Hook (Instant 0ms in-memory search & filter) ────────────────
 export function useClasses(page = 1, pageSize = 15, search = '', gradeLevel = 'الكل') {
   const allClassesQuery = useAllClasses();
-  const allClasses = allClassesQuery.data || [];
+  const allClasses = useMemo(() => allClassesQuery.data || [], [allClassesQuery.data]);
 
   const filteredData = useMemo(() => {
     if (!allClasses.length) return { data: [], count: 0 };

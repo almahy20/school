@@ -54,7 +54,7 @@ export function StudentReportModal({
   const [showSignatures, setShowSignatures] = useState<boolean>(true);
 
   // Parse records
-  const student = studentData || {};
+  const student = useMemo(() => studentData || ({} as any), [studentData]);
   const grades = useMemo(() => (studentData?.grades || []) as any[], [studentData]);
   const attendance = useMemo(() => (studentData?.attendance || []) as any[], [studentData]);
   const curriculum = useMemo(() => (studentData?.curriculum || []) as any[], [studentData]);

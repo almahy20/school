@@ -27,7 +27,7 @@ export default function SchoolBrandingSettings() {
         name: brandingData.name || ''
       });
     }
-  }, [brandingData?.logo_url, brandingData?.name]);
+  }, [brandingData]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'icon') => {
     try {

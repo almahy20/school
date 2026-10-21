@@ -271,7 +271,7 @@ export function useParentChildren() {
 }
 
 export function useChildFullDetails(studentId: string | undefined) {
-  const { user } = useAuth();
+  const { session, user } = useAuth();
   const queryClient = useQueryClient();
 
   return useQuery({
@@ -478,7 +478,7 @@ export function useChildFullDetails(studentId: string | undefined) {
         };
       }
     },
-    enabled: !!studentId && !!(user?.schoolId || user?.isSuperAdmin),
+    enabled: !!(session && studentId && (user?.schoolId || user?.isSuperAdmin)),
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,

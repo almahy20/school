@@ -54,7 +54,7 @@ export default function ClassesPage() {
   
   // جلب إحصائيات أعداد الطلاب لكل فصل باستعلام خفيف ومباشر
   const { data: studentCountsData, isLoading: countsLoading } = useClassStudentCounts();
-  const studentCounts = studentCountsData || {};
+  const studentCounts = useMemo(() => studentCountsData || {}, [studentCountsData]);
 
   const addMutation = useAddClass();
   const deleteMutation = useDeleteClass();

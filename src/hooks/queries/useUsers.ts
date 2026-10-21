@@ -76,7 +76,7 @@ export function useAllUsers() {
 // ─── useUsers Hook (Instant in-memory 0ms search & filter) ──────────────────
 export function useUsers(page: number = 1, pageSize: number = 20, search: string = '', roleFilter: string = '') {
   const allUsersQuery = useAllUsers();
-  const allUsers = allUsersQuery.data || [];
+  const allUsers = useMemo(() => allUsersQuery.data || [], [allUsersQuery.data]);
 
   const filteredData = useMemo(() => {
     if (!allUsers.length) return { data: [], count: 0 };

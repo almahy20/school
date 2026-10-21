@@ -47,10 +47,10 @@ export function useTermFees(term?: string) {
 // ─── useFees Hook (Instant 0ms in-memory search & filter) ───────────────────
 export function useFees(term?: string, page = 1, pageSize = 15, search = '', classId = 'all', statusFilter = 'الكل') {
   const allStudentsQuery = useAllStudents();
-  const allStudents = allStudentsQuery.data || [];
+  const allStudents = useMemo(() => allStudentsQuery.data || [], [allStudentsQuery.data]);
   
   const termFeesQuery = useTermFees(term);
-  const monthFees = termFeesQuery.data || [];
+  const monthFees = useMemo(() => termFeesQuery.data || [], [termFeesQuery.data]);
 
   const processed = useMemo(() => {
     if (!allStudents.length) {

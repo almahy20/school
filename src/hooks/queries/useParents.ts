@@ -178,7 +178,7 @@ export function useAllParents() {
 // ─── useParents Hook (Instant in-memory 0ms search & filter) ────────────────
 export function useParents(page = 1, pageSize = 15, search = '', status = 'الكل') {
   const allParentsQuery = useAllParents();
-  const allParents = allParentsQuery.data || [];
+  const allParents = useMemo(() => allParentsQuery.data || [], [allParentsQuery.data]);
 
   const filteredData = useMemo(() => {
     if (!allParents.length) return { data: [], count: 0 };

@@ -183,33 +183,15 @@ export function useExamQuestions(examId: string | undefined | null, options?: { 
       if (!examId) return [];
 
       if (options?.excludeAnswer) {
-        // 1. الجلب من دالة RPC الآمنة المخصصة للطلاب أولاً (بدون correct_answer)
-        try {
-          const { data, error } = await db.rpc('get_student_exam_questions', {
-            p_exam_ids: [examId],
-          });
-          if (!error && data && data.length > 0) {
-            return data as ExamQuestion[];
-          }
-          if (error) {
-            logger.warn('[useExamQuestions] get_student_exam_questions RPC error, trying fallback:', error.message);
-          }
-        } catch (e) {
-          logger.warn('[useExamQuestions] get_student_exam_questions RPC exception:', e);
+        // الجلب من دالة RPC الآمنة المخصصة للطلاب (بدون correct_answer والمتوافقة مع RLS الجديد)
+        const { data, error } = await db.rpc('get_student_exam_questions', {
+          p_exam_ids: [examId],
+        });
+        if (error) {
+          logger.error('[useExamQuestions] get_student_exam_questions error:', error.message);
+          throw error;
         }
-
-        // 2. بديل آمن 100%: استعلام مباشر لجدول exam_questions بدون جلب عمود correct_answer نهائياً
-        const { data: fallbackData, error: fallbackError } = await db
-          .from('exam_questions')
-          .select('id, exam_id, school_id, question_type, question_text, options, order_index, created_at')
-          .eq('exam_id', examId)
-          .order('order_index', { ascending: true });
-
-        if (fallbackError) {
-          logger.error('[useExamQuestions] exam_questions fallback failed:', fallbackError);
-          throw fallbackError;
-        }
-        return (fallbackData || []) as ExamQuestion[];
+        return (data || []) as ExamQuestion[];
       }
 
       const { data, error } = await db
@@ -252,25 +234,11 @@ export function useExamReviewQuestions(examId: string | undefined) {
         const { data: rpcData, error: rpcError } = await db.rpc('get_student_exam_questions', {
           p_exam_ids: [examId],
         });
-        if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+        if (!rpcError && Array.isArray(rpcData)) {
           return rpcData as ExamQuestion[];
         }
       } catch (rpcEx) {
         logger.warn('[useExamReviewQuestions] get_student_exam_questions RPC fallback exception:', rpcEx);
-      }
-
-      // بديل مباشر أخير لجدول exam_questions
-      try {
-        const { data, error } = await db
-          .from('exam_questions')
-          .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
-          .eq('exam_id', examId)
-          .order('order_index', { ascending: true });
-        if (!error && Array.isArray(data)) {
-          return data as ExamQuestion[];
-        }
-      } catch (directEx) {
-        logger.warn('[useExamReviewQuestions] exam_questions direct fallback exception:', directEx);
       }
 
       return [];
@@ -773,16 +741,8 @@ export function useParentElectronicExams() {
         (qData || []).forEach((q: any) => {
           questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1;
         });
-      } catch {
-        try {
-          const { data: qData } = await db
-            .from('exam_questions')
-            .select('id, exam_id')
-            .in('exam_id', examIds);
-          (qData || []).forEach((q: any) => {
-            questionCounts[q.exam_id] = (questionCounts[q.exam_id] || 0) + 1;
-          });
-        } catch { /* ignore */ }
+      } catch (qErr) {
+        logger.warn('[useParentElectronicExams] get_student_exam_questions count warning:', qErr);
       }
 
       // 2هـ. جلب محاولات ولي الأمر / الأبناء بدقة مع دعم التوأم والأخوة
@@ -952,7 +912,7 @@ export function useSubmitExamAttempt() {
       if (rpcError || !rpcResult) {
         logger.warn('[Exam] submit_exam_attempt RPC failed, trying resilient direct save fallback:', rpcError?.message);
 
-        // Fetch questions with correct answers
+        // Fetch questions with correct answers via secure RPC
         let reviewQuestions = questions;
         try {
           const { data: revData } = await db.rpc('get_exam_review_questions', { p_exam_id: examId });
@@ -960,18 +920,6 @@ export function useSubmitExamAttempt() {
             reviewQuestions = revData as ExamQuestion[];
           }
         } catch { /* ignore */ }
-
-        if (!reviewQuestions.some(q => !!q.correct_answer)) {
-          try {
-            const { data: qData } = await db
-              .from('exam_questions')
-              .select('id, exam_id, school_id, question_type, question_text, options, correct_answer, order_index, created_at')
-              .eq('exam_id', examId);
-            if (qData && qData.length > 0) {
-              reviewQuestions = qData as ExamQuestion[];
-            }
-          } catch { /* ignore */ }
-        }
 
         // Calculate score with flexible Arabic tolerance
         let calculatedScore = 0;

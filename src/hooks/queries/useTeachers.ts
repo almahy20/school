@@ -103,7 +103,7 @@ export function useAllTeachers(options?: { enabled?: boolean }) {
 // ─── useTeachers Hook (Instant in-memory 0ms search & filter) ────────────────
 export function useTeachers(page = 1, pageSize = 15, search = '', status = 'الكل', options?: { enabled?: boolean }) {
   const allTeachersQuery = useAllTeachers(options);
-  const allTeachers = allTeachersQuery.data || [];
+  const allTeachers = useMemo(() => allTeachersQuery.data || [], [allTeachersQuery.data]);
 
   const filteredData = useMemo(() => {
     if (!allTeachers.length) return { data: [], count: 0 };
