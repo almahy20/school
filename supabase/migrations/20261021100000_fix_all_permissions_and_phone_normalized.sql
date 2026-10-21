@@ -133,6 +133,16 @@ GRANT SELECT ON public.schools TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications 
   TO authenticated, service_role;
 
+-- conversations & chat
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversations 
+  TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.conversation_messages 
+  TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.class_chat_rooms 
+  TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.class_chat_messages 
+  TO authenticated, service_role;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. منح صلاحيات الـ RPC الأساسية للمصادقة (طريقة ديناميكية بالـ regprocedure تمنع أي mismatch في المعاملات)
 -- ─────────────────────────────────────────────────────────────────────────────
