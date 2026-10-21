@@ -7,12 +7,12 @@ import {
   Users, Database, LogOut, Edit2, Plus, ArrowLeft,
   Smartphone, CheckCircle2, Info, Settings2, Palette, Lock, Sun, Moon, Download
 } from 'lucide-react';
-import SchoolBrandingSettings from '@/components/admin/SchoolBrandingSettings';
+const SchoolBrandingSettings = lazy(() => import('@/components/admin/SchoolBrandingSettings'));
 import { useToast } from '@/components/ui/use-toast';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { NotificationSettingsCard } from '@/components/NotificationSettingsCard';
 import { sendPushToUser } from '@/utils/pushNotifications';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { 
@@ -224,7 +224,7 @@ export default function SettingsPage() {
                       <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">هوية المؤسسة</h3>
                       <Badge className="bg-indigo-50 text-indigo-600 font-bold text-[8px] px-3">صلاحيات المدير</Badge>
                    </div>
-                   <SchoolBrandingSettings />
+                   <Suspense fallback={<div className="h-48 rounded-[36px] bg-slate-50 animate-pulse border border-slate-100" />}><SchoolBrandingSettings /></Suspense>
                    
                    <div className="flex items-center justify-between pr-2 pt-4">
                       <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">إدارة المستخدمين</h3>

@@ -96,7 +96,7 @@ export function useAdminConversations(status: string = 'all', search: string = '
     },
     enabled: !!(session && user?.schoolId),
     staleTime: 5 * 1000,
-    refetchInterval: 5000,
+    refetchInterval: 15000, // ???? ???? ???? ?????? ????????? ????? Realtime ????
     refetchOnWindowFocus: true,
     gcTime: 5 * 60 * 1000,
     placeholderData: (prev: any) => prev,
@@ -180,7 +180,7 @@ export function useParentConversations() {
     },
     enabled: !!(session && user?.id),
     staleTime: 5 * 1000,
-    refetchInterval: 5000,
+    refetchInterval: 15000, // ???? ???? ???? ?????? ????????? ????? Realtime ????
     refetchOnWindowFocus: true,
     placeholderData: (prev: any) => prev,
     gcTime: 5 * 60 * 1000,
